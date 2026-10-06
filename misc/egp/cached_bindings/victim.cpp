@@ -69,9 +69,8 @@ static void initialize(ModuleInitializationLevel level) {
 	if (level != MODULE_INITIALIZATION_LEVEL_SCENE) {
 		return;
 	}
-#if BINDING_VERSION == 5
 	GDREGISTER_CLASS(EGPBindingSpare);
-#else
+#if BINDING_VERSION != 5
 	GDREGISTER_CLASS(EGPBindingVictim);
 #endif
 }

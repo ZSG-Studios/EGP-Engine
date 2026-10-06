@@ -78,7 +78,7 @@ class GDExtensionMethodBind : public MethodBind {
 		}
 		// Ptrcall return storage uses the builtin ABI, including int64/double
 		// encodings. Assign defaults rather than copying/constructing over live
-		// strings, collections or references, and never leave scalars undefined.
+		// strings or collections, and never leave scalars undefined.
 #define DEFAULT_EXTENSION_RETURN(m_enum, m_type) \
 	case Variant::m_enum: { \
 		PtrToArg<m_type>::encode({}, r_ret); \
@@ -1003,10 +1003,6 @@ void GDExtension::prepare_reload() {
 	for (KeyValue<StringName, Extension> &E : extension_classes) {
 		E.value.is_reloading = true;
 
-		for (KeyValue<StringName, GDExtensionMethodBind *> &M : E.value.methods) {
-			M.value->is_reloading = true;
-		}
-
 		for (const ObjectID &obj_id : E.value.instances) {
 			Object *obj = ObjectDB::get_instance(obj_id);
 			if (!obj) {
@@ -1055,6 +1051,14 @@ void GDExtension::prepare_reload() {
 				std::move(state), // List<Pair<String, Variant>> properties;
 				is_placeholder, // bool is_placeholder;
 			};
+		}
+	}
+	// Property getters may call methods from any class in this library while
+	// saving state. Keep those bindings callable until all state is captured,
+	// then block calls before extension teardown and unloading begins.
+	for (KeyValue<StringName, Extension> &E : extension_classes) {
+		for (KeyValue<StringName, GDExtensionMethodBind *> &M : E.value.methods) {
+			M.value->is_reloading = true;
 		}
 	}
 }

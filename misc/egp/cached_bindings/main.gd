@@ -5,10 +5,12 @@ var observer: EGPBindingObserver
 var mode: String
 var stage := "initial"
 var checks := 0
+var failed := false
 
 func require(good: bool, message: String) -> void:
 	checks += 1
 	if not good:
+		failed = true
 		print("EGP_CACHED_BINDING_FAILED ", stage, ": ", message)
 		get_tree().quit(1)
 		assert(good, message)
@@ -114,6 +116,9 @@ func _ready() -> void:
 		probe(0, true)
 		require(observer.cache(), "removed-class cache refresh")
 		probe(300 if mode.ends_with("static") else 391, false)
+	if failed:
+		get_tree().quit(1)
+		return
 	checkpoint("complete")
 	print("EGP_CACHED_BINDING_PASSED ", JSON.stringify({"checks": checks, "mode": mode, "pid": OS.get_process_id()}))
 	get_tree().quit()
