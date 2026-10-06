@@ -167,7 +167,7 @@ def main():
             runtime.parent.mkdir()
             (project / "export_presets.cfg").write_text(
                 '[preset.0]\nname="Admission Lifecycle"\nplatform="Windows Desktop"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n[preset.0.options]\n'
-                + f'custom_template/debug="{engine.as_posix()}"\ncustom_template/release="{engine.as_posix()}"\nbinary_format/embed_pck=false\n',
+                + f'custom_template/debug="{engine.as_posix()}"\ncustom_template/release="{engine.as_posix()}"\nbinary_format/embed_pck=false\napplication/modify_resources=false\n',
                 encoding="utf-8",
             )
             run(
