@@ -32,7 +32,7 @@ because these chats exist.
 
 | Area | Required evidence | Current status |
 | --- | --- | --- |
-| Merge provenance | Every EGP tree/feature commit/dirty source accounted for; conflicts resolved; canonical commits and combined build | Seven trees preserved/accounted for; canonical commits present; final combined gates and publication pending |
+| Merge provenance | Every EGP tree/feature commit/dirty source accounted for; conflicts resolved; canonical commits and combined build | Seven trees preserved/accounted for; intended handoffs consolidated, combined gates pass and qualified source published to master; remaining feature acceptance continues |
 | Public API | Actual ClassDB dump matches embedded SDK, generated C# and docs; signatures, enums, properties, signals, defaults and errors consistent | Matching final SDK/C# bindings and 77-class exposure plus 371 enum docs pass; behavioral/signature/default coverage incomplete |
 | API usability | Familiar naming; typed options/results; actionable errors; examples for GDScript/C#/C++; threading and ownership documented | Audit pending |
 | Library/build | Native and Mono builds; exact fork bindings; dependency/license manifests; lean server build; reproducible toolchain | Combined Mono editor, glue/assemblies, exact SDK and Debug/Release templates pass; lean server/platform/reproducibility gates remain |
@@ -418,9 +418,11 @@ hashes remain `fa230aaa…fd449` and `759f39a3…28718` (full hashes above).
   passes 59 assertions from the canonical output; evidence is
   `.build/canonical-bin-interop.json`.
 
-Next publish the qualified source to master without force, verify its SHA and
-reconcile PR #1. Keep primary on `codex/egp-integration` for loop ownership.
-Subsequent publication receipts go in `.build/integration-master-publication.json`.
+Qualified consolidation `8543a431024cd8ef85985e4245b37c79e8083549` was pushed
+to origin master without force and its remote SHA verified on 2026-10-06. GitHub
+marked PR #1 MERGED at 06:50:52 UTC. The primary checkout stays on
+`codex/egp-integration` for loop ownership; local master is advanced to the same
+qualified history. Publication evidence is `.build/integration-master-publication.json`.
 The intended handoff source is consolidated; acceptance of all features remains
 unfinished. Prioritize actual running-game C#/C++ reload and recovery, the 13
 undocumented EGPNetSession methods and eight new server methods in each dimension
