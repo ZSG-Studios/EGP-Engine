@@ -32,12 +32,32 @@ class ClockEvidenceTests(unittest.TestCase):
                 }
                 for n in range(1, 4)
             ]
+            low = copy.deepcopy(high)
+            for n, record in enumerate(low, 1):
+                record.update({
+                    "old_peer": 256 * n + 1,
+                    "new_peer": 256 * (n + 1) + 1,
+                    "client_id": 556 if language == "csharp" else 667,
+                    "client_disconnect_cleared": True,
+                    "retired_peer_rejected": True,
+                    "opaque_state_hex": f"{n:02x}00ff2a",
+                    "server_apps": n,
+                    "client_apps": n,
+                    "server_packets": n,
+                    "client_packets": n,
+                })
+            low_states = []
+            for n in range(1, 5):
+                low_states += ["Connecting", "Synchronizing", "Connected", "Stopped"]
+                if n < 4:
+                    low_states += ["Disconnected", "Stopped"]
             self.result["clock_recovery"][language] = {
                 "passed": True,
                 "same_session": True,
                 "body_id": body,
                 "cycles": high,
-                "low_cycles": copy.deepcopy(high),
+                "low_cycles": low,
+                "low_client_states": low_states,
                 "diagnostics": ["Fixed simulation exceeded its catch-up budget; resynchronization required."] * 3,
                 "low_diagnostics": ["Fixed simulation exceeded its catch-up budget; resynchronization required."] * 3,
                 "client_states": ["Stopped"] + ["Connecting", "Synchronizing", "Connected", "Stopped"] * 4,
@@ -106,6 +126,30 @@ class ClockEvidenceTests(unittest.TestCase):
 
     def test_interest_did_not_restore(self):
         self.result["clock_recovery"]["cpp"]["cycles"][2]["interest_roundtrip"] = False
+        self.assertIsNotNone(clock_recovery_failure(self.result))
+
+    def test_low_peer_handle_reused(self):
+        self.result["clock_recovery"]["cpp"]["low_cycles"][1]["new_peer"] = 513
+        self.assertIsNotNone(clock_recovery_failure(self.result))
+
+    def test_low_retired_peer_still_accepted(self):
+        self.result["clock_recovery"]["csharp"]["low_cycles"][0]["retired_peer_rejected"] = False
+        self.assertIsNotNone(clock_recovery_failure(self.result))
+
+    def test_low_opaque_zero_bytes_lost(self):
+        self.result["clock_recovery"]["cpp"]["low_cycles"][0]["opaque_state_hex"] = "01ff2a"
+        self.assertIsNotNone(clock_recovery_failure(self.result))
+
+    def test_low_duplicate_application(self):
+        self.result["clock_recovery"]["csharp"]["low_cycles"][1]["client_apps"] = 3
+        self.assertIsNotNone(clock_recovery_failure(self.result))
+
+    def test_low_missing_channel_delivery(self):
+        self.result["clock_recovery"]["cpp"]["low_cycles"][2]["server_packets"] = 2
+        self.assertIsNotNone(clock_recovery_failure(self.result))
+
+    def test_low_missing_disconnect(self):
+        self.result["clock_recovery"]["csharp"]["low_client_states"].remove("Disconnected")
         self.assertIsNotNone(clock_recovery_failure(self.result))
 
 

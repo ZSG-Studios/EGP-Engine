@@ -362,22 +362,75 @@ public partial class InteropFixture : Node
             entity = next;
         }
         server.Stop(); physics!.Detach(); csPeer.Stop();
-        using var low = new NetSession(); Check(low.Configure() == Error.Ok && low.Listen(0) == Error.Ok, "C# low clock host");
+        using var low = new NetSession(); using var clientLow = new NetSession();
+        Check(low.Configure(new NetOptions { MaxPlayers = 1, MaxEntities = 2 }) == Error.Ok && low.Listen(0) == Error.Ok
+            && clientLow.Configure(new NetOptions { MaxPlayers = 1, MaxEntities = 2, SimulatedLatencyMs = 20, SimulatedJitterMs = 5 }) == Error.Ok, "C# low clock host/client");
         var lowDiagnostics = new List<string>(); low.Diagnostic += lowDiagnostics.Add;
+        var lowStates = new List<string>(); clientLow.StateChanged += lowStates.Add;
+        ulong clientLowId = clientLow.Native.GetInstanceId(); byte[] previousLowToken = System.Array.Empty<byte>();
         ulong lowId = low.Native.GetInstanceId(); int lowPort = low.Statistics["local_port"].AsInt32(); long old = low.Spawn(1, new byte[] { 1 }).Entity;
+        async Task PumpLowUntil(Func<bool> condition)
+        {
+            ulong deadline = Time.GetTicksMsec() + 2000;
+            while (!condition() && Time.GetTicksMsec() < deadline) { CheckPoll(low.Poll()); CheckPoll(clientLow.Poll()); await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(condition(), "C# low recovery bounded pump");
+        }
+        async Task JoinLowClient()
+        {
+            var token = low.IssueToken(556, $"127.0.0.1:{lowPort}");
+            Check(token.Error == Error.Ok && token.Token.Length == 2048 && !token.Token.AsSpan().SequenceEqual(previousLowToken)
+                && clientLow.ConnectToken(556, token.Token) == Error.Ok && clientLow.Native.GetInstanceId() == clientLowId, "C# low fresh admission/retained client");
+            previousLowToken = token.Token;
+            await PumpLowUntil(() => clientLow.State == "Connected" && low.GetPeers().Length == 1);
+            Check(low.GetPeers()[0].ClientId == 556, "C# low authenticated recovery identity");
+        }
+        await JoinLowClient(); await PumpLowUntil(() => clientLow.GetEntities().Length == 1);
+        long activePeer = 0; int lowCycle = 0, serverApps = 0, clientApps = 0, serverPackets = 0, clientPackets = 0;
+        low.ApplicationReceived += (peer, bytes) => { Check(peer == activePeer && bytes.AsSpan().SequenceEqual(new byte[] { (byte)lowCycle, 77 }), "C# low server application identity/payload"); serverApps++; };
+        clientLow.ApplicationReceived += (peer, bytes) => { Check(peer == 0 && bytes.AsSpan().SequenceEqual(new byte[] { (byte)lowCycle, 77 }), "C# low client application identity/payload"); clientApps++; };
+        low.PacketReceived += (peer, bytes, channel, delivery) => { Check(peer == activePeer && channel == 3 && delivery == Delivery.ReliableOrdered && bytes.AsSpan().SequenceEqual(new byte[] { (byte)lowCycle, 0, 255 }), "C# low server channel payload"); serverPackets++; };
+        clientLow.PacketReceived += (peer, bytes, channel, delivery) => { Check(peer == 0 && channel == 3 && delivery == Delivery.ReliableOrdered && bytes.AsSpan().SequenceEqual(new byte[] { (byte)lowCycle, 0, 255 }), "C# low client channel payload"); clientPackets++; };
         var lowCycles = new Array();
         for (int cycle = 1; cycle <= 3; cycle++) {
-            ulong before = Time.GetTicksMsec(); OS.DelayMsec(550);
+            long retiredPeer = low.GetPeers()[0].PeerId; int livePolls = 0;
+            ulong before = Time.GetTicksMsec();
+            while (Time.GetTicksMsec() - before < 550) { CheckPoll(clientLow.Poll()); livePolls++; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(clientLow.State == "Connected" && livePolls > 0, "C# low client stays live " + cycle);
             Check(low.Poll() == Error.Failed && low.State == "Stopped" && low.GetEntities().Length == 0 && low.GetPeers().Length == 0
                 && low.Spawn(1, new byte[] { 1 }).Error == Error.Unauthorized, "C# low clock fails closed " + cycle);
+            ulong gap = Time.GetTicksMsec() - before;
+            await PumpLowUntil(() => clientLow.State == "Disconnected");
+            Check(clientLow.GetEntities().Length == 0 && clientLow.GetPeers().Length == 0 && clientLow.SendApplication(0, new byte[] { 1 }) == Error.DoesNotExist, "C# low native disconnect clears baseline/work " + cycle);
+            clientLow.Stop();
             Check(low.Listen(lowPort) == Error.Ok && low.Native.GetInstanceId() == lowId, "C# low session retained " + cycle);
-            var next = low.Spawn(1, new byte[] { 2 });
+            await JoinLowClient(); activePeer = low.GetPeers()[0].PeerId; lowCycle = cycle;
+            Check(activePeer != retiredPeer && low.SendApplication(retiredPeer, new byte[] { 1 }) == Error.DoesNotExist
+                && low.DisconnectPeer(retiredPeer) == Error.DoesNotExist && low.Spawn(1, new byte[] { 1 }, retiredPeer).Error == Error.InvalidParameter, "C# low retired peer rejected " + cycle);
+            byte[] opaque = { (byte)cycle, 0, 255, 42 }; var next = low.Spawn(1, opaque, activePeer);
             Check(next.Error == Error.Ok && next.Entity != 0 && next.Entity != old && low.UpdateEntity(old, new byte[] { 3 }) == Error.DoesNotExist, "C# low retired handle " + cycle);
-            lowCycles.Add(new Dictionary { ["cycle"] = cycle, ["old_entity"] = old, ["new_entity"] = next.Entity, ["poll_error"] = (int)Error.Failed, ["gap_ms"] = Time.GetTicksMsec() - before }); old = next.Entity;
+            await PumpLowUntil(() => clientLow.GetEntities().Length == 1 && clientLow.GetEntities()[0].Entity == next.Entity);
+            var raw = clientLow.GetEntities()[0];
+            Check(raw.AuthorityPeer == activePeer && raw.State.AsSpan().SequenceEqual(opaque), "C# low recovered owned opaque baseline " + cycle);
+            byte[] application = { (byte)cycle, 77 }, packet = { (byte)cycle, 0, 255 };
+            Check(low.SendApplication(activePeer, application) == Error.Ok && clientLow.SendApplication(0, application) == Error.Ok
+                && low.SendPacket(activePeer, packet, 3) == Error.Ok && clientLow.SendPacket(0, packet, 3) == Error.Ok, "C# low recovered bidirectional data " + cycle);
+            await PumpLowUntil(() => serverApps == cycle && clientApps == cycle && serverPackets == cycle && clientPackets == cycle);
+            Check(low.SetEntityVisible(next.Entity, retiredPeer, false) == Error.DoesNotExist && low.SetEntityVisible(next.Entity, activePeer, false) == Error.Ok, "C# low retired/current interest handles " + cycle);
+            await PumpLowUntil(() => clientLow.GetEntities().Length == 0);
+            Check(low.SetEntityVisible(next.Entity, activePeer, true) == Error.Ok, "C# low recovered interest show " + cycle);
+            await PumpLowUntil(() => clientLow.GetEntities().Length == 1 && low.Statistics["tick"].AsInt64() >= 8);
+            Check(serverApps == cycle && clientApps == cycle && serverPackets == cycle && clientPackets == cycle && clientLow.GetEntities()[0].State.AsSpan().SequenceEqual(opaque), "C# low exact data counts/restored baseline " + cycle);
+            lowCycles.Add(new Dictionary { ["cycle"] = cycle, ["old_entity"] = old, ["new_entity"] = next.Entity, ["poll_error"] = (int)Error.Failed, ["gap_ms"] = gap,
+                ["old_peer"] = retiredPeer, ["new_peer"] = activePeer, ["client_id"] = 556, ["client_live_polls"] = livePolls, ["client_same_session"] = true,
+                ["fresh_token"] = true, ["client_disconnect_cleared"] = true, ["retired_peer_rejected"] = true, ["interest_roundtrip"] = true,
+                ["opaque_state_hex"] = Convert.ToHexString(opaque).ToLowerInvariant(), ["server_apps"] = serverApps, ["client_apps"] = clientApps,
+                ["server_packets"] = serverPackets, ["client_packets"] = clientPackets, ["final_network_tick"] = low.Statistics["tick"] }); old = next.Entity;
         }
+        clientLow.Stop();
         Check(lowDiagnostics.Count == 3 && lowDiagnostics.TrueForAll(s => s == "Fixed simulation exceeded its catch-up budget; resynchronization required."), "C# low clock diagnostics");
         clockRecovery["csharp"] = new Dictionary { ["passed"] = true, ["same_session"] = true, ["body_id"] = 10000, ["cycles"] = cycles, ["low_cycles"] = lowCycles,
             ["client_states"] = new Array(clientStates.ConvertAll(s => (Variant)s).ToArray()), ["client_latency_ms"] = 20, ["client_jitter_ms"] = 5,
+            ["low_client_states"] = new Array(lowStates.ConvertAll(s => (Variant)s).ToArray()),
             ["diagnostics"] = new Array(diagnostics.ConvertAll(s => (Variant)s).ToArray()), ["low_diagnostics"] = new Array(lowDiagnostics.ConvertAll(s => (Variant)s).ToArray()) };
     }
 }

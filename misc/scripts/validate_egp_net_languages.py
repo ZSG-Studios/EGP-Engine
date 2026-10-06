@@ -35,12 +35,20 @@ def clock_recovery_failure(result):
             or proof.get("client_jitter_ms") != 5
         ):
             return f"Missing {language} repeated client admission/reset history"
+        expected_low_states = []
+        for epoch in range(1, 5):
+            expected_low_states += ["Connecting", "Synchronizing", "Connected", "Stopped"]
+            if epoch < 4:
+                expected_low_states += ["Disconnected", "Stopped"]
+        if proof.get("low_client_states") != expected_low_states:
+            return f"Missing {language} connected low-level disconnect/rejoin history"
         for kind in ("cycles", "low_cycles"):
             records = proof.get(kind, [])
             diagnostics = proof.get("diagnostics" if kind == "cycles" else "low_diagnostics")
             if len(records) != 3 or diagnostics != [diagnostic] * 3:
                 return f"Missing {language} {kind} faults/diagnostics"
             previous = None
+            previous_peer = None
             for number, record in enumerate(records, 1):
                 old, new = record.get("old_entity"), record.get("new_entity")
                 if (
@@ -86,6 +94,35 @@ def clock_recovery_failure(result):
                         or record.get("invalid_input_count") != 0
                     ):
                         return f"Invalid {language} restored client baseline/ownership/interest"
+                else:
+                    old_peer, new_peer = record.get("old_peer", 0), record.get("new_peer", 0)
+                    if (
+                        not isinstance(old_peer, int)
+                        or not isinstance(new_peer, int)
+                        or old_peer <= 0
+                        or new_peer <= old_peer
+                        or (previous_peer is not None and old_peer != previous_peer)
+                        or record.get("client_id") != (556 if language == "csharp" else 667)
+                        or record.get("client_live_polls", 0) <= 0
+                        or record.get("final_network_tick", 0) < 8
+                        or record.get("opaque_state_hex") != f"{number:02x}00ff2a"
+                        or any(
+                            record.get(field) != number
+                            for field in ("server_apps", "client_apps", "server_packets", "client_packets")
+                        )
+                        or any(
+                            record.get(flag) is not True
+                            for flag in (
+                                "client_same_session",
+                                "fresh_token",
+                                "client_disconnect_cleared",
+                                "retired_peer_rejected",
+                                "interest_roundtrip",
+                            )
+                        )
+                    ):
+                        return f"Invalid {language} connected low-level recovery/opaque data history"
+                    previous_peer = new_peer
     return None
 
 

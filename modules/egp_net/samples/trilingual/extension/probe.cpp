@@ -32,6 +32,21 @@ class EGPNetCppProbe : public Node {
     Array recovery_client_states;
     int64_t recovery_peer = 0, recovery_entity = 0;
     int recovery_cycle = 0, recovery_inputs = 0, recovery_invalid_inputs = 0;
+    Array low_client_states;
+    int64_t low_recovery_peer = 0;
+    int low_cycle = 0, low_server_apps = 0, low_client_apps = 0, low_server_packets = 0, low_client_packets = 0, low_invalid = 0;
+    void low_state(const String &state) { low_client_states.push_back(state); }
+    void low_data(int64_t peer, const PackedByteArray &data, bool server_side, bool packet_data, int64_t channel = 3, int64_t delivery = 2) {
+        const bool bytes_ok = packet_data ? data.size() == 3 && data[0] == low_cycle && data[1] == 0 && data[2] == 255
+            : data.size() == 2 && data[0] == low_cycle && data[1] == 77;
+        if (peer != (server_side ? low_recovery_peer : 0) || !bytes_ok || channel != 3 || delivery != 2) { ++low_invalid; return; }
+        if (packet_data) { if (server_side) ++low_server_packets; else ++low_client_packets; }
+        else { if (server_side) ++low_server_apps; else ++low_client_apps; }
+    }
+    void low_server_application(int64_t peer, const PackedByteArray &data) { low_data(peer, data, true, false); }
+    void low_client_application(int64_t peer, const PackedByteArray &data) { low_data(peer, data, false, false); }
+    void low_server_packet(int64_t peer, const PackedByteArray &data, int64_t channel, int64_t delivery) { low_data(peer, data, true, true, channel, delivery); }
+    void low_client_packet(int64_t peer, const PackedByteArray &data, int64_t channel, int64_t delivery) { low_data(peer, data, false, true, channel, delivery); }
     String clock_handoff, clock_message;
     int clock_epoch = 1, clock_drain = 0;
     int64_t clock_entity = 0, clock_retired = 0;
@@ -283,23 +298,78 @@ public:
         physics->detach(); high->stop(); client.stop();
         Array high_diagnostics = clock_diagnostics.duplicate(); clock_diagnostics.clear();
         low = std::make_unique<net::Session>();
-        if (low->configure() != OK || low->connect("diagnostic", callable_mp(this, &EGPNetCppProbe::clock_diagnostic)) != OK || low->listen(0) != OK) return proof;
+        net::Session client_low; net::Options low_options; low_options.max_players = 1; low_options.max_entities = 2;
+        if (low->configure(low_options) != OK || low->connect("diagnostic", callable_mp(this, &EGPNetCppProbe::clock_diagnostic)) != OK || low->listen(0) != OK) return proof;
+        low_options.simulated_latency_ms = 20; low_options.simulated_jitter_ms = 5;
+        low_client_states.clear(); low_server_apps = low_client_apps = low_server_packets = low_client_packets = low_invalid = 0;
+        if (client_low.configure(low_options) != OK || client_low.connect("state_changed", callable_mp(this, &EGPNetCppProbe::low_state)) != OK
+            || low->connect("application_received", callable_mp(this, &EGPNetCppProbe::low_server_application)) != OK
+            || client_low.connect("application_received", callable_mp(this, &EGPNetCppProbe::low_client_application)) != OK
+            || low->connect("packet_received", callable_mp(this, &EGPNetCppProbe::low_server_packet)) != OK
+            || client_low.connect("packet_received", callable_mp(this, &EGPNetCppProbe::low_client_packet)) != OK) return proof;
         const auto native = low->native();
+        const auto client_low_native = client_low.native(); PackedByteArray previous_low_token;
         const int low_port = int64_t(low->statistics()["local_port"]);
         int64_t previous = low->spawn(1, PackedByteArray()).entity;
+        auto pump_low = [&](auto ready) {
+            const uint64_t deadline = Time::get_singleton()->get_ticks_msec() + 2000;
+            while (!ready() && Time::get_singleton()->get_ticks_msec() < deadline) {
+                if (poll() != OK || client_low.poll() != OK) return false;
+                OS::get_singleton()->delay_usec(2000);
+            }
+            return ready();
+        };
+        auto join_low = [&]() {
+            auto token = low->issue_token(667, String("127.0.0.1:") + String::num_int64(low_port));
+            if (token.error != OK || token.token.size() != 2048 || token.token == previous_low_token || client_low.connect_token(667, token.token) != OK || client_low.native() != client_low_native) return false;
+            previous_low_token = token.token;
+            if (!pump_low([&]() { return client_low.state() == "Connected" && low->peers().size() == 1; })) return false;
+            Dictionary peer = low->peers()[0]; return int64_t(peer["client_id"]) == 667;
+        };
+        if (!join_low() || !pump_low([&]() { return client_low.entities().size() == 1; })) return proof;
         Array low_cycles;
         for (int cycle = 1; cycle <= 3; ++cycle) {
+            Dictionary prior_peer = low->peers()[0]; const int64_t retired_peer = prior_peer["peer_id"];
             const uint64_t before = Time::get_singleton()->get_ticks_msec();
-            OS::get_singleton()->delay_usec(550000);
-            if (poll() != FAILED || low->state() != "Stopped" || !low->entities().is_empty() || low->spawn(1, PackedByteArray()).error != ERR_UNAUTHORIZED || low->listen(low_port) != OK || low->native() != native) return proof;
-            auto next = low->spawn(1, PackedByteArray());
+            int live_polls = 0;
+            while (Time::get_singleton()->get_ticks_msec() - before < 550) { if (client_low.poll() != OK) return proof; ++live_polls; OS::get_singleton()->delay_usec(2000); }
+            if (client_low.state() != "Connected" || live_polls == 0 || poll() != FAILED || low->state() != "Stopped" || !low->entities().is_empty() || !low->peers().is_empty() || low->spawn(1, PackedByteArray()).error != ERR_UNAUTHORIZED) return proof;
+            const int64_t gap = Time::get_singleton()->get_ticks_msec() - before;
+            if (!pump_low([&]() { return client_low.state() == "Disconnected"; }) || !client_low.entities().is_empty() || !client_low.peers().is_empty() || client_low.send_application(0, PackedByteArray()) != ERR_DOES_NOT_EXIST) return proof;
+            client_low.stop();
+            if (low->listen(low_port) != OK || low->native() != native || !join_low()) return proof;
+            Dictionary new_peer = low->peers()[0]; low_recovery_peer = new_peer["peer_id"]; low_cycle = cycle;
+            if (low_recovery_peer == retired_peer || low->send_application(retired_peer, PackedByteArray()) != ERR_DOES_NOT_EXIST
+                || low->disconnect_peer(retired_peer) != ERR_DOES_NOT_EXIST || low->spawn(1, PackedByteArray(), retired_peer).error != ERR_INVALID_PARAMETER) return proof;
+            PackedByteArray opaque; opaque.push_back(cycle); opaque.push_back(0); opaque.push_back(255); opaque.push_back(42);
+            auto next = low->spawn(1, opaque, low_recovery_peer);
             if (next.error != OK || !next.entity || next.entity == previous || low->update_entity(previous, PackedByteArray()) != ERR_DOES_NOT_EXIST) return proof;
-            Dictionary record; record["cycle"] = cycle; record["old_entity"] = previous; record["new_entity"] = next.entity; record["poll_error"] = FAILED; record["gap_ms"] = int64_t(Time::get_singleton()->get_ticks_msec() - before); low_cycles.push_back(record); previous = next.entity;
+            if (!pump_low([&]() { if (client_low.entities().size() != 1) return false; Dictionary r = client_low.entities()[0]; return int64_t(r["entity"]) == next.entity; })) return proof;
+            Dictionary raw = client_low.entities()[0];
+            if (int64_t(raw["authority_peer"]) != low_recovery_peer || PackedByteArray(raw["state"]) != opaque) return proof;
+            PackedByteArray data; data.push_back(cycle); data.push_back(77);
+            PackedByteArray packet; packet.push_back(cycle); packet.push_back(0); packet.push_back(255);
+            if (low->send_application(low_recovery_peer, data) != OK || client_low.send_application(0, data) != OK
+                || low->send_packet(low_recovery_peer, packet, 3) != OK || client_low.send_packet(0, packet, 3) != OK
+                || !pump_low([&]() { return low_server_apps == cycle && low_client_apps == cycle && low_server_packets == cycle && low_client_packets == cycle; })) return proof;
+            if (low->set_entity_visible(next.entity, retired_peer, false) != ERR_DOES_NOT_EXIST || low->set_entity_visible(next.entity, low_recovery_peer, false) != OK
+                || !pump_low([&]() { return client_low.entities().is_empty(); }) || low->set_entity_visible(next.entity, low_recovery_peer, true) != OK
+                || !pump_low([&]() { return client_low.entities().size() == 1 && int64_t(low->statistics()["tick"]) >= 8; })) return proof;
+            raw = client_low.entities()[0];
+            if (low_invalid != 0 || low_server_apps != cycle || low_client_apps != cycle || low_server_packets != cycle || low_client_packets != cycle || PackedByteArray(raw["state"]) != opaque) return proof;
+            Dictionary record; record["cycle"] = cycle; record["old_entity"] = previous; record["new_entity"] = next.entity; record["poll_error"] = FAILED; record["gap_ms"] = gap;
+            record["old_peer"] = retired_peer; record["new_peer"] = low_recovery_peer; record["client_id"] = 667; record["client_live_polls"] = live_polls;
+            record["client_same_session"] = true; record["fresh_token"] = true; record["client_disconnect_cleared"] = true; record["retired_peer_rejected"] = true; record["interest_roundtrip"] = true;
+            record["opaque_state_hex"] = opaque.hex_encode(); record["server_apps"] = low_server_apps; record["client_apps"] = low_client_apps;
+            record["server_packets"] = low_server_packets; record["client_packets"] = low_client_packets; record["final_network_tick"] = low->statistics()["tick"];
+            low_cycles.push_back(record); previous = next.entity;
         }
+        client_low.stop();
         if (clock_diagnostics.size() != 3) return proof;
         for (int i = 0; i < 3; ++i) if (String(clock_diagnostics[i]) != "Fixed simulation exceeded its catch-up budget; resynchronization required.") return proof;
         proof["passed"] = true; proof["cycles"] = cycles; proof["low_cycles"] = low_cycles; proof["diagnostics"] = high_diagnostics; proof["low_diagnostics"] = clock_diagnostics; proof["same_session"] = true; proof["body_id"] = 20000;
         proof["client_states"] = recovery_client_states; proof["client_latency_ms"] = 20; proof["client_jitter_ms"] = 5;
+        proof["low_client_states"] = low_client_states;
         stop(); return proof;
     }
     void stop() { physics.reset(); world.unref(); high.reset(); low.reset(); }
