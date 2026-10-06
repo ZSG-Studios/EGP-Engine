@@ -7,10 +7,11 @@ using Dictionary = Godot.Collections.Dictionary;
 namespace EGP.Networking;
 
 /// <summary>High-level AIO node. Uses the same validated codec as GDScript and C++.</summary>
-public partial class NetNode : Node
+public partial class NetNode : Node, ISerializationListener
 {
     private Node? bridge;
     private SignalLinks? links;
+    private bool restoreSignals;
     private bool autoPoll = true;
     [Export] public bool AutoPoll { get => autoPoll; set { autoPoll = value; if (GodotObject.IsInstanceValid(bridge)) bridge!.Set("auto_poll", value); } }
     public event Action<string>? StateChanged;
@@ -31,22 +32,66 @@ public partial class NetNode : Node
             if (GodotObject.IsInstanceValid(bridge)) return bridge!;
             bridge = (Node)Shared.New("res://addons/egp_net/egp_net.gd");
             bridge.Name = "EGPNetBridge"; bridge.Set("auto_poll", autoPoll);
-            AddChild(bridge); links = new(bridge);
-            links.Add("state_changed", Callable.From<string>(s => StateChanged?.Invoke(s)));
-            links.Add("peer_connected", Callable.From<long>(p => PeerConnected?.Invoke(p)));
-            links.Add("peer_disconnected", Callable.From<long>(p => PeerDisconnected?.Invoke(p)));
-            links.Add("entity_spawned", Callable.From<long, long, Dictionary>((id, kind, state) => EntitySpawned?.Invoke(id, (int)kind, state)));
-            links.Add("entity_changed", Callable.From<long, Dictionary>((id, state) => EntityChanged?.Invoke(id, state)));
-            links.Add("entity_despawned", Callable.From<long>(id => EntityDespawned?.Invoke(id)));
-            links.Add("message_received", Callable.From<long, StringName, Array>((p, name, args) => MessageReceived?.Invoke(p, name, args)));
-            links.Add("input_received", Callable.From<long, long, Dictionary>((p, id, input) => InputReceived?.Invoke(p, id, input)));
-            links.Add("packet_received", Callable.From<long, byte[], long, long>((p, data, channel, delivery) => PacketReceived?.Invoke(p, data, (int)channel, (Delivery)delivery)));
-            links.Add("simulation_tick", Callable.From<long, bool>((tick, server) => SimulationTick?.Invoke(tick, server)));
-            links.Add("diagnostic", Callable.From<string>(s => Diagnostic?.Invoke(s)));
+            AddChild(bridge);
+            ConnectBridgeSignals();
             return bridge;
         }
     }
-    public override void _ExitTree() { Close(); }
+    private void ConnectBridgeSignals()
+    {
+        if (links != null || !GodotObject.IsInstanceValid(bridge)) return;
+        links = new(bridge!);
+        try
+        {
+            links.Add("state_changed", new Callable(this, nameof(ForwardState)));
+            links.Add("peer_connected", new Callable(this, nameof(ForwardPeerConnected)));
+            links.Add("peer_disconnected", new Callable(this, nameof(ForwardPeerDisconnected)));
+            links.Add("entity_spawned", new Callable(this, nameof(ForwardSpawn)));
+            links.Add("entity_changed", new Callable(this, nameof(ForwardEntity)));
+            links.Add("entity_despawned", new Callable(this, nameof(ForwardDespawn)));
+            links.Add("message_received", new Callable(this, nameof(ForwardMessage)));
+            links.Add("input_received", new Callable(this, nameof(ForwardInput)));
+            links.Add("packet_received", new Callable(this, nameof(ForwardPacket)));
+            links.Add("simulation_tick", new Callable(this, nameof(ForwardTick)));
+            links.Add("diagnostic", new Callable(this, nameof(ForwardDiagnostic)));
+            restoreSignals = true;
+        }
+        catch { DisconnectBridgeSignals(); throw; }
+    }
+    private void DisconnectBridgeSignals()
+    {
+        links?.Dispose();
+        links = null;
+    }
+    // Object/method callables retain stable native identity during managed teardown.
+    private void ForwardState(string state) => StateChanged?.Invoke(state);
+    private void ForwardPeerConnected(long peer) => PeerConnected?.Invoke(peer);
+    private void ForwardPeerDisconnected(long peer) => PeerDisconnected?.Invoke(peer);
+    private void ForwardSpawn(long entity, long kind, Dictionary state) => EntitySpawned?.Invoke(entity, (int)kind, state);
+    private void ForwardEntity(long entity, Dictionary state) => EntityChanged?.Invoke(entity, state);
+    private void ForwardDespawn(long entity) => EntityDespawned?.Invoke(entity);
+    private void ForwardMessage(long peer, StringName name, Array args) => MessageReceived?.Invoke(peer, name, args);
+    private void ForwardInput(long peer, long entity, Dictionary input) => InputReceived?.Invoke(peer, entity, input);
+    private void ForwardPacket(long peer, byte[] data, long channel, long delivery) => PacketReceived?.Invoke(peer, data, (int)channel, (Delivery)delivery);
+    private void ForwardTick(long tick, bool server) => SimulationTick?.Invoke(tick, server);
+    private void ForwardDiagnostic(string message) => Diagnostic?.Invoke(message);
+    public override void _EnterTree() => ConnectBridgeSignals();
+    public override void _ExitTree()
+    {
+        try { Close(); }
+        finally { DisconnectBridgeSignals(); restoreSignals = false; }
+    }
+    /// <summary>Preserves the codec/session; derived overrides must call base.</summary>
+    public virtual void OnBeforeSerialize()
+    {
+        restoreSignals = links != null;
+        DisconnectBridgeSignals();
+    }
+    /// <summary>Restores forwarding. Reattach application event handlers in their owner's reload hook.</summary>
+    public virtual void OnAfterDeserialize()
+    {
+        if (restoreSignals) ConnectBridgeSignals();
+    }
     public Error Configure(NetOptions? options = null) => Configure((options ?? new()).ToDictionary());
     public Error Configure(Dictionary options) => Shared.Error(Bridge, "configure", options);
     public Error Host(int port = 10515, string bindAddress = "0.0.0.0") => Shared.Error(Bridge, "host", port, bindAddress);

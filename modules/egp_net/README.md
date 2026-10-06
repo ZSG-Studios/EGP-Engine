@@ -113,6 +113,19 @@ Save application state separately in exported properties. Event subscriptions ar
 explicitly rebuilt; arbitrary captured closures and high-level `Net`/physics
 adapter ownership are not automatically serialized by this API.
 
+For high-level C# `NetNode`, keep the node in the scene tree and preserve its
+reference in your owner's exported `NetNode` property. Its serialization hooks
+detach and restore forwarding on the same GDScript codec child and native
+session. Registered message handlers should use named Godot object methods,
+for example `new Callable(this, nameof(ReceiveMessage))`. Subscribe ordinary
+C# application events again in their owner's `OnAfterDeserialize`; captured
+closures are not a state persistence format. Overrides of `NetNode`'s
+serialization hooks must call `base`. Leaving the tree closes the session and
+disconnects all forwarding callbacks; re-entering reconnects forwarding on the
+existing codec child. Host or join explicitly to create a new session afterward.
+Preserve application state separately. Physics adapters still require their
+own explicit ownership and restoration policy.
+
 `samples/trilingual` compiles C# sources and a C++ GDExtension, admits encrypted
 C#/GDScript/C++ peers, and exercises the shared high-level codec, opaque
 low-level replication, raw channels, prediction and explicit Box3D ticks.

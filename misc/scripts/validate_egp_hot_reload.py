@@ -13,6 +13,8 @@ import time
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+from egp_hot_reload_node_evidence import node_failure, node_lifecycle_failure
+
 ROOT = Path(__file__).resolve().parents[2]
 PROBE = """using Godot;
 using System.Runtime.Loader;
@@ -415,6 +417,11 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--expect-disabled", action="store_true", help="Record the pre-fix opt-in rejection")
     parser.add_argument(
+        "--network-csharp-node",
+        action="store_true",
+        help="Exercise high-level NetNode codec, typed events, ownership and tree lifecycle across reload",
+    )
+    parser.add_argument(
         "--network-csharp-facade",
         action="store_true",
         help="Transfer public NetSession ownership and reconnect managed events across assembly reload",
@@ -493,7 +500,24 @@ def main():
         parser.error("--network-physics requires --network-live-reload or --network-recovery")
     if args.network_csharp_facade and not network_enabled:
         parser.error("--network-csharp-facade requires --network-live-reload or --network-recovery")
+    if args.network_csharp_node and not network_enabled:
+        parser.error("--network-csharp-node requires --network-live-reload or --network-recovery")
+    if args.network_csharp_node and (args.network_csharp_facade or args.network_physics):
+        parser.error("--network-csharp-node requires a separate fixture from low-level facade/physics reload")
     probe_source = PROBE
+    if args.network_csharp_node:
+        members = (ROOT / "misc/scripts/egp_hot_reload_node.cs.txt").read_text(encoding="utf-8")
+        probe_source = probe_source.replace("    [Signal]", members + "    [Signal]")
+        probe_source = probe_source.replace(
+            '        var server = NetworkState["server"].AsGodotObject();',
+            "        if (ServerNode != null && ClientNode != null) { "
+            "var first = authority ? ServerNode.Poll() : Error.Ok; var second = ClientNode.Poll(); "
+            "return first != Error.Ok ? first : second; }\n"
+            '        var server = NetworkState["server"].AsGodotObject();',
+        ).replace(
+            "AfterCount++;",
+            "AfterCount++; if (ServerNode != null && ClientNode != null) { SubscribeNodes(); NodeRestores++; }",
+        )
     if args.network_csharp_facade:
         probe_source = probe_source.replace("    [Signal]", FACADE_MEMBERS + "    [Signal]")
         probe_source = probe_source.replace(
@@ -535,6 +559,15 @@ def main():
     ]
     receipt["source_commit"] = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     receipt["fixture_sha256"] = {str(p.relative_to(ROOT)): digest(p) for p in fixture_paths}
+    if args.network_csharp_node:
+        paths = [
+            ROOT / "misc/scripts" / name
+            for name in ("egp_hot_reload_node.gd", "egp_hot_reload_node.cs.txt", "egp_hot_reload_node_evidence.py")
+        ]
+        paths += list((ROOT / "modules/egp_net/csharp").glob("*.cs")) + list(
+            (ROOT / "modules/egp_net/gdscript").glob("*.gd")
+        )
+        receipt["fixture_sha256"].update({str(p.relative_to(ROOT)): digest(p) for p in paths})
     if args.network_csharp_facade:
         for name in ("NetApi.cs", "NetSessionSignals.cs"):
             helper = ROOT / "modules/egp_net/csharp" / name
@@ -684,6 +717,14 @@ def main():
         shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_editor.gd", addon / "plugin.gd")
         if network_enabled:
             shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_network.gd", project / "network.gd")
+        if args.network_csharp_node:
+            shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_network.gd", project / "network_base.gd")
+            shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_node.gd", project / "network.gd")
+            for folder, pattern in (("csharp", "*.cs"), ("gdscript", "*.gd")):
+                destination = project / "addons/egp_net" / folder if folder == "csharp" else project / "addons/egp_net"
+                destination.mkdir(parents=True, exist_ok=True)
+                for path in (ROOT / "modules/egp_net" / folder).glob(pattern):
+                    shutil.copyfile(path, destination / path.name)
         if args.network_physics:
             (project / "physics_enabled").write_text("enabled", encoding="utf-8")
         if args.network_csharp_facade:
@@ -1118,7 +1159,9 @@ def main():
                     state["after_count"] > previous["after_count"], "Network fault reload skipped managed lifecycle"
                 )
                 proofs.extend([sample("network-stopped"), sample("network-recover")])
-                failure = network_recovery_failure(proofs)
+                failure = (
+                    node_failure(proofs, False, {}) if args.network_csharp_node else network_recovery_failure(proofs)
+                )
                 require(failure is None, failure or "Network reload proof failed")
                 if args.network_physics:
                     failure = network_physics_failure(proofs, live=False)
@@ -1133,6 +1176,7 @@ def main():
                     "cs_version": 6,
                     "physics": args.network_physics,
                     "csharp_facade": args.network_csharp_facade,
+                    "csharp_node": args.network_csharp_node,
                     "scope": "Windows Debug editor/game, one authenticated local client; native session references in serialized dictionaries and dynamic signal callbacks. Explicit admission after a stopped-authority fault; no physics checkpoint, concurrent reload or exported-runtime claim.",
                 }
             if args.network_live_reload:
@@ -1179,7 +1223,11 @@ def main():
                     )
                     previous = state
                     proofs.append(sample("network-live-check"))
-                failure = network_live_failure(proofs, simulation)
+                failure = (
+                    node_failure(proofs, True, simulation)
+                    if args.network_csharp_node
+                    else network_live_failure(proofs, simulation)
+                )
                 require(failure is None, failure or "Live network reload proof failed")
                 if args.network_csharp_facade:
                     failure = facade_failure(proofs, live=True)
@@ -1191,6 +1239,7 @@ def main():
                     "passed": True,
                     "physics": args.network_physics,
                     "csharp_facade": args.network_csharp_facade,
+                    "csharp_node": args.network_csharp_node,
                     "proofs": proofs,
                     "phases": [
                         "initial",
@@ -1202,6 +1251,11 @@ def main():
                     ],
                     "scope": "Windows Debug editor and separate game; one authenticated authority/client pair shares game process. Both outbound simulators configured; no reconnect, checkpoints/handles/native identities retained. Configured loss does not quantify actual dropped packets or real WAN performance.",
                 }
+            if args.network_csharp_node:
+                lifecycle = [sample("network-node-exit"), sample("network-node-reenter")]
+                failure = node_lifecycle_failure(lifecycle)
+                require(failure is None, failure or "High-level node tree lifecycle failed")
+                receipt["node_lifecycle"] = {"passed": True, "proofs": lifecycle}
         command("close")
         require(process.wait(timeout=60) == 0, "Editor/game teardown failed")
         game_log = (output / "game.log").read_text(encoding="utf-8")
@@ -1253,9 +1307,11 @@ def main():
                     "ReloadProbe.cs",
                     "NetApi.cs",
                     "NetSessionSignals.cs",
+                    "NetNode.cs",
                     "reload.gdextension",
                     "physics_checkpoint.bin",
                 )
+                or (p.suffix == ".cs" and "addons" in p.relative_to(project).parts)
                 or (p.suffix == ".dll" and "extensions" in p.relative_to(project).parts)
             )
         }

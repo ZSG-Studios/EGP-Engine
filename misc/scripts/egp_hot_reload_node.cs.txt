@@ -1,0 +1,76 @@
+    [Export] public EGP.Networking.NetNode? ServerNode { get; set; }
+    [Export] public EGP.Networking.NetNode? ClientNode { get; set; }
+    [Export] public int NodeRestores { get; set; }
+    [Export] public int ServerMessages { get; set; }
+    [Export] public int ClientMessages { get; set; }
+    [Export] public int OwnerInputs { get; set; }
+    [Export] public int ServerPackets { get; set; }
+    [Export] public int ClientPackets { get; set; }
+    [Export] public int ServerSpawns { get; set; }
+    [Export] public int ClientSpawns { get; set; }
+    [Export] public Godot.Collections.Array ServerHistory { get; set; } = new();
+    [Export] public Godot.Collections.Array ClientHistory { get; set; } = new();
+    [Export] public Godot.Collections.Array InputHistory { get; set; } = new();
+    private void SubscribeNodes() {
+        ServerNode!.MessageReceived += (peer, name, args) => ServerMessages++;
+        ClientNode!.MessageReceived += (peer, name, args) => ClientMessages++;
+        ServerNode.InputReceived += (peer, entity, input) => {
+            OwnerInputs++; InputHistory.Add(new Godot.Collections.Dictionary {
+                ["peer"] = peer, ["entity"] = entity, ["sequence"] = input["sequence"] });
+        };
+        ServerNode.PacketReceived += (peer, data, channel, delivery) => ServerPackets++;
+        ClientNode.PacketReceived += (peer, data, channel, delivery) => ClientPackets++;
+        ServerNode.EntitySpawned += (entity, kind, state) => ServerSpawns++;
+        ClientNode.EntitySpawned += (entity, kind, state) => ClientSpawns++;
+    }
+    public Godot.Collections.Dictionary CreateNodeSessions(Godot.Collections.Dictionary config) {
+        ServerNode = new() { Name = "Authority", AutoPoll = false };
+        ClientNode = new() { Name = "Client", AutoPoll = false };
+        AddChild(ServerNode); AddChild(ClientNode); SubscribeNodes();
+        if (ServerNode.Configure(config) != Error.Ok || ClientNode.Configure(config) != Error.Ok)
+            throw new System.InvalidOperationException("NetNode configuration failed");
+        if (ServerNode.RegisterMessage("probe", new Callable(this, nameof(ReceiveNodeMessage)), EGP.Networking.Sender.Client) != Error.Ok
+            || ClientNode.RegisterMessage("reply", new Callable(this, nameof(ReceiveNodeReply)), EGP.Networking.Sender.Server) != Error.Ok)
+            throw new System.InvalidOperationException("NetNode handler registration failed");
+        return new() { ["server"] = ServerNode.NativeSession!, ["client"] = ClientNode.NativeSession!,
+            ["server_bridge"] = ServerNode.Bridge, ["client_bridge"] = ClientNode.Bridge };
+    }
+    public void ReceiveNodeMessage(long peer, Godot.Collections.Array args) => ServerHistory.Add(new Godot.Collections.Dictionary {
+        ["peer"] = peer, ["sequence"] = args[0], ["payload"] = System.Convert.ToHexString(args[1].AsByteArray()).ToLowerInvariant() });
+    public void ReceiveNodeReply(long peer, Godot.Collections.Array args) => ClientHistory.Add(new Godot.Collections.Dictionary {
+        ["peer"] = peer, ["sequence"] = args[0], ["payload"] = System.Convert.ToHexString(args[1].AsByteArray()).ToLowerInvariant() });
+    public Error HostNode(int port) => ServerNode!.Host(port, "127.0.0.1");
+    public Godot.Collections.Dictionary NodeToken(string address) {
+        var token = ServerNode!.IssueToken(424242, address);
+        return new() { ["error"] = (int)token.Error, ["token"] = token.Token };
+    }
+    public Error JoinNode(byte[] token) => ClientNode!.JoinToken(424242, token, "127.0.0.1");
+    public long SpawnNode(long peer, int sequence) => ServerNode!.Spawn(17, new() { ["sequence"] = sequence, ["blob"] = new byte[] { 0, 255, 42 } }, peer);
+    public Error UpdateNode(long entity, int sequence) => ServerNode!.UpdateEntity(entity, new() { ["sequence"] = sequence, ["blob"] = new byte[] { 0, 255, 42 } });
+    public Error ExchangeNodeMessages(long peer, long entity, int sequence) {
+        Error[] results = {
+            ClientNode!.SendMessage(0, "probe", new() { sequence, new byte[] { (byte)sequence, 0, 255, 42 } }),
+            ServerNode!.SendMessage(peer, "reply", new() { sequence, new byte[] { (byte)(128 + sequence), 0, 255, 42 } }),
+            ClientNode.SendInput(entity, new() { ["sequence"] = sequence }),
+            ClientNode.SendInput(entity + 10000, new() { ["sequence"] = -sequence }),
+            ClientNode.SendPacket(0, new byte[] { (byte)sequence, 0, 255, 42 }, 3),
+            ServerNode.SendPacket(peer, new byte[] { (byte)(128 + sequence), 0, 255, 42 }, 3)
+        };
+        foreach (var result in results) if (result != Error.Ok) return result;
+        return Error.Ok;
+    }
+    private static string NodeId(GodotObject? value) => GodotObject.IsInstanceValid(value) ? unchecked((long)value!.GetInstanceId()).ToString() : "";
+    public Godot.Collections.Dictionary GetNodeState() => new() {
+        ["server_node"] = NodeId(ServerNode), ["client_node"] = NodeId(ClientNode),
+        ["server_bridge"] = NodeId(ServerNode?.Bridge), ["client_bridge"] = NodeId(ClientNode?.Bridge),
+        ["server_native"] = NodeId(ServerNode?.NativeSession), ["client_native"] = NodeId(ClientNode?.NativeSession),
+        ["server_children"] = ServerNode!.GetChildCount(), ["client_children"] = ClientNode!.GetChildCount(),
+        ["server_auto_poll"] = ServerNode.AutoPoll, ["client_auto_poll"] = ClientNode.AutoPoll,
+        ["server_messages"] = ServerMessages, ["client_messages"] = ClientMessages, ["inputs"] = OwnerInputs,
+        ["server_packets"] = ServerPackets, ["client_packets"] = ClientPackets,
+        ["server_spawns"] = ServerSpawns, ["client_spawns"] = ClientSpawns, ["restores"] = NodeRestores,
+        ["server_history"] = ServerHistory.Duplicate(true), ["client_history"] = ClientHistory.Duplicate(true), ["input_history"] = InputHistory.Duplicate(true)
+    };
+    public void RemoveNodeSessions() { RemoveChild(ClientNode!); RemoveChild(ServerNode!); }
+    public void ReenterNodeSessions() { AddChild(ServerNode!); AddChild(ClientNode!); }
+    public void CloseNodeSessions() { ClientNode?.Free(); ServerNode?.Free(); ClientNode = null; ServerNode = null; }
