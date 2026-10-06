@@ -31,7 +31,9 @@ app, and Homebrew's Apple Silicon installation. Windows setup uses WinGet and
 reuses an existing Visual Studio C++ workload. Linux setup supports apt, dnf,
 pacman, and zypper through polkit. macOS requests Apple's Command Line Tools and
 uses an existing Homebrew installation for CMake, or opens its official installer.
-Stop a running game before rebuilding. Extension source files and CMake settings
+Running-game Debug rebuilds require opting in to runtime reload before launch;
+see [the reload contract](egp_api_contract.md#runtime-reload). Stop the game before
+Release rebuilds. Extension source files and CMake settings
 belong in source control; generated `bin/` files and editor caches do not.
 The descriptor is created after the first successful build. Hashed library copies
 avoid overwriting a DLL already loaded by the editor. Older copies may be removed
@@ -71,6 +73,20 @@ Short paths avoid Windows compiler path limits. Build caches are separate for
 each project/extension; library caches are shared by SDK, compiler, platform,
 architecture, and Debug/Release configuration. Extension projects remain ordinary
 shared-library GDExtensions; changing an extension does not require rebuilding EGP.
+
+Hot reload preserves existing extension objects when the native base remains
+compatible. Changing method arguments or return types invalidates cached native
+method bindings and prints a diagnostic; dynamic method lookup and ordinary
+`Callable` lookup use the new signature. Update callers to match the signature.
+Code holding raw cached method bindings needs a restart.
+
+Changing a live class's native base requires a restart. Removing a class with live
+objects, or rejecting its base change, leaves those objects as their original
+native parent and retains their saved extension properties. The reload result is
+`LOAD_STATUS_NEEDS_RESTART`. Restore the compatible class and reload to recover
+its state, or restart to apply the new hierarchy. Parent properties can still be
+edited during recovery. This does not guarantee recovery for arbitrary binary
+layout, inheritance, or binding changes.
 
 ## Command line
 

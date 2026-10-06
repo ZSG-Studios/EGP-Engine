@@ -78,6 +78,8 @@ native joint configuration, force/torque snapshots, hit and threshold event
 schemas, and explosions. Box2D shape sweeps and body metadata have backend class
 references compiled into editor help and generated managed documentation.
 
+## Runtime reload
+
 Running-game C#/C++ reload is enabled before startup with
 `debug/hot_reload/enable_runtime=true` in an editor build. The editor debugger
 reloads changed native extensions at an idle boundary before script bindings;
@@ -101,6 +103,13 @@ The fixture releases its own thread and checks recovery diagnostics in the edito
 debugger panel. Application threads still require application-controlled shutdown.
 Use `--disable-runtime` for the default non-collectible player and
 `--feature-override` to check the editor feature override of the runtime setting.
+
+Use `--native-recovery --native-abi-recovery` to check missing/invalid native DLLs,
+changed argument counts and return types, rejected native-base changes and live
+class removal. The fixture restores the original class, checks its identity,
+saved properties and signal subscriptions, and verifies restart/repair diagnostics.
+This qualifies dynamic method and `Callable` lookup; raw cached method bindings,
+arbitrary class layouts and inheritance chains still require separate validation.
 
 
 Use `--native-recovery` to exercise a missing DLL followed by an invalid DLL

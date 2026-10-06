@@ -508,6 +508,8 @@ def main():
                 verify(state, 3, previous, cs_version=5 if args.unload_recovery else 4)
                 receipt["native_abi_recovery"] = {
                     "passed": True,
+                    "native_builds": 7,
+                    "rejected_explicit_retries": 2,
                     "method_changes": ["argument-count", "return-type"],
                     "base_change": "Node to Node2D rejected; Node repair retains state and identity",
                     "class_removal": "Live parent and state retained until original class is restored",
@@ -517,6 +519,16 @@ def main():
             receipt["reloads"] = 3 + int(args.assembly_recovery) + int(args.unload_recovery) + int(args.native_recovery)
         command("close")
         require(process.wait(timeout=60) == 0, "Editor/game teardown failed")
+        if args.native_abi_recovery:
+            stream.flush()
+            log = (output / "editor.log").read_text(encoding="utf-8")
+            for diagnostic in (
+                "Attempt to unregister unexisting extension class",
+                'Parameter "_extension" is null',
+                "Cannot call invalid GDExtension method bind",
+                "SCRIPT ERROR:",
+            ):
+                require(diagnostic not in log, "Unexpected reload diagnostic: " + diagnostic)
         require(digest(engine) == receipt["engine_sha256"], "Input engine changed during validation")
         require(
             all(digest(Path(path)) == expected for path, expected in receipt["managed_runtime_sha256"].items()),
