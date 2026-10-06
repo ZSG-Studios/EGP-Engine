@@ -1,6 +1,8 @@
 """Regression check for SDK packaging inside Godot's shared Python build environment."""
 
+import hashlib
 import importlib.util
+import json
 import shutil
 import struct
 import subprocess
@@ -74,6 +76,10 @@ class BundledSDKTest(unittest.TestCase):
         self.assertIn("gen/include/gdextension_interface.h", files)
         self.assertIn("gen/include/godot_cpp/classes/node.hpp", files)
         self.assertIn("LICENSE.md", files)
+        self.assertEqual(
+            json.loads(files["sdk.json"])["api_sha256"],
+            hashlib.sha256((ROOT / "thirdparty/godot-cpp/gdextension/extension_api-4-7.json").read_bytes()).hexdigest(),
+        )
         self.assertIn(b'compatibility_minimum = "4.7"', files["templates/extension.gdextension.in"])
         self.assertNotIn(b"@BITS@", files["CMakeLists.txt"])
         self.assertNotIn(b"find_package(Python", files["CMakeLists.txt"])

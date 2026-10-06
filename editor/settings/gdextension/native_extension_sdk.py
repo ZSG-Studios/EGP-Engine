@@ -51,6 +51,7 @@ def make_archive(cpp_root, template_root, bits="64", precision="single", api_fil
                 {
                     "api_major": api["version_major"],
                     "api_minor": api["version_minor"],
+                    "api_sha256": hashlib.sha256(api_file.read_bytes()).hexdigest(),
                     "bits": bits,
                     "precision": precision,
                 },
