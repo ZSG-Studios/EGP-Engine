@@ -44,7 +44,7 @@ because these chats exist.
 | Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Packaged Debug graceful and Release abrupt dedicated-server replacement pass with three persistent visible clients under WAN impairment; eight-second headless outage passes; single and repeated selected-client recovery and same-process server clock rejection/checkpoint/fresh admission/ownership recovery pass in editor and packaged Debug host/Release dedicated WAN runs; retired-token and retired-entity input rejection are covered; broader controls/scale/soak remain |
 | C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Matching SDK/editor controls, mixed-language exports, dynamic signature changes and rejected hierarchy/class repair pass on Windows; six cached instance/static call paths and nine return kinds now pass on Windows Debug SDK; arbitrary ABI changes and other platforms remain |
 | C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Two live Debug rebuilds preserve existing IDs, property state, callables and signals; failed compile retains published code; Missing/invalid DLL recovery and rejected base/extension-parent/ancestor/class-removal repair preserve extension and editable parent state; cached binding failure/default-return and compatible repair checks now pass; arbitrary ABI changes and soak remain |
-| C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Combined native/managed reload and corrupted-DLL/blocked-unload repair preserve instances, properties and events; public low-level C# session handoff and high-level NetNode reload preserve connected/stopped sessions and exact signal counts; high-level tree exit/reentry, fresh session traffic, retired callback isolation, reentrant close/stop replacement and freed codec replacement pass; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
+| C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Combined native/managed reload and corrupted-DLL/blocked-unload repair preserve instances, properties and events; public low-level C# session handoff, high-level NetNode reload and public C# Box3D adapter/world/body-map transfer preserve connected/stopped sessions and exact signal counts; high-level tree exit/reentry, fresh session traffic, retired callback isolation, reentrant close/stop replacement and freed codec replacement pass; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
 | Export/platform | Relocated Debug/Release games with C#/GDScript/C++ and Box physics/networking; platform-specific binaries and missing-binary diagnostics | Relocated Windows Debug/Release trilingual games pass on the matching API; broader platform/export matrix remains |
 | Performance | Identical-scenes upstream comparison; p95/p99, CPU/GPU/memory/allocations, server tick, bandwidth and long sessions | No AAA readiness claim |
 
@@ -2803,3 +2803,90 @@ independent-process fault/reload, concurrent/exported-runtime reload, automatic
 client physics prediction/rollback, production admission/retry/checkpoint delivery
 and platform/scale/soak/performance. Configured impairments do not quantify packet
 loss or WAN performance; full feature completion and AAA readiness remain open.
+
+
+### 2026-10-06 — public C# Box3D adapter ownership across reload
+
+`NetBox3D.DetachForReload()` and `ResumeAfterReload()` now transfer ownership of
+one existing GDScript adapter. The adapter stays attached to its existing codec,
+world and stable entity-to-body map. Named RefCounted signal methods replace
+managed delegate callables; the old wrapper disconnects its three managed links
+before assembly unload. Its methods reject use after transfer, and disposing it
+again does not detach the resumed owner. Resuming consumes one local capsule;
+invalid, foreign, malformed, copied-after-consumption and future-version capsules
+are rejected without mutation. The resumed wrapper still requires explicit
+application event resubscription. Ordinary disposal detaches; the caller retains
+ownership of the world and network node. This is not a disk/network state format
+or automatic client rollback. The public README includes an ownership example.
+
+API/mirror commit `9098bb5569c9af1eb04c06e0bc3f0044194f6791` is followed by fixture/diagnostic commit
+`bf68b565a1bc0f42e341908e60b43b6e1966fc39`. The live receipt started before the latter commit was made;
+its frozen executed inputs are byte-identical to the committed fixture. The
+stopped receipt and fresh trilingual inputs are pinned to that fixture commit.
+Both source/mirror C# helpers and the new signal class match exactly.
+
+| Check | Exact evidence |
+| --- | --- |
+| Public adapter, six live phases | `.build/integration-box3d-ownership-live-qualified/1791311872001952600/receipt.json`; editor 4372, game 2592; world ticks [46, 143, 248, 469, 719, 1037] and managed transfers/restores [0, 0, 0, 1, 1, 2] |
+| Stopped-authority reload and explicit admission | `.build/integration-box3d-ownership-stopped-qualified/1791312022427911200/receipt.json`; editor 20336, game 7828; world ticks [18, 25, 25, 44] and transfers/restores [0, 0, 1, 1] |
+| Retained world, body and clock | Same adapter/world IDs, one stable body 10000, C++/C# world references/tick/hash/position reads, one before/after event per completed world tick, three managed connections exactly one, one adapter clock connection and zero adapter failures at every checkpoint |
+| Explicit tree lifecycle and fresh sessions | Two exit/reenter checkpoints plus three fresh admission cycles per fixture; stable adapter/world, stopped tree physics unchanged, new entity remapped to body 10000, advancing replicated client physics and exact high-level/retired-native callback counts |
+| Capsule/lifecycle self-checks | 22 actual C# capsule checks, six codec replacement checks and 18 reentrant close/stop state checks per fixture; malformed/future/foreign/replayed ownership rejected, old disposed wrapper cannot disconnect resumed ownership |
+| Editor and relocated Debug/Release | `.build/integration-box3d-ownership-languages/receipt.json`; 27 fresh stages and 197 assertions in each configuration; independent C#/GDScript/C++ request/reply and six independent high-level C#/C++ fault runs pass |
+| Low facade/world and runtime default | `.build/integration-box3d-ownership-low-regression/1791312260385920400/receipt.json` and `.build/integration-box3d-ownership-default/1791312314664724100/receipt.json`; fresh executed fixture inputs replace earlier runner/game sequencing evidence |
+| Evidence/options | `.build/integration-box3d-ownership-tool-checks-qualified/receipt.json`; 662 semantic reader tests (293 previous plus 369 adapter/tree cases), 18 rejected CLI combinations, help/Ruff/format/mypy pass |
+
+The isolated controls found a test harness boundary problem: debugger captures
+can interrupt GDScript inside a native poll/physics tick. A direct test update
+could be overwritten by the unfinished tick's already-copied entity state; direct
+tree exit could interrupt a step between before/after events. The harness now
+defers network commands/snapshots and native reload requests until that call stack
+returns. It also waits for both native test receivers to receive all three test
+application packets per sequence, including the rejected ownership packet. Exact
+immediate authority, native and client application sequence checks remain enabled.
+`.build/integration-box3d-ownership-controls.json` retains the three finalized
+failing runs and one incomplete interrupted diagnostic with source/binary/log
+hashes. Deferred fixture commands qualify safe-boundary tests; arbitrary
+application mutation or reload inside synchronous callbacks remains open.
+
+Commands:
+
+```powershell
+$egpPython = 'C:/Users/Rose-X/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe'
+& $egpPython misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --output .build/integration-box3d-ownership-live-qualified --network-live-reload --network-csharp-node --network-csharp-box3d --assembly-recovery --unload-recovery --native-recovery --native-abi-recovery
+& $egpPython misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --output .build/integration-box3d-ownership-stopped-qualified --network-recovery --network-csharp-node --network-csharp-box3d --assembly-recovery --unload-recovery --native-recovery --native-abi-recovery
+```
+
+The matching SDK/template trilingual argv and 21 frozen source inputs are in
+`.build/integration-box3d-ownership-languages/source.json`. Fresh Debug extension
+`0352845e965aa5df8fb3e3debba4f977474eaef9586c8290bd61b2e20ac54f09`, Release extension `6ce96b5342d574c02f1c08089e1a9bf840f5351835617278855366931fe01bd3`
+and C# assembly `3d8d42aa0922e39bee4954b71f8a58fc78a6be7dc10a2482671a1a81cfda79ea` accompany generated/runtime/log hashes.
+The live profile remains configured 30 ms latency, 5 ms jitter and 5 percent loss
+on both outbound simulators; this does not count actual drops or quantify WAN
+performance. The authority/client pair shares one local Windows Debug game
+process during reload. Generic corrupt assembly/unload/ABI recovery still occurs
+before authenticated node creation; those injected failures during an active
+network node remain open.
+
+Native source `4d64b38c554ab3dc491285f4ffa5119c001da56f`, engine SHA
+`20be5396d78b4c9873d4a355132f62366be58fcf9b1519bb595006fb07e74342`, 86 installed
+artifacts, ClassDB/SDK/glue and the 120-check/ten-test native suites remain
+unchanged. Seven earlier GDS-only physics/lab cases, their default sample and 72
+admission cases retain byte-identical executed inputs. Their unused historical
+C# Box3D manifest entry is superseded by the fresh C# builds/adapter qualification;
+none of those GDS lab/admission runs executes a C# helper.
+
+`.build/integration-box3d-ownership-publication.json` checks committed canonical
+source/normal remote equality, original handoff ancestry, all seven worktrees,
+foreign tracked/untracked bytes, no open PRs, helper mirrors and the combined
+fresh/reused evidence. Current four original chats are completed; the independent
+docs owner finished its a5146052e8 builds/deployments and is handed the new
+qualified source after publication. Foreign historical leftovers remain preserved
+and accounted for, not declared universally clean or merged. The loop stays ACTIVE.
+
+Next: authenticated-node assembly/unload/ABI failures, high-level C++ adapter
+ownership, arbitrary in-flight callback/lifecycle mutation, low-level independent
+process fault/reload, concurrent/exported-runtime reload, automatic client physics
+prediction/rollback, production admission/retry/checkpoint delivery and wider
+platform/scale/soak/performance. Full feature acceptance and AAA readiness remain
+open.
