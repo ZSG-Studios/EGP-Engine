@@ -239,6 +239,122 @@ def stall_failure(receipt):
     return None
 
 
+def server_stall_failure(receipt):
+    """Require stopped authority, fresh admission and restoration in the same server PID."""
+    fault = receipt["server_stall"]
+    clients = receipt["clients"]
+    records = receipt["processes"]
+    servers = [record for record in records if record["role"] in ("server", "host")]
+    peers = [record for record in records if record["role"] == "client"]
+    if (
+        len(servers) != 1
+        or len(peers) != clients
+        or {record["result"].get("index") for record in peers} != set(range(clients))
+        or len({record["pid"] for record in records}) != clients + 1
+    ):
+        return "Server stall lost its original server/client processes"
+    server = servers[0]
+    result = server["result"]
+    proof = result.get("server_stall_proof", {})
+    checkpoint = proof.get("checkpoint", {})
+    initial = 100 + clients * (clients + 1) // 2
+    final = initial + clients * (clients + 1) // 2
+    if (
+        server["exit_code"] != 0
+        or not result.get("passed")
+        or checkpoint.get("pid") != server["pid"]
+        or checkpoint.get("generation") != 1
+        or checkpoint.get("admitted_clients") != clients
+        or checkpoint.get("input_clients") != clients
+        or checkpoint.get("root_authority") != -1
+        or checkpoint.get("tick", 0) < 2
+        or checkpoint.get("persistent_value") != initial
+        or result.get("generation") != 2
+        or result.get("admitted_clients") != clients
+        or result.get("input_clients") != clients
+        or result.get("restored_value") != initial
+        or result.get("persistent_value") != final
+    ):
+        return (
+            "Server did not restore its authenticated application checkpoint and accept exactly one new input per owner"
+        )
+    if (
+        result.get("diagnostics") != ["Fixed simulation exceeded its catch-up budget; resynchronization required."]
+        or proof.get("elapsed_ms", 0) < fault["milliseconds"]
+        or proof.get("injected_at_ms", 0) < fault["at_seconds"] * 1000
+        or proof.get("poll_error") != 1
+        or proof.get("state_after_failure") != "Stopped"
+        or proof.get("entities_after_failure") != 0
+        or proof.get("peers_after_failure") != 0
+        or proof.get("tick_after_failure") != 0
+        or proof.get("spawn_after_failure") != 0
+        or proof.get("update_after_failure") != 4
+        or not proof.get("old_root")
+        or not proof.get("new_root")
+        or proof["old_root"] == proof["new_root"]
+        or proof.get("port") != receipt["listener"]["port"]
+        or proof.get("recovered_port") != receipt["listener"]["port"]
+        or result.get("connection_states") != ["Listening", "Stopped", "Listening", "Stopped"]
+    ):
+        return "Server clock failure did not reject work, clear authority or resume on the same endpoint"
+    retired = proof.get("retired_admission", {})
+    states = retired.get("states", [])
+    if (
+        "Connecting" not in states
+        or states[-1:] != ["Disconnected"]
+        or any(state in states for state in ("Connected", "Synchronizing"))
+        or retired.get("entities") != 0
+        or retired.get("peers") != 0
+    ):
+        return "Retired admission was not rejected by the recovered secure listener"
+    old_entities = {proof["old_root"]}
+    new_entities = {proof["new_root"]}
+    for record in peers:
+        data = record["result"]
+        index = str(data.get("index"))
+        owners = data.get("epoch_owners", {})
+        old, new = owners.get("1", {}), owners.get("2", {})
+        history = result.get("peer_generations", {}).get(index, {})
+        connection = data.get("connection_states", [])
+        if (
+            record["exit_code"] != 0
+            or not data.get("passed")
+            or data.get("diagnostics")
+            or data.get("generation") != 2
+            or data.get("replies") != 2
+            or not data.get("disconnected")
+            or not data.get("cleared_on_disconnect")
+            or data.get("epoch_inputs") != {"1": True, "2": True}
+            or data.get("epoch_ticks", {}).get("1", 0) < 2
+            or data.get("epoch_ticks", {}).get("2", 0) < 2
+            or data.get("epoch_server_pids") != {"1": server["pid"], "2": server["pid"]}
+            or data.get("restored_value") != initial
+            or data.get("persistent_value") != final
+            or not old.get("peer")
+            or not new.get("peer")
+            or old["peer"] == new["peer"]
+            or not old.get("entity")
+            or not new.get("entity")
+            or old["entity"] == new["entity"]
+            or new.get("stale_input_enqueued") is not True
+            or proof.get("old_owners", {}).get(index) != old["entity"]
+            or set(proof.get("old_peers", {}).get(index, {})) != {str(old["peer"])}
+            or set(history) != {str(old["peer"]), str(new["peer"])}
+            or result.get("input_generations", {}).get(index) != {"1": True, "2": True}
+            or connection.count("Connected") != 2
+            or connection.count("Disconnected") != 1
+        ):
+            return "Client lost disconnect, cleared caches, fresh ownership or acknowledged authoritative recovery evidence"
+        split = connection.index("Disconnected")
+        if "Connected" not in connection[:split] or "Connected" not in connection[split + 1 :]:
+            return "Client connection history does not span the server outage"
+        old_entities.add(old["entity"])
+        new_entities.add(new["entity"])
+    if len(old_entities) != clients + 1 or len(new_entities) != clients + 1 or old_entities & new_entities:
+        return "Recovered server reused or duplicated a retired entity handle"
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, required=True, help="EGP editor or template containing EGPNetSession")
@@ -284,6 +400,13 @@ def main():
     )
     parser.add_argument("--server-restart-mode", choices=("graceful", "abrupt"), default="graceful")
     parser.add_argument(
+        "--server-stall-at",
+        type=bounded_float(0, 90),
+        default=0.0,
+        help="Delay the authoritative poll, then restore the same server and readmit its clients",
+    )
+    parser.add_argument("--server-stall-ms", type=int, default=750, help="Server clock gap in ms (550..5000)")
+    parser.add_argument(
         "--server-down-for", type=bounded_float(0, 10), default=1.0, help="Server outage duration in seconds"
     )
     parser.add_argument("--preset", choices=PRESETS, default="local")
@@ -304,6 +427,15 @@ def main():
         parser.error("--port must be 0..65535")
     if args.reconnect_at and not 1 <= args.reconnect_at <= args.duration - 3:
         parser.error("--reconnect-at must leave at least 3 seconds before the duration ends")
+    if not 550 <= args.server_stall_ms <= 5000:
+        parser.error("--server-stall-ms must be 550..5000")
+    if args.server_stall_at:
+        if args.reconnect_at or args.server_restart_at or args.client_stall_at:
+            parser.error("--server-stall-at cannot overlap manual reconnect, server replacement or client stalls")
+        if not 3 <= args.server_stall_at <= args.duration - args.server_stall_ms / 1000 - 7:
+            parser.error("Server stalls must allow 3 seconds before the gap and 7 seconds afterward")
+    elif args.server_stall_ms != 750:
+        parser.error("--server-stall-ms requires --server-stall-at")
     if not 550 <= args.client_stall_ms <= 5000 or not 0 <= args.client_stall_index < args.clients:
         parser.error("--client-stall-ms must be 550..5000 and --client-stall-index must name an existing client")
     if args.client_stall_at:
@@ -370,12 +502,17 @@ def main():
             "mode": args.server_restart_mode,
             "down_seconds": args.server_down_for,
         },
+        "server_stall": {
+            "requested": bool(args.server_stall_at),
+            "at_seconds": args.server_stall_at,
+            "milliseconds": args.server_stall_ms,
+        },
         "simulation": simulation,
         "simulate_on": args.simulate_on,
         "processes": [],
         "window_observation_supported": os.name == "nt",
         "visible_window_observations": [],
-        "scope": "Local encrypted admission, account identity, replies, tick replication and optional reconnect/server replacement. Replacement uses fresh tokens and explicit application checkpoint restoration, owner-authorized input and stale-entity checks. No automatic persistence, gameplay, physics rollback, remote auth or performance qualification.",
+        "scope": "Local encrypted admission, account identity, replies, tick replication and optional reconnect/server replacement or server clock recovery. Recovery uses fresh tokens and explicit application checkpoint restoration, owner-authorized input and stale-entity checks. No automatic persistence, gameplay, physics rollback, remote auth or performance qualification.",
     }
     engine_main = engine.with_name(engine.name.replace(".console.exe", ".exe"))
     receipt["engine_artifacts"] = {
@@ -492,7 +629,9 @@ def main():
                     f"--client-stall-count={args.client_stall_count}",
                     f"--client-stall-interval={args.client_stall_interval}",
                     f"--port={args.port if port is None else port}",
-                    f"--restart-enabled={int(bool(args.server_restart_at))}",
+                    f"--restart-enabled={int(bool(args.server_restart_at or args.server_stall_at))}",
+                    f"--server-stall-at={args.server_stall_at}",
+                    f"--server-stall-ms={args.server_stall_ms}",
                     f"--generation={generation}",
                     f"--checkpoint-value={checkpoint}",
                     f"--server-down-for={args.server_down_for}",
@@ -641,6 +780,11 @@ def main():
                 receipt["error"] = failure
         if args.client_stall_at and receipt["passed"]:
             failure = stall_failure(receipt)
+            if failure:
+                receipt["passed"] = False
+                receipt["error"] = failure
+        if args.server_stall_at and receipt["passed"]:
+            failure = server_stall_failure(receipt)
             if failure:
                 receipt["passed"] = False
                 receipt["error"] = failure

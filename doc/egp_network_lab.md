@@ -36,6 +36,8 @@ python misc/scripts/launch_egp_network_lab.py --engine bin/godot.windows.templat
 | `--server-restart-at SECONDS` | Replace the dedicated server while keeping the original clients alive |
 | `--server-restart-mode graceful` / `abrupt` | Request a final checkpoint and clean exit, or forcibly terminate the owned server after verifying its latest health checkpoint |
 | `--server-down-for SECONDS` | Outage before replacement, 0..10 seconds; default 1 |
+| `--server-stall-at SECONDS` | Delay the authoritative poll, restore the application checkpoint and readmit clients in the original server/host process |
+| `--server-stall-ms MILLISECONDS` | Authoritative gap from 550 to 5000 ms, default 750 |
 | `--duration SECONDS` | Client lifetime, 5..100 seconds; processes have an additional bounded watchdog and cleanup |
 | `--port PORT` | Loopback UDP endpoint; 0 chooses an available port; replacement retains the initial port |
 | `--output DIRECTORY` | Evidence parent, default `.build/egp-network-lab`; each run uses a unique child |
@@ -69,7 +71,7 @@ must retain their original connection and receive the advancing authoritative
 state. All original process PIDs stay alive; no engine budget or timeout is raised.
 This is an explicit application recovery example using a local trusted backend,
 not automatic transport reconnect or production authentication. It covers one
-selected client per run; server stalls and physics rollback need separate
+selected client per run; physics rollback needs separate
 qualification. Repeated recovery uses immutable admission files for each connection
 generation; retired tokens are not reused. The next gap waits for the current
 owner-input acknowledgment and advancing authoritative tick/counter state. If
@@ -94,6 +96,35 @@ explicit application counter checkpoint, then applies the new generation's input
 once. The receipt verifies replicated server PIDs, both generations' input
 acknowledgments and tick progress, exact restoration, and advancement on the new
 server. Immutable local handoff files avoid replacing files held open on Windows.
+
+To exercise the authoritative clock in the original server or listen host:
+
+```powershell
+python misc/scripts/launch_egp_network_lab.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --mode host --clients 3 --visible --preset wan --duration 20 --server-stall-at 4
+```
+
+Server stalls cannot overlap client stalls, manual reconnect or server replacement.
+Allow three seconds before the gap and seven seconds afterward. Injection waits
+for all clients' authenticated owner inputs and acknowledgments. The engine must
+reject the delayed poll, stop the listener, clear peers/entities and reset ticks;
+entity creation and updates must fail while stopped.
+
+After poll returns, the fixture keeps the configured server Session and calls
+`host()` on the original port. The listener generates a new secure key and starts
+a fresh clock. The application explicitly restores its counter checkpoint,
+creates new root and owned entities, and issues fresh tokens. Retaining this
+Session also preserves its handle generations, so retired peer/entity handles
+cannot alias the new authority. Clients observe disconnect, clear their replicated
+caches and obtain the new baseline. Each sends a retired-entity input, which must
+be discarded, and one new owner input, which must be acknowledged exactly once.
+An isolated peer in the server process also tries the retired token; it must finish
+disconnected without reaching synchronization or receiving entities.
+
+The receipt verifies the same server/client PIDs and port, both connection epochs,
+fresh ownership, rejected retired admission, exact checkpoint restoration and the
+final authoritative counter on every client. This fixture preserves one explicit
+application counter; arbitrary game state and authoritative physics restoration
+remain separate acceptance items.
 
 Receipts include fixture/helper/launcher hashes, source editor/template hashes,
 exported runtime/PCK hashes, process commands/PIDs/exit codes, window observations

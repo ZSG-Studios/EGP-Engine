@@ -232,6 +232,13 @@ provides `--client-stall-at`, `--client-stall-ms`, `--client-stall-index`,
 `--client-stall-count` and `--client-stall-interval` to exercise single or repeated
 recovery without increasing the engine budget. Each recovery uses a fresh token,
 peer and owned entity; the next gap waits for verified authoritative progress.
+The lab's `--server-stall-at` and `--server-stall-ms` restore a stopped server in
+the same process. After poll returns, a stopped configured server can call
+`host()` again, restore application state and issue fresh tokens. A secure listener
+without an explicit `private_key` generates a new key each time it starts, so old
+tokens no longer admit clients. Keeping the Session preserves its retired handle
+generations. Handles are scoped to their Session; replacing the Session requires
+the application to discard old handles and track its new authority generation.
 `server_tick` reports the latest
 replicated server tick, not a continuously synchronized idle clock.
 
