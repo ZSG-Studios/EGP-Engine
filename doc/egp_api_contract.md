@@ -136,5 +136,9 @@ Use an application-controlled safe boundary before unload and stored Dictionary
 properties for capsules. Restore the same bridge/session/adapter/world and
 resubscribe application callbacks after compatible reload. The focused Debug
 fixture uses manual polling and pauses it during unload; automatic or in-flight
-owner transfer and failed-library recovery of these wrappers remain separate
-acceptance items.
+owner transfer and prolonged failed-library outages remain separate acceptance
+items. The ownership fixture's `--native-recovery` mode qualifies consecutive
+missing/invalid DLL attempts followed by compatible repair within the fixed-clock
+catch-up budget, with unavailable extension methods, retained parent edits and
+exact native solver state. It does not establish automatic re-admission after a
+long fault interval.

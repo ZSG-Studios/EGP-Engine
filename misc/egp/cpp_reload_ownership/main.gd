@@ -3,6 +3,8 @@ var probe: Node
 var assertions := 0
 var phases: Array = []
 var transfers: Array = []
+var faults: Array = []
+var native_recovery := false
 
 func check(value: bool, message: String) -> void:
 	assertions += 1
@@ -43,13 +45,25 @@ func validate(proof: Dictionary, version: int, previous: Dictionary = {}) -> voi
 		check(proof.handoffs == version - 1 and proof.restores == version - 1 and proof.checks >= 30 * (version - 1), "ownership controls and transfers")
 	phases.append(proof)
 
-func descriptor(version: int) -> void:
+func descriptor_library(library: String) -> void:
 	var file := FileAccess.open("res://ownership.gdextension", FileAccess.WRITE)
 	check(file != null, "descriptor open")
-	file.store_string('[configuration]\nentry_symbol="ownership_init"\ncompatibility_minimum="4.8"\nreloadable=true\n[libraries]\nwindows.debug.x86_64="res://bin/ownership%d.dll"\n' % version)
+	file.store_string('[configuration]\nentry_symbol="ownership_init"\ncompatibility_minimum="4.8"\nreloadable=true\n[libraries]\nwindows.debug.x86_64="res://bin/%s.dll"\n' % library)
 	file.close()
 
+func inject_fault(kind: String, version: int, node_id: int) -> void:
+	descriptor_library("ownership-" + kind)
+	var status := GDExtensionManager.reload_extension("res://ownership.gdextension")
+	check(status == GDExtensionManager.LOAD_STATUS_FAILED, "injected library load must fail")
+	check(probe.get_instance_id() == node_id and probe.get_class() == "Node", "failed load retains native parent")
+	check(not probe.has_method("resume") and not probe.has_method("proof"), "failed library has no callable extension methods")
+	check(probe.get_child_count() == 2, "network bridge children retained during failure")
+	check(not GDExtensionManager.get_extension("res://ownership.gdextension").is_library_open(), "failed library stays closed")
+	probe.name = "RecoveredOwnership%d%s" % [version, kind]
+	faults.append({"kind": kind, "version": version, "status": status, "node_id": node_id, "parent_id": probe.get_parent().get_instance_id(), "name": str(probe.name), "children": probe.get_child_count(), "methods_unavailable": not probe.has_method("resume"), "library_closed": not GDExtensionManager.get_extension("res://ownership.gdextension").is_library_open()})
+
 func _ready() -> void:
+	native_recovery = "--native-recovery" in OS.get_cmdline_user_args()
 	probe = ClassDB.instantiate("EGPNetOwnershipProbe")
 	add_child(probe)
 	check(probe.start() == OK, "start")
@@ -63,18 +77,26 @@ func _ready() -> void:
 		var node_id := probe.get_instance_id()
 		check(probe.suspend() == OK, "explicit owner handoff")
 		var frozen := snapshot()
-		descriptor(version)
+		var fault_start := Time.get_ticks_msec()
+		if native_recovery:
+			inject_fault("missing", version, node_id)
+			inject_fault("invalid", version, node_id)
+		descriptor_library("ownership%d" % version)
 		check(GDExtensionManager.reload_extension("res://ownership.gdextension") == 0, "real compatible DLL reload")
 		check(probe.get_instance_id() == node_id and probe.proof().version == version, "same live extension node/new code")
+		var fault_elapsed_ms := Time.get_ticks_msec() - fault_start
+		if native_recovery:
+			check(str(probe.name) == "RecoveredOwnership%dinvalid" % version, "parent-property edit persists through consecutive failures")
+			check(fault_elapsed_ms < 500, "fault interval exceeded qualified clock catch-up budget")
 		check(probe.resume() == OK, "consume serialized native owner capsules")
 		var restored := snapshot()
 		check(restored.world_tick == frozen.world_tick and restored.world_hash == frozen.world_hash, "exact solver state across unload")
-		transfers.append({"version": version, "node_id": node_id, "restored_node_id": probe.get_instance_id(), "tick": frozen.world_tick, "restored_tick": restored.world_tick, "hash": frozen.world_hash, "restored_hash": restored.world_hash})
+		transfers.append({"version": version, "node_id": node_id, "restored_node_id": probe.get_instance_id(), "tick": frozen.world_tick, "restored_tick": restored.world_tick, "hash": frozen.world_hash, "restored_hash": restored.world_hash, "fault_elapsed_ms": fault_elapsed_ms, "parent_name": str(probe.name)})
 		check(probe.send() == OK, "message handler re-registration")
 		await pump(previous.world_tick + 8, version)
 		var proof := snapshot()
 		validate(proof, version, previous)
 		previous = proof
-	var report := {"passed": true, "assertions": assertions, "phases": phases, "transfers": transfers}
+	var report := {"passed": true, "assertions": assertions, "phases": phases, "transfers": transfers, "native_recovery": native_recovery, "faults": faults}
 	print("EGP_CPP_OWNERSHIP_PASSED " + JSON.stringify(report))
 	get_tree().quit(0)

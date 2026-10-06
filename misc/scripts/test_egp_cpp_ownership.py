@@ -3,7 +3,7 @@
 import copy
 import unittest
 
-from validate_egp_cpp_ownership import evidence_failure
+from validate_egp_cpp_ownership import diagnostic_failure, evidence_failure
 
 
 class CppOwnershipEvidenceTests(unittest.TestCase):
@@ -103,6 +103,93 @@ class CppOwnershipEvidenceTests(unittest.TestCase):
             proof["phases"][1][key] = value
             with self.subTest(key=key, value=value):
                 self.assertIsNotNone(evidence_failure(proof))
+
+    def recovery_proof(self):
+        proof = self.proof()
+        proof["native_recovery"] = True
+        proof["faults"] = []
+        for transfer in proof["transfers"]:
+            version = transfer["version"]
+            transfer.update(fault_elapsed_ms=20, parent_name=f"RecoveredOwnership{version}invalid")
+            for kind in ("missing", "invalid"):
+                proof["faults"].append(
+                    dict(
+                        kind=kind,
+                        version=version,
+                        status=1,
+                        node_id=transfer["node_id"],
+                        parent_id=90,
+                        name=f"RecoveredOwnership{version}{kind}",
+                        children=2,
+                        methods_unavailable=True,
+                        library_closed=True,
+                    )
+                )
+        return proof
+
+    def test_failed_library_boundaries_and_mode(self):
+        proof = self.recovery_proof()
+        self.assertIsNone(evidence_failure(proof, True))
+        self.assertIsNotNone(evidence_failure(proof))
+        self.assertIsNotNone(evidence_failure(self.proof(), True))
+        for index, row in enumerate(proof["faults"]):
+            for key in row:
+                altered = self.recovery_proof()
+                del altered["faults"][index][key]
+                with self.subTest(index=index, key=key):
+                    self.assertIsNotNone(evidence_failure(altered, True))
+            for key, value in (
+                ("status", 0),
+                ("status", True),
+                ("children", 0),
+                ("node_id", 92),
+                ("parent_id", 0),
+                ("methods_unavailable", 1),
+                ("library_closed", False),
+                ("name", "lost"),
+            ):
+                altered = self.recovery_proof()
+                altered["faults"][index][key] = value
+                self.assertIsNotNone(evidence_failure(altered, True))
+
+    def test_long_fault_or_lost_parent_edit_rejected(self):
+        for index in (0, 1):
+            for value in (None, True, -1, 500, "20"):
+                proof = self.recovery_proof()
+                proof["transfers"][index]["fault_elapsed_ms"] = value
+                self.assertIsNotNone(evidence_failure(proof, True))
+            proof = self.recovery_proof()
+            del proof["transfers"][index]["parent_name"]
+            self.assertIsNotNone(evidence_failure(proof, True))
+        proof = self.recovery_proof()
+        proof["faults"].reverse()
+        self.assertIsNotNone(evidence_failure(proof, True))
+
+    def diagnostics(self):
+        return "\n".join(
+            [
+                'ERROR: Condition "!FileAccess::exists(path)" is true. Returning: ERR_FILE_NOT_FOUND',
+                "ERROR: GDExtension dynamic library not found: 'res://ownership.gdextension'.",
+                "ERROR: Can't open GDExtension dynamic library: 'res://ownership.gdextension'.",
+                "ERROR: Can't open dynamic library: C:/fixture/bin/ownership-invalid.dll. Error: Bad image.",
+            ]
+            * 2
+        )
+
+    def test_expected_errors_do_not_hide_unrelated_failures(self):
+        text = self.diagnostics()
+        self.assertIsNone(diagnostic_failure(text, True))
+        self.assertIsNone(diagnostic_failure("clean"))
+        for altered in (
+            text + "\nERROR: other failure",
+            text + "\nSCRIPT ERROR: invalid",
+            text + "\nEGP_CPP_OWNERSHIP_FAILED lost",
+            text.replace("ownership-invalid.dll", "other.dll"),
+            text.replace("not found", "wrong"),
+            text.splitlines()[0],
+        ):
+            self.assertIsNotNone(diagnostic_failure(altered, True))
+        self.assertIsNotNone(diagnostic_failure(text))
 
 
 if __name__ == "__main__":

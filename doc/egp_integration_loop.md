@@ -3068,3 +3068,60 @@ failed-library recovery of these wrappers, independent-process and exported-game
 reload, Release-library recreation, arbitrary native layouts, production
 prediction/rollback/admission and broader parity/platform/scale/soak/performance
 acceptance remain open. The loop continues.
+
+## 2026-10-06: C++ owner recovery through missing and invalid libraries
+
+The public owner fixture now has `--native-recovery`. Before each compatible
+reload it attempts a missing library and then an invalid library, without
+consuming the saved owner capsules. All four attempts return `LOAD_STATUS_FAILED`.
+The same live object remains its native Node parent, both networking children
+remain attached, the extension library stays closed and extension methods remain
+unavailable. No extension methods are called while its DLL is unavailable.
+Parent-name edits made during those failures survive the later repair.
+
+`.build/integration-cpp-owner-recovery-qualified/1791319083802516800/receipt.json`
+passes 158 runtime assertions and 60 capsule checks. The two measured fault/repair
+intervals were 25 ms and 14 ms. World ticks 44 and 55 and their exact hashes remain
+unchanged across unload/repair; repaired code resumes the original sessions,
+adapter/world/entity/body 10000 mapping, one callback per completed tick and
+reliable application handlers. Subsequent world ticks advance to 55 and 66 with
+one newly received message per phase. This is one local Windows Debug
+editor-build process with manual polling paused during each controlled interval.
+Configured outbound simulation is 10 ms latency, 2 ms jitter and 3 percent loss;
+these settings do not measure actual loss or WAN performance.
+
+`.build/integration-cpp-owner-recovery-default/1791319135331172800/receipt.json`
+also passes the unchanged no-fault mode using the updated fixture/reader.
+Seven semantic test methods cover complete recovery phases, missing/wrong fields,
+fault ordering, short interval/parent-edit evidence and strict diagnostic
+classification, in addition to the previous identity/physics/capsule checks.
+The expected eight loader errors are counted by exact missing/extension messages
+and the isolated invalid-DLL path; extra, unrelated or missing errors, script
+errors and ownership failure markers still reject the run. Ruff/format pass.
+
+```powershell
+$egpPython = 'C:/Users/Rose-X/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe'
+$egpSdk = "$env:LOCALAPPDATA/Godot/egp_cpp/sdk/4bc13481314e7023"
+$egpLib = "$env:LOCALAPPDATA/Godot/egp_cpp/lib/4bc13481314e7023/MSVC-19.51.36260.0-Windows-AMD64-x64/Debug/egp_godot_cpp.lib"
+& $egpPython misc/scripts/validate_egp_cpp_ownership.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --sdk $egpSdk --sdk-library $egpLib --native-recovery --output .build/cpp-owner-recovery-repeat
+& $egpPython -m unittest discover -s misc/scripts -p test_egp_cpp_ownership.py
+```
+
+No native engine or public helper implementation changed for this acceptance
+item. The C++ helper/mirror hash remains
+`c3aac8bd6fba4af2bdf8ed013ce2fa4afd52a444a1e000dfb58d1cbf64823fb8`.
+The prior 27-stage trilingual editor/Debug/Release run and 29 combined-engine
+scopes retain byte-identical executed helper/native inputs; the installed 95
+artifacts, API and SDK identities remain unchanged. New commands, sources, DLLs,
+processes and log hashes are pinned in the two fresh receipts.
+`.build/integration-cpp-owner-recovery-publication.json` verifies committed/pushed
+fixture/docs, fresh evidence, inherited combined qualification, merge provenance
+and the preserved worktree inventory. The docs owner is independently publishing
+the preceding helper source pin; each deployment retains its own source identity.
+
+Short missing/invalid-library owner recovery now has focused evidence. Prolonged
+failure beyond clock catch-up limits still requires explicit stop/checkpoint,
+re-admission and new entity mapping; that combined owner-recovery scenario remains
+open. Automatic/in-flight transfer, exported/independent-process reload,
+Release-library recreation, arbitrary ABI changes, production prediction and
+broader physics/platform/scale/soak/performance acceptance also remain open.

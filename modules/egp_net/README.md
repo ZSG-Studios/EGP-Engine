@@ -447,6 +447,12 @@ DLL reloads in one local Windows editor-build process with manually polled,
 authenticated server/client sessions. It verifies exact solver state at the
 handoff, stable identities/body mapping, advancing replicated physics, one
 callback per tick and message-handler resubscription. Polling pauses during the
-explicit unload; this does not qualify automatic transfer, mutation inside active
-callbacks, failed-library recovery of these owners, independent-process reload,
+explicit unload. Add `--native-recovery` to inject a missing DLL and an invalid
+DLL before each repair. The fixture verifies that extension methods stay
+unavailable during failure, parent-property edits survive, and the same stored
+capsules restore the owners and exact solver state after both failed attempts.
+The loader diagnostics are expected and counted; unrelated errors still fail
+qualification. These are short controlled failures within the network clock's
+catch-up budget. This does not qualify automatic transfer, mutation inside active
+callbacks, prolonged outages/re-admission, independent-process reload,
 Release-library recreation or arbitrary native layouts.

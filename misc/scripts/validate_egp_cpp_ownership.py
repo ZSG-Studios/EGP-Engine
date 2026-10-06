@@ -20,9 +20,11 @@ def digest(path):
     return hashlib.sha256(Path(path).read_bytes()).hexdigest()
 
 
-def evidence_failure(proof):
+def evidence_failure(proof, native_recovery=False):
     if not isinstance(proof, dict) or proof.get("passed") is not True:
         return "Missing literal success"
+    if proof.get("native_recovery", False) is not native_recovery:
+        return "Recovery mode evidence mismatch"
     phases = proof.get("phases")
     if not isinstance(phases, list) or len(phases) != 3:
         return "Expected three live code versions"
@@ -54,6 +56,12 @@ def evidence_failure(proof):
             or transfer["hash"] != transfer.get("restored_hash")
         ):
             return "Unloading changed exact solver state"
+        if native_recovery and (
+            type(transfer.get("fault_elapsed_ms")) is not int
+            or not 0 <= transfer["fault_elapsed_ms"] < 500
+            or transfer.get("parent_name") != f"RecoveredOwnership{version}invalid"
+        ):
+            return "Missing bounded fault interval/retained parent edit"
     previous = None
     for version, phase in enumerate(phases, 1):
         if not isinstance(phase, dict):
@@ -136,6 +144,56 @@ def evidence_failure(proof):
     for transfer, phase in zip(transfers, phases):
         if transfer["tick"] != phase["world_tick"] or transfer["hash"] != phase.get("world_hash"):
             return "Transfer checkpoint does not match preceding live phase"
+    faults = proof.get("faults", [])
+    if not isinstance(faults, list) or len(faults) != (4 if native_recovery else 0):
+        return "Missing/unexpected failed-library phases"
+    for index, fault in enumerate(faults):
+        version = 2 + index // 2
+        kind = "missing" if index % 2 == 0 else "invalid"
+        if not isinstance(fault, dict) or any(
+            type(fault.get(k)) is not int for k in ("version", "status", "node_id", "parent_id", "children")
+        ):
+            return "Malformed failed-library phase"
+        if (
+            fault["version"] != version
+            or fault.get("kind") != kind
+            or fault["status"] != 1
+            or fault["children"] != 2
+            or fault["node_id"] != transfers[index // 2]["node_id"]
+            or fault["parent_id"] == 0
+            or fault["parent_id"] != faults[0].get("parent_id")
+        ):
+            return "Failed-library identity/state mismatch"
+        if (
+            fault.get("methods_unavailable") is not True
+            or fault.get("library_closed") is not True
+            or fault.get("name") != f"RecoveredOwnership{version}{kind}"
+        ):
+            return "Failed-library diagnostic boundary/parent state"
+    return None
+
+
+def diagnostic_failure(text, native_recovery=False):
+    if "SCRIPT ERROR:" in text or "EGP_CPP_OWNERSHIP_FAILED" in text:
+        return "Script/ownership failure"
+    errors = [line.strip() for line in text.splitlines() if line.strip().startswith("ERROR:")]
+    if not native_recovery:
+        return "Unexpected engine error" if errors else None
+    expected = {
+        'ERROR: Condition "!FileAccess::exists(path)" is true. Returning: ERR_FILE_NOT_FOUND': 2,
+        "ERROR: GDExtension dynamic library not found: 'res://ownership.gdextension'.": 2,
+        "ERROR: Can't open GDExtension dynamic library: 'res://ownership.gdextension'.": 2,
+    }
+    for line, count in expected.items():
+        if errors.count(line) != count:
+            return "Missing expected failed-load diagnostic"
+    invalid = [
+        line
+        for line in errors
+        if re.fullmatch(r"ERROR: Can't open dynamic library: .*[/\\]ownership-invalid\.dll\. Error: .+\.", line)
+    ]
+    if len(invalid) != 2 or len(errors) != 8:
+        return "Unexpected/missing native-loader error"
     return None
 
 
@@ -145,6 +203,9 @@ def main():
     parser.add_argument("--sdk", type=Path, required=True)
     parser.add_argument("--sdk-library", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--native-recovery", action="store_true", help="Inject missing and invalid DLLs before each compatible repair"
+    )
     args = parser.parse_args()
     output = args.output.resolve() / str(time.time_ns())
     project = output / "project"
@@ -163,7 +224,8 @@ def main():
         "sdk_library_sha256": digest(args.sdk_library),
         "source_sha256": {str(p): digest(p) for p in inputs if p.is_file()},
         "steps": [],
-        "scope": "Explicit Godot-thread handoff before two real compatible C++ DLL reloads; authenticated local server/client, retained Net/Box3D/world/body identities, exact callback counts, forged/copied capsule rejection and handler resubscription. No automatic/in-flight reload, independent-process reload, cross-language capsules, corrupted-library recovery, platform/scale/soak claim.",
+        "native_recovery": args.native_recovery,
+        "scope": "Explicit Godot-thread handoff before two real compatible C++ DLL reloads; authenticated local server/client, retained Net/Box3D/world/body identities, exact callback counts, forged/copied capsule rejection and handler resubscription. Optional missing/invalid DLL repair within the fixed-clock catch-up budget. No automatic/in-flight reload, prolonged fault/re-admission, independent-process/exported reload, cross-language capsules, arbitrary ABI/platform/scale/soak claim.",
     }
     options = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
     if os.name == "nt":
@@ -244,14 +306,17 @@ def main():
         )
         run("build", ["cmake", "--build", output / "build", "--config", "Debug", "--parallel", "3"], 300)
         receipt["libraries_sha256"] = {p.name: digest(p) for p in (project / "bin").glob("*.dll")}
-        text = run(
-            "runtime", [engine, "--headless", "--path", project, "--max-fps", "60", "--disable-crash-handler"], 45
-        )
+        if args.native_recovery:
+            (project / "bin/ownership-invalid.dll").write_bytes(b"Deliberately invalid isolated ownership fixture DLL")
+        command = [engine, "--headless", "--path", project, "--max-fps", "60", "--disable-crash-handler"]
+        if args.native_recovery:
+            command += ["--", "--native-recovery"]
+        text = run("runtime", command, 45)
         markers = re.findall(r"EGP_CPP_OWNERSHIP_PASSED (\{[^\n]+\})", text)
-        if len(markers) != 1 or any(s in text for s in ("SCRIPT ERROR:", "ERROR:", "EGP_CPP_OWNERSHIP_FAILED")):
+        if len(markers) != 1 or diagnostic_failure(text, args.native_recovery):
             raise RuntimeError("Invalid runtime success evidence; see runtime.log")
         receipt["proof"] = json.loads(markers[0])
-        failure = evidence_failure(receipt["proof"])
+        failure = evidence_failure(receipt["proof"], args.native_recovery)
         if failure:
             raise RuntimeError(failure)
         if (
