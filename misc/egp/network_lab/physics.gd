@@ -106,6 +106,11 @@ func recover_server_stall(error: Error) -> bool:
 
 func _process(delta: float) -> void:
 	super._process(delta)
+	if label != null and world != null:
+		if role != "client":
+			label.text += "\nPhysics tick: %d · bodies: %d" % [world.get_tick(), world.get_body_count()]
+		elif physics_history.has(epoch):
+			label.text += "\nStable body: %d · physics tick: %d" % [10000 + index, physics_history[epoch].tick]
 	if finished or role != "client" or net == null or owned_entity == 0:
 		return
 	var record: Dictionary = net.get_entity(owned_entity)

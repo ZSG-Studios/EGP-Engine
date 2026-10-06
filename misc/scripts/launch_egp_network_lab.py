@@ -599,7 +599,7 @@ def main():
         "processes": [],
         "window_observation_supported": os.name == "nt",
         "visible_window_observations": [],
-        "scope": "Local encrypted admission, account identity, replies, tick replication and optional reconnect/server replacement or server clock recovery. Recovery uses fresh tokens and explicit application checkpoint restoration, owner-authorized input and stale-entity checks. No automatic persistence, gameplay, physics rollback, remote auth or performance qualification.",
+        "scope": "Local encrypted admission, account identity, replies, tick replication and optional reconnect/server replacement or server clock recovery. Recovery uses fresh tokens and explicit application checkpoint restoration, owner-authorized input and stale-entity checks. --physics adds trusted local Box3D checkpoint/replay and stable body mapping. No automatic scene persistence, client physics rollback, remote auth or performance qualification.",
     }
     engine_main = engine.with_name(engine.name.replace(".console.exe", ".exe"))
     receipt["engine_artifacts"] = {
