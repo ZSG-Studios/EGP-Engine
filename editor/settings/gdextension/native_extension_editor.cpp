@@ -56,6 +56,7 @@
 #include "scene/gui/line_edit.h"
 #include "scene/gui/option_button.h"
 #include "scene/gui/rich_text_label.h"
+#include "scene/main/scene_tree.h"
 #include "scene/resources/text_file.h"
 
 void NativeExtensionEditor::_bind_methods() {
@@ -63,6 +64,8 @@ void NativeExtensionEditor::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("build_extension", "name", "release"), &NativeExtensionEditor::build_extension, DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("is_building"), &NativeExtensionEditor::is_building);
 	ClassDB::bind_method(D_METHOD("get_last_build_result"), &NativeExtensionEditor::get_last_build_result);
+	ClassDB::bind_method(D_METHOD("check_toolchain"), &NativeExtensionEditor::check_toolchain);
+	ClassDB::bind_method(D_METHOD("install_tools"), &NativeExtensionEditor::install_tools);
 	ADD_SIGNAL(MethodInfo("diagnostic_found", PropertyInfo(Variant::STRING, "path"), PropertyInfo(Variant::INT, "line")));
 }
 
@@ -186,7 +189,9 @@ Error NativeExtensionEditor::build_extension(const String &p_name, bool p_releas
 	ERR_FAIL_COND_V(!p_name.is_valid_identifier() || !FileAccess::exists("res://extensions/" + p_name + "/CMakeLists.txt"), ERR_INVALID_PARAMETER);
 	Error error = _prepare_sdk();
 	ERR_FAIL_COND_V(error != OK, error);
-	cmake_executable = cmake_path->get_text().strip_edges();
+	operation = BUILD;
+	cmake_executable = _find_cmake();
+	process_executable = cmake_executable;
 	ScriptEditor::get_singleton()->save_all_scripts();
 	if (cmake_executable.is_empty()) {
 		cmake_executable = "cmake";
@@ -216,7 +221,7 @@ Error NativeExtensionEditor::build_extension(const String &p_name, bool p_releas
 }
 
 bool NativeExtensionEditor::_start_process(const List<String> &p_arguments) {
-	Dictionary process = OS::get_singleton()->execute_with_pipe(cmake_executable, p_arguments, false);
+	Dictionary process = OS::get_singleton()->execute_with_pipe(process_executable, p_arguments, false);
 	if (!process.has("pid")) {
 		last_build_result = -2;
 		_set_busy(false);
@@ -231,6 +236,8 @@ bool NativeExtensionEditor::_start_process(const List<String> &p_arguments) {
 }
 
 void NativeExtensionEditor::_set_busy(bool p_busy) {
+	check_button->set_disabled(p_busy);
+	install_button->set_disabled(p_busy);
 	create_button->set_disabled(p_busy);
 	debug_button->set_disabled(p_busy);
 	release_button->set_disabled(p_busy);
@@ -239,6 +246,9 @@ void NativeExtensionEditor::_set_busy(bool p_busy) {
 }
 
 void NativeExtensionEditor::_append_line(const String &p_line) {
+	if (cli) {
+		print_line(p_line);
+	}
 	RegEx diagnostic;
 	diagnostic.compile("^(.+\\.(?:cpp|hpp|h|c))(?:(?:\\((\\d+)(?:,\\d+)?\\))|(?::(\\d+)(?::\\d+)?))\\s*:");
 	Ref<RegExMatch> match = diagnostic.search(p_line);
@@ -323,12 +333,21 @@ Error NativeExtensionEditor::_publish_library() {
 }
 
 void NativeExtensionEditor::_notification(int p_what) {
+	if (p_what == NOTIFICATION_READY) {
+		callable_mp(this, &NativeExtensionEditor::_run_cli).call_deferred();
+	}
 	if (p_what == NOTIFICATION_READY || p_what == NOTIFICATION_WM_WINDOW_FOCUS_IN) {
 		if (process_id == 0) {
 			_refresh_extensions();
 		}
 	}
-	if (p_what != NOTIFICATION_PROCESS || process_id == 0) {
+	if (p_what != NOTIFICATION_PROCESS) {
+		return;
+	}
+	if (process_id == 0) {
+		if (cli) {
+			_next_cli();
+		}
 		return;
 	}
 	_drain_pipe(0);
@@ -351,11 +370,22 @@ void NativeExtensionEditor::_notification(int p_what) {
 		arguments.push_back(build_config);
 		arguments.push_back("--parallel");
 		arguments.push_back(itos(MAX(1, OS::get_singleton()->get_processor_count() - 1)));
-		_start_process(arguments);
+		if (!_start_process(arguments)) {
+			_complete_operation();
+		}
 		return;
 	}
 	last_build_result = result;
-	if (result == 0) {
+	if (result == 0 && operation == INSTALL) {
+		if (check_toolchain() != OK) {
+			last_build_result = -2;
+			_complete_operation();
+		}
+		return;
+	}
+	if (result == 0 && operation == CHECK) {
+		_append_line("EGP_CPP_TOOLCHAIN_READY: CMake, C++17 compiler and linker verified.");
+	} else if (result == 0) {
 		const Error error = _publish_library();
 		if (error != OK) {
 			last_build_result = -3;
@@ -364,7 +394,144 @@ void NativeExtensionEditor::_notification(int p_what) {
 	} else {
 		_append_line(vformat(TTR("Build failed (exit code %d). The previous published library is unchanged."), result));
 	}
+	_complete_operation();
+}
+
+String NativeExtensionEditor::_find_cmake() const {
+	const String configured = cmake_path->get_text().strip_edges();
+	if (!configured.is_empty() && configured != "cmake") {
+		return configured;
+	}
+#ifdef WINDOWS_ENABLED
+	const String installed = OS::get_singleton()->get_environment("ProgramFiles").path_join("CMake/bin/cmake.exe");
+	if (FileAccess::exists(installed)) {
+		return installed;
+	}
+#elif defined(MACOS_ENABLED)
+	if (FileAccess::exists("/Applications/CMake.app/Contents/bin/cmake")) {
+		return "/Applications/CMake.app/Contents/bin/cmake";
+	}
+	if (FileAccess::exists("/opt/homebrew/bin/cmake")) {
+		return "/opt/homebrew/bin/cmake";
+	}
+#endif
+	return "cmake";
+}
+
+Error NativeExtensionEditor::check_toolchain() {
+	ERR_FAIL_COND_V(process_id != 0, ERR_BUSY);
+	Error error = _prepare_sdk();
+	ERR_FAIL_COND_V(error != OK, error);
+	operation = CHECK;
+	configuring = true;
+	last_build_result = -1;
+	build_config = "Debug";
+	process_executable = _find_cmake();
+	cmake_executable = process_executable;
+	build_path = EditorPaths::get_singleton()->get_cache_dir().path_join("egp_cpp/toolchain").path_join(String(egp_cpp_sdk_hash).left(16));
+	output->clear();
+	List<String> arguments;
+	arguments.push_back("-S");
+	arguments.push_back(sdk_path.path_join("tools"));
+	arguments.push_back("-B");
+	arguments.push_back(build_path);
+	arguments.push_back("-DCMAKE_BUILD_TYPE=Debug");
+#ifdef WINDOWS_ENABLED
+	arguments.push_back("-A");
+	arguments.push_back(Engine::get_singleton()->get_architecture_name() == "arm64" ? "ARM64" : (sizeof(void *) == 8 ? "x64" : "Win32"));
+#endif
+	return _start_process(arguments) ? OK : ERR_CANT_FORK;
+}
+
+Error NativeExtensionEditor::install_tools() {
+	ERR_FAIL_COND_V(process_id != 0, ERR_BUSY);
+	Error error = _prepare_sdk();
+	ERR_FAIL_COND_V(error != OK, error);
+	operation = INSTALL;
+	configuring = false;
+	last_build_result = -1;
+	output->clear();
+	List<String> arguments;
+#ifdef WINDOWS_ENABLED
+	process_executable = OS::get_singleton()->get_environment("SystemRoot").path_join("System32/WindowsPowerShell/v1.0/powershell.exe");
+	arguments.push_back("-NoProfile");
+	arguments.push_back("-ExecutionPolicy");
+	arguments.push_back("Bypass");
+	arguments.push_back("-File");
+	arguments.push_back(sdk_path.path_join("tools/setup.ps1"));
+#else
+	process_executable = "/bin/sh";
+	arguments.push_back(sdk_path.path_join("tools/setup.sh"));
+#endif
+	_append_line(TTR("Installing missing CMake/compiler tools. Complete any system installer or administrator prompts."));
+	return _start_process(arguments) ? OK : ERR_CANT_FORK;
+}
+
+void NativeExtensionEditor::_complete_operation() {
 	_set_busy(false);
+	set_process(cli);
+	if (cli) {
+		_next_cli();
+	}
+}
+
+void NativeExtensionEditor::_run_cli() {
+	for (const String &argument : OS::get_singleton()->get_cmdline_user_args()) {
+		if (argument.begins_with("--cpp-")) {
+			cli = true;
+			cli_commands.push_back(argument);
+		}
+	}
+	if (cli) {
+		last_build_result = 0;
+		set_process(true);
+	}
+}
+
+void NativeExtensionEditor::_next_cli() {
+	if (last_build_result != 0) {
+		SceneTree::get_singleton()->quit(1);
+		set_process(false);
+		return;
+	}
+	if (EditorFileSystem::get_singleton()->is_scanning()) {
+		return;
+	}
+	while (cli_index < cli_commands.size()) {
+		const String command = cli_commands[cli_index++];
+		Error error = OK;
+		if (command == "--cpp-help") {
+			print_line("EGP --headless --editor --path PROJECT -- [--cpp-cmake=PATH] [--cpp-install] [--cpp-check] [--cpp-create=NAME] [--cpp-build=NAME:debug|release]");
+		} else if (command.begins_with("--cpp-cmake=")) {
+			cmake_path->set_text(command.trim_prefix("--cpp-cmake="));
+		} else if (command == "--cpp-check") {
+			error = check_toolchain();
+		} else if (command == "--cpp-install") {
+			error = install_tools();
+		} else if (command.begins_with("--cpp-create=")) {
+			error = create_extension(command.trim_prefix("--cpp-create="));
+		} else if (command.begins_with("--cpp-build=")) {
+			const PackedStringArray parts = command.trim_prefix("--cpp-build=").split(":");
+			if (parts.size() != 2 || (parts[1] != "debug" && parts[1] != "release")) {
+				error = ERR_INVALID_PARAMETER;
+			} else {
+				error = build_extension(parts[0], parts[1] == "release");
+			}
+		} else {
+			error = ERR_INVALID_PARAMETER;
+		}
+		if (error != OK) {
+			print_error(vformat("EGP C++ command failed: %s (error %d)", command, error));
+			last_build_result = -1;
+			_complete_operation();
+			return;
+		}
+		if (process_id != 0 || EditorFileSystem::get_singleton()->is_scanning()) {
+			return;
+		}
+	}
+	print_line("EGP_CPP_CLI_PASSED");
+	SceneTree::get_singleton()->quit(0);
 	set_process(false);
 }
 
@@ -431,6 +598,12 @@ NativeExtensionEditor::NativeExtensionEditor() {
 	cmake_path->set_h_size_flags(SIZE_EXPAND_FILL);
 	cmake_path->set_text(EDITOR_DEF("native_extensions/cmake_path", "cmake"));
 	tool_row->add_child(cmake_path);
+	check_button = memnew(Button(TTRC("Check Toolchain")));
+	check_button->connect("pressed", callable_mp(this, &NativeExtensionEditor::check_toolchain));
+	tool_row->add_child(check_button);
+	install_button = memnew(Button(TTRC("Install Tools")));
+	install_button->connect("pressed", callable_mp(this, &NativeExtensionEditor::install_tools));
+	tool_row->add_child(install_button);
 	output = memnew(RichTextLabel);
 	output->set_custom_minimum_size(Size2(0, 150 * EDSCALE));
 	output->set_scroll_follow(true);

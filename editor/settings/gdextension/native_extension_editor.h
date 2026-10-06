@@ -50,6 +50,8 @@ class NativeExtensionEditor : public VBoxContainer {
 	Button *debug_button = nullptr;
 	Button *release_button = nullptr;
 	Button *restart_button = nullptr;
+	Button *check_button = nullptr;
+	Button *install_button = nullptr;
 	RichTextLabel *output = nullptr;
 	String sdk_path;
 	String building_name;
@@ -60,6 +62,13 @@ class NativeExtensionEditor : public VBoxContainer {
 	Vector<uint8_t> pending_output[2];
 	int64_t process_id = 0;
 	bool configuring = false;
+	enum Operation { BUILD,
+		CHECK,
+		INSTALL } operation = BUILD;
+	bool cli = false;
+	Vector<String> cli_commands;
+	int cli_index = 0;
+	String process_executable;
 	int last_build_result = -1;
 
 	Error _prepare_sdk();
@@ -75,6 +84,10 @@ class NativeExtensionEditor : public VBoxContainer {
 	bool _start_process(const List<String> &p_arguments);
 	void _set_busy(bool p_busy);
 	Error _publish_library();
+	String _find_cmake() const;
+	void _run_cli();
+	void _next_cli();
+	void _complete_operation();
 
 protected:
 	static void _bind_methods();
@@ -83,6 +96,8 @@ protected:
 public:
 	Error create_extension(const String &p_name);
 	Error build_extension(const String &p_name, bool p_release = false);
+	Error check_toolchain();
+	Error install_tools();
 	bool is_building() const { return process_id != 0; }
 	int get_last_build_result() const { return last_build_result; }
 	NativeExtensionEditor();
