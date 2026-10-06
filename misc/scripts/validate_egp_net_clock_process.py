@@ -44,7 +44,7 @@ def evidence_failure(server, client, language, pids):
     if (
         len(polls) < 30
         or any(not isinstance(t, int) or t <= 0 for t in polls)
-        or any(not 0 < b - a <= 250 for a, b in zip(polls, polls[1:]))
+        or any(not 0 <= b - a <= 250 for a, b in zip(polls, polls[1:]))
     ):
         return "Client polling stalled or wall-clock observations are inconsistent"
     for number, (authority, baseline) in enumerate(zip(epochs, baselines), 1):
@@ -87,7 +87,7 @@ def evidence_failure(server, client, language, pids):
             not isinstance(state_hash, str)
             or not re.fullmatch("[0-9a-f]{16}", state_hash)
             or abs(end - begin - fault["gap_ms"]) > 50
-            or sum(begin <= t <= end for t in polls) < 10
+            or len({t for t in polls if begin <= t <= end}) < 10
         ):
             return "Missing continuous independent client observations during authority stall"
         if (

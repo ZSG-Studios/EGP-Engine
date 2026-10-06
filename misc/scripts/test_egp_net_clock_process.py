@@ -64,6 +64,14 @@ class ProcessClockEvidenceTests(unittest.TestCase):
     def test_complete_independent_recovery(self):
         self.assertIsNone(self.failure())
 
+    def test_coincident_millisecond_polls(self):
+        self.client["poll_utc_ms"].insert(1, self.client["poll_utc_ms"][0])
+        self.assertIsNone(self.failure())
+
+    def test_duplicate_samples_do_not_prove_live_client(self):
+        self.client["poll_utc_ms"] = [t if not 1500 <= t <= 2050 else 1500 for t in self.client["poll_utc_ms"]]
+        self.assertIsNotNone(self.failure())
+
     def test_shared_process_cannot_prove_independence(self):
         self.client["pid"] = 11
         self.assertIsNotNone(self.failure())
