@@ -397,3 +397,56 @@ After closing a native session, explicitly reconfigure/admit and map each new
 entity to its stable body ID. Numeric entities belong to their issuing session.
 This ownership transfer does not implement automatic client physics rollback or
 restore arbitrary application event closures.
+
+### Explicit C++ owner handoff
+
+C++ `egp::networking::Net` and `Box3D` support `detach_for_reload()` and static
+`resume_after_reload(Dictionary &, Error * = nullptr)`. Before a compatible DLL
+reload, stop calling application code at a safe boundary on its Godot thread,
+save the returned capsules in stored Dictionary properties on the extension node,
+and destroy the detached wrappers. After the engine restores those properties,
+consume them and register application callbacks again:
+
+```cpp
+// Before unload, at an application-controlled safe boundary:
+godot::Dictionary physics_state = physics->detach_for_reload();
+if (physics_state.is_empty()) return; // Ownership was not transferred.
+physics.reset(); // Does not detach the transferred adapter.
+
+// After compatible reload, using the restored Dictionary property:
+godot::Error error;
+physics = egp::networking::Box3D::resume_after_reload(physics_state, &error);
+if (error != godot::OK) return; // Invalid capsules remain unchanged.
+physics->connect("failed", failure_callback); // Register the new DLL's callback.
+```
+
+The `Net` capsule retains the tree-owned bridge and native session. Its original
+parent must stay alive and must not be queued for deletion. The `Box3D` capsule
+retains the adapter, its attached world, stable body mapping and GDScript clock
+connection. Transfer the network wrapper too when that wrapper belongs to the
+unloading DLL. A detached wrapper becomes unavailable; error-returning operations
+return `ERR_UNCONFIGURED`, repeated transfer returns an empty Dictionary, and
+later destruction cannot close or detach the resumed owner.
+
+Wrapper-owned signal callbacks and registered message handlers are removed at
+handoff. `Net` and `Box3D` both expose `connect`/`disconnect` for these tracked
+callbacks. Callbacks installed directly on `bridge()`/`native()`, scene factories,
+application threads and unrelated closures require application-controlled cleanup.
+Resubscribe handlers from the new DLL before resuming application traffic.
+
+Capsules use a version, exact helper-script identity and a random single-use
+ownership token. Malformed, foreign, forged or already-consumed capsules return
+null with `ERR_INVALID_PARAMETER` and remain unchanged. The successful consume
+clears the Dictionary and invalidates copied capsules. These are local object
+references, not a disk/network format, and C++ capsules cannot be consumed by the
+C# helpers. Consume a pending capsule or explicitly close/detach its retained
+object before discarding it.
+
+`misc/scripts/validate_egp_cpp_ownership.py` qualifies two real compatible Debug
+DLL reloads in one local Windows editor-build process with manually polled,
+authenticated server/client sessions. It verifies exact solver state at the
+handoff, stable identities/body mapping, advancing replicated physics, one
+callback per tick and message-handler resubscription. Polling pauses during the
+explicit unload; this does not qualify automatic transfer, mutation inside active
+callbacks, failed-library recovery of these owners, independent-process reload,
+Release-library recreation or arbitrary native layouts.

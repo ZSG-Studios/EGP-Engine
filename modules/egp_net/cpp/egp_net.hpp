@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 #include <godot_cpp/classes/class_db_singleton.hpp>
+#include <godot_cpp/classes/crypto.hpp>
 #include <godot_cpp/classes/node.hpp>
 #include <godot_cpp/classes/node2d.hpp>
 #include <godot_cpp/classes/node3d.hpp>
@@ -15,6 +16,8 @@
 #include <vector>
 #include <utility>
 #include <cmath>
+#include <algorithm>
+#include <memory>
 
 /// Godot C++ extension API. Engine-independent users can instead include net_core.h.
 namespace egp::networking {
@@ -65,6 +68,22 @@ template<class... Args> Error error(Object *object, const char *method, const Ar
     if (!object) return ERR_UNCONFIGURED;
     Variant keep_alive(object);
     return Error(int64_t(object->call(method, args...)));
+}
+inline PackedByteArray reload_token() {
+    Ref<Crypto> crypto;
+    crypto.instantiate();
+    return crypto.is_valid() ? crypto->generate_random_bytes(32) : PackedByteArray();
+}
+inline Object *reload_object(const Dictionary &state, const char *key, const char *path, const char *metadata) {
+    Variant version = state.get("version", Variant());
+    Variant object = state.get(key, Variant());
+    Variant token = state.get("token", Variant());
+    if (version.get_type() != Variant::INT || int64_t(version) != 1 || object.get_type() != Variant::OBJECT || token.get_type() != Variant::PACKED_BYTE_ARRAY) return nullptr;
+    PackedByteArray bytes = token;
+    Object *instance = object;
+    Ref<Script> script = ResourceLoader::get_singleton()->load(path);
+    if (!instance || script.is_null() || instance->get_script() != Variant(script) || bytes.size() != 32 || !instance->has_meta(metadata) || instance->get_meta(metadata) != token) return nullptr;
+    return instance;
 }
 }
 
@@ -122,6 +141,16 @@ public:
 class Net {
     uint64_t id = 0;
     std::vector<std::pair<StringName, Callable>> links;
+    std::vector<StringName> messages;
+    static constexpr const char *reload_metadata = "_egp_cpp_net_reload_token";
+    explicit Net(Node *node) : id(node->get_instance_id()) {}
+    void disconnect_callbacks() {
+        if (auto *node = bridge()) {
+            for (const auto &link : links) if (node->is_connected(link.first, link.second)) node->disconnect(link.first, link.second);
+            for (const auto &message : messages) node->call("unregister_message", message);
+        }
+        links.clear(); messages.clear();
+    }
 public:
     explicit Net(Node &parent) {
         Variant instance = detail::new_script("res://addons/egp_net/egp_net.gd");
@@ -132,10 +161,36 @@ public:
     Net(const Net &) = delete;
     Net &operator=(const Net &) = delete;
     ~Net() {
+        disconnect_callbacks();
         if (auto *node = bridge()) {
-            for (const auto &link : links) if (node->is_connected(link.first, link.second)) node->disconnect(link.first, link.second);
             node->call("close"); node->queue_free();
         }
+    }
+    /// Transfer the live bridge/session without closing it. Call at a Godot-thread safe boundary before unloading this extension.
+    /// The original parent must survive. Old wrapper callbacks are removed; register them again after resume.
+    /// Empty means unavailable/token generation failed, with ownership unchanged. Capsules are local references, never a wire/disk format.
+    Dictionary detach_for_reload() {
+        Dictionary state;
+        auto *node = bridge();
+        if (!node || node->is_queued_for_deletion()) return state;
+        PackedByteArray token = detail::reload_token();
+        if (token.size() != 32) return state;
+        state["version"] = int64_t(1); state["bridge"] = node; state["token"] = token;
+        node->set_meta(reload_metadata, token);
+        disconnect_callbacks(); id = 0;
+        return state;
+    }
+    /// Consume one authentic capsule. Invalid, foreign and copied/consumed capsules return null and remain unchanged.
+    static std::unique_ptr<Net> resume_after_reload(Dictionary &state, Error *error = nullptr) {
+        auto *node = Object::cast_to<Node>(detail::reload_object(state, "bridge", "res://addons/egp_net/egp_net.gd", reload_metadata));
+        if (!node || node->is_queued_for_deletion() || !node->get_parent()) {
+            if (error) *error = ERR_INVALID_PARAMETER;
+            return nullptr;
+        }
+        std::unique_ptr<Net> result(new Net(node));
+        node->remove_meta(reload_metadata); state.clear();
+        if (error) *error = OK;
+        return result;
     }
     Node *bridge() const { return id ? Object::cast_to<Node>(ObjectDB::get_instance(id)) : nullptr; }
     bool available() const { return bridge() != nullptr; }
@@ -167,8 +222,15 @@ public:
     Array entities() const { return available() ? Array(bridge()->call("get_entities")) : Array(); }
     Dictionary entity(int64_t handle) const { return available() ? Dictionary(bridge()->call("get_entity", handle)) : Dictionary(); }
     Error register_scene(int kind, const Ref<PackedScene> &scene, Node *parent) { return detail::error(bridge(), "register_scene", kind, scene, parent); }
-    Error register_message(const StringName &name, const Callable &handler, Sender sender = Sender::Both) { return detail::error(bridge(), "register_message", name, handler, int(sender)); }
-    void unregister_message(const StringName &name) { if (auto *n = bridge()) n->call("unregister_message", name); }
+    Error register_message(const StringName &name, const Callable &handler, Sender sender = Sender::Both) {
+        Error result = detail::error(bridge(), "register_message", name, handler, int(sender));
+        if (result == OK) messages.push_back(name);
+        return result;
+    }
+    void unregister_message(const StringName &name) {
+        if (auto *n = bridge()) n->call("unregister_message", name);
+        messages.erase(std::remove(messages.begin(), messages.end(), name), messages.end());
+    }
     Error send_message(int64_t peer, const StringName &name, const Array &arguments = {}) { return detail::error(bridge(), "send_message", peer, name, arguments); }
     Error broadcast_message(const StringName &name, const Array &arguments = {}) { return detail::error(bridge(), "broadcast_message", name, arguments); }
     Error send_input(int64_t entity, const Dictionary &input) { return detail::error(bridge(), "send_input", entity, input); }
@@ -178,6 +240,10 @@ public:
     Error connect(const StringName &signal, const Callable &callback) {
         if (!available()) return ERR_UNCONFIGURED;
         auto result = bridge()->connect(signal, callback); if (result == OK) links.emplace_back(signal, callback); return result;
+    }
+    void disconnect(const StringName &signal, const Callable &callback) {
+        if (auto *node = bridge(); node && node->is_connected(signal, callback)) node->disconnect(signal, callback);
+        links.erase(std::remove_if(links.begin(), links.end(), [&](const auto &link) { return link.first == signal && link.second == callback; }), links.end());
     }
 };
 
@@ -200,17 +266,54 @@ public:
 };
 class Box3D {
     Ref<RefCounted> value;
+    std::vector<std::pair<StringName, Callable>> links;
+    static constexpr const char *reload_metadata = "_egp_cpp_box3d_reload_token";
+    explicit Box3D(const Ref<RefCounted> &adapter) : value(adapter) {}
+    void disconnect_callbacks() {
+        if (value.is_valid()) for (const auto &link : links) if (value->is_connected(link.first, link.second)) value->disconnect(link.first, link.second);
+        links.clear();
+    }
 public:
     Box3D() : value(detail::new_ref_script("res://addons/egp_net/egp_net_box3d.gd")) {}
-    ~Box3D() { detach(); }
+    ~Box3D() { disconnect_callbacks(); detach(); }
     Box3D(const Box3D &) = delete;
     Box3D &operator=(const Box3D &) = delete;
+    bool available() const { return value.is_valid(); }
     Ref<RefCounted> native() const { return value; }
+    /// Retain adapter/world/body mappings and the network clock link; release only this wrapper's callbacks and ownership.
+    Dictionary detach_for_reload() {
+        Dictionary state;
+        if (!available()) return state;
+        PackedByteArray token = detail::reload_token();
+        if (token.size() != 32) return state;
+        state["version"] = int64_t(1); state["adapter"] = value; state["token"] = token;
+        value->set_meta(reload_metadata, token);
+        disconnect_callbacks(); value.unref();
+        return state;
+    }
+    static std::unique_ptr<Box3D> resume_after_reload(Dictionary &state, Error *error = nullptr) {
+        auto *adapter = Object::cast_to<RefCounted>(detail::reload_object(state, "adapter", "res://addons/egp_net/egp_net_box3d.gd", reload_metadata));
+        if (!adapter) { if (error) *error = ERR_INVALID_PARAMETER; return nullptr; }
+        std::unique_ptr<Box3D> result(new Box3D(Ref<RefCounted>(adapter)));
+        adapter->remove_meta(reload_metadata); state.clear();
+        if (error) *error = OK;
+        return result;
+    }
     Error attach(Net &net, const Ref<RefCounted> &world) { return detail::error(value.ptr(), "attach", net.bridge(), world); }
     // A zero body_id keeps the entity-as-body convention; explicit IDs survive reconnect.
     Error track(int64_t entity, int64_t body_id = 0) { return detail::error(value.ptr(), "track", entity, body_id); }
     void untrack(int64_t entity) { if (value.is_valid()) value->call("untrack", entity); }
     void detach() { if (value.is_valid()) value->call("detach"); }
+    Error connect(const StringName &signal, const Callable &callback) {
+        if (!available()) return ERR_UNCONFIGURED;
+        Error result = value->connect(signal, callback);
+        if (result == OK) links.emplace_back(signal, callback);
+        return result;
+    }
+    void disconnect(const StringName &signal, const Callable &callback) {
+        if (available() && value->is_connected(signal, callback)) value->disconnect(signal, callback);
+        links.erase(std::remove_if(links.begin(), links.end(), [&](const auto &link) { return link.first == signal && link.second == callback; }), links.end());
+    }
 };
 
 /// Embed in a native actor and bind apply_network_state to apply().

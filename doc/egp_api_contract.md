@@ -129,3 +129,12 @@ compares embedded method/signal descriptions with source XML, rejecting stale
 help even when signatures still match. CLI documentation dumps load shipped
 metadata without constructing an editor. Exposed implementation classes with
 only inherited documentation retain their ABI entries with empty descriptions.
+
+For explicit C++ networking/Box3D owner handoff, see
+[the networking helper contract](../modules/egp_net/README.md#explicit-c-owner-handoff).
+Use an application-controlled safe boundary before unload and stored Dictionary
+properties for capsules. Restore the same bridge/session/adapter/world and
+resubscribe application callbacks after compatible reload. The focused Debug
+fixture uses manual polling and pauses it during unload; automatic or in-flight
+owner transfer and failed-library recovery of these wrappers remain separate
+acceptance items.

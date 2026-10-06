@@ -2999,3 +2999,72 @@ broader physics parity, platform/hardware coverage (including PowerVR), scale,
 soak and performance. Ordinary customized-scene checks do not prove every
 customized inherited-reference combination. This qualification does not establish
 full feature completion or AAA readiness. The integration loop remains ACTIVE.
+
+## 2026-10-06: explicit C++ networking and Box3D owner transfer
+
+C++ `egp::networking::Net` and `Box3D` now provide `detach_for_reload()` and
+`resume_after_reload(Dictionary &, Error *)`. The capsule retains the same
+tree-owned bridge/native session or adapter/world/body mapping. Old wrapper
+destruction no longer closes or detaches the transferred objects. Version/type,
+exact GDScript helper identity and random single-use token checks reject malformed,
+foreign, forged, future and copied/consumed capsules without mutation. The caller
+must preserve the original parent and explicitly hand off at a Godot-thread safe
+boundary before unloading the DLL.
+
+Tracked signal callbacks and message registrations are disconnected before
+unload, then resubscribed from new code. Both wrappers expose matching
+`connect`/`disconnect` methods; repeated disconnect is harmless. Direct native
+callbacks, scene factories, application threads and unrelated closures remain
+application responsibilities. C++ capsules are local references and do not share
+the C# capsule format. See the networking README's explicit C++ handoff contract.
+
+| Check | Evidence |
+| --- | --- |
+| Two actual compatible DLL reloads | `.build/integration-cpp-ownership-qualified-source/1791318619798667500/receipt.json`; three loaded code versions on the same live extension node; manually polled authenticated local server/client |
+| Retained solver and owners | Same bridge/session/adapter/world/entity identities; body 10000 mapping retained; exact world tick/hash across each unload; advancing replicated body after each resume |
+| Callback/traffic ownership | One before/after callback per completed solver tick, one adapter clock link, zero physics failures; one reliable application message per phase after handler re-registration; explicit disconnect leaves no callback |
+| Capsule rejection | 30 checks per transfer, 60 total; missing/wrong types, foreign objects, forged token, full-width future version, copied/consumed capsules, unavailable old wrappers and repeated transfer |
+| Existing trilingual behavior | `.build/integration-cpp-ownership-languages-final/receipt.json`; 27 passing stages with 197 assertions per editor/relocated Debug/Release configuration plus six independent C#/C++ clock/fault processes; final helper bytes frozen in executed fixtures |
+| Evidence reader | Four semantic test methods reject missing fields, altered IDs/hashes/ticks, duplicate callbacks, wrong numeric types, absent physics and ownership counts; signed RefCounted IDs are explicitly accepted; Ruff/format pass |
+
+Exact commands, DLL hashes, fixture/helper input hashes, engine identity and
+watchdog-supervised process logs are in the receipts. The original first build
+failure (fixture Variant-to-Node cast) and first evidence-reader failure (signed
+RefCounted ID) remain under `.build/integration-cpp-ownership`; later semantic
+tests also caught a missing final-phase hash check. These controls are preserved,
+and only the final passing source-bound receipts support qualification.
+The preliminary language run remains separate because it preceded the final
+disconnect helper addition; the final namespace compiles and executes those
+frozen final helpers.
+
+```powershell
+$egpPython = 'C:/Users/Rose-X/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe'
+$egpSdk = "$env:LOCALAPPDATA/Godot/egp_cpp/sdk/4bc13481314e7023"
+$egpLib = "$env:LOCALAPPDATA/Godot/egp_cpp/lib/4bc13481314e7023/MSVC-19.51.36260.0-Windows-AMD64-x64/Debug/egp_godot_cpp.lib"
+& $egpPython misc/scripts/validate_egp_cpp_ownership.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --sdk $egpSdk --sdk-library $egpLib --output .build/cpp-ownership-repeat
+& $egpPython -m unittest discover -s misc/scripts -p test_egp_cpp_ownership.py
+```
+
+These are header/helper and fixture changes; the installed 95 combined engine
+artifacts, API fingerprint and matching SDK libraries remain unchanged. Editor
+source is still `7b57a3b3140cb1c8b0bbcfb6bbe2c1f4eab70161`, template source is still
+`c6a6920685b844ff0ba30d2e794117b776edf72a`, with the documented final zstd-guard
+source distinction. `.build/integration-cpp-ownership-publication.json` verifies
+the committed/pushed helper source, executed inputs, artifact/receipt integrity,
+merge provenance and preserved foreign work. Eight engine worktrees remain
+accounted for, six foreign snapshots and the two canonical unrelated files
+unchanged, with no pending PRs or separate feature branches in the current inventory.
+
+The previous engine pin `8eb540e94d` was also deployed in docs `60cbfec4e51cfbc158d18a07129fdf9bf4bf2e79`
+and website `9b4f20f8d88a4a201e5468353a844870e93887cf`: hosted docs CI/Pages and
+website deployment all passed. `.build/egp-docs-upstream-publication.json` records
+live content checks and compiled snippets. New helper documentation is handed
+back to that owner after this source publication; do not infer its deployment
+from the earlier receipt.
+
+The explicit C++ high-level owner-transfer item now has focused Debug evidence.
+Polling pauses during the controlled unload. Automatic/in-flight owner transfer,
+failed-library recovery of these wrappers, independent-process and exported-game
+reload, Release-library recreation, arbitrary native layouts, production
+prediction/rollback/admission and broader parity/platform/scale/soak/performance
+acceptance remain open. The loop continues.
