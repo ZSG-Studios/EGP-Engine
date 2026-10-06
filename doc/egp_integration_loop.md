@@ -44,7 +44,7 @@ because these chats exist.
 | Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Packaged Debug graceful and Release abrupt dedicated-server replacement pass with three persistent visible clients under WAN impairment; eight-second headless outage passes; single and repeated selected-client recovery and same-process server clock rejection/checkpoint/fresh admission/ownership recovery pass in editor and packaged Debug host/Release dedicated WAN runs; retired-token and retired-entity input rejection are covered; broader controls/scale/soak remain |
 | C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Matching SDK/editor controls, mixed-language exports, dynamic signature changes and rejected hierarchy/class repair pass on Windows; six cached instance/static call paths and nine return kinds now pass on Windows Debug SDK; arbitrary ABI changes and other platforms remain |
 | C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Two live Debug rebuilds preserve existing IDs, property state, callables and signals; failed compile retains published code; Missing/invalid DLL recovery and rejected base/extension-parent/ancestor/class-removal repair preserve extension and editable parent state; cached binding failure/default-return and compatible repair checks now pass; arbitrary ABI changes and soak remain |
-| C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Six combined native/managed reloads including corrupted-DLL and blocked-unload recovery preserve instances, properties and events; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
+| C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Combined native/managed reload and corrupted-DLL/blocked-unload repair preserve instances, properties and events; public low-level C# session ownership handoff preserves connected/stopped sessions and exact signal connection counts; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
 | Export/platform | Relocated Debug/Release games with C#/GDScript/C++ and Box physics/networking; platform-specific binaries and missing-binary diagnostics | Relocated Windows Debug/Release trilingual games pass on the matching API; broader platform/export matrix remains |
 | Performance | Identical-scenes upstream comparison; p95/p99, CPU/GPU/memory/allocations, server tick, bandwidth and long sessions | No AAA readiness claim |
 
@@ -2517,3 +2517,111 @@ authority/client pair sharing a game process and one explicit native body,
 with a fixture stepper/codec. Configured loss does not quantify actual drops
 or real WAN behavior. Exported-runtime reload, arbitrary game/ABI state,
 platform parity and performance remain open; the loop stays ACTIVE.
+
+
+### Public C# session ownership and event handoff across reload
+
+API source `1eb93efec9f982b4e52d90f9becbe97e0d10ec26` and connection-count gate
+source `a81045721e45dbc80debe621d15cd7c49c10fb5e` are committed in canonical master. `NetSession.DetachForReload()`
+disconnects managed bridges and returns an exported-dictionary capsule while the
+native session remains alive. The old wrapper becomes disposed; disposing it later
+does not close the transferred session. `NetSession.ResumeAfterReload()` consumes
+the capsule, restores the native session wrapper and reconnects its typed event
+bridges. Applications resubscribe their own handlers in `OnAfterDeserialize()`.
+The module README includes a complete hook example and same-Godot-thread contract.
+Schema/type/native-class/claim validation rejects malformed, foreign and consumed
+capsules without modifying them; native metadata prevents copied capsules from
+claiming the same session again. These are trusted local references, not a disk
+checkpoint or admission format. Mirrored sample helpers include the signal bridge.
+
+The investigation retained three precursors:
+`.build/integration-csharp-facade-initial/1791304217839876800/receipt.json`
+failed a fixture assertion because an unconfigured session was polled as if
+configured; a standalone retained game log reproduced that exact assertion.
+`.build/integration-csharp-facade-repaired/1791304447830653500/receipt.json`
+also exposed signed GDScript versus unsigned C# instance-ID formatting.
+Its game log revealed stale delegate callbacks even though messages arrived.
+`.build/integration-csharp-facade-native-callable/1791304653049429700/receipt.json`
+passed the old message-count gate but retained stale callable errors; it is
+explicitly superseded as cleanup evidence. Keeping a native callable Variant
+alone did not solve delegate hash/handle changes during teardown. The final helper
+uses a private RefCounted bridge with named methods and disconnects it before
+rebuilding ownership. Its public C# events still use ordinary typed delegates.
+The debugger capture now returns its required bool immediately and sends the
+asynchronous network proof later. Each run retains its own game log and hashes.
+
+Current acceptance evidence:
+
+| Check | Receipt and observed result |
+| --- | --- |
+| Full live connection, failed compiles, C#-only, C++-only and combined reload | `.build/integration-csharp-facade-live-connections-qualified/1791305291957002300/receipt.json`; editor PID 11472, game PID 35016; native session/peer/entity identities remain stable, six exact application payloads each direction, facade callback counts 1..6, handoff/restore histories `[0, 0, 0, 1, 1, 2]` |
+| Full stopped-authority fault and explicit recovery | `.build/integration-csharp-facade-stopped-qualified/1791305420873104600/receipt.json`; editor PID 22832, game PID 27144; 66 continuing client polls during 566 ms authority gap; stopped-session handoff is restored before explicit fresh admission; peer 257 -> 513, entity 1 -> 2 |
+| Runtime default | `.build/integration-csharp-facade-default/1791305558887462700/receipt.json`; non-collectible default remains unchanged |
+| Optional facade/physics disabled | `.build/integration-csharp-facade-option-off/1791305690135549500/receipt.json`; standard dynamic-native live fixture passes with empty facade/physics evidence |
+| Public helper compatibility and exports | `.build/integration-csharp-facade-languages/receipt.json`; fresh 27 stages, 197 assertions each in editor PID 27336, relocated Debug PID 17556 and Release PID 16292; independent high-level C#/C++ process fault cycles also rerun |
+| Evidence semantics and options | `.build/integration-csharp-facade-connections-tool-checks/receipt.json`; 64 rejection/acceptance tests, 12 invalid CLI cases, help, Ruff, formatting and mypy pass (existing Python 3.9 configuration warning retained) |
+
+Both facade fixtures execute 23 actual managed checks: null/missing/malformed
+capsules, full-width unsupported version, forged claim, foreign native class,
+consumed capsule and copied claim; detached wrapper access/second detach; rejected
+state preservation; native identity, old-wrapper disposal, event disconnect and
+one fresh callback. Native signal connection counts are checked for all seven
+session signals at every checkpoint, including quiet signals. Server counts are
+state 1, peer connected/disconnected 1 each, application 4, packet 1, simulation 2
+(facade plus physics stepper), diagnostic 2; client counts are state 2, peers 1
+each, application 2, packet 1, simulation 1, diagnostic 1. Counts remain constant
+through failed compiles and both managed handoffs. The current game logs reject
+stale delegate/ManagedCallableMiddleman errors, script errors and asynchronous
+capture return-type errors. Deliberately injected assembly/ABI failures retain
+their expected diagnostics and successful repair proofs.
+
+Live Box3D ticks `[33, 133, 246, 452, 688, 1000]` and received physics ticks
+`[27, 126, 242, 448, 679, 996]` advance under the same native world.
+Stopped recovery rejects corrupt checkpoint data with error
+`16` without changing the mutated world; valid
+restore exactly returns tick `22` and solver hash
+`21a31bd979e10a65` before explicit fresh admission and advancing baseline.
+
+Commands (Python is the bundled runtime used in these receipts):
+
+```powershell
+$egpPython = 'C:/Users/Rose-X/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe'
+& $egpPython misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --output .build/integration-csharp-facade-live-connections-qualified --network-live-reload --network-physics --network-csharp-facade --assembly-recovery --unload-recovery --native-recovery --native-abi-recovery
+& $egpPython misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --output .build/integration-csharp-facade-stopped-qualified --network-recovery --network-physics --network-csharp-facade --assembly-recovery --unload-recovery --native-recovery --native-abi-recovery
+& $egpPython misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --output .build/integration-csharp-facade-option-off --network-live-reload
+& $egpPython misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --output .build/integration-csharp-facade-default --disable-runtime
+& $egpPython misc/scripts/validate_egp_net_languages.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --sdk C:/Users/Rose-X/AppData/Local/Godot/egp_cpp/sdk/4bc13481314e7023 --sdk-library C:/Users/Rose-X/AppData/Local/Godot/egp_cpp/lib/4bc13481314e7023/MSVC-19.51.36260.0-Windows-AMD64-x64/Debug/egp_godot_cpp.lib --release-sdk-library C:/Users/Rose-X/AppData/Local/Godot/egp_cpp/lib/4bc13481314e7023/MSVC-19.51.36260.0-Windows-AMD64-x64/Release/egp_godot_cpp.lib --packages bin/GodotSharp/Tools/nupkgs --template bin/godot.windows.template_debug.x86_64.mono.exe --release-template bin/godot.windows.template_release.x86_64.mono.exe --output .build/integration-csharp-facade-languages
+```
+
+No native rebuild: editor SHA `20be5396d78b4c9873d4a355132f62366be58fcf9b1519bb595006fb07e74342` and compiled native source
+`4d64b38c554ab3dc491285f4ffa5119c001da56f` remain pinned with the exact SDK/API,
+matching Debug/Release archives and templates. Fresh live reload native DLL SHA
+`53dc859fbf43a2343aa83f4f92ed5fb3ad1311abd95612a0386bd5a64c2ac622` and managed assembly SHA `101308f2ba87e8c0f076a6156a22062ca3593293f2cb76fced9314575ffd4b1b` qualify these fixture sources.
+Fresh trilingual native Debug/Release DLLs are `cb7fe8b3f3c31e8c790cd8485eaa214902d117628e2c6c251810b526fb90ea8c` /
+`8c2e914d956e9a8f8ae1b7fdad09b08da40a4ba011d2ba6b7361f5416ffaf5ae`; C# assembly is `add5ed8dc4083f83dabee8696eaf14397d8a0b9a7847f340f5c0aa0154287313`.
+All helper source, runtime, generated artifacts and game/build log hashes are
+recorded in the receipts. The language manifest is frozen at API commit 1eb93efec9;
+subsequent changes add only hot-reload evidence checks and this checklist.
+
+`.build/integration-csharp-facade-publication.json` is the new normal-publication
+gate. It verifies original handoff ancestry, canonical/remote master equality,
+all seven actual worktrees, unchanged foreign tracked patches/untracked bytes,
+no open PRs, completed original engine chat handoffs and 86 unchanged installed
+artifacts. Native 120-check/ten-test suites, 72 admission cases and seven
+GDScript-only physics lab cases retain their unchanged executed-input evidence.
+The old physics manifest's unused C# helper hash is superseded by the fresh
+language/reload builds above. The old C++ NIL/poll control stays pinned to its
+actual unchanged source/DLL; the newly built DLL has its own recorded identity.
+Historical worktree leftovers remain preserved, not declared clean or merged.
+Documentation/website publication is separately owned and receives this qualified
+source after normal push.
+
+Next: high-level Net/NetNode/NetBox3D ownership handoff, application handler/state
+policies, independent-process low-level faults and reload, concurrent/in-flight
+reload, automatic client physics prediction/rollback, production admission and
+checkpoint delivery, exported-runtime reload, larger worlds, WAN/scale/soak and
+platform/performance gates. This evidence uses one local Windows Debug
+authority/client pair and one Box3D body per game. Configured loss does not
+quantify real packet drops or WAN performance. Arbitrary ABI/game/closure state
+is not covered; full feature acceptance and AAA readiness remain open and the
+loop stays ACTIVE.
