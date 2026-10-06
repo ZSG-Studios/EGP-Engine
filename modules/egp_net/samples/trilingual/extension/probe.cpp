@@ -77,7 +77,7 @@ public:
         d["low_entities"] = low ? low->entities() : Array();
         d["physics_tick"] = world.is_valid() ? world->call("get_tick") : Variant(0);
         d["network_tick"] = high ? high->statistics().get("tick", 0) : Variant(0);
-        d["body"] = world.is_valid() ? world->call("get_body_state", body) : Variant(Dictionary());
+        d["body"] = world.is_valid() ? world->call("get_body_state", 20000) : Variant(Dictionary());
         d["process_passed"] = process_sent && process_replied;
         return d;
     }
@@ -108,9 +108,10 @@ public:
         if (high->configure(options) != OK || high->host(0) != OK) return FAILED;
         Dictionary state; state["position"] = Vector3(0, 10, 0);
         body = high->spawn(1, state);
-        if (!body || int64_t(world->call("queue_create_sphere", body, 1, Vector3(0, 10, 0), 0.5)) != OK) return FAILED;
+        if (!body || int64_t(world->call("queue_create_sphere", 20000, 1, Vector3(0, 10, 0), 0.5)) != OK) return FAILED;
         physics = std::make_unique<net::Box3D>();
-        return physics->attach(*high, world) == OK ? physics->track(body) : FAILED;
+        if (physics->attach(*high, world) != OK || physics->track(body) != OK || physics->track(body, 20000) != OK || physics->track(body, -1) != ERR_INVALID_PARAMETER) return FAILED;
+        return OK;
     }
     int start_process(const PackedByteArray &token) {
         high = std::make_unique<net::Net>(*this); high->set_auto_poll(false);

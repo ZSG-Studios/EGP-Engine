@@ -20,10 +20,11 @@ func attach(net: Node, world: RefCounted) -> Error:
 	_net.simulation_tick.connect(_tick)
 	return OK
 
-func track(entity: int) -> Error:
-	if _net == null or not _net.is_server() or _net.get_entity(entity).is_empty():
+## A zero body_id uses entity. Explicit IDs survive network handle replacement.
+func track(entity: int, body_id: int = 0) -> Error:
+	if _net == null or body_id < 0 or not _net.is_server() or _net.get_entity(entity).is_empty():
 		return ERR_INVALID_PARAMETER
-	_tracked[entity] = true
+	_tracked[entity] = entity if body_id == 0 else body_id
 	return OK
 
 func untrack(entity: int) -> void:
@@ -60,7 +61,7 @@ func _tick(tick: int, server: bool) -> void:
 		if record.is_empty():
 			_tracked.erase(entity)
 			continue
-		var body: Dictionary = _world.get_body_state(entity)
+		var body: Dictionary = _world.get_body_state(_tracked[entity])
 		if body.is_empty():
 			continue
 		var state: Dictionary = record.state.duplicate(true)

@@ -85,6 +85,22 @@ Box3D world before networking and use its `get_simulation_fingerprint()` in
 the options. `simulation_tick(tick, server)` is the fixed clock; feed validated
 commands to the explicit Box3D world and call `step_tick(world.get_tick()+1)`
 once per tick. `EGPNetBox3D` attaches this clock, validates the world fingerprint and rate, and publishes tracked body states. Ordinary scene physics still uses SceneTree's physics clock.
+
+Map an authoritative network entity to its stable physics body with
+`EGPNetBox3D.track(entity, body_id)`, C# `NetBox3D.Track(entity, bodyId)`, or C++
+`Box3D::track(entity, body_id)`. The optional body ID defaults to zero, which uses
+the entity ID as before. Positive explicit IDs keep snapshot bodies independent
+of connection-scoped network handles. Negative body IDs are rejected without
+replacing the current mapping. Queue the body's creation before its next step;
+untrack or despawn an entity when its replicated body is no longer needed.
+
+For server checkpoint recovery, detach the adapter, restore a trusted local
+`EGPBox3DWorld` snapshot, restart the listener, reattach and map new network handles
+to the restored bodies. The world keeps its restored tick while the restarted
+transport clock begins at zero. Each subsequent server tick advances the world
+once. The network lab's `--physics --server-stall-at` mode demonstrates local
+checkpoint restoration, damaged-snapshot rejection, identical local command replay
+and owner-driven replicated motion. It does not supply automatic client rollback.
 Do not step a world from both clocks.
 
 ```gdscript

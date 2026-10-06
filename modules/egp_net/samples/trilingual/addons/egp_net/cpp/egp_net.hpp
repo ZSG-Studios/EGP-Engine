@@ -13,6 +13,7 @@
 #include <godot_cpp/variant/dictionary.hpp>
 #include <godot_cpp/variant/packed_byte_array.hpp>
 #include <vector>
+#include <utility>
 #include <cmath>
 
 /// Godot C++ extension API. Engine-independent users can instead include net_core.h.
@@ -184,6 +185,8 @@ class Prediction {
     Ref<RefCounted> value;
 public:
     Prediction() : value(detail::new_ref_script("res://addons/egp_net/egp_net_prediction.gd")) {}
+    Prediction(const Prediction &) = delete;
+    Prediction &operator=(const Prediction &) = delete;
     Ref<RefCounted> native() const { return value; }
     Error configure(const Callable &capture, const Callable &restore, const Callable &simulate,
         int64_t initial_tick = 0, int max_ticks = 128, int max_state_bytes = 65536, int max_history_bytes = 8388608) {
@@ -204,7 +207,8 @@ public:
     Box3D &operator=(const Box3D &) = delete;
     Ref<RefCounted> native() const { return value; }
     Error attach(Net &net, const Ref<RefCounted> &world) { return detail::error(value.ptr(), "attach", net.bridge(), world); }
-    Error track(int64_t entity) { return detail::error(value.ptr(), "track", entity); }
+    // A zero body_id keeps the entity-as-body convention; explicit IDs survive reconnect.
+    Error track(int64_t entity, int64_t body_id = 0) { return detail::error(value.ptr(), "track", entity, body_id); }
     void untrack(int64_t entity) { if (value.is_valid()) value->call("untrack", entity); }
     void detach() { if (value.is_valid()) value->call("detach"); }
 };

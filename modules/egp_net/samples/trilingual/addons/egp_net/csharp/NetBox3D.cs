@@ -21,7 +21,8 @@ public sealed class NetBox3D : IDisposable
         links.Add("failed", Callable.From<long>(error => Failed?.Invoke((Error)error)));
     }
     public Error Attach(NetNode net, GodotObject world) => Shared.Error(Native, "attach", net.Bridge, world);
-    public Error Track(long entity) => Shared.Error(Native, "track", entity);
+    /// <summary>Map a network entity to a stable body ID; zero uses the entity ID.</summary>
+    public Error Track(long entity, long bodyId = 0) => Shared.Error(Native, "track", entity, bodyId);
     public void Untrack(long entity) => Native.Call("untrack", entity);
     public void Detach() => Native.Call("detach");
     public void Dispose() { if (disposed) return; disposed = true; links.Dispose(); Detach(); Native.Dispose(); }

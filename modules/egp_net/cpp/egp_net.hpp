@@ -207,7 +207,8 @@ public:
     Box3D &operator=(const Box3D &) = delete;
     Ref<RefCounted> native() const { return value; }
     Error attach(Net &net, const Ref<RefCounted> &world) { return detail::error(value.ptr(), "attach", net.bridge(), world); }
-    Error track(int64_t entity) { return detail::error(value.ptr(), "track", entity); }
+    // A zero body_id keeps the entity-as-body convention; explicit IDs survive reconnect.
+    Error track(int64_t entity, int64_t body_id = 0) { return detail::error(value.ptr(), "track", entity, body_id); }
     void untrack(int64_t entity) { if (value.is_valid()) value->call("untrack", entity); }
     void detach() { if (value.is_valid()) value->call("detach"); }
 };

@@ -38,6 +38,7 @@ python misc/scripts/launch_egp_network_lab.py --engine bin/godot.windows.templat
 | `--server-down-for SECONDS` | Outage before replacement, 0..10 seconds; default 1 |
 | `--server-stall-at SECONDS` | Delay the authoritative poll, restore the application checkpoint and readmit clients in the original server/host process |
 | `--server-stall-ms MILLISECONDS` | Authoritative gap from 550 to 5000 ms, default 750 |
+| `--physics` | Include a trusted Box3D solver checkpoint, local replay and stable body mapping in a server-stall run |
 | `--duration SECONDS` | Client lifetime, 5..100 seconds; processes have an additional bounded watchdog and cleanup |
 | `--port PORT` | Loopback UDP endpoint; 0 chooses an available port; replacement retains the initial port |
 | `--output DIRECTORY` | Evidence parent, default `.build/egp-network-lab`; each run uses a unique child |
@@ -128,6 +129,33 @@ fresh ownership, rejected retired admission, exact checkpoint restoration and th
 final authoritative counter on every client. This fixture preserves one explicit
 application counter; arbitrary game state and authoritative physics restoration
 remain separate acceptance items.
+
+Add `--physics` to a server-stall run to include an explicit Box3D world:
+
+```powershell
+python misc/scripts/launch_egp_network_lab.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --clients 3 --visible --preset wan --duration 24 --server-stall-at 4 --physics
+```
+
+The server creates a floor and one stable body per authenticated account. Each
+owner input queues an impulse on that body. The adapter maps network entity
+handles to these body IDs with `track(entity, body_id)`; fresh connection handles
+can therefore replicate bodies restored from an earlier solver snapshot.
+
+The checkpoint captures trusted local solver bytes at a command-free tick boundary.
+After the clock failure, the fixture detaches the adapter, advances a six-tick
+command branch, rejects a damaged snapshot without changing the branch, restores
+the checkpoint and replays the identical branch. Its diagnostic state hash must
+match the first branch. It restores the checkpoint again before reattaching and
+readmitting clients. The world retains its restored tick; the new transport clock
+starts at zero and advances that world one step per server tick.
+
+Receipts verify restored tick/hash/body IDs, failed transactional restore, local
+replay, both generations' entity-to-body mappings, finite replicated poses and
+velocities, and continued owner-driven motion on every client. Solver bytes stay
+in the server process and never enter tokens, messages, retained projects or
+receipts. This bounded fixture covers local server restoration on a compatible
+build. It does not restore arbitrary scenes, establish cross-platform determinism,
+or provide automatic client rollback or production persistence.
 
 Receipts include fixture/helper/launcher hashes, source editor/template hashes,
 exported runtime/PCK hashes, process commands/PIDs/exit codes, window observations

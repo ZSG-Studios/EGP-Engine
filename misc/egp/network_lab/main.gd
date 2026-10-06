@@ -57,6 +57,7 @@ var retired_probe: Node
 var retired_probe_states: Array[String] = []
 var retired_probe_started := 0
 var server_retired_token := PackedByteArray()
+var simulation_fingerprint := "script-state-v1"
 
 func checks_ownership() -> bool:
 	return restart_enabled or stall_enabled
@@ -122,6 +123,7 @@ func _ready() -> void:
 func configure() -> bool:
 	var error: Error = net.configure({
 		"game_protocol": "egp-network-lab-v1", "max_players": clients,
+		"simulation_fingerprint": simulation_fingerprint,
 		"max_entities": maxi(4, clients + 1), "timeout_seconds": 3 if checks_ownership() else 10, "token_lifetime_seconds": 120,
 		"simulated_latency_ms": float(options.get("latency", 0)),
 		"simulated_jitter_ms": float(options.get("jitter", 0)),
@@ -214,6 +216,12 @@ func health() -> Dictionary:
 	return {"pid": OS.get_process_id(), "generation": epoch, "admitted_clients": admissions.size(),
 		"input_clients": input_clients.size(), "persistent_value": persistent_value,
 		"root_authority": net.get_entity(entity).get("authority_peer", -2), "tick": net.get_statistics().get("tick", 0)}
+
+func capture_checkpoint() -> Dictionary:
+	return health()
+
+func valid_owner_state(state: Dictionary) -> bool:
+	return state == {"account": 10000 + index, "generation": epoch}
 
 func observe_state(state: String) -> void:
 	connection_states.append(state)
@@ -369,7 +377,7 @@ func recover_server_stall(error: Error) -> bool:
 	add_child(retired_probe)
 	retired_probe.state_changed.connect(func(state: String): retired_probe_states.append(state))
 	retired_probe_started = Time.get_ticks_msec()
-	var admitted: bool = retired_probe.configure({"game_protocol": "egp-network-lab-v1", "timeout_seconds": 3}) == OK and retired_probe.join_token(900000, server_retired_token) == OK
+	var admitted: bool = retired_probe.configure({"game_protocol": "egp-network-lab-v1", "simulation_fingerprint": simulation_fingerprint, "timeout_seconds": 3}) == OK and retired_probe.join_token(900000, server_retired_token) == OK
 	server_retired_token.clear()
 	return admitted
 
@@ -432,7 +440,9 @@ func _process(_delta: float) -> void:
 			return
 		server_retired_token = issued.token
 		server_stall_injected = true
-		server_stall_proof = {"checkpoint": health(), "port": net.get_statistics().local_port, "old_root": entity, "old_owners": owned_entities.duplicate(), "old_peers": generations.duplicate(true), "injected_at_ms": Time.get_ticks_msec() - started}
+		server_stall_proof = {"checkpoint": capture_checkpoint(), "port": net.get_statistics().local_port, "old_root": entity, "old_owners": owned_entities.duplicate(), "old_peers": generations.duplicate(true), "injected_at_ms": Time.get_ticks_msec() - started}
+		if finished:
+			return
 		var before := Time.get_ticks_msec()
 		OS.delay_msec(int(options.get("server-stall-ms", 750)))
 		server_stall_proof.elapsed_ms = Time.get_ticks_msec() - before
@@ -488,7 +498,7 @@ func _process(_delta: float) -> void:
 		if checks_ownership() and owned_entity != 0 and not input_sent and net.get_state() == "Connected":
 			var record: Dictionary = net.get_entity(owned_entity)
 			if not record.is_empty():
-				if record.authority_peer != owner_peer or record.state != {"account": 10000 + index, "generation": epoch}:
+				if record.authority_peer != owner_peer or not valid_owner_state(record.state):
 					finish(false, "client ownership mismatch")
 					return
 				if stall_recovered:

@@ -3,7 +3,7 @@
 import copy
 import unittest
 
-from launch_egp_network_lab import restart_failure, server_stall_failure, stall_failure
+from launch_egp_network_lab import physics_failure, restart_failure, server_stall_failure, stall_failure
 
 
 class RestartEvidenceTests(unittest.TestCase):
@@ -404,6 +404,103 @@ class ServerStallEvidenceTests(unittest.TestCase):
     def test_connection_history_must_span_disconnect(self):
         self.client["connection_states"] = ["Connected", "Connected", "Disconnected", "Stopped"]
         self.assertIsNotNone(server_stall_failure(self.receipt))
+
+
+class PhysicsEvidenceTests(unittest.TestCase):
+    def setUp(self):
+        source = ServerStallEvidenceTests()
+        source.setUp()
+        self.receipt = source.receipt
+        self.proof = source.proof
+        self.proof["checkpoint"]["physics"] = {
+            "tick": 240,
+            "hash": "1111111111111111",
+            "bodies": 3,
+            "body_ids": [1, 10000, 10001],
+            "bytes": 4096,
+        }
+        self.proof["physics"] = {
+            "restored_tick": 240,
+            "restored_hash": "1111111111111111",
+            "restored_bodies": 3,
+            "branch_tick": 246,
+            "branch_hash": "2222222222222222",
+            "replayed_hash": "2222222222222222",
+            "damaged_restore_error": 30,
+            "damaged_restore_preserved_hash": "2222222222222222",
+        }
+        source.server["statistics"] = {"tick": 30}
+        self.proof["physics_final_tick"] = 270
+        self.proof["physics_mappings"] = {"1": {}, "2": {}}
+        for record in self.receipt["processes"][1:]:
+            data = record["result"]
+            data["server_stall_proof"] = {"physics_history": {}}
+            for generation in ("1", "2"):
+                entity = data["epoch_owners"][generation]["entity"]
+                self.proof["physics_mappings"][generation][str(data["index"])] = {
+                    "body": 10000 + data["index"],
+                    "entity": entity,
+                }
+                data["server_stall_proof"]["physics_history"][generation] = {
+                    "entity": entity,
+                    "tick": 230 if generation == "1" else 260,
+                    "position": [0 if generation == "1" else 1, 0.5, 0],
+                    "linear_velocity": [1, 0, 0],
+                }
+        self.history = self.receipt["processes"][1]["result"]["server_stall_proof"]["physics_history"]
+
+    def test_complete_checkpoint_and_mapping(self):
+        self.assertIsNone(physics_failure(self.receipt))
+
+    def test_checkpoint_tick_must_match_initial_clock(self):
+        self.proof["checkpoint"]["physics"]["tick"] = 239
+        self.assertIsNotNone(physics_failure(self.receipt))
+
+    def test_restore_must_recover_exact_hash(self):
+        self.proof["physics"]["restored_hash"] = "3333333333333333"
+        self.assertIsNotNone(physics_failure(self.receipt))
+
+    def test_local_replay_must_match_branch(self):
+        self.proof["physics"]["replayed_hash"] = "3333333333333333"
+        self.assertIsNotNone(physics_failure(self.receipt))
+
+    def test_damaged_snapshot_must_fail_transactionally(self):
+        for field, wrong in (("damaged_restore_error", 0), ("damaged_restore_preserved_hash", "3333333333333333")):
+            receipt = copy.deepcopy(self.receipt)
+            receipt["processes"][0]["result"]["server_stall_proof"]["physics"][field] = wrong
+            self.assertIsNotNone(physics_failure(receipt))
+
+    def test_restarted_network_clock_preserves_world_origin(self):
+        self.proof["physics_final_tick"] = 30
+        self.assertIsNotNone(physics_failure(self.receipt))
+
+    def test_empty_snapshot_is_not_checkpoint_evidence(self):
+        self.proof["checkpoint"]["physics"]["bytes"] = 0
+        self.assertIsNotNone(physics_failure(self.receipt))
+
+    def test_stable_body_ids_must_survive(self):
+        self.proof["checkpoint"]["physics"]["body_ids"] = [1, 2, 3]
+        self.assertIsNotNone(physics_failure(self.receipt))
+
+    def test_client_must_receive_physics_after_recovery(self):
+        self.history.pop("2")
+        self.assertIsNotNone(physics_failure(self.receipt))
+
+    def test_retired_network_entity_cannot_be_mapped(self):
+        self.proof["physics_mappings"]["2"]["0"]["entity"] = 2
+        self.assertIsNotNone(physics_failure(self.receipt))
+
+    def test_world_tick_must_advance_after_restoration(self):
+        self.history["2"]["tick"] = 240
+        self.assertIsNotNone(physics_failure(self.receipt))
+
+    def test_owner_impulse_must_advance_replicated_motion(self):
+        self.history["2"]["position"] = self.history["1"]["position"]
+        self.assertIsNotNone(physics_failure(self.receipt))
+
+    def test_malformed_physics_vector_is_rejected(self):
+        self.history["2"]["linear_velocity"] = [float("nan"), 0, 0]
+        self.assertIsNotNone(physics_failure(self.receipt))
 
 
 if __name__ == "__main__":

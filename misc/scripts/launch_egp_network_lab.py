@@ -358,6 +358,76 @@ def server_stall_failure(receipt):
     return None
 
 
+def physics_failure(receipt):
+    """Require full local restore/replay and stable bodies bound to fresh network handles."""
+    server = next(record for record in receipt["processes"] if record["role"] in ("server", "host"))
+    result = server["result"]
+    proof = result.get("server_stall_proof", {})
+    saved = proof.get("checkpoint", {}).get("physics", {})
+    restored = proof.get("physics", {})
+    clients = receipt["clients"]
+    tick = saved.get("tick", 0)
+    state_hash = saved.get("hash", "")
+    if (
+        tick < 2
+        or tick != proof.get("checkpoint", {}).get("tick")
+        or not isinstance(state_hash, str)
+        or not re.fullmatch(r"[0-9a-fA-F]{16}", state_hash)
+        or not 0 < saved.get("bytes", 0) <= 64 * 1024 * 1024
+        or saved.get("bodies") != clients + 1
+        or saved.get("body_ids") != [1, *range(10000, 10000 + clients)]
+        or restored.get("restored_tick") != tick
+        or restored.get("restored_hash") != state_hash
+        or restored.get("restored_bodies") != clients + 1
+        or restored.get("branch_tick") != tick + 6
+        or restored.get("branch_hash") == state_hash
+        or not re.fullmatch(r"[0-9a-fA-F]{16}", restored.get("branch_hash", ""))
+        or restored.get("replayed_hash") != restored.get("branch_hash")
+        or not restored.get("damaged_restore_error")
+        or restored.get("damaged_restore_preserved_hash") != restored.get("branch_hash")
+        or proof.get("physics_final_tick", 0) != tick + result.get("statistics", {}).get("tick", 0)
+    ):
+        return "Physics checkpoint lacks transactional restore, identical local replay or resumed clock evidence"
+    mappings = proof.get("physics_mappings", {})
+    if set(mappings) != {"1", "2"} or any(
+        set(mapping) != {str(i) for i in range(clients)} for mapping in mappings.values()
+    ):
+        return "Physics checkpoint lost a generation or stable body mapping"
+    for record in receipt["processes"]:
+        if record["role"] != "client":
+            continue
+        data = record["result"]
+        index = data["index"]
+        history = data.get("server_stall_proof", {}).get("physics_history", {})
+        owners = data.get("epoch_owners", {})
+        if set(history) != {"1", "2"}:
+            return "Client lacks replicated physical state on both sides of recovery"
+        for generation in ("1", "2"):
+            state = history[generation]
+            mapping = mappings[generation][str(index)]
+            if (
+                mapping.get("body") != 10000 + index
+                or mapping.get("entity") != owners.get(generation, {}).get("entity")
+                or mapping.get("entity") == mapping.get("body")
+                or state.get("entity") != mapping.get("entity")
+                or state.get("tick", 0) < 2
+                or (generation == "2" and state["tick"] <= tick)
+                or any(
+                    not isinstance(state.get(field), list)
+                    or len(state[field]) != 3
+                    or any(
+                        not isinstance(v, (int, float)) or isinstance(v, bool) or not math.isfinite(v)
+                        for v in state[field]
+                    )
+                    for field in ("position", "linear_velocity")
+                )
+            ):
+                return "Client physics state is stale, malformed or bound to a retired network/body identity"
+        if history["2"]["tick"] <= history["1"]["tick"] or history["2"]["position"][0] <= history["1"]["position"][0]:
+            return "Recovered owner input did not advance the stable physical body's replicated state"
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, required=True, help="EGP editor or template containing EGPNetSession")
@@ -410,6 +480,11 @@ def main():
     )
     parser.add_argument("--server-stall-ms", type=int, default=750, help="Server clock gap in ms (550..5000)")
     parser.add_argument(
+        "--physics",
+        action="store_true",
+        help="Restore and replay a trusted Box3D checkpoint during server-stall recovery",
+    )
+    parser.add_argument(
         "--server-down-for", type=bounded_float(0, 10), default=1.0, help="Server outage duration in seconds"
     )
     parser.add_argument("--preset", choices=PRESETS, default="local")
@@ -439,6 +514,8 @@ def main():
             parser.error("Server stalls must allow 3 seconds before the gap and 7 seconds afterward")
     elif args.server_stall_ms != 750:
         parser.error("--server-stall-ms requires --server-stall-at")
+    if args.physics and not args.server_stall_at:
+        parser.error("--physics requires --server-stall-at")
     if not 550 <= args.client_stall_ms <= 5000 or not 0 <= args.client_stall_index < args.clients:
         parser.error("--client-stall-ms must be 550..5000 and --client-stall-index must name an existing client")
     if args.client_stall_at:
@@ -471,6 +548,12 @@ def main():
     output.mkdir(parents=True)
     project = output / "project"
     shutil.copytree(ROOT / "misc/egp/network_lab", project, ignore=shutil.ignore_patterns(".godot", "*.uid"))
+    if args.physics:
+        scene = project / "main.tscn"
+        scene.write_text(
+            scene.read_text(encoding="utf-8").replace('path="res://main.gd"', 'path="res://physics.gd"'),
+            encoding="utf-8",
+        )
     helpers = project / "addons/egp_net"
     helpers.mkdir(parents=True)
     for source in (ROOT / "modules/egp_net/gdscript").glob("*.gd"):
@@ -510,6 +593,7 @@ def main():
             "at_seconds": args.server_stall_at,
             "milliseconds": args.server_stall_ms,
         },
+        "physics_requested": args.physics,
         "simulation": simulation,
         "simulate_on": args.simulate_on,
         "processes": [],
@@ -788,6 +872,11 @@ def main():
                 receipt["error"] = failure
         if args.server_stall_at and receipt["passed"]:
             failure = server_stall_failure(receipt)
+            if failure:
+                receipt["passed"] = False
+                receipt["error"] = failure
+        if args.physics and receipt["passed"]:
+            failure = physics_failure(receipt)
             if failure:
                 receipt["passed"] = False
                 receipt["error"] = failure

@@ -195,9 +195,10 @@ public partial class InteropFixture : Node
         physicsProfile = fingerprint;
         Check(server.Configure(new NetOptions { SimulationFingerprint = fingerprint }) == Error.Ok && server.Host(0) == Error.Ok, "C# physics profile session");
         entity = server.Spawn(1, new Dictionary { ["position"] = new Vector3(0, 10, 0) });
-        Check(CallError(world, "queue_create_sphere", entity, 1, new Vector3(0, 10, 0), 0.5f) == Error.Ok, "C# network entity body");
+        Check(CallError(world, "queue_create_sphere", 10000, 1, new Vector3(0, 10, 0), 0.5f) == Error.Ok, "C# stable entity body");
         physics = new NetBox3D(); int steps = 0; physics.AfterStep += _ => steps++;
-        Check(physics.Attach(server, world) == Error.Ok && physics.Track(entity) == Error.Ok, "C# physics adapter attach/track");
+        Check(physics.Attach(server, world) == Error.Ok && physics.Track(entity) == Error.Ok, "C# default body mapping compatibility");
+        Check(physics.Track(entity, 10000) == Error.Ok && physics.Track(entity, -1) == Error.InvalidParameter, "C# stable body mapping and rejected invalid replacement");
         cppPeer = (Node)ClassDB.Instantiate("EGPNetCppProbe").AsGodotObject(); AddChild(cppPeer);
         Check(CallError(cppPeer, "start_physics") == Error.Ok, "C++ physics adapter attach/track");
         ulong physicsDeadline = Time.GetTicksMsec() + 3000;
