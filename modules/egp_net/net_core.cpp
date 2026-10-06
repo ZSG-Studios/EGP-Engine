@@ -32,6 +32,10 @@ struct Meta : yojimbo::Message {
     YOJIMBO_VIRTUAL_SERIALIZE_FUNCTIONS();
 };
 struct State : yojimbo::BlockMessage {
+    // The queue retains this ticket until the reliable message is acknowledged
+    // (or its connection is reset). Links keep only a weak reference, so they
+    // can coalesce later revisions without holding a transport message alive.
+    std::shared_ptr<uint8_t> in_flight;
     uint64_t handle = 0, revision = 0, tick = 0, authority = UINT64_MAX;
     int kind = 0;
     template <typename Stream> bool Serialize(Stream &stream) {
@@ -85,6 +89,7 @@ struct Session::Impl : yojimbo::Adapter {
         int64_t handle = 0;
         bool begun = false, complete = false;
         std::map<uint64_t, uint64_t> revisions;
+        std::map<uint64_t, std::weak_ptr<uint8_t>> in_flight_states;
         std::set<uint64_t> hidden;
         double window = 0;
         int incoming_count = 0, outgoing_count = 0;
@@ -213,6 +218,7 @@ struct Session::Impl : yojimbo::Adapter {
             for (auto it = link.revisions.begin(); it != link.revisions.end();) {
                 if (!entity_map.count(it->first) || link.hidden.count(it->first)) {
                     if (!meta(slot, DestroyEntity, it->first)) break;
+                    link.in_flight_states.erase(it->first);
                     it = link.revisions.erase(it);
                 } else ++it;
             }
@@ -222,12 +228,21 @@ struct Session::Impl : yojimbo::Adapter {
                 const Entity &entity = record.second;
                 auto revision = link.revisions.find(entity.handle);
                 if (revision != link.revisions.end() && revision->second == entity.revision) continue;
+                // One queued state per entity/peer bounds stale revisions under
+                // latency and leaves capacity for newly spawned owned entities.
+                auto pending = link.in_flight_states.find(entity.handle);
+                if (pending != link.in_flight_states.end() && !pending->second.expired()) {
+                    caught_up = false;
+                    continue;
+                }
                 if (!room(slot, 0, entity.state.size() + 64)) { caught_up = false; break; }
                 auto *m = static_cast<State *>(create(slot, StateType));
                 if (!m) { caught_up = false; break; }
                 m->handle = entity.handle; m->revision = entity.revision; m->tick = entity.tick;
                 m->authority = uint64_t(entity.authority_peer); m->kind = entity.kind;
                 if (!attach(slot, m, entity.state)) { release(slot, m); caught_up = false; break; }
+                m->in_flight = std::make_shared<uint8_t>(0);
+                link.in_flight_states[entity.handle] = m->in_flight;
                 queue(slot, 0, m, entity.state.size() + 64);
                 link.revisions[entity.handle] = entity.revision;
             }
@@ -253,7 +268,6 @@ struct Session::Impl : yojimbo::Adapter {
             action = m->action; handle = m->handle; tick = m->tick;
             good = !server && channel == 0;
         } else if (type == StateType) {
-            stats.server_tick = std::max(stats.server_tick, entity.tick);
             const auto *m = static_cast<State *>(message);
             entity.handle = m->handle; entity.revision = m->revision; entity.tick = m->tick;
             entity.authority_peer = int64_t(m->authority); entity.kind = m->kind;
@@ -284,6 +298,7 @@ struct Session::Impl : yojimbo::Adapter {
             else entity_map.erase(handle);
         } else if (type == StateType) {
             if (!entity_map.count(entity.handle) && entity_map.size() >= size_t(options.max_entities)) { reject(slot); return; }
+            stats.server_tick = std::max(stats.server_tick, entity.tick);
             entity.state = std::move(payload);
             auto old = entity_map.find(entity.handle);
             if (old == entity_map.end() || old->second.revision < entity.revision) entity_map[entity.handle] = std::move(entity);

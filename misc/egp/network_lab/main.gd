@@ -22,6 +22,26 @@ var admissions: Dictionary = {}
 var generations: Dictionary = {}
 var diagnostics: Array[String] = []
 var label: Label
+var restart_enabled := false
+var epoch := 1
+var persistent_value := 100
+var restored_value := 0
+var restart_wait := false
+var restart_wait_started := 0
+var disconnected := false
+var cleared_on_disconnect := false
+var connection_states: Array[String] = []
+var epoch_ticks: Dictionary = {}
+var epoch_replies: Dictionary = {}
+var epoch_inputs: Dictionary = {}
+var epoch_server_pids: Dictionary = {}
+var owned_entity := 0
+var owner_peer := -1
+var input_sent := false
+var input_clients: Dictionary = {}
+var owned_entities: Dictionary = {}
+var last_health := 0
+var health_sequence := 0
 
 func _ready() -> void:
 	for argument in OS.get_cmdline_user_args():
@@ -34,6 +54,10 @@ func _ready() -> void:
 	index = int(options.get("index", 0))
 	duration = float(options.get("duration", 8))
 	reconnect_at = float(options.get("reconnect-at", 0))
+	restart_enabled = options.get("restart-enabled", "0") == "1"
+	epoch = int(options.get("generation", 1))
+	restored_value = int(options.get("checkpoint-value", 0))
+	persistent_value = restored_value if epoch > 1 else 100
 	if role not in ["server", "host", "client"] or directory.is_empty() or clients < 1 or clients > 64:
 		finish(false, "invalid lab arguments")
 		return
@@ -47,6 +71,7 @@ func _ready() -> void:
 	net.auto_poll = false
 	add_child(net)
 	net.diagnostic.connect(func(message: String): diagnostics.append(message))
+	net.state_changed.connect(observe_state)
 	if not configure():
 		return
 	if role in ["server", "host"]:
@@ -54,31 +79,30 @@ func _ready() -> void:
 		if net.host(int(options.get("port", 0)), "127.0.0.1") != OK:
 			finish(false, "loopback listener failed")
 			return
-		entity = net.spawn(1, {"tick": 0, "host_player": role == "host"})
+		entity = net.spawn(1, authority_state(0))
 		if entity == 0:
 			finish(false, "authority entity failed")
 			return
 		net.simulation_tick.connect(func(tick: int, server: bool):
-			if server and net.update_entity(entity, {"tick": tick, "host_player": role == "host"}) != OK:
+			if server and net.update_entity(entity, authority_state(tick)) != OK:
 				finish(false, "authority update failed"))
+		net.input_received.connect(receive_input)
 		var port: int = net.get_statistics().local_port
 		for client in range(clients):
-			if not publish_token(client, ""):
+			if not publish_token(client, "-epoch-%d" % epoch if restart_enabled else ""):
 				return
-		var ready := FileAccess.open(directory.path_join("ready.json"), FileAccess.WRITE)
-		if ready == null:
+		if not publish_json("ready-%d.json" % epoch, {"port": port, "clients": clients, "generation": epoch, "pid": OS.get_process_id()}):
 			finish(false, "readiness handoff failed")
 			return
-		ready.store_string(JSON.stringify({"port": port, "clients": clients}))
-		ready.close()
 	else:
 		net.register_message(&"reply", receive_reply, Net.Sender.SERVER)
-		join()
+		net.register_message(&"input_reply", receive_input_reply, Net.Sender.SERVER)
+		join("-epoch-%d" % epoch if restart_enabled else "")
 
 func configure() -> bool:
 	var error: Error = net.configure({
 		"game_protocol": "egp-network-lab-v1", "max_players": clients,
-		"max_entities": 4, "timeout_seconds": 10, "token_lifetime_seconds": 120,
+		"max_entities": maxi(4, clients + 1), "timeout_seconds": 3 if restart_enabled else 10, "token_lifetime_seconds": 120,
 		"simulated_latency_ms": float(options.get("latency", 0)),
 		"simulated_jitter_ms": float(options.get("jitter", 0)),
 		"simulated_loss": float(options.get("loss", 0)),
@@ -123,21 +147,109 @@ func receive_hello(peer: int, arguments: Array) -> void:
 			var connections: Dictionary = generations.get(arguments[0], {})
 			connections[peer] = true
 			generations[arguments[0]] = connections
-			if net.send_message(peer, &"reply", [arguments[0]]) != OK:
+			var reply: Array = [arguments[0]]
+			if restart_enabled:
+				var owned: int = net.spawn(2, {"account": record.client_id, "generation": epoch}, peer)
+				if owned == 0:
+					finish(false, "client authority spawn failed")
+					return
+				owned_entities[arguments[0]] = owned
+				reply = [arguments[0], epoch, peer, owned]
+			if net.send_message(peer, &"reply", reply) != OK:
 				finish(false, "reply enqueue failed")
 			return
 	finish(false, "unknown authenticated peer")
 
 func receive_reply(_peer: int, arguments: Array) -> void:
-	if arguments != [index]:
+	if (not restart_enabled and arguments != [index]) or (restart_enabled and (arguments.size() != 4 or arguments[0] != index or arguments[1] != epoch)):
 		finish(false, "reply contract mismatch")
 		return
 	replies += 1
+	epoch_replies[epoch] = true
+	if restart_enabled:
+		owner_peer = arguments[2]
+		owned_entity = arguments[3]
+
+func authority_state(tick: int) -> Dictionary:
+	return {"tick": tick, "host_player": role == "host", "generation": epoch,
+		"server_pid": OS.get_process_id(), "persistent_value": persistent_value, "restored_value": restored_value}
+
+func publish_json(filename: String, value: Dictionary) -> bool:
+	var path := directory.path_join(filename)
+	var file := FileAccess.open(path + ".tmp", FileAccess.WRITE)
+	if file == null:
+		return false
+	file.store_string(JSON.stringify(value))
+	file.close()
+	return DirAccess.rename_absolute(path + ".tmp", path) == OK
+
+func health() -> Dictionary:
+	return {"pid": OS.get_process_id(), "generation": epoch, "admitted_clients": admissions.size(),
+		"input_clients": input_clients.size(), "persistent_value": persistent_value,
+		"root_authority": net.get_entity(entity).get("authority_peer", -2), "tick": net.get_statistics().get("tick", 0)}
+
+func observe_state(state: String) -> void:
+	connection_states.append(state)
+	if restart_enabled and role == "client" and epoch == 1 and state == "Disconnected" and epoch_replies.has(1):
+		disconnected = true
+		cleared_on_disconnect = net.get_entities().is_empty()
+		restart_wait = true
+		restart_wait_started = Time.get_ticks_msec()
+
+func receive_input(peer: int, handle: int, input: Dictionary) -> void:
+	if not restart_enabled:
+		return
+	for record in net.get_peers():
+		if record.peer_id != peer:
+			continue
+		var client: int = record.client_id - 10000
+		if client < 0 or client >= clients or owned_entities.get(client, 0) != handle or input != {"account": record.client_id, "generation": epoch, "sequence": 1} or input_clients.has(client):
+			finish(false, "owner-authorized input contract failed")
+			return
+		input_clients[client] = true
+		persistent_value += client + 1
+		if net.send_message(peer, &"input_reply", [client, epoch]) != OK:
+			finish(false, "input acknowledgment enqueue failed")
+		return
+	finish(false, "input from unknown authenticated peer")
+
+func receive_input_reply(_peer: int, arguments: Array) -> void:
+	if not restart_enabled or arguments != [index, epoch]:
+		finish(false, "input acknowledgment contract failed")
+		return
+	epoch_inputs[epoch] = true
+
+func recover_server() -> void:
+	if not cleared_on_disconnect or not net.get_entities().is_empty():
+		finish(false, "stale replicated entities survived disconnect")
+		return
+	var path := directory.path_join("ready-2.json")
+	if not FileAccess.file_exists(path):
+		if Time.get_ticks_msec() - restart_wait_started > 5000 + int(float(options.get("server-down-for", 1)) * 1000):
+			finish(false, "replacement admission watchdog")
+		return
+	var parser := JSON.new()
+	if parser.parse(FileAccess.get_file_as_string(path)) != OK or not parser.data is Dictionary or int(parser.data.get("generation", 0)) != 2:
+		finish(false, "invalid replacement readiness")
+		return
+	# Reconfigure only after poll returns; a fresh server issues a fresh token.
+	net.close()
+	epoch = 2
+	restart_wait = false
+	sent = false
+	input_sent = false
+	owned_entity = 0
+	owner_peer = -1
+	if configure():
+		join("-epoch-2")
 
 func _process(_delta: float) -> void:
 	if finished or net == null:
 		return
 	var elapsed := (Time.get_ticks_msec() - started) / 1000.0
+	if restart_wait:
+		recover_server()
+		return
 	if role == "client" and reconnect_at > 0 and elapsed >= reconnect_at and not reconnected:
 		net.close()
 		reconnected = true
@@ -167,6 +279,23 @@ func _process(_delta: float) -> void:
 	if net.poll() != OK:
 		finish(false, "poll failed")
 		return
+	if restart_wait:
+		recover_server()
+		return
+	if restart_enabled and role != "client":
+		if Time.get_ticks_msec() - last_health >= 100:
+			last_health = Time.get_ticks_msec()
+			# Immutable publications avoid replacing a file held open by a reader on Windows.
+			health_sequence += 1
+			if not publish_json("health-%d-%06d.json" % [epoch, health_sequence], health()):
+				finish(false, "health publication failed")
+				return
+		if epoch == 1 and FileAccess.file_exists(directory.path_join("stop.request")):
+			if not publish_json("checkpoint.json", health()):
+				finish(false, "checkpoint publication failed")
+				return
+			finish(admissions.size() == clients and input_clients.size() == clients, "graceful restart checkpoint")
+			return
 	if role != "client" and reconnect_at > 0:
 		for client in range(clients):
 			if FileAccess.file_exists(directory.path_join("reconnect-%d.request" % client)) and not FileAccess.file_exists(directory.path_join("client-%d-reconnect.bin" % client)):
@@ -174,20 +303,54 @@ func _process(_delta: float) -> void:
 					return
 	if role == "client":
 		for handle in net.get_entities():
-			var state: Dictionary = net.get_entity(handle).state
+			var record: Dictionary = net.get_entity(handle)
+			var state: Dictionary = record.state
 			highest_tick = maxi(highest_tick, int(state.get("tick", 0)))
+			if restart_enabled and record.kind == 1:
+				if record.authority_peer != -1 or int(state.get("generation", 0)) != epoch:
+					finish(false, "stale generation or root authority")
+					return
+				epoch_ticks[epoch] = maxi(int(epoch_ticks.get(epoch, 0)), int(state.get("tick", 0)))
+				epoch_server_pids[epoch] = int(state.get("server_pid", 0))
+				if epoch == 2:
+					restored_value = int(state.get("restored_value", 0))
+					persistent_value = int(state.get("persistent_value", 0))
+		if restart_enabled and owned_entity != 0 and not input_sent and net.get_state() == "Connected":
+			var record: Dictionary = net.get_entity(owned_entity)
+			if not record.is_empty():
+				if record.authority_peer != owner_peer or record.state != {"account": 10000 + index, "generation": epoch}:
+					finish(false, "client ownership mismatch")
+					return
+				if net.send_input(owned_entity, {"account": 10000 + index, "generation": epoch, "sequence": 1}) != OK:
+					finish(false, "owner input enqueue failed")
+					return
+				input_sent = true
 		if net.get_state() == "Connected" and not sent:
 			if net.send_message(0, &"hello", [index]) != OK:
 				finish(false, "hello enqueue failed")
 				return
 			sent = true
+		if restart_enabled and Time.get_ticks_msec() - last_health >= 1000:
+			last_health = Time.get_ticks_msec()
+			health_sequence += 1
+			if not publish_json("client-health-%d-%06d.json" % [index, health_sequence], {
+				"pid": OS.get_process_id(), "generation": epoch, "state": net.get_state(),
+				"replies": replies, "entities": net.get_entities(), "owned_entity": owned_entity,
+				"input_sent": input_sent, "epoch_inputs": epoch_inputs, "highest_tick": highest_tick}):
+				finish(false, "client health publication failed")
+				return
 	if label != null:
 		label.text = "EGP Network Lab\n%s %d · %s\n%.1f / %.1f seconds\nPeers: %d · server tick: %d\nLatency: %s ms · jitter: %s ms · loss: %s%%\nReplies: %d · diagnostics: %d" % [role, index, net.get_state(), elapsed, duration, net.get_peers().size(), highest_tick, options.get("latency", "0"), options.get("jitter", "0"), options.get("loss", "0"), replies, diagnostics.size()]
 	if elapsed >= duration + (2.0 if role != "client" else 0.0):
 		if role == "client":
-			finish(replies >= (2 if reconnect_at > 0 else 1) and highest_tick > 1, "encrypted admission, replies and replicated tick")
+			var passed := replies >= (2 if reconnect_at > 0 or restart_enabled else 1) and highest_tick > 1
+			if restart_enabled:
+				passed = passed and disconnected and cleared_on_disconnect and epoch == 2 and epoch_ticks.get(1, 0) > 1 and epoch_ticks.get(2, 0) > 1 and epoch_inputs.has(1) and epoch_inputs.has(2) and restored_value >= 100 and persistent_value > restored_value
+			finish(passed, "encrypted admission, replies and replicated tick; restart authority/state when requested")
 		else:
 			var passed := admissions.size() == clients
+			if restart_enabled:
+				passed = passed and input_clients.size() == clients
 			if reconnect_at > 0:
 				for client in range(clients):
 					passed = passed and generations.get(client, {}).size() >= 2
@@ -200,5 +363,9 @@ func finish(passed: bool, message: String) -> void:
 	var statistics: Dictionary = net.get_statistics() if net != null else {}
 	if net != null:
 		net.close()
-	print("EGP_NETWORK_LAB " + JSON.stringify({"passed": passed, "role": role, "index": index, "message": message, "replies": replies, "highest_tick": highest_tick, "admitted_clients": admissions.size(), "diagnostics": diagnostics, "statistics": statistics}))
+	print("EGP_NETWORK_LAB " + JSON.stringify({"passed": passed, "role": role, "index": index, "message": message, "replies": replies, "highest_tick": highest_tick, "admitted_clients": admissions.size(), "diagnostics": diagnostics, "statistics": statistics,
+		"generation": epoch, "restart_enabled": restart_enabled, "disconnected": disconnected,
+		"cleared_on_disconnect": cleared_on_disconnect, "connection_states": connection_states,
+		"epoch_ticks": epoch_ticks, "epoch_inputs": epoch_inputs, "epoch_server_pids": epoch_server_pids,
+		"restored_value": restored_value, "persistent_value": persistent_value, "input_clients": input_clients.size()}))
 	get_tree().quit(0 if passed else 1)

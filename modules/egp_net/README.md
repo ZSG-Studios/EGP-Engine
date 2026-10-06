@@ -123,7 +123,21 @@ and bounded queues can return busy; broadcasts can partially enqueue before
 returning that error. All operations run on the constructing thread.
 
 The native replication layer sends changed entity revisions as complete bounded
-states over reliable ordered delivery. `EGPNetPrediction` adds bounded local input/state history, authoritative correction and deterministic replay through game-provided capture/restore/simulate callbacks. Its default caps are 128 pending ticks, 64 KiB per local snapshot and 8 MiB of history. History pressure refuses new predictions; callback/state failures require an explicit baseline reset. Server input acknowledgments and complete predicted state are game contracts. Replay callbacks must suppress duplicate presentation effects. State sent over the network still obeys the 4096-byte wire limit.
+states over reliable ordered delivery. Each peer keeps at most one unacknowledged
+state message per entity; changes made while that message is pending are coalesced
+into the latest revision after acknowledgment. Intermediate states may be skipped.
+Use application messages for events that must each arrive. This prevents frequent
+updates to one entity from filling the reliable queue with its obsolete revisions;
+it does not guarantee a delivery deadline or fairness across thousands of entities.
+The client's `server_tick` statistic includes accepted replicated entity ticks.
+
+`EGPNetPrediction` adds bounded local input/state history, authoritative correction and deterministic replay through game-provided capture/restore/simulate callbacks. Its default caps are 128 pending ticks, 64 KiB per local snapshot and 8 MiB of history. History pressure refuses new predictions; callback/state failures require an explicit baseline reset. Server input acknowledgments and complete predicted state are game contracts. Replay callbacks must suppress duplicate presentation effects. State sent over the network still obeys the 4096-byte wire limit.
+
+For dedicated servers, listen hosts, visible local clients, impairment and bounded
+server replacement, see [the network lab guide](../../doc/egp_network_lab.md).
+Restart recovery in that fixture explicitly restores an application checkpoint and
+obtains fresh admission tokens. Production persistence and authentication belong to
+the game/backend.
 
 Field-delta compression, game-level prediction/input acknowledgment integration, lag-compensated hit tests,
 scene-level Box2D/Box3D rollback fidelity, production authentication, bandwidth
