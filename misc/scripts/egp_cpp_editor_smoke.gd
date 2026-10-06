@@ -32,6 +32,7 @@ func run_test() -> void:
 	if not require(panels.size() == 1, "Built-in C++ editor panel was not found"):
 		return
 	panel = panels[0]
+	print("EGP_CPP_STAGE: create and cold debug build")
 	panel.diagnostic_found.connect(func(path: String, line: int): diagnostics.append([path, line]))
 	if not require(panel.create_extension("smoke") == OK, "Extension scaffolding failed"):
 		return
@@ -47,7 +48,21 @@ func run_test() -> void:
 	if not require(node.get_message() == "Hello from smoke!", "Custom C++ method returned the wrong value"):
 		return
 	node.free()
+	print("EGP_CPP_STAGE: second extension and shared SDK cache")
+	if not require(panel.create_extension("second") == OK, "Second extension scaffolding failed"):
+		return
+	var selector = panel.find_children("*", "OptionButton", true, false)[0]
+	if not require(selector.get_item_text(selector.get_selected()) == "second", "New extension was not selected"):
+		return
+	if not require(panel.build_extension("second", false) == OK, "Second extension build did not start"):
+		return
+	if not await finish_build():
+		return
+	if not require(panel.get_last_build_result() == 0 and ClassDB.class_exists("EGP_second_Node"),
+			"Second extension failed to reuse the SDK library and register its node"):
+		return
 	var descriptor := "res://extensions/smoke/smoke.gdextension"
+	print("EGP_CPP_STAGE: deliberate compile failure and diagnostic navigation")
 	var before := FileAccess.get_file_as_string(descriptor)
 	var source_path := "res://extensions/smoke/src/extension.cpp"
 	var source := FileAccess.get_file_as_string(source_path)
@@ -75,9 +90,9 @@ func run_test() -> void:
 	if not require(text_editor.get_text().contains("EGP deliberate diagnostic fixture")
 			and text_editor.get_caret_line() == int(diagnostics[-1][1]) - 1, "Diagnostic navigation opened the wrong source line"):
 		return
-	file = FileAccess.open(source_path, FileAccess.WRITE)
-	file.store_string(source.replace("Hello from smoke!", "Hello after rebuild!"))
-	file.close()
+	# Fix the source through the actual editor; Build must save its unsaved changes.
+	print("EGP_CPP_STAGE: save edited source and reload changed implementation")
+	text_editor.set_text(source.replace("Hello from smoke!", "Hello after rebuild!"))
 	if not require(panel.build_extension("smoke", false) == OK, "Rebuild did not start"):
 		return
 	if not await finish_build():
@@ -88,6 +103,7 @@ func run_test() -> void:
 	if not require(node.get_message() == "Hello after rebuild!", "Reload kept the old C++ implementation"):
 		return
 	node.free()
+	print("EGP_CPP_STAGE: release build and export mappings")
 	if not require(panel.build_extension("smoke", true) == OK, "Release build did not start"):
 		return
 	if not await finish_build():

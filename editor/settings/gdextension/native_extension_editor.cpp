@@ -133,6 +133,12 @@ Error NativeExtensionEditor::create_extension(const String &p_name) {
 		ignore->store_string("bin/\n");
 	}
 	_refresh_extensions();
+	for (int i = 0; i < extensions->get_item_count(); i++) {
+		if (extensions->get_item_text(i) == p_name) {
+			extensions->select(i);
+			break;
+		}
+	}
 	EditorFileSystem::get_singleton()->scan();
 	_append_line(vformat(TTR("Created %s. Build Debug to make its node available in the editor."), path));
 	return OK;
@@ -372,13 +378,16 @@ void NativeExtensionEditor::_diagnostic_clicked(const Variant &p_meta) {
 		path = ProjectSettings::get_singleton()->globalize_path("res://extensions/" + building_name).path_join(path);
 	}
 	Ref<TextFile> file;
-	file.instantiate();
-	if (file->load_text(path) != OK) {
-		return;
-	}
 	path = ProjectSettings::get_singleton()->localize_path(path);
-	file->set_file_path(path);
-	file->set_path(path, true);
+	file = ResourceCache::get_ref(path);
+	if (file.is_null()) {
+		file.instantiate();
+		if (file->load_text(path) != OK) {
+			return;
+		}
+		file->set_file_path(path);
+		file->set_path(path);
+	}
 	ProjectSettingsEditor::get_singleton()->hide();
 	ScriptEditor::get_singleton()->edit(file, MAX(0, int(location[1]) - 1), 0);
 }

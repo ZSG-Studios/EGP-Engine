@@ -13,7 +13,7 @@ EGP is a fork of [Godot Engine](https://github.com/godotengine/godot) built arou
 
 ## Current status
 
-The fork is being established. Box3D, the LiteNet stack, and the additional native C++ editor tooling are planned integrations; they are not implemented in this repository yet. No performance improvements or EGP build qualification are claimed at this stage.
+The fork is being established. Native C++ extension tooling is built into the editor, with a bundled godot-cpp SDK, project scaffolding, Debug/Release builds, clickable diagnostics, and extension reload. See [the C++ extension guide](doc/egp_cpp_extensions.md). Box3D and the LiteNet stack are separate integrations. No general performance improvements or production readiness are claimed.
 
 The first milestone is a working stock Godot baseline: build the C# editor and Windows export template, run a minimal C# scene, and verify its exported executable. Engine replacements follow that baseline.
 
@@ -23,7 +23,7 @@ The first milestone is a working stock Godot baseline: build the C# editor and W
 
 The goal is to create a C++ extension project, configure its toolchain, build it, and navigate compiler errors from the editor. Match godot-cpp bindings to EGP's extension API, support debug and release builds, reload compatible extensions after successful builds, and offer an editor restart when reload is unsupported. Package the appropriate extension libraries with exported games.
 
-The editor tooling will be part of the engine distribution. Project extensions will remain standard GDExtension libraries; developing one should not require rebuilding the engine. A platform compiler and build tools are still required.
+The editor includes the C++ SDK and its generated bindings. Project extensions remain standard GDExtension libraries; developing one does not require rebuilding the engine or downloading godot-cpp. A platform compiler and CMake are still required.
 
 Acceptance includes a generated extension whose custom node appears in the editor, a compiler error that opens the correct source location, a successful rebuild/reload or restart, and an exported game that loads the extension.
 
