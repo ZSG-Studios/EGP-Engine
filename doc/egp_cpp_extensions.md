@@ -80,8 +80,9 @@ method bindings and prints a diagnostic; dynamic method lookup and ordinary
 `Callable` lookup use the new signature. Update callers to match the signature.
 Code holding raw cached method bindings needs a restart.
 
-Changing a live class's native base requires a restart. Removing a class with live
-objects, or rejecting its base change, leaves those objects as their original
+Changing a class's native base requires a restart. Removing a class, or rejecting
+its base change, retains the registration record for compatible repair, including
+in an editor without live instances. Existing objects remain as their original
 native parent and retains their saved extension properties. The reload result is
 `LOAD_STATUS_NEEDS_RESTART`. Restore the compatible class and reload to recover
 its state, or restart to apply the new hierarchy. Parent properties can still be
