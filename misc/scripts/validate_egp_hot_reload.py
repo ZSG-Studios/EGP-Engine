@@ -13,7 +13,7 @@ import time
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from egp_hot_reload_node_evidence import node_failure, node_lifecycle_failure
+from egp_hot_reload_node_evidence import node_failure, node_lifecycle_failure, node_reentry_failure
 
 ROOT = Path(__file__).resolve().parents[2]
 PROBE = """using Godot;
@@ -1256,6 +1256,17 @@ def main():
                 failure = node_lifecycle_failure(lifecycle)
                 require(failure is None, failure or "High-level node tree lifecycle failed")
                 receipt["node_lifecycle"] = {"passed": True, "proofs": lifecycle}
+                reentry = []
+                receipt["node_reentry"] = {"passed": False, "proofs": reentry}
+                for cycle in range(3):
+                    if cycle:
+                        sample("network-node-exit")
+                        sample("network-node-reenter")
+                    reentry.append(sample("network-node-reopen"))
+                    require(reentry[-1]["passed"], reentry[-1].get("error", "Node reentry runtime checks failed"))
+                failure = node_reentry_failure(reentry, proofs[-1])
+                require(failure is None, failure or "High-level node reentry failed")
+                receipt["node_reentry"]["passed"] = True
         command("close")
         require(process.wait(timeout=60) == 0, "Editor/game teardown failed")
         game_log = (output / "game.log").read_text(encoding="utf-8")

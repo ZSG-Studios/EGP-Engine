@@ -2,6 +2,7 @@
     [Export] public EGP.Networking.NetNode? ClientNode { get; set; }
     [Export] public int NodeRestores { get; set; }
     [Export] public int NodeChecks { get; set; }
+    [Export] public int ReentryChecks { get; set; }
     [Export] public int ServerMessages { get; set; }
     [Export] public int ClientMessages { get; set; }
     [Export] public int OwnerInputs { get; set; }
@@ -55,6 +56,8 @@
     }
     public Godot.Collections.Dictionary CreateNodeSessions(Godot.Collections.Dictionary config) {
         CheckNodeLifecycle();
+        CheckReentrantLifecycle(false);
+        CheckReentrantLifecycle(true);
         ServerNode = new() { Name = "Authority", AutoPoll = false };
         ClientNode = new() { Name = "Client", AutoPoll = false };
         AddChild(ServerNode); AddChild(ClientNode); SubscribeNodes();
@@ -66,11 +69,47 @@
         return new() { ["server"] = ServerNode.NativeSession!, ["client"] = ClientNode.NativeSession!,
             ["server_bridge"] = ServerNode.Bridge, ["client_bridge"] = ClientNode.Bridge };
     }
+    private void CheckReentrantLifecycle(bool stop) {
+        var scratch = new EGP.Networking.NetNode { AutoPoll = false };
+        AddChild(scratch);
+        void Require(bool value) {
+            if (!value) throw new System.InvalidOperationException("Reentrant NetNode lifecycle self-test failed");
+            ReentryChecks++;
+        }
+        try {
+            Require(scratch.Configure() == Error.Ok);
+            Require(scratch.Host(0, "127.0.0.1") == Error.Ok);
+            var previous = scratch.NativeSession;
+            using Variant retained = previous!;
+            bool changed = false;
+            long freshEntity = 0;
+            scratch.StateChanged += state => {
+                if (state != "Stopped" || changed) return;
+                changed = true;
+                scratch.Close();
+                Require(scratch.Configure() == Error.Ok);
+                Require(scratch.Host(0, "127.0.0.1") == Error.Ok);
+                freshEntity = scratch.Spawn(19, new() { ["marker"] = 99 });
+                Require(freshEntity != 0);
+            };
+            if (stop) scratch.Stop(); else scratch.Close();
+            Require(changed);
+            Require(scratch.NativeSession != previous && scratch.State == "Listening");
+            Require(scratch.GetEntities().Count == 1 && scratch.GetEntity(freshEntity)["state"].AsGodotDictionary()["marker"].AsInt32() == 99);
+            Require(scratch.GetChildCount() == 1);
+        }
+        finally { scratch.Free(); }
+    }
     public void ReceiveNodeMessage(long peer, Godot.Collections.Array args) => ServerHistory.Add(new Godot.Collections.Dictionary {
         ["peer"] = peer, ["sequence"] = args[0], ["payload"] = System.Convert.ToHexString(args[1].AsByteArray()).ToLowerInvariant() });
     public void ReceiveNodeReply(long peer, Godot.Collections.Array args) => ClientHistory.Add(new Godot.Collections.Dictionary {
         ["peer"] = peer, ["sequence"] = args[0], ["payload"] = System.Convert.ToHexString(args[1].AsByteArray()).ToLowerInvariant() });
     public Error HostNode(int port) => ServerNode!.Host(port, "127.0.0.1");
+    public Godot.Collections.Dictionary ReopenNodeSessions(Godot.Collections.Dictionary config) {
+        if (ServerNode!.Configure(config) != Error.Ok || ClientNode!.Configure(config) != Error.Ok)
+            throw new System.InvalidOperationException("NetNode reentry configuration failed");
+        return new() { ["server"] = ServerNode.NativeSession!, ["client"] = ClientNode.NativeSession! };
+    }
     public Godot.Collections.Dictionary NodeToken(string address) {
         var token = ServerNode!.IssueToken(424242, address);
         return new() { ["error"] = (int)token.Error, ["token"] = token.Token };
@@ -99,7 +138,7 @@
         ["server_auto_poll"] = ServerNode.AutoPoll, ["client_auto_poll"] = ClientNode.AutoPoll,
         ["server_messages"] = ServerMessages, ["client_messages"] = ClientMessages, ["inputs"] = OwnerInputs,
         ["server_packets"] = ServerPackets, ["client_packets"] = ClientPackets,
-        ["server_spawns"] = ServerSpawns, ["client_spawns"] = ClientSpawns, ["restores"] = NodeRestores, ["checks"] = NodeChecks,
+        ["server_spawns"] = ServerSpawns, ["client_spawns"] = ClientSpawns, ["restores"] = NodeRestores, ["checks"] = NodeChecks, ["reentry_checks"] = ReentryChecks,
         ["server_history"] = ServerHistory.Duplicate(true), ["client_history"] = ClientHistory.Duplicate(true), ["input_history"] = InputHistory.Duplicate(true)
     };
     public void RemoveNodeSessions() { RemoveChild(ClientNode!); RemoveChild(ServerNode!); }

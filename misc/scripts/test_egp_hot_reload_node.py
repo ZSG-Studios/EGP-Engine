@@ -19,6 +19,7 @@ def node_evidence(live=True):
         row["baseline_state"] = {"sequence": sequence, "blob_hex": "00ff2a"} if active else {}
         state = {
             "checks": 6,
+            "reentry_checks": 18,
             "server_node": "11",
             "client_node": "12",
             "server_bridge": "13",
@@ -90,6 +91,7 @@ def rejection(index, path, value, live=True, tree=False):
 
 
 CASES: list[tuple[int, tuple[str, ...], object]] = [
+    (3, ("node_state", "reentry_checks"), 0),
     (3, ("node_state", "checks"), 0),
     (3, ("passed",), False),
     (3, ("references_ok",), False),

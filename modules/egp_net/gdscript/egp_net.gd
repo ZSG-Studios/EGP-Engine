@@ -43,17 +43,35 @@ func configure(options: Dictionary = {}) -> Error:
 	_tick_rate = options.get("tick_rate", 60)
 	_simulation_fingerprint = options.get("simulation_fingerprint", "script-state-v1")
 	session.state_changed.connect(_on_state)
-	session.peer_connected.connect(func(peer: int): peer_connected.emit(peer))
-	session.peer_disconnected.connect(func(peer: int):
-		_blocked_peers.erase(peer)
-		peer_disconnected.emit(peer))
+	session.peer_connected.connect(_on_peer_connected)
+	session.peer_disconnected.connect(_on_peer_disconnected)
 	session.application_received.connect(_on_message)
-	session.packet_received.connect(func(peer: int, data: PackedByteArray, channel: int, delivery: int):
-		if not _blocked_peers.has(peer):
-			packet_received.emit(peer, data, channel, delivery))
-	session.simulation_tick.connect(func(tick: int, server: bool): simulation_tick.emit(tick, server))
-	session.diagnostic.connect(func(text: String): diagnostic.emit(text))
+	session.packet_received.connect(_on_packet)
+	session.simulation_tick.connect(_on_tick)
+	session.diagnostic.connect(_on_diagnostic)
 	return OK
+
+func _on_peer_connected(peer: int) -> void:
+	peer_connected.emit(peer)
+
+func _on_peer_disconnected(peer: int) -> void:
+	_blocked_peers.erase(peer)
+	peer_disconnected.emit(peer)
+
+func _on_packet(peer: int, data: PackedByteArray, channel: int, delivery: int) -> void:
+	if not _blocked_peers.has(peer):
+		packet_received.emit(peer, data, channel, delivery)
+
+func _on_tick(tick: int, server: bool) -> void:
+	simulation_tick.emit(tick, server)
+
+func _on_diagnostic(text: String) -> void:
+	diagnostic.emit(text)
+
+func _disconnect_session(active: RefCounted) -> void:
+	for link in [[&"state_changed", _on_state], [&"peer_connected", _on_peer_connected], [&"peer_disconnected", _on_peer_disconnected], [&"application_received", _on_message], [&"packet_received", _on_packet], [&"simulation_tick", _on_tick], [&"diagnostic", _on_diagnostic]]:
+		if active.is_connected(link[0], link[1]):
+			active.disconnect(link[0], link[1])
 
 func host(port: int = 10515, bind_address: String = "0.0.0.0") -> Error:
 	if session == null:
@@ -115,15 +133,20 @@ func _exit_tree() -> void:
 	close()
 
 func stop() -> void:
-	if session != null:
-		session.stop()
-	_clear_entities()
+	var active := session
+	if active != null:
+		active.stop()
+	if session == active:
+		_clear_entities()
 
 func close() -> void:
-	if session != null:
-		session.close()
+	var active := session
+	if active != null:
+		active.close()
+		_disconnect_session(active)
+	if session == active:
 		session = null
-	_clear_entities()
+		_clear_entities()
 
 func is_server() -> bool:
 	return _server and session != null and session.get_state() == "Listening"

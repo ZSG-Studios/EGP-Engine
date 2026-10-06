@@ -123,6 +123,13 @@ closures are not a state persistence format. Overrides of `NetNode`'s
 serialization hooks must call `base`. Leaving the tree closes the session and
 disconnects all forwarding callbacks; re-entering reconnects forwarding on the
 existing codec child. Host or join explicitly to create a new session afterward.
+Configure your custom options again before that host/join operation. Close
+disconnects the codec from its old native session, including retained native
+references held by other code. Registered message handlers and scene factories
+remain on the codec; application event handlers remain your owner's responsibility.
+Native peer/entity numbers belong to their issuing session and may repeat in a
+new session. Keep the session identity with stored handles; do not carry ownership
+commands from a retired session into a replacement session.
 Preserve application state separately. Physics adapters still require their
 own explicit ownership and restoration policy.
 
