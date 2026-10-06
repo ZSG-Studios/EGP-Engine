@@ -55,6 +55,10 @@ func _test_exception_allows_overlap() -> void:
 	var from_a: Array[PhysicsBody3D] = a.get_collision_exceptions()
 	_check(from_a.size() == 1 and from_a[0] == b, "the exception is listed on the requesting body")
 	_check(b.get_collision_exceptions().is_empty(), "the other body does not list it")
+	var server_exceptions := PhysicsServer3D.body_get_collision_exceptions(a.get_rid())
+	_check(server_exceptions == [b.get_rid()], "server query returns the excluded body RID")
+	server_exceptions.clear()
+	_check(PhysicsServer3D.body_get_collision_exceptions(a.get_rid()).has(b.get_rid()), "clearing the query result does not mutate server exclusions")
 
 	a.queue_free()
 	b.queue_free()

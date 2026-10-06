@@ -1409,6 +1409,35 @@
 				Creates a 3D world boundary shape in the physics server, and returns the [RID] that identifies it. Use [method shape_set_data] to set the shape's normal direction and distance properties.
 			</description>
 		</method>
+		<method name="body_get_collision_exceptions">
+			<return type="RID[]" />
+			<param index="0" name="body" type="RID" />
+			<description>
+				Returns an owned array of body RIDs excluded from collisions with [param body]. Changing this array does not change the exclusions; use [method body_add_collision_exception] or [method body_remove_collision_exception].
+			</description>
+		</method>
+		<method name="body_get_contacts_reported_depth_threshold" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="body" type="RID" />
+			<description>
+				Returns the minimum contact penetration depth recorded for [param body]. See [method body_set_contacts_reported_depth_threshold].
+			</description>
+		</method>
+		<method name="body_set_contacts_reported_depth_threshold">
+			<return type="void" />
+			<param index="0" name="body" type="RID" />
+			<param index="1" name="threshold" type="float" />
+			<description>
+				Sets the minimum contact penetration depth recorded for [param body]. [param threshold] must be finite and nonnegative. This filters reported contacts; it does not disable collision response. [method body_set_max_contacts_reported] must enable contact reporting.
+			</description>
+		</method>
+		<method name="soft_body_get_collision_exceptions">
+			<return type="RID[]" />
+			<param index="0" name="body" type="RID" />
+			<description>
+				Returns an owned array of body RIDs excluded from collisions with the soft body. Changing this array does not change the exclusions; use [method soft_body_add_collision_exception] or [method soft_body_remove_collision_exception].
+			</description>
+		</method>
 	</methods>
 	<constants>
 		<constant name="JOINT_TYPE_PIN" value="0" enum="JointType">

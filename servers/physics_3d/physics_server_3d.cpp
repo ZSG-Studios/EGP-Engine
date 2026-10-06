@@ -33,11 +33,32 @@
 #include "core/config/project_settings.h"
 #include "core/object/class_db.h"
 #include "core/object/ref_counted.h"
+#include "core/variant/typed_array.h"
 
 PhysicsServer3D *PhysicsServer3D::singleton = nullptr;
 
 PhysicsServer3D *PhysicsServer3D::get_singleton() {
 	return singleton;
+}
+
+TypedArray<RID> PhysicsServer3D::_body_get_collision_exceptions(RID p_body) {
+	List<RID> exceptions;
+	body_get_collision_exceptions(p_body, &exceptions);
+	TypedArray<RID> result;
+	for (const RID &exception : exceptions) {
+		result.push_back(exception);
+	}
+	return result;
+}
+
+TypedArray<RID> PhysicsServer3D::_soft_body_get_collision_exceptions(RID p_body) {
+	List<RID> exceptions;
+	soft_body_get_collision_exceptions(p_body, &exceptions);
+	TypedArray<RID> result;
+	for (const RID &exception : exceptions) {
+		result.push_back(exception);
+	}
+	return result;
 }
 
 void PhysicsServer3D::debug_set_enabled(bool p_enabled) {
@@ -226,9 +247,12 @@ void PhysicsServer3D::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("body_add_collision_exception", "body", "excepted_body"), &PhysicsServer3D::body_add_collision_exception);
 	ClassDB::bind_method(D_METHOD("body_remove_collision_exception", "body", "excepted_body"), &PhysicsServer3D::body_remove_collision_exception);
+	ClassDB::bind_method(D_METHOD("body_get_collision_exceptions", "body"), &PhysicsServer3D::_body_get_collision_exceptions);
 
 	ClassDB::bind_method(D_METHOD("body_set_max_contacts_reported", "body", "amount"), &PhysicsServer3D::body_set_max_contacts_reported);
 	ClassDB::bind_method(D_METHOD("body_get_max_contacts_reported", "body"), &PhysicsServer3D::body_get_max_contacts_reported);
+	ClassDB::bind_method(D_METHOD("body_set_contacts_reported_depth_threshold", "body", "threshold"), &PhysicsServer3D::body_set_contacts_reported_depth_threshold);
+	ClassDB::bind_method(D_METHOD("body_get_contacts_reported_depth_threshold", "body"), &PhysicsServer3D::body_get_contacts_reported_depth_threshold);
 
 	ClassDB::bind_method(D_METHOD("body_set_omit_force_integration", "body", "enable"), &PhysicsServer3D::body_set_omit_force_integration);
 	ClassDB::bind_method(D_METHOD("body_is_omitting_force_integration", "body"), &PhysicsServer3D::body_is_omitting_force_integration);
@@ -264,6 +288,7 @@ void PhysicsServer3D::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("soft_body_add_collision_exception", "body", "body_b"), &PhysicsServer3D::soft_body_add_collision_exception);
 	ClassDB::bind_method(D_METHOD("soft_body_remove_collision_exception", "body", "body_b"), &PhysicsServer3D::soft_body_remove_collision_exception);
+	ClassDB::bind_method(D_METHOD("soft_body_get_collision_exceptions", "body"), &PhysicsServer3D::_soft_body_get_collision_exceptions);
 
 	ClassDB::bind_method(D_METHOD("soft_body_set_state", "body", "state", "variant"), &PhysicsServer3D::soft_body_set_state);
 	ClassDB::bind_method(D_METHOD("soft_body_get_state", "body", "state"), &PhysicsServer3D::soft_body_get_state);

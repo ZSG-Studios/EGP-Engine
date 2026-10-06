@@ -81,6 +81,9 @@
     },
     "PhysicsServer2D": {
       "methods": [
+        "body_get_collision_exceptions",
+        "body_get_contacts_reported_depth_threshold",
+        "body_set_contacts_reported_depth_threshold",
         "joint_get_configuration",
         "joint_get_constraint_force",
         "joint_get_constraint_torque",
@@ -118,11 +121,15 @@
     },
     "PhysicsServer3D": {
       "methods": [
+        "body_get_collision_exceptions",
+        "body_get_contacts_reported_depth_threshold",
+        "body_set_contacts_reported_depth_threshold",
         "joint_get_configuration",
         "joint_get_constraint_force",
         "joint_get_constraint_torque",
         "joint_make_configured",
         "joint_set_configuration",
+        "soft_body_get_collision_exceptions",
         "space_apply_explosion",
         "space_get_contact_count",
         "space_get_contact_hit_events",
@@ -447,5 +454,15 @@
   },
   "removed_classes": [
     "SeparationRayShape3D"
-  ]
+  ],
+  "property_types": {
+    "HingeJoint3D": {
+      "spring/enabled": 1
+    },
+    "SliderJoint3D": {
+      "linear_limit/enabled": 1,
+      "motor/enabled": 1,
+      "spring/enabled": 1
+    }
+  }
 }

@@ -91,9 +91,10 @@ def main():
     parser.add_argument("--sdk", type=Path, required=True, help="SDK extracted from the same editor")
     parser.add_argument("--managed", type=Path, required=True, help="modules/mono/glue/GodotSharp directory")
     parser.add_argument("--changes", type=Path, help="Required and removed API manifest")
+    parser.add_argument("--classdb", type=Path, help="Actual property/signal snapshot from dump_egp_classdb.gd")
     parser.add_argument("--output", type=Path, default=Path(".build/egp-api-validation/receipt.json"))
     args = parser.parse_args()
-    receipt = {"passed": False, "checks": [], "native_only_hooks": [], "failures": []}
+    receipt = {"passed": False, "checks": [], "native_only_hooks": [], "inspector_properties": [], "failures": []}
     failures = receipt["failures"]
     try:
         api = json.loads(args.api.read_text(encoding="utf-8"))
@@ -107,6 +108,23 @@ def main():
         if metadata.get("precision") != api["header"]["precision"]:
             failures.append("C++ SDK precision differs from the actual editor API")
         changes = json.loads(args.changes.read_text(encoding="utf-8")) if args.changes else {}
+        reflected = {}
+        if args.classdb:
+            reflection = json.loads(args.classdb.read_text(encoding="utf-8"))
+            if reflection.get("extension_api_sha256") != receipt["extension_api_sha256"]:
+                failures.append("ClassDB snapshot does not record the same actual API hash")
+            engine = Path(reflection.get("engine", ""))
+            if not engine.is_file() or digest(engine) != reflection.get("engine_sha256"):
+                failures.append("ClassDB snapshot engine is missing or has changed")
+            receipt["classdb_sha256"] = digest(args.classdb)
+            receipt["classdb_engine_sha256"] = reflection.get("engine_sha256")
+            reflected = reflection.get("classes", {})
+        elif any(
+            members.get("properties")
+            for direction in ("required", "removed")
+            for members in changes.get(direction, {}).values()
+        ) or changes.get("property_types"):
+            failures.append("Property acceptance requires --classdb from the actual editor")
         native_only = changes.get("native_only_hooks", {})
         for name, members in native_only.items():
             methods_by_name = {method["name"]: method for method in classes.get(name, {}).get("methods", [])}
@@ -156,8 +174,12 @@ def main():
             methods = {method["name"] for method in row.get("methods", [])}
             constants = {value["name"] for enum in row.get("enums", []) for value in enum["values"]}
             constants.update(constant["name"] for constant in row.get("constants", []))
-            signals = {signal["name"] for signal in row.get("signals", [])}
-            properties = {prop["name"] for prop in row.get("properties", [])}
+            actual = reflected.get(name, row)
+            if args.classdb and name not in reflected:
+                failures.append(f"ClassDB snapshot omits audited class: {name}")
+            signals = {signal["name"] for signal in actual.get("signals", [])}
+            property_rows = [prop for prop in actual.get("properties", []) if prop.get("type") not in (0, "Nil")]
+            properties = {prop["name"] for prop in property_rows}
             for method in sorted(methods):
                 if method not in cs_names and method not in native_only.get(name, []):
                     failures.append(f"C# omits {name}.{method}")
@@ -169,9 +191,17 @@ def main():
             for signal in sorted(signals):
                 if signal not in cs_names:
                     failures.append(f"C# omits {name} signal {signal}")
-            for prop in row.get("properties", []):
-                if prop["name"] not in cs_names:
+            for prop in property_rows:
+                if "/" in prop["name"]:
+                    # The managed generator deliberately exposes these through Get/Set,
+                    # rather than generating invalid C# identifiers for inspector paths.
+                    receipt["inspector_properties"].append({"class": name, "property": prop["name"], "type": prop["type"]})
+                elif prop["name"] not in cs_names:
                     failures.append(f"C# omits {name} property {prop['name']}")
+            for member, expected_type in changes.get("property_types", {}).get(name, {}).items():
+                prop = next((prop for prop in property_rows if prop["name"] == member), None)
+                if prop is None or prop.get("type") != expected_type:
+                    failures.append(f"Property type check failed: {name}.{member}; expected Variant type {expected_type}")
             for direction in ("required", "removed"):
                 delta = changes.get(direction, {}).get(name, {})
                 for kind, names in (

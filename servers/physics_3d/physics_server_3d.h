@@ -52,6 +52,8 @@ class PhysicsServer3D : public Object {
 	GDCLASS(PhysicsServer3D, Object);
 
 	static PhysicsServer3D *singleton;
+	TypedArray<RID> _body_get_collision_exceptions(RID p_body);
+	TypedArray<RID> _soft_body_get_collision_exceptions(RID p_body);
 
 	virtual bool _body_test_motion(RID p_body, RequiredParam<PhysicsTestMotionParameters3D> p_parameters, const Ref<PhysicsTestMotionResult3D> &p_result = Ref<PhysicsTestMotionResult3D>());
 

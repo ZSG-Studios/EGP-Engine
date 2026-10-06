@@ -1168,6 +1168,7 @@ void Box2DPhysicsServer2D::body_set_contacts_reported_depth_threshold(RID p_body
 	std::lock_guard<std::recursive_mutex> guard(egp::box2d::get_simulation_mutex());
 	Box2DBody2D *body = body_owner.get_or_null(p_body);
 	ERR_FAIL_NULL(body);
+	ERR_FAIL_COND(!std::isfinite(p_threshold) || p_threshold < 0);
 	body->set_contact_depth_threshold(p_threshold);
 }
 

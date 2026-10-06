@@ -11,6 +11,21 @@ against `misc/egp/api_contract.json`. It rejects missing ordinary game methods a
 retired networking surfaces. This structural audit supplements runtime fixtures;
 it does not verify every signature, default, return value or behavioral contract.
 
+The extension API dump omits inspector properties. Capture those separately with
+`misc/scripts/dump_egp_classdb.gd`, passing `--api=FILE --output=FILE` after the
+script argument separator, and provide the resulting snapshot through the
+validator's `--classdb` option. Use the same editor for both dumps. The audit
+requires matching API hashes, an unchanged engine binary and coverage of each
+audited class; property acceptance cannot pass without reflection data. The
+manifest can require exact Variant type IDs (for example, 1 for boolean toggles).
+
+Properties containing `/` are inspector paths. The managed binding generator
+deliberately omits named C# properties for them; they remain accessible through
+`GodotObject.Get/Set`. The receipt lists these paths separately with their actual
+types. Their bound accessor methods still undergo normal C#/C++ exposure checks.
+This classification does not establish runtime behavior; fixtures must test the
+typed accessor and inspector path where behavior is required.
+
 The 16 raw-pointer virtual callbacks in `PhysicsDirectSpaceState2DExtension`,
 `PhysicsDirectSpaceState3DExtension`, `PhysicsServer2DExtension` and
 `PhysicsServer3DExtension` are native backend-authoring hooks retained for native

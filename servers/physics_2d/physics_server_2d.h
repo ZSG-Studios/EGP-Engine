@@ -43,6 +43,7 @@ class PhysicsServer2D : public Object {
 	GDCLASS(PhysicsServer2D, Object);
 
 	static PhysicsServer2D *singleton;
+	TypedArray<RID> _body_get_collision_exceptions(RID p_body);
 
 	virtual bool _body_test_motion(RID p_body, RequiredParam<PhysicsTestMotionParameters2D> p_parameters, const Ref<PhysicsTestMotionResult2D> &p_result = Ref<PhysicsTestMotionResult2D>());
 
