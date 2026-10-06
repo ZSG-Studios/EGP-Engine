@@ -95,6 +95,7 @@ FACADE_MEMBERS = """
         RequireFacade(oldHits == 1);
         var capsule = scratch.DetachForReload();
         var duplicate = capsule.Duplicate();
+        RequireFacade(reference.GetSignalConnectionList("application_received").Count == 0);
         reference.EmitSignal("application_received", 0L, System.Array.Empty<byte>());
         RequireFacade(oldHits == 1);
         try { _ = scratch.Native; throw new System.InvalidOperationException("Detached wrapper remained usable"); }
@@ -113,6 +114,7 @@ FACADE_MEMBERS = """
         RequireFacade(capsule.Count == 3);
         using var restored = EGP.Networking.NetSession.ResumeAfterReload(capsule);
         restored.ApplicationReceived += (peer, payload) => newHits++;
+        RequireFacade(reference.GetSignalConnectionList("application_received").Count == 1);
         scratch.Dispose();
         RequireFacade(capsule.Count == 0 && GodotObject.IsInstanceValid(reference) && restored.Native == reference);
         RejectCapsule(capsule);
@@ -151,7 +153,7 @@ def facade_failure(proofs, live):
         sequence = proof.get("sequence", proof.get("epoch")) if live else proof.get("epoch")
         client_hits = sequence if live else 0
         if (
-            state.get("checks") != 21
+            state.get("checks") != 23
             or state.get("server_id") != proof.get("server_id")
             or state.get("client_id") != proof.get("client_id")
             or state.get("server_hits") != sequence
@@ -160,6 +162,20 @@ def facade_failure(proofs, live):
             or state.get("handoffs") != state.get("restores")
         ):
             return "Managed facade ownership, self-test or callbacks failed"
+        expected_server = {
+            "state_changed": 1,
+            "peer_connected": 1,
+            "peer_disconnected": 1,
+            "application_received": 4,
+            "packet_received": 1,
+            "simulation_tick": 2 if proof.get("physics") else 1,
+            "diagnostic": 2,
+        }
+        expected_client = dict(
+            expected_server, state_changed=2, application_received=2, simulation_tick=1, diagnostic=1
+        )
+        if state.get("server_connections") != expected_server or state.get("client_connections") != expected_client:
+            return "Reload left orphaned or missing managed signal connections"
     if live:
         initial, managed_failure, native_failure, cs, cpp, combined = proofs
         if any(p["facade"]["restores"] != initial["facade"]["restores"] for p in (managed_failure, native_failure)):

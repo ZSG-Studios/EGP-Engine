@@ -123,6 +123,13 @@ func admit() -> bool:
 
 func snapshot(action: String) -> Dictionary:
 	var rows: Array = client.command("entities")
+	var facade: Dictionary = managed.GetFacadeState() if managed.has_method("GetFacadeState") else {}
+	if not facade.is_empty():
+		facade.server_connections = {}
+		facade.client_connections = {}
+		for signal_name in ["state_changed", "peer_connected", "peer_disconnected", "application_received", "packet_received", "simulation_tick", "diagnostic"]:
+			facade.server_connections[signal_name] = server.get_signal_connection_list(signal_name).size()
+			facade.client_connections[signal_name] = client.get_signal_connection_list(signal_name).size()
 	var physics: Dictionary = {}
 	if world != null:
 		var cpp: Dictionary = native.get_physics_state()
@@ -149,7 +156,7 @@ func snapshot(action: String) -> Dictionary:
 		"client_packets": client_packets.duplicate(true), "simulation": simulation.duplicate(),
 		"baseline_hex": rows[0].state.slice(0, 4).hex_encode() if rows.size() == 1 else "",
 		"revision": rows[0].revision if rows.size() == 1 else 0, "physics": physics,
-		"facade": managed.GetFacadeState() if managed.has_method("GetFacadeState") else {}}
+		"facade": facade}
 
 func run_action(action: String) -> Dictionary:
 	var evidence: Dictionary = {}

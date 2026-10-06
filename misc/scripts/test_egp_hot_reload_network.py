@@ -329,7 +329,7 @@ def facade_evidence(live=True):
         sequence = proof["sequence"] if live else proof["epoch"]
         restores = (0 if index < 3 else 1 if index < 5 else 2) if live else (0 if index < 2 else 1)
         proof["facade"] = {
-            "checks": 21,
+            "checks": 23,
             "server_id": proof["server_id"],
             "client_id": proof["client_id"],
             "server_hits": sequence,
@@ -337,6 +337,24 @@ def facade_evidence(live=True):
             "capsules_empty": True,
             "handoffs": restores,
             "restores": restores,
+            "server_connections": {
+                "state_changed": 1,
+                "peer_connected": 1,
+                "peer_disconnected": 1,
+                "application_received": 4,
+                "packet_received": 1,
+                "simulation_tick": 1,
+                "diagnostic": 2,
+            },
+            "client_connections": {
+                "state_changed": 2,
+                "peer_connected": 1,
+                "peer_disconnected": 1,
+                "application_received": 2,
+                "packet_received": 1,
+                "simulation_tick": 1,
+                "diagnostic": 1,
+            },
         }
     return proofs
 
@@ -367,7 +385,17 @@ class ManagedFacadeEvidenceTests(unittest.TestCase):
         self.assertIsNotNone(facade_failure(proofs, True))
 
     def test_incomplete_self_tests(self):
-        self.reject(0, "checks", 20)
+        self.reject(0, "checks", 22)
+
+    def test_orphaned_server_connections(self):
+        proofs = facade_evidence()
+        proofs[3]["facade"]["server_connections"]["simulation_tick"] = 2
+        self.assertIsNotNone(facade_failure(proofs, True))
+
+    def test_missing_client_connection(self):
+        proofs = facade_evidence()
+        del proofs[3]["facade"]["client_connections"]["application_received"]
+        self.assertIsNotNone(facade_failure(proofs, True))
 
     def test_replaced_session(self):
         self.reject(3, "server_id", "other")
