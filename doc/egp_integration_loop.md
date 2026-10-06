@@ -33,16 +33,16 @@ because these chats exist.
 | Area | Required evidence | Current status |
 | --- | --- | --- |
 | Merge provenance | Every EGP tree/feature commit/dirty source accounted for; conflicts resolved; canonical commits and combined build | Seven trees preserved/accounted for; canonical commits present; final combined gates and publication pending |
-| Public API | Actual ClassDB dump matches embedded SDK, generated C# and docs; signatures, enums, properties, signals, defaults and errors consistent | Paired live dumps and 77-class audit added; refreshed binding gate pending; behavioral/signature coverage incomplete |
+| Public API | Actual ClassDB dump matches embedded SDK, generated C# and docs; signatures, enums, properties, signals, defaults and errors consistent | Matching final SDK/C# bindings and 77-class exposure plus 371 enum docs pass; behavioral/signature/default coverage incomplete |
 | API usability | Familiar naming; typed options/results; actionable errors; examples for GDScript/C#/C++; threading and ownership documented | Audit pending |
-| Library/build | Native and Mono builds; exact fork bindings; dependency/license manifests; lean server build; reproducible toolchain | Earlier receipts exist; combined snapshot pending |
-| Physics | Box2D/Box3D scene integration, joints, characters, queries, events, serialization, deterministic stepping and restore; unsupported capabilities exposed honestly | Handoff consolidated; refreshed native engine passed 14 Box2D runs and all 28 Box3D cases; wider parity/scale/platform gates remain |
+| Library/build | Native and Mono builds; exact fork bindings; dependency/license manifests; lean server build; reproducible toolchain | Combined Mono editor, glue/assemblies, exact SDK and Debug/Release templates pass; lean server/platform/reproducibility gates remain |
+| Physics | Box2D/Box3D scene integration, joints, characters, queries, events, serialization, deterministic stepping and restore; unsupported capabilities exposed honestly | Combined native/Mono editors passed 14 Box2D runs and all 28 Box3D cases; wider parity/scale/platform gates remain |
 | Physics/network | Explicit fixed clock, fingerprint validation, authoritative state, commands, prediction/correction/replay and recovery | Existing limited fixtures; full game contract pending |
 | Networking | Encrypted admission, account/peer/entity identities, authority, ownership, interest, lifecycle, reconnect and backpressure | Native and language fixtures exist |
 | Advanced networking | Field deltas, bounded bandwidth/queues, input acknowledgments, lag compensation, scale/soak, malicious input rejection | Implementation/qualification gaps remain |
-| Network lab | Dedicated server, listen host, N clients, visible windows, latency/jitter/loss, directional simulation, reconnect, logs/watchdog/cleanup | Dedicated/host headless runs passed; refreshed native engine passed host plus 3 clients with four simultaneously visible windows and reconnect; final Mono/export matrix pending |
+| Network lab | Dedicated server, listen host, N clients, visible windows, latency/jitter/loss, directional simulation, reconnect, logs/watchdog/cleanup | Native host and packaged Mono Debug host/Release dedicated server pass simultaneous visible clients, WAN simulation and reconnect; broader matrix remains |
 | Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Pending |
-| C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Handoff/tip merged locally; headless editor regression passed; combined Debug/Release exports pending |
+| C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Handoff/tip consolidated; final matching SDK/cache/editor controls and mixed-language Debug/Release exports pass; running-game reload remains |
 | C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Partial editor smoke exists; full acceptance pending |
 | C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Hooks exist; current runtime qualification pending |
 | Export/platform | Relocated Debug/Release games with C#/GDScript/C++ and Box physics/networking; platform-specific binaries and missing-binary diagnostics | Combined Windows and platform matrix pending |
@@ -379,3 +379,51 @@ Godot release branches are not EGP feature handoffs. Remote C++ feature head
 `e4e0090fb8` and final handoff `2624581a26` are canonical ancestors. PR #1 remains
 open; remote master is still `f4389f3a76`. Publish after final matching bindings
 and combined runtime/export checks pass; then reconcile that PR.
+
+### Qualified consolidation ready for publication
+
+The final matched pipeline finished successfully; no build remains active.
+Engine source remains frozen at `bd4dfee3dc771c79b2f240607bc2aaee5327f850`.
+Later commits change only the lab launcher and documentation. Final actual editor
+SHA256 `5b9c139caff2459b634cdf29407def5f785563008eda9345a767a0d6d7d5ce9d` has API SHA256
+`e84e140b923451849e88aab8300021fd9d32f95c31825bb6d7e25a4235953271`; both are recorded
+in `.build/integration-final-mono-matched/receipt.json`. Debug/Release template
+hashes remain `fa230aaa…fd449` and `759f39a3…28718` (full hashes above).
+
+- `.build/integration-matched-final-api/1791268787938526900/receipt.json` is the
+  final paired capture. Audit `.build/integration-matched-final-api-audit.json`
+  passes 77 classes and 371 documented enum constants using the actual extracted
+  SDK `%LOCALAPPDATA%/Godot/egp_cpp/sdk/4bc13481314e7023` and freshly compiled C#.
+  Use the preceding audit command with these new paths; the earlier SDK hash
+  rejection remains preserved.
+- `.build/integration-matched-final-cpp-ui/1791268787939027100/receipt.json`
+  passes on that exact editor, including cold Debug/Release SDK libraries, shared
+  cache reuse, compile-failure recovery, diagnostics, editor reload and shutdown.
+- Repeating the full trilingual command with SDK/library directory
+  `4bc13481314e7023` and `--output .build/integration-matched-final-net-languages`
+  passes all stages, 59 mixed-language runtime assertions, separate GDScript/C#/C++
+  clients and relocated Debug/optimized Release exports. This uses isolated fresh
+  NuGet packages; global caches with the same development version are not qualified.
+- Packaged Debug host plus three clients passes four simultaneous visible windows,
+  WAN simulation and reconnect at
+  `.build/integration-debug-network-export-windows/1791268787944027300/receipt.json`.
+  Command is the Release lab command above with `template_debug`, `--mode host`
+  and that output directory. EXE SHA256
+  `b002b0a1f4eaa756d46f436f054ae4bb26bf510f8c4957dbfe2d3fb40e04dc50`.
+- Verified editor/console wrappers, both Mono templates and matching GodotSharp
+  tools/assemblies/packages are now in primary `bin/`. All 86 copied files are
+  hashed in `.build/canonical-mono-artifacts.json`; overwritten build outputs
+  were preserved in its recorded backup directory. Native non-Mono files were
+  not overwritten. `bin/godot.windows.editor.dev.x86_64.mono.console.exe --headless --path .build/integration-matched-final-net-languages/project --max-fps 60`
+  passes 59 assertions from the canonical output; evidence is
+  `.build/canonical-bin-interop.json`.
+
+Next publish the qualified source to master without force, verify its SHA and
+reconcile PR #1. Keep primary on `codex/egp-integration` for loop ownership.
+Subsequent publication receipts go in `.build/integration-master-publication.json`.
+The intended handoff source is consolidated; acceptance of all features remains
+unfinished. Prioritize actual running-game C#/C++ reload and recovery, the 13
+undocumented EGPNetSession methods and eight new server methods in each dimension
+(see `.build/integration-missing-method-docs.json`, excluding normal property
+accessors), native 2D capability/event fixtures, signature/default audits, fresh
+development-package cache identity and advanced network/scale/platform gates.

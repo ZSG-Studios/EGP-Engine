@@ -135,6 +135,17 @@ the main checkout during this build. These outputs use the captured LiteNet
 implementation and do not include the later Yojimbo migration or subsequent
 feature changes. Rebuild the main checkout to incorporate those changes.
 
+The current combined Box/Yojimbo/Mono pipeline is now qualified separately from
+the historical LiteNet snapshot above. See `.build/integration-final-mono-matched/receipt.json`
+and its source manifest, based on canonical engine source `bd4dfee3dc`. Editor,
+exact actual C++ SDK, generated/compiled C# and both Mono templates pass. Final
+editor SHA256 is `5b9c139caff2459b634cdf29407def5f785563008eda9345a767a0d6d7d5ce9d`.
+Primary `bin/` contains these verified Mono outputs; artifact hashes and backups
+are in `.build/canonical-mono-artifacts.json`. The combined engine passed the
+physics, API, C++ editor and trilingual/export gates recorded in
+`doc/egp_integration_loop.md`. These checks do not establish all platform,
+performance or running-game hot-reload acceptance.
+
 References: [FASTBuild v1.20 downloads](https://www.fastbuild.org/docs/download.html),
 [distributed compilation](https://www.fastbuild.org/docs/features/distribution.html),
 [compiler synchronization](https://www.fastbuild.org/docs/functions/compiler.html),
