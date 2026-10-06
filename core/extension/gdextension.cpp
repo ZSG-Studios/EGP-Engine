@@ -997,7 +997,10 @@ void GDExtension::_clear_extension(Extension *p_extension) {
 			continue;
 		}
 
-		obj->clear_internal_extension();
+		// A previous rejected reload has already cleared the extension data.
+		if (obj->get_class_name() == p_extension->gdextension.class_name) {
+			obj->clear_internal_extension();
+		}
 	}
 }
 
