@@ -29,7 +29,7 @@ Acceptance includes a generated extension whose custom node appears in the edito
 
 ### Performance and runtime checks
 
-Compare stock Godot and EGP with identical scenes and settings. Track CPU/GPU time, p95/p99 frame times, memory, allocations, and server tick time. Validate physics behaviour and multiplayer operation under latency, packet loss, disconnects, and reconnects.
+Compare stock Godot and EGP with identical scenes and settings. Track CPU/GPU time, p95/p99 frame times, memory, allocations, and server tick time. Validate physics behavior and multiplayer operation under latency, packet loss, disconnects, and reconnects.
 
 ## Upstream and licensing
 

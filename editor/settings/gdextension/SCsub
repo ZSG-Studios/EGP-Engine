@@ -17,8 +17,13 @@ sdk_sources += Glob("#thirdparty/godot-cpp/src/*/*.cpp")
 sdk_sources += Glob("#thirdparty/godot-cpp/gdextension/*")
 sdk_sources += Glob("cpp_sdk/templates/*")
 sdk_sources += Glob("cpp_sdk/tools/*")
-sdk_sources += [File("native_extension_sdk.py"), File("#thirdparty/godot-cpp/make_interface_header.py"),
-                File("#thirdparty/godot-cpp/LICENSE.md"), env.Value(env["precision"]), env.Value(sdk_env["egp_cpp_bits"])]
+sdk_sources += [
+    File("native_extension_sdk.py"),
+    File("#thirdparty/godot-cpp/make_interface_header.py"),
+    File("#thirdparty/godot-cpp/LICENSE.md"),
+    env.Value(env["precision"]),
+    env.Value(sdk_env["egp_cpp_bits"]),
+]
 if sdk_env["egp_cpp_api"]:
     sdk_sources += [File(sdk_env["egp_cpp_api"])]
 sdk_env.CommandNoCache("native_extension_sdk.gen.h", sdk_sources, sdk_env.Run(native_extension_sdk.build_header))

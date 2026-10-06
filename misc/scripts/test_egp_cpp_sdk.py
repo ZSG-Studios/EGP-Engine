@@ -9,7 +9,9 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 SPEC = importlib.util.spec_from_file_location(
-    "native_extension_sdk", ROOT / "editor/settings/gdextension/native_extension_sdk.py")
+    "native_extension_sdk", ROOT / "editor/settings/gdextension/native_extension_sdk.py"
+)
+assert SPEC is not None and SPEC.loader is not None
 SDK = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(SDK)
 
@@ -20,8 +22,7 @@ class BundledSDKTest(unittest.TestCase):
         engine_generator = types.ModuleType("make_interface_header")
         sys.modules["make_interface_header"] = engine_generator
         try:
-            archive = SDK.make_archive(ROOT / "thirdparty/godot-cpp",
-                                       ROOT / "editor/settings/gdextension/cpp_sdk")
+            archive = SDK.make_archive(ROOT / "thirdparty/godot-cpp", ROOT / "editor/settings/gdextension/cpp_sdk")
             self.assertIs(sys.modules["make_interface_header"], engine_generator)
         finally:
             if old_module is None:
@@ -33,12 +34,12 @@ class BundledSDKTest(unittest.TestCase):
         while offset < len(archive):
             name_size, data_size = struct.unpack_from("<II", archive, offset)
             offset += 8
-            name = archive[offset:offset + name_size].decode()
+            name = archive[offset : offset + name_size].decode()
             offset += name_size
             self.assertNotIn("..", Path(name).parts)
             self.assertFalse(Path(name).is_absolute())
             self.assertNotIn(name, files)
-            files[name] = archive[offset:offset + data_size]
+            files[name] = archive[offset : offset + data_size]
             offset += data_size
         self.assertEqual(offset, len(archive))
         self.assertIn("gen/include/gdextension_interface.h", files)

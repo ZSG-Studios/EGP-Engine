@@ -45,7 +45,18 @@ Initialize the pinned dependency before building EGP:
 git submodule update --init --depth 1
 ```
 
-Normal editor builds automatically generate and embed the SDK. Export templates
+To build bindings for the exact engine API, including fork-specific classes, use:
+
+```sh
+python misc/scripts/build_egp_cpp_editor.py -- platform=windows -j4
+```
+
+Pass normal SCons flags after `--` (for example `module_mono_enabled=yes`). This
+builds a bootstrap editor, dumps its API, then embeds matching bindings in the
+final editor. Packaged C++ CI editors use this path. It is an engine-maintainer
+step; extension authors need neither Python nor binding generation.
+
+Direct SCons editor builds automatically generate and embed the default SDK. Export templates
 do not include the editor SDK or its UI. The default bindings target the bundled
 Godot 4.7 API snapshot, which is supported by the 4.8 engine baseline. To expose
 new or fork-specific APIs, dump `extension_api.json` from the intended EGP binary

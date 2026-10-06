@@ -23,8 +23,14 @@ def make_archive(cpp_root, template_root, bits="64", precision="single", api_fil
     try:
         spec.loader.exec_module(generator)
         with tempfile.TemporaryDirectory() as temp:
-            generator.generate_bindings(str(api_file), str(cpp_root / "gdextension/gdextension_interface.json"),
-                                        True, bits=bits, precision=precision, output_dir=temp)
+            generator.generate_bindings(
+                str(api_file),
+                str(cpp_root / "gdextension/gdextension_interface.json"),
+                True,
+                bits=bits,
+                precision=precision,
+                output_dir=temp,
+            )
             files = {}
             for folder in ("include", "src"):
                 for path in sorted((cpp_root / folder).rglob("*")):
@@ -39,11 +45,22 @@ def make_archive(cpp_root, template_root, bits="64", precision="single", api_fil
                     files[path.relative_to(template_root).as_posix()] = path.read_bytes()
             api = json.loads(api_file.read_text(encoding="utf-8"))["header"]
             files["templates/extension.gdextension.in"] = files["templates/extension.gdextension.in"].replace(
-                b"@API@", f'{api["version_major"]}.{api["version_minor"]}'.encode())
-            files["sdk.json"] = json.dumps({"api_major": api["version_major"], "api_minor": api["version_minor"],
-                                           "bits": bits, "precision": precision}, sort_keys=True).encode()
-            files["CMakeLists.txt"] = files["CMakeLists.txt"].replace(b"@BITS@", bits.encode()).replace(
-                b"@PRECISION_DEFINE@", b"REAL_T_IS_DOUBLE" if precision == "double" else b"")
+                b"@API@", f"{api['version_major']}.{api['version_minor']}".encode()
+            )
+            files["sdk.json"] = json.dumps(
+                {
+                    "api_major": api["version_major"],
+                    "api_minor": api["version_minor"],
+                    "bits": bits,
+                    "precision": precision,
+                },
+                sort_keys=True,
+            ).encode()
+            files["CMakeLists.txt"] = (
+                files["CMakeLists.txt"]
+                .replace(b"@BITS@", bits.encode())
+                .replace(b"@PRECISION_DEFINE@", b"REAL_T_IS_DOUBLE" if precision == "double" else b"")
+            )
             archive = bytearray()
             for name, data in sorted(files.items()):
                 name = name.encode("utf-8")
@@ -64,17 +81,18 @@ def build_header(target, source, env):
     digest = hashlib.sha256(archive).hexdigest()
     output = Path(str(target[0]))
     with output.open("w", encoding="utf-8", newline="\n") as header:
-        header.write('// Generated EGP godot-cpp SDK. Do not edit.\n#pragma once\n')
+        header.write("// Generated EGP godot-cpp SDK. Do not edit.\n#pragma once\n")
         header.write(f'inline constexpr const char *egp_cpp_sdk_hash = "{digest}";\n')
-        header.write(f'inline constexpr int egp_cpp_sdk_size = {len(archive)};\n')
-        header.write('inline constexpr unsigned char egp_cpp_sdk_data[] = {\n')
+        header.write(f"inline constexpr int egp_cpp_sdk_size = {len(archive)};\n")
+        header.write("inline constexpr unsigned char egp_cpp_sdk_data[] = {\n")
         for offset in range(0, len(compressed), 32):
-            header.write(",".join(str(value) for value in compressed[offset:offset + 32]) + ",\n")
-        header.write('};\n')
+            header.write(",".join(str(value) for value in compressed[offset : offset + 32]) + ",\n")
+        header.write("};\n")
 
 
 if __name__ == "__main__":
     import argparse
+
     parser = argparse.ArgumentParser()
     parser.add_argument("--output", required=True)
     parser.add_argument("--api")
@@ -87,10 +105,10 @@ if __name__ == "__main__":
     while offset < len(archive):
         name_length, data_length = struct.unpack_from("<II", archive, offset)
         offset += 8
-        name = archive[offset:offset + name_length].decode()
+        name = archive[offset : offset + name_length].decode()
         offset += name_length
         path = output / name
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_bytes(archive[offset:offset + data_length])
+        path.write_bytes(archive[offset : offset + data_length])
         offset += data_length
     print(f"Extracted SDK to {output}")

@@ -52,7 +52,7 @@ jobs:
         shell: bash
         run: |
           FLAGS="platform=${{ matrix.platform }} arch=${{ matrix.arch }} debug_symbols=no angle=no accesskit=no vulkan=no opengl3=no module_mono_enabled=no ${{ matrix.flags }}"
-          python -m SCons -j4 $FLAGS target=editor dev_build=yes
+          python misc/scripts/build_egp_cpp_editor.py -- -j4 $FLAGS dev_build=yes
           python -m SCons -j4 $FLAGS target=template_debug
           python -m SCons -j4 $FLAGS target=template_release
       - run: python misc/scripts/test_egp_cpp_sdk.py

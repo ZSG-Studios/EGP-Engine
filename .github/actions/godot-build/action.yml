@@ -21,6 +21,10 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Initialize bundled C++ SDK
+      if: inputs.target == 'editor'
+      shell: sh
+      run: git submodule update --init --depth 1 thirdparty/godot-cpp
     - name: SCons Build
       shell: sh
       run: |

@@ -30,13 +30,12 @@
 
 #include "project_settings_gdextension.h"
 
-#include "native_extension_editor.h"
-
 #include "core/config/project_settings.h"
 #include "core/extension/gdextension_manager.h"
 #include "core/io/config_file.h"
 #include "core/object/callable_mp.h"
 #include "core/os/os.h"
+#include "editor/settings/gdextension/native_extension_editor.h"
 #include "editor/themes/editor_scale.h"
 #include "scene/gui/label.h"
 #include "scene/gui/tree.h"

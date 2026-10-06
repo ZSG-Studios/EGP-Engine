@@ -1,5 +1,5 @@
 /**************************************************************************/
-/*  native_extension_editor.cpp                                          */
+/*  native_extension_editor.cpp                                           */
 /**************************************************************************/
 /*                         This file is part of:                          */
 /*                             GODOT ENGINE                               */
@@ -30,8 +30,6 @@
 
 #include "native_extension_editor.h"
 
-#include "native_extension_sdk.gen.h"
-
 #include "core/config/engine.h"
 #include "core/config/project_settings.h"
 #include "core/extension/gdextension_manager.h"
@@ -49,6 +47,7 @@
 #include "editor/run/editor_run_bar.h"
 #include "editor/script/script_editor_plugin.h"
 #include "editor/settings/editor_settings.h"
+#include "editor/settings/gdextension/native_extension_sdk.gen.h"
 #include "editor/settings/project_settings_editor.h"
 #include "editor/themes/editor_scale.h"
 #include "scene/gui/button.h"
