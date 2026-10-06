@@ -499,9 +499,14 @@ all build, game and reload watchdogs remain bounded.
 
 Seven-tree/113-ref inventory and current tracked patches/untracked file hashes:
 `.build/integration-takeover/runtime-reload-1791270788583469900/inventory.json`.
-No open EGP PR was found; foreign handoffs remain preserved. Finish publication
-and record its verified remote SHA before marking this increment published.
+No open EGP PR was found; foreign handoffs remain preserved. Qualified increment
+`3e81a13d04` was pushed to origin master without force on 2026-10-06 and its remote
+SHA verified. `.build/integration-runtime-reload-publication.json` records the
+final canonical/local/remote identities, source delta and qualification receipts.
+The build's displayed Git/version timestamp comes from the frozen worktree base;
+the verified source manifest and actual binary hashes identify this increment.
 All-feature acceptance remains open: incompatible native ABI/class changes and
 invalid-library recovery, wider script/state and reload-soak cases, native 2D
 capability events, missing public method/signature/default documentation, unique
-development-package identity, and advanced networking/platform/performance gates.
+development-package identity and canonical build version provenance, and advanced
+networking/platform/performance gates.
