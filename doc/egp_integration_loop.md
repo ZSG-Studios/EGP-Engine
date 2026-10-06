@@ -3383,3 +3383,22 @@ extension/settings/UID files, documents the preparation commands and makes the
 launcher accept an already-created helpers directory. Commit `bd2ea10b83` records
 those changes; its separate check-only and bounded two-client launcher smoke pass.
 The interactive project changes remain outside the integration commit.
+
+## 2026-10-06: upstream C++ fixture migration
+
+Linux Mono job `112523217526` compiles the engine but fails the upstream godot-cpp
+4.5 test extension before its editor artifact can be uploaded. The test includes
+retired MultiplayerAPI/MultiplayerPeer headers and RPC methods. A checked patch
+in `.github/actions/godot-cpp-build/egp-test.patch` removes only that RPC portion
+from its implementation, declarations and corresponding project assertions.
+All other upstream test sources remain present. The action checks patch
+applicability before applying it; upstream drift remains an explicit failure.
+
+`.build/integration-godot-cpp-fixture/receipt.json` records upstream commit
+`27d9dd23c83871e0619fca5dc2cddfbfd69e926a`, the baseline missing-header failure
+and successful GCC syntax compilation of all patched test translation units
+using that upstream's headers and bindings generated from the installed `7b57`
+editor API. This does not establish linked-extension or current engine runtime
+success. The Linux workflow now uploads its built editor/Mono assemblies before
+the still-required C++ fixture step, permitting bounded artifact replay when a
+later fixture fails. No compatibility or unit test gate is disabled.

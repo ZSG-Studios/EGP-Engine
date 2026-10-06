@@ -33,6 +33,12 @@ runs:
       shell: sh
       run: ${{ inputs.bin }} --headless --dump-gdextension-interface --dump-extension-api
 
+    - name: Prepare EGP test fixture
+      shell: sh
+      run: |
+        git -C ./godot-cpp apply --check "${{ github.workspace }}/.github/actions/godot-cpp-build/egp-test.patch"
+        git -C ./godot-cpp apply "${{ github.workspace }}/.github/actions/godot-cpp-build/egp-test.patch"
+
     - name: SCons Build
       shell: sh
       env:
