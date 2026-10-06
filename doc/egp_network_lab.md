@@ -168,3 +168,27 @@ This is a bounded local fixture. The application checkpoint is explicit test
 behavior, rather than automatic engine persistence. Packet loss is stochastic.
 Production authentication, remote services, arbitrary game-state restoration,
 authoritative physics rollback, scale, soak and performance require separate gates.
+
+For admission lifecycle tests, run:
+
+```powershell
+python misc/scripts/validate_egp_net_admission.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe
+```
+
+The isolated validator tests native and GDScript sessions with zero/nonzero
+retained test keys and generated keys. It deliberately exceeds the fixed-clock
+budget and rebinds the same port, then tries an unused account's in-memory token.
+Same-second retained tokens must connect; tokens issued before the listener's
+restart second must disconnect. Generated keys must reject either token.
+This distinguishes the transport's timestamp protection from key rotation.
+Receipts contain public creation/expiry/restart timestamps and process identities;
+no token or key bytes are retained. A missed requested boundary fails the test.
+
+Use `--fault graceful` for normal stop/rebind, `--fault both` for both paths,
+`--api native|gdscript|both`, `--key zero|nonzero|generated|all`, and
+`--boundary same|cross|both` to select cases. Default coverage is both APIs, all
+key modes and both boundaries under clock failure. To qualify a packaged game,
+pass a matching template as `--engine` and the source editor as `--editor`.
+The validator exports a fresh isolated project and retains runtime/PCK hashes,
+logs and exact commands under the chosen `--output` directory. This is a bounded
+local test; production admission and backend revocation require separate evidence.

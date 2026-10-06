@@ -255,6 +255,14 @@ without an explicit `private_key` generates a new key each time it starts, so ol
 tokens no longer admit clients. Keeping the Session preserves its retired handle
 generations. Handles are scoped to their Session; replacing the Session requires
 the application to discard old handles and track its new authority generation.
+An explicitly configured `private_key` is retained across listener restarts.
+Do not use a stopped/rebound listener as a general token-revocation mechanism:
+the transport rejects tokens whose expiry precedes the new listener's UTC start
+second plus its configured maximum lifetime, but an unused token issued in that
+same second can still admit when the key is retained. Use fresh admission and
+the backend's revocation policy. `misc/scripts/validate_egp_net_admission.py`
+checks this boundary with zero/nonzero test keys and generated keys through
+native and GDScript APIs, including an optional packaged Windows template.
 `server_tick` reports the latest
 replicated server tick, not a continuously synchronized idle clock.
 
