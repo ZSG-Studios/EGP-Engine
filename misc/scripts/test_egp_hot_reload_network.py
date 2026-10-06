@@ -4,7 +4,7 @@
 import copy
 import unittest
 
-from validate_egp_hot_reload import network_live_failure, network_recovery_failure
+from validate_egp_hot_reload import network_live_failure, network_physics_failure, network_recovery_failure
 
 
 def evidence():
@@ -213,6 +213,109 @@ class LiveReloadEvidenceTests(unittest.TestCase):
 
     def test_missing_live_checkpoint(self):
         self.assertIsNotNone(network_live_failure(live_evidence()[:5], SIMULATION))
+
+
+def physics_evidence(live):
+    proofs = live_evidence() if live else evidence()
+    for index, proof in enumerate(proofs):
+        offset = 0 if live or index == 0 else 20
+        tick = proof["server_tick"] + offset
+        connected = proof["client_state"] == "Connected"
+        client_tick = tick - 2 if connected else 0
+        proof["physics"] = {
+            "enabled": True,
+            "world_id": "-47",
+            "body_id": 10000,
+            "body_count": 1,
+            "cpp_state_ok": True,
+            "cs_state_ok": True,
+            "fingerprint": "egp-box3d:hz60:sub4:workers1",
+            "tick": tick,
+            "clock_offset": offset,
+            "hash": f"{tick:016x}",
+            "position_y": 10000.0 - tick,
+            "velocity_y": -1.0,
+            "client_tick": client_tick,
+            "client_body_id": 10000 if connected else 0,
+            "client_position_y": 10000.0 - client_tick if connected else 0.0,
+            "checkpoint_tick": offset,
+            "checkpoint_hash": f"{offset:016x}" if offset else "",
+        }
+    if not live:
+        proofs[-1].update(
+            corrupt_snapshot_error=16,
+            corrupt_restore_unchanged=True,
+            restored_tick=20,
+            restored_hash="0000000000000014",
+            restored_y=9980.0,
+        )
+    return proofs
+
+
+class PhysicsReloadEvidenceTests(unittest.TestCase):
+    def reject(self, index, key, value, live=False):
+        proofs = physics_evidence(live)
+        proofs[index]["physics"][key] = value
+        self.assertIsNotNone(network_physics_failure(proofs, live))
+
+    def reject_recovery(self, key, value):
+        proofs = physics_evidence(False)
+        proofs[-1][key] = value
+        self.assertIsNotNone(network_physics_failure(proofs, False))
+
+    def test_live_world_and_baselines(self):
+        self.assertIsNone(network_physics_failure(physics_evidence(True), True))
+
+    def test_explicit_checkpoint_restore(self):
+        self.assertIsNone(network_physics_failure(physics_evidence(False), False))
+
+    def test_world_replacement(self):
+        self.reject(2, "world_id", "-99")
+
+    def test_lost_body(self):
+        self.reject(2, "body_count", 0)
+
+    def test_lost_managed_physics_reference(self):
+        self.reject(2, "cs_state_ok", False)
+
+    def test_clock_offset_loss(self):
+        self.reject(3, "clock_offset", 0)
+
+    def test_wrong_profile(self):
+        self.reject(2, "fingerprint", "egp-box3d:hz120:sub4:workers1")
+
+    def test_nonfinite_state(self):
+        self.reject(2, "position_y", float("nan"))
+
+    def test_stale_client_baseline(self):
+        self.reject(3, "client_tick", 20)
+
+    def test_client_ahead_of_authority(self):
+        self.reject(3, "client_tick", 33)
+
+    def test_reused_body_mapping(self):
+        self.reject(3, "client_body_id", 2)
+
+    def test_live_physics_stalled(self):
+        self.reject(3, "position_y", 9910.0, live=True)
+
+    def test_accepted_corrupt_checkpoint(self):
+        self.reject_recovery("corrupt_snapshot_error", 0)
+
+    def test_corruption_changed_world(self):
+        self.reject_recovery("corrupt_restore_unchanged", False)
+
+    def test_inexact_restored_hash(self):
+        self.reject_recovery("restored_hash", "0000000000000015")
+
+    def test_inexact_restored_tick(self):
+        self.reject_recovery("restored_tick", 21)
+
+    def test_inexact_restored_position(self):
+        self.reject_recovery("restored_y", 9979.0)
+
+    def test_stopped_reload_changed_checkpoint(self):
+        self.reject(2, "hash", "0000000000000015")
 
 
 if __name__ == "__main__":

@@ -38,6 +38,14 @@ public partial class ReloadProbe : Node, ISerializationListener {
         return result != Error.Ok ? result : clientResult;
     }
     public void ReceiveNetwork(long peer, byte[] payload) { NetworkHits++; }
+    public Godot.Collections.Dictionary GetPhysicsState() {
+        if (!NetworkState.ContainsKey("world")) return new();
+        var world = NetworkState["world"].AsGodotObject();
+        var state = world.Call("get_body_state", 10000).AsGodotDictionary();
+        state["tick"] = world.Call("get_tick");
+        state["hash"] = world.Call("get_state_hash");
+        return state;
+    }
     public void HoldRoot(string path) {
         var thread = new System.Threading.Thread(() => {
             System.IO.File.WriteAllText(path + ".started", "started");
@@ -189,12 +197,104 @@ def network_live_failure(proofs, simulation):
     return None
 
 
+def network_physics_failure(proofs, live):
+    """Validate authoritative world references, replication and explicit rollback."""
+    if len(proofs) != (6 if live else 4):
+        return "Missing physics reload checkpoints"
+    initial = proofs[0].get("physics", {})
+    if not initial.get("world_id") or int(initial["world_id"]) == 0:
+        return "Missing authoritative world identity"
+    for proof in proofs:
+        physics = proof.get("physics", {})
+        if any(
+            physics.get(k) != value
+            for k, value in {
+                "enabled": True,
+                "world_id": initial["world_id"],
+                "body_id": 10000,
+                "body_count": 1,
+                "cpp_state_ok": True,
+                "cs_state_ok": True,
+                "fingerprint": initial.get("fingerprint"),
+            }.items()
+        ):
+            return "Physics identity, body mapping or language state changed"
+        if ":hz60:" not in physics.get("fingerprint", "") or not re.fullmatch(r"[0-9a-f]{16}", physics.get("hash", "")):
+            return "Physics profile/hash evidence missing"
+        if physics.get("tick", 0) <= 0 or physics["tick"] != physics.get("clock_offset", -1) + proof.get(
+            "server_tick", -1
+        ):
+            return "Physics lost authoritative fixed-clock offset"
+        if any(
+            not isinstance(physics.get(k), (float, int)) or not math.isfinite(physics[k])
+            for k in ("position_y", "velocity_y", "client_position_y")
+        ):
+            return "Nonfinite physics state"
+        if physics["velocity_y"] >= 0:
+            return "Gravity-driven body stopped advancing"
+        if proof.get("client_state") == "Connected":
+            if (
+                physics.get("client_body_id") != 10000
+                or not physics.get("clock_offset", 0) < physics.get("client_tick", 0) <= physics["tick"]
+            ):
+                return "Replicated body or physics tick missing/stale"
+            if physics["client_position_y"] < physics["position_y"]:
+                return "Client physics baseline is ahead of authority"
+    if live:
+        for previous, current in zip(proofs, proofs[1:]):
+            before, after = previous["physics"], current["physics"]
+            if (
+                after["clock_offset"] != 0
+                or after["tick"] <= before["tick"]
+                or after["client_tick"] <= before["client_tick"]
+                or after["position_y"] >= before["position_y"]
+            ):
+                return "Live physics reset or stopped through language reload"
+    else:
+        fault, stopped, recovered = proofs[1:]
+        saved = fault["physics"]
+        for proof in (fault, stopped):
+            physics = proof["physics"]
+            if (
+                physics.get("client_tick") != 0
+                or physics.get("checkpoint_tick") != physics["tick"]
+                or physics.get("checkpoint_hash") != physics["hash"]
+            ):
+                return "Stopped physics checkpoint or cleared client baseline missing"
+            if any(
+                physics.get(k) != saved.get(k)
+                for k in ("tick", "hash", "position_y", "checkpoint_tick", "checkpoint_hash")
+            ):
+                return "Stopped reload changed preserved checkpoint state"
+        if recovered.get("corrupt_snapshot_error") != 16 or not recovered.get("corrupt_restore_unchanged"):
+            return "Corrupt checkpoint was accepted or modified live state"
+        if (
+            recovered.get("restored_tick") != saved["tick"]
+            or recovered.get("restored_hash") != saved["hash"]
+            or recovered.get("restored_y") != saved["position_y"]
+        ):
+            return "Trusted checkpoint restore lost exact solver state"
+        after = recovered["physics"]
+        if (
+            after["clock_offset"] != saved["tick"]
+            or after["client_tick"] <= saved["tick"]
+            or after["position_y"] >= saved["position_y"]
+        ):
+            return "Recovered baseline did not resume stable body from checkpoint"
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, required=True)
     parser.add_argument("--packages", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--expect-disabled", action="store_true", help="Record the pre-fix opt-in rejection")
+    parser.add_argument(
+        "--network-physics",
+        action="store_true",
+        help="Retain an authoritative Box3D world during network reload; restore a trusted checkpoint in fault recovery",
+    )
     parser.add_argument("--disable-runtime", action="store_true", help="Verify the default non-collectible player")
     parser.add_argument(
         "--network-live-reload",
@@ -260,6 +360,8 @@ def main():
     if not args.network_live_reload and values != (30, 5, 5):
         parser.error("network simulation options require --network-live-reload")
     network_enabled = args.network_recovery or args.network_live_reload
+    if args.network_physics and not network_enabled:
+        parser.error("--network-physics requires --network-live-reload or --network-recovery")
     output = args.output.resolve() / str(time.time_ns())
     project = output / "project"
     addon = project / "addons/reload_fixture"
@@ -421,6 +523,8 @@ def main():
         shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_editor.gd", addon / "plugin.gd")
         if network_enabled:
             shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_network.gd", project / "network.gd")
+        if args.network_physics:
+            (project / "physics_enabled").write_text("enabled", encoding="utf-8")
         simulation = {"simulated_latency_ms": values[0], "simulated_jitter_ms": values[1], "simulated_loss": values[2]}
         if args.network_live_reload:
             (project / "network_options.json").write_text(json.dumps(simulation), encoding="utf-8")
@@ -459,7 +563,10 @@ def main():
         require("Hello from reload!" in source, "Unexpected scaffold template")
         source = source.replace("Hello from reload!", "VERSION")
         if network_enabled:
-            source = "#include <godot_cpp/classes/egp_net_session.hpp>\n" + source
+            source = (
+                "#include <godot_cpp/classes/egp_net_session.hpp>\n#include <godot_cpp/classes/egp_box3d_world.hpp>\n"
+                + source
+            )
             source = source.replace(
                 'ClassDB::bind_method(D_METHOD("get_message"), &EGP_reload_Node::get_message);',
                 'ClassDB::bind_method(D_METHOD("get_message"), &EGP_reload_Node::get_message);\n'
@@ -470,6 +577,7 @@ def main():
                 '\t\tClassDB::bind_method(D_METHOD("get_network_hits"), &EGP_reload_Node::get_network_hits);\n'
                 '\t\tADD_PROPERTY(PropertyInfo(Variant::INT, "network_hits"), "set_network_hits", "get_network_hits");\n'
                 '\t\tClassDB::bind_method(D_METHOD("poll_network", "authority"), &EGP_reload_Node::poll_network);\n'
+                '\t\tClassDB::bind_method(D_METHOD("get_physics_state"), &EGP_reload_Node::get_physics_state);\n'
                 '\t\tClassDB::bind_method(D_METHOD("receive_network", "peer", "payload"), &EGP_reload_Node::receive_network);',
             ).replace(
                 "public:\n",
@@ -479,6 +587,13 @@ def main():
                 "\tDictionary get_network_state() const { return network_state; }\n"
                 "\tvoid set_network_hits(int value) { network_hits = value; }\n"
                 "\tint get_network_hits() const { return network_hits; }\n"
+                "\tDictionary get_physics_state() const {\n"
+                '\t\tif (!network_state.has("world")) return Dictionary();\n'
+                '\t\tRef<EGPBox3DWorld> world = network_state["world"];\n'
+                "\t\tif (world.is_null()) return Dictionary();\n"
+                "\t\tDictionary state = world->get_body_state(10000);\n"
+                '\t\tstate["tick"] = world->get_tick(); state["hash"] = world->get_state_hash();\n'
+                "\t\treturn state;\n\t}\n"
                 "\tvoid receive_network(int64_t peer, const PackedByteArray &payload) { network_hits++; }\n"
                 "\tError poll_network(bool authority) {\n"
                 '\t\tRef<EGPNetSession> server = network_state["server"];\n'
@@ -839,11 +954,15 @@ def main():
                 proofs.extend([sample("network-stopped"), sample("network-recover")])
                 failure = network_recovery_failure(proofs)
                 require(failure is None, failure or "Network reload proof failed")
+                if args.network_physics:
+                    failure = network_physics_failure(proofs, live=False)
+                    require(failure is None, failure or "Physics checkpoint reload proof failed")
                 receipt["network_recovery"] = {
                     "passed": True,
                     "proofs": proofs,
                     "cpp_version": 4,
                     "cs_version": 6,
+                    "physics": args.network_physics,
                     "scope": "Windows Debug editor/game, one authenticated local client; native session references in serialized dictionaries and dynamic signal callbacks. Explicit admission after a stopped-authority fault; no physics checkpoint, concurrent reload or exported-runtime claim.",
                 }
             if args.network_live_reload:
@@ -892,8 +1011,12 @@ def main():
                     proofs.append(sample("network-live-check"))
                 failure = network_live_failure(proofs, simulation)
                 require(failure is None, failure or "Live network reload proof failed")
+                if args.network_physics:
+                    failure = network_physics_failure(proofs, live=True)
+                    require(failure is None, failure or "Live physics reload proof failed")
                 receipt["network_live_reload"] = {
                     "passed": True,
+                    "physics": args.network_physics,
                     "proofs": proofs,
                     "phases": [
                         "initial",
@@ -940,7 +1063,14 @@ def main():
             for p in project.rglob("*")
             if p.is_file()
             and (
-                p.name in ("ReloadFixture.dll", "extension.cpp", "ReloadProbe.cs", "reload.gdextension")
+                p.name
+                in (
+                    "ReloadFixture.dll",
+                    "extension.cpp",
+                    "ReloadProbe.cs",
+                    "reload.gdextension",
+                    "physics_checkpoint.bin",
+                )
                 or (p.suffix == ".dll" and "extensions" in p.relative_to(project).parts)
             )
         }

@@ -20,6 +20,13 @@ var client_polls := 0
 var baseline_sequence := 0
 var client_packets: Array[Dictionary] = []
 var simulation: Dictionary = {}
+var world: RefCounted
+var checkpoint: PackedByteArray
+var checkpoint_tick := 0
+var checkpoint_hash := ""
+var checkpoint_y := 0.0
+var clock_offset := 0
+const BODY_ID := 10000
 
 func setup(cpp: Node, cs: Node) -> void:
 	native = cpp
@@ -48,11 +55,37 @@ func wait_until(predicate: Callable, timeout_ms := 5000) -> bool:
 func references_ok() -> bool:
 	var cpp: Dictionary = native.network_state
 	var cs: Dictionary = managed.NetworkState
-	return cpp.get("server") == server and cpp.get("client") == client and cs.get("server") == server and cs.get("client") == client
+	return cpp.get("server") == server and cpp.get("client") == client and cs.get("server") == server and cs.get("client") == client and (world == null or (cpp.get("world") == world and cs.get("world") == world))
+
+func physics_payload() -> PackedByteArray:
+	var payload := PackedByteArray([baseline_sequence, 0, 255, 42])
+	if world != null:
+		var body: Dictionary = world.get_body_state(BODY_ID)
+		payload.append_array(var_to_bytes({"body_id": BODY_ID, "physics_tick": world.get_tick(), "position": body.position, "linear_velocity": body.linear_velocity}))
+	return payload
+
+func client_physics() -> Dictionary:
+	var rows: Array = client.command("entities")
+	if world == null or rows.size() != 1 or rows[0].state.size() <= 4:
+		return {}
+	var body = bytes_to_var(rows[0].state.slice(4))
+	return body if body is Dictionary else {}
+
+func physics_tick(_tick: int, authority: bool) -> void:
+	if world == null or not authority:
+		return
+	check(world.step_tick(world.get_tick() + 1) == OK, "authoritative physics step failed")
+	if entity != 0:
+		check(server.command("update_entity", {"entity": entity, "state": physics_payload()}) == OK, "physics baseline publication failed")
 
 func baseline_ok() -> bool:
 	var rows: Array = client.command("entities")
-	return rows.size() == 1 and rows[0].entity == entity and rows[0].authority_peer == peer and rows[0].state == PackedByteArray([baseline_sequence, 0, 255, 42])
+	if rows.size() != 1 or rows[0].entity != entity or rows[0].authority_peer != peer or rows[0].state.slice(0, 4) != PackedByteArray([baseline_sequence, 0, 255, 42]):
+		return false
+	if world == null:
+		return rows[0].state.size() == 4
+	var body := client_physics()
+	return body.get("body_id") == BODY_ID and body.get("physics_tick", 0) > clock_offset and body.physics_tick <= world.get_tick()
 
 func admit() -> bool:
 	epoch += 1
@@ -73,7 +106,7 @@ func admit() -> bool:
 	if not check(peers.size() == 1 and peers[0].client_id == 424242, "admission identity mismatch"):
 		return false
 	peer = peers[0].peer_id
-	var spawned: Dictionary = server.command("spawn", {"kind": 17, "authority_peer": peer, "state": PackedByteArray([epoch, 0, 255, 42])})
+	var spawned: Dictionary = server.command("spawn", {"kind": 17, "authority_peer": peer, "state": physics_payload()})
 	check(spawned.error == OK, "fresh owned entity spawn failed")
 	entity = spawned.entity
 	if not await wait_until(baseline_ok):
@@ -90,6 +123,21 @@ func admit() -> bool:
 
 func snapshot(action: String) -> Dictionary:
 	var rows: Array = client.command("entities")
+	var physics: Dictionary = {}
+	if world != null:
+		var cpp: Dictionary = native.get_physics_state()
+		var cs: Dictionary = managed.GetPhysicsState()
+		var body: Dictionary = world.get_body_state(BODY_ID)
+		var received := client_physics()
+		physics = {"enabled": true, "world_id": str(world.get_instance_id()), "body_id": BODY_ID, "body_count": world.get_body_count(),
+			"tick": world.get_tick(), "hash": world.get_state_hash(), "fingerprint": world.get_simulation_fingerprint(),
+			"position_y": body.position.y, "velocity_y": body.linear_velocity.y,
+			"clock_offset": clock_offset, "checkpoint_tick": checkpoint_tick, "checkpoint_hash": checkpoint_hash,
+			"cpp_state_ok": cpp.get("position") == body.position and cpp.get("linear_velocity") == body.linear_velocity and cpp.get("rotation") == body.rotation and cpp.get("angular_velocity") == body.angular_velocity and cpp.get("tick") == world.get_tick() and cpp.get("hash") == world.get_state_hash(),
+			"cs_state_ok": cs.get("position") == body.position and cs.get("linear_velocity") == body.linear_velocity and cs.get("rotation") == body.rotation and cs.get("angular_velocity") == body.angular_velocity and cs.get("tick") == world.get_tick() and cs.get("hash") == world.get_state_hash(),
+			"client_body_id": received.get("body_id", 0), "client_tick": received.get("physics_tick", 0),
+			"client_position_y": received.position.y if received.has("position") else 0.0}
+		check(physics.cpp_state_ok and physics.cs_state_ok and physics.tick == clock_offset + server.get_statistics().tick, "language physics state or fixed clock offset mismatch")
 	return {"action": action, "passed": error_message.is_empty(), "error": error_message,
 		"pid": OS.get_process_id(), "epoch": epoch, "server_id": str(server.get_instance_id()), "client_id": str(client.get_instance_id()),
 		"server_state": server.get_state(), "client_state": client.get_state(), "references_ok": references_ok(),
@@ -99,8 +147,8 @@ func snapshot(action: String) -> Dictionary:
 		"diagnostics": diagnostics.duplicate(), "states": states.duplicate(),
 		"port": port, "total_client_polls": client_polls, "sequence": baseline_sequence,
 		"client_packets": client_packets.duplicate(true), "simulation": simulation.duplicate(),
-		"baseline_hex": rows[0].state.hex_encode() if rows.size() == 1 else "",
-		"revision": rows[0].revision if rows.size() == 1 else 0}
+		"baseline_hex": rows[0].state.slice(0, 4).hex_encode() if rows.size() == 1 else "",
+		"revision": rows[0].revision if rows.size() == 1 else 0, "physics": physics}
 
 func run_action(action: String) -> Dictionary:
 	var evidence: Dictionary = {}
@@ -109,6 +157,11 @@ func run_action(action: String) -> Dictionary:
 			server = ClassDB.instantiate("EGPNetSession")
 			client = ClassDB.instantiate("EGPNetSession")
 			var config := {"game_protocol": "egp-reload-fault-v1", "max_players": 1, "timeout_seconds": 3}
+			if FileAccess.file_exists("res://physics_enabled"):
+				world = ClassDB.instantiate("EGPBox3DWorld")
+				check(world.configure(60, 4, 1, Vector3(0, -9.8, 0)) == OK and world.queue_create_box(BODY_ID, 1, Vector3(0, 10000, 0), Vector3(0.5, 0.5, 0.5)) == OK and world.apply_queued_commands() == OK, "physics world setup failed")
+				config.simulation_fingerprint = world.get_simulation_fingerprint()
+				server.simulation_tick.connect(physics_tick)
 			if action == "network-live-start":
 				simulation = JSON.parse_string(FileAccess.get_file_as_string("res://network_options.json"))
 				config.merge(simulation)
@@ -120,6 +173,8 @@ func run_action(action: String) -> Dictionary:
 			server.application_received.connect(Callable(managed, "ReceiveNetwork"))
 			client.application_received.connect(func(sender: int, payload: PackedByteArray): client_packets.append({"peer": sender, "payload": payload.hex_encode()}))
 			var retained := {"server": server, "client": client}
+			if world != null:
+				retained.world = world
 			native.network_state = retained
 			managed.NetworkState = retained
 			await admit()
@@ -129,7 +184,7 @@ func run_action(action: String) -> Dictionary:
 		"network-live-check":
 			check(references_ok() and client.get_state() == "Connected" and server.get_state() == "Listening", "active reload interrupted native session")
 			baseline_sequence += 1
-			check(server.command("update_entity", {"entity": entity, "state": PackedByteArray([baseline_sequence, 0, 255, 42])}) == OK, "live entity update failed")
+			check(server.command("update_entity", {"entity": entity, "state": physics_payload()}) == OK, "live entity update failed")
 			await wait_until(baseline_ok)
 			check(client.send_application(0, PackedByteArray([baseline_sequence, 0, 255, 42])) == OK and server.send_application(peer, PackedByteArray([128 + baseline_sequence, 0, 255, 42])) == OK, "live application exchange failed")
 			await wait_until(func(): return packets.size() == baseline_sequence and client_packets.size() == baseline_sequence)
@@ -140,6 +195,15 @@ func run_action(action: String) -> Dictionary:
 			old_peer = peer
 			old_entity = entity
 			pause_authority = true
+			if world != null:
+				checkpoint = world.capture_snapshot()
+				checkpoint_tick = world.get_tick()
+				checkpoint_hash = world.get_state_hash()
+				checkpoint_y = world.get_body_state(BODY_ID).position.y
+				check(not checkpoint.is_empty(), "trusted physics checkpoint capture failed")
+				var file := FileAccess.open("res://physics_checkpoint.bin", FileAccess.WRITE)
+				file.store_buffer(checkpoint)
+				file.close()
 			var polls_before := client_polls
 			var started := Time.get_ticks_msec()
 			while Time.get_ticks_msec() - started < 550:
@@ -151,6 +215,7 @@ func run_action(action: String) -> Dictionary:
 			await wait_until(func(): return client.get_state() == "Disconnected")
 			client.stop()
 			running = false
+			clock_offset = checkpoint_tick
 			check(evidence.client_polls >= 20, "client did not keep polling during authority stall")
 			check(server.command("peers").is_empty() and server.command("entities").is_empty() and client.command("entities").is_empty(), "fault retained obsolete network cache")
 			check(diagnostics == ["Fixed simulation exceeded its catch-up budget; resynchronization required."], "fault diagnostic missing or duplicated")
@@ -160,6 +225,20 @@ func run_action(action: String) -> Dictionary:
 			check(native.poll_network(true) == OK and managed.PollNetwork(true) == OK, "restored language API cannot poll stopped sessions")
 		"network-recover":
 			check(references_ok(), "recovery replaced retained native sessions")
+			if world != null:
+				check(world.step_tick(checkpoint_tick + 1) == OK and world.get_state_hash() != checkpoint_hash, "physics rollback control did not change state")
+				var changed_hash: String = world.get_state_hash()
+				var corrupt := checkpoint.duplicate()
+				corrupt[corrupt.size() - 1] ^= 255
+				evidence.corrupt_snapshot_error = world.restore_snapshot(corrupt)
+				evidence.corrupt_restore_unchanged = world.get_state_hash() == changed_hash and world.get_tick() == checkpoint_tick + 1
+				check(evidence.corrupt_snapshot_error == ERR_FILE_CORRUPT and evidence.corrupt_restore_unchanged, "corrupt checkpoint changed live physics state")
+				check(world.restore_snapshot(checkpoint) == OK, "trusted checkpoint restore failed")
+				evidence.restored_hash = world.get_state_hash()
+				evidence.restored_tick = world.get_tick()
+				evidence.restored_y = world.get_body_state(BODY_ID).position.y
+				check(evidence.restored_hash == checkpoint_hash and evidence.restored_tick == checkpoint_tick and evidence.restored_y == checkpoint_y, "trusted restore lost exact physics state")
+				entity = 0
 			await admit()
 			evidence.retired_peer_error = server.send_application(old_peer, PackedByteArray([9]))
 			evidence.retired_entity_error = server.command("update_entity", {"entity": old_entity, "state": PackedByteArray([9])})
