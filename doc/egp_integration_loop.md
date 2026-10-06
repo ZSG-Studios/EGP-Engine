@@ -38,7 +38,7 @@ because these chats exist.
 | Library/build | Native and Mono builds; exact fork bindings; dependency/license manifests; lean server build; reproducible toolchain | Combined Mono editor, glue/assemblies, exact SDK and Debug/Release templates pass; lean server/platform/reproducibility gates remain |
 | Physics | Box2D/Box3D scene integration, joints, characters, queries, events, serialization, deterministic stepping and restore; unsupported capabilities exposed honestly | Combined Mono editor passes 19 Box2D runs and 28 Box3D cases; twelve relocated Debug/Release Box2D checks cover configured joints, events, explosions, canvas/casts, packed/vector polygons and invalid-input recovery; picking, broader shape/scaling/parity/platform gates remain |
 | Physics/network | Explicit fixed clock, fingerprint validation, authoritative state, commands, prediction/correction/replay and recovery | Existing limited fixtures; full game contract pending |
-| Networking | Encrypted admission, account/peer/entity identities, authority, ownership, interest, lifecycle, reconnect and backpressure | Native and language fixtures pass; per-entity pending states coalesce under WAN pressure, with late ownership and restored server-generation inputs verified; broader fairness/scale remains |
+| Networking | Encrypted admission, account/peer/entity identities, authority, ownership, interest, lifecycle, reconnect and backpressure | Native and language fixtures pass; WAN coalescing/restart and two-client, 64-entity fairness at a low outgoing budget pass, including baseline, interest and repeated reconnect/revocation; larger WAN worlds, receive-window behavior and scale remain |
 | Advanced networking | Field deltas, bounded bandwidth/queues, input acknowledgments, lag compensation, scale/soak, malicious input rejection | Implementation/qualification gaps remain |
 | Network lab | Dedicated server, listen host, N clients, visible windows, latency/jitter/loss, directional simulation, reconnect, logs/watchdog/cleanup | Native host and packaged Mono Debug host/Release dedicated server pass simultaneous visible clients, WAN simulation and reconnect; broader matrix remains |
 | Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Packaged Debug graceful and Release abrupt dedicated-server replacement pass with three persistent visible clients under WAN impairment; eight-second headless outage passes; broader controls/scale/soak remain |
@@ -994,3 +994,92 @@ ABI/layout/schema changes, wider C# state, physics shape/scaling/platform parity
 production persistence/authentication, full authoritative gameplay, performance
 and package/build-version identity remain open. The loop remains ACTIVE; these
 bounded Windows fixtures do not establish full feature completion or AAA readiness.
+
+### Rate-budget fairness, baseline completion and queued-state memory
+
+Engine/library source is frozen at `20f0400aacca6d92bc70cd0247d3ffc168056095`.
+The later commit `7e856b28de85f9f9df587d5a9ff80b626009de57` changes only the
+standalone memory fixture's measurement checkpoints; that test is not compiled
+into the engine. Exact source hashes and editor/Debug/Release build commands are
+in `.build/integration-fairness-native-build/source.json` and `receipt.json`.
+Mono editor SHA-256 is
+`ed2f6d3801b86d4696afef366fc3bd244261e9bbab70b0de6729c6ad6b2c0087`;
+Debug and Release template SHA-256 values are
+`1ef926ee8dadd67215d61f76aa1b713adbd710e1905f82aa269542dbbf21f1ee` and
+`05e12b4547d0026644cfbd8519c208576463e04897b4f9817b1e9770cabdda3a`.
+Public API, wire format and SDK fingerprints remain unchanged.
+
+A new native regression exposes two encrypted clients to 64 owned entities that
+change at 60 Hz, with the server's queue-admission budget set to 32 messages and
+8192 estimated payload/header bytes per second per peer. This does not measure
+or cap actual retransmitted wire bandwidth. Clients use an independent 1000-message receive budget;
+this case uses zero simulated latency/loss. The preceding published source fails
+its five-second baseline gate at `.build/integration-fairness-baseline/receipt.json`
+and `ctest.log`; the six preceding tests pass. Changing lower-ID entities consume
+each new budget window and later entities starve. The baseline also incorrectly
+waits for every entity's current revision while the world keeps changing.
+
+Each peer now resumes replication after its last queued entity when its queue or
+rate budget fills. The initial ordered baseline completes once each visible
+entity has had a state queued; its completion marker gets priority over subsequent
+updates at the next available budget window. Reliable ordering still places that
+marker after the initial states. This is a membership baseline rather than an
+atomic whole-world physics snapshot; complete predicted/rollback state remains a
+game contract.
+
+The new regression verifies both baselines, advancement of every entity, both
+interest hide/reentry cycles, ownership revocation reaching the other client,
+two fresh encrypted reconnects, distinct transport peer generations, no inherited
+revoked ownership and cleanup. It passes in roughly 20 seconds per configuration.
+The memory fixture now covers 1024 never-published hidden entities and 64 visible
+spawn/update/despawn cycles with real queued state and acknowledgment lifetimes.
+An initial combined Debug run failed with a negative allocation delta because
+its starting count included unacknowledged baseline Debug bookkeeping; the failed
+receipt/log remain at `.build/integration-fairness-native-session`. Measurement
+now starts after empty-world handshake drainage and requires the exact initial
+allocation count within a bounded final ACK drain. Both configurations report
+`EGP_INTEREST_RETAINED_ALLOCATIONS=0`; exact commands, executable/fixture hashes
+and outputs are in `.build/integration-fairness-memory/receipt.json`. This measures
+retained allocations through C++ new/delete, not total RSS, allocator peak usage
+or Yojimbo's separately allocated TLSF buffers.
+
+Final commands:
+
+- `python misc/scripts/validate_egp_net.py --configuration Debug --engine
+  C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe
+  --output .build/integration-fairness-native-session-final` passes seven CTest
+  cases, 101 native checks, GDScript ownership/scene/raw-channel cases, secure
+  quarantine, lifecycle, separate processes, Box3D fixed-clock state and 29
+  prediction/correction/replay checks.
+- `python misc/scripts/validate_egp_net.py --configuration Release
+  --output .build/integration-fairness-release-final` passes seven CTest cases
+  and 101 native checks. Earlier Debug/Release attempts are retained separately.
+- The matching Release template and Mono editor, with
+  `misc/scripts/launch_egp_network_lab.py --mode dedicated --clients 3 --visible
+  --preset wan --duration 20 --server-restart-at 6 --server-restart-mode abrupt
+  --output .build/integration-fairness-restart`, pass at
+  `1791282354489981100/receipt.json`: server PID 13564 becomes 584, original client
+  PIDs persist, counter 106 is restored and reaches 112, fresh ownership inputs
+  and both replicated server identities are checked. WAN simulation remains
+  100 ms latency, 25 ms jitter and 3% loss on both endpoints.
+
+`.build/integration-fairness-native-qualification/receipt.json` passes the fresh
+paired native API/ClassDB/SDK/C#/compiled-doc audit, managed documentation,
+19 Box2D runs, 28 Box3D cases, twelve packaged Box2D checks, 59 mixed-language
+checks and exports, native signature/hierarchy/class recovery, C# reload and
+default runtime, plus Debug listen-host/Release dedicated visible reconnect runs.
+Exact commands and individual logs are retained. Verified installation and
+canonical/local/remote publication belong in
+`.build/canonical-fairness-artifacts.json` and
+`.build/integration-fairness-publication.json` before this increment is reported
+published. All four handoff chats remain idle/completed; the snapshots are in
+`.build/integration-fairness-handoffs.json`. The seven-tree provenance inventory
+preserves historical dirty sources and unrelated user files.
+
+Next networking acceptance: incoming rate-window boundaries, larger payloads and
+more peers under latency/loss, repeated server resets and peak queue/allocator/
+bandwidth measurements. This two-client native fairness fixture does not qualify
+large WAN worlds or production scale. Raw cached native bindings, arbitrary ABI
+changes, wider managed state, physics shape/scaling/platform parity, full
+production persistence/authentication/gameplay, performance and package/build
+identity remain open. The loop remains ACTIVE.
