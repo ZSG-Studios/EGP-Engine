@@ -286,3 +286,7 @@
 *.py                                          @godotengine/buildsystem
 SConstruct                                    @godotengine/buildsystem
 SCsub                                         @godotengine/buildsystem
+
+# EGP fork integrations
+
+/modules/egp_net/                              @ZSG-Studios

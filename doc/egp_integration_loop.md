@@ -654,7 +654,7 @@ nonbreaking threshold behavior, copied event dictionaries, masked explosions and
 native contact-hit geometry. `canvas_cast_test.gd` checks canvas reassignment,
 body/area/RID filtering, nearest/all-hit ordering, destinations, exclusions and
 empty results. Box2D uses pixels and its default cast tolerance is 0.5 pixels;
-the initial test incorrectly reused 3D metre dimensions and was corrected. The
+the initial test incorrectly reused 3D meter dimensions and was corrected. The
 small rectangle crash discovered by that fixture remains a regression case.
 
 The invalid-input runner requires exactly two null-query and four invalid-hull
