@@ -49,9 +49,9 @@ int Box2DConcavePolygonShape2D::overlap(const OverlapQuery &p_query, const Trans
 	}
 
 	// De-duplicate overlaps
-	int i = 0;
+	uint32_t i = 0;
 	while (i < results.size()) {
-		int j = i + 1;
+		uint32_t j = i + 1;
 		while (j < results.size()) {
 			if (results[j] == results[i]) {
 				results.remove_at(j);

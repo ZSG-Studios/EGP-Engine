@@ -1302,9 +1302,9 @@ bool Box2DPhysicsServer2D::_body_test_motion_compat(
 		p_result->collider = object->get_rid();
 		p_result->collider_shape = cast_result.other_shape->get_index();
 
-		Box2DBody2D *body = object->as_body();
-		if (body) {
-			p_result->collider_velocity = body->get_velocity_at_point(cast_result.point);
+		Box2DBody2D *collider_body = object->as_body();
+		if (collider_body) {
+			p_result->collider_velocity = collider_body->get_velocity_at_point(cast_result.point);
 		} else {
 			p_result->collider_velocity = Vector2();
 		}
@@ -1315,13 +1315,9 @@ bool Box2DPhysicsServer2D::_body_test_motion_compat(
 
 		if (recovered && p_recovery_as_collision) {
 			transform.set_origin(transform.get_origin() + p_motion);
-			int count = body->character_collide(transform, p_margin, character_collide_results);
+			body->character_collide(transform, p_margin, character_collide_results);
 
-			for (int i = 0; i < character_collide_results.size(); i++) {
-				CharacterCollideResult &collision = character_collide_results[i];
-				// if (p_motion.length_squared() > 0.0f && p_motion.normalized().dot(collision.normal) >= -CMP_EPSILON) {
-				// 	continue;
-				// }
+			for (uint32_t i = 0; i < character_collide_results.size(); i++) {
 				if (deepest_index == -1) {
 					deepest_index = i;
 					continue;
@@ -1359,9 +1355,9 @@ bool Box2DPhysicsServer2D::_body_test_motion_compat(
 		p_result->collider = object->get_rid();
 		p_result->collider_shape = rest_collision.other_shape->get_index();
 
-		Box2DBody2D *body = object->as_body();
-		if (body) {
-			p_result->collider_velocity = body->get_velocity_at_point(rest_collision.point);
+		Box2DBody2D *collider_body = object->as_body();
+		if (collider_body) {
+			p_result->collider_velocity = collider_body->get_velocity_at_point(rest_collision.point);
 		} else {
 			p_result->collider_velocity = Vector2();
 		}

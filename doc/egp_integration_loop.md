@@ -3242,3 +3242,58 @@ including real Box2D picking. Existing C++ editor/template matrix `37528340019`
 continues independently, and its queued successor retains its own source pin.
 The loop still owns any subsequent compile/runtime failures and broader feature
 acceptance.
+
+## 2026-10-06: Physics profile compiler controls and macOS C++ export evidence
+
+GHA `37533104098` at `8ecf5efa30` finishes with static checks and the minimal
+Linux template passing. The remaining profiles fail. Saved job logs in
+`.build/github-failures` identify the next concrete causes: the double template's
+SCU generator expects the removed editor directory; no-physics mobile/Web CSG
+calls an omitted collision method; strict desktop compilers reject Box2D adapter
+warnings; Windows clang-cl rejects conflicting floating-point options.
+
+Commit `4db0f856bf` moves SCU coverage to a supported single-precision desktop
+editor with GCC sanitizers. The double debug template retains explicit unit tests
+and sanitizers. Commit `cb3c35220f` uses consistent non-contracting clang-cl flags
+for both physics modules and standalone Box3D tests, retaining MSVC/GCC policies.
+`.build/physics-fp-policy/receipt.json` preserves the actual conflicting-option
+compiler failure, the repaired optimized LLVM IR without FMA, and a Clang Release
+native Box3D build with both deterministic replay and joint CTest targets passing.
+This is focused compiler/native solver evidence, not a linked engine result.
+
+The CSG tree-entry condition now calls `is_using_collision()` only when 3D physics
+is enabled. `.build/integration-csg-ci-repair/receipt.json` records the original
+MSVC no-physics compile failure and successful compilation of the exact patched
+translation unit with physics enabled and disabled. CSG rendering/runtime and
+mobile exports still require the replacement hosted builds and runtime checks.
+
+Box2D adapter cleanup retains signed negative-index rejection, aligns constructor
+initializers with declaration order, supplies virtual destructors and matching
+forward-declaration tags, and removes dead locals/functions and shadowed names.
+Shape inflation copies the original tagged primitive before adjusting its active
+radius, avoiding GCC's inactive-union uninitialized-copy diagnostic. All 26
+adapter translation units compile with optimized GCC and Clang `dev_mode=yes`
+warnings treated as errors. Baseline controls and failed intermediate candidates
+are retained in `.build/integration-box2d-ci-repair/receipt.json`, with exact
+commands, source hashes, object identities and logs. Query results populate
+`collider_id` and use the upstream `get_collider()` lookup instead of assigning
+the deprecated cached pointer; the script-facing collider result remains part
+of the upstream wrapper contract and still needs current-engine runtime checks.
+Physics module CODEOWNERS entries use the project's existing owner. No blanket
+warning suppression or solver capability fallback is added.
+
+Separately, macOS arm64 C++ job `112491597216` in run `37528340019` passes at
+`2b7e76be94`. `.build/integration-cpp-hosted-2b7/receipt.json` freezes the downloaded
+artifact and job-log identities: two SDK unit tests and 13 CLI/native/export
+checks, including four expected diagnostic failures and Debug/Release exported
+games reporting `EGP_CPP_GAME_PASSED`. This headless build omits Mono; it does not
+qualify hot reload, interactive graphics or the current repaired source. The
+artifact contains logs/results rather than engine/template binaries, so binary
+SHA256 identities are unavailable for that hosted result.
+
+The 95 installed artifacts retain their existing source/binary identities.
+Earlier combined-engine receipts remain evidence for their recorded source
+scopes. The repaired source requires a replacement hosted matrix and combined
+runtime qualification before its integration is marked validated. Foreign dirty
+snapshots and unrelated canonical files remain preserved; full acceptance stays
+open.

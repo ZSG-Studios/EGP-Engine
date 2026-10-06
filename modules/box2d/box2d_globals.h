@@ -65,7 +65,7 @@ _FORCE_INLINE_ b2Transform to_box2d(Transform2D p_transform) {
 class BodyShapeRange {
 public:
 	explicit BodyShapeRange(b2BodyId body_id) :
-			body_id(body_id), shape_ids(nullptr) {
+			shape_ids(nullptr) {
 		shape_count = b2Body_GetShapeCount(body_id);
 		if (shape_count == 0) {
 			return;
@@ -80,8 +80,8 @@ public:
 
 	class Iterator {
 	public:
-		Iterator(b2ShapeId *ids, int index) :
-				shape_ids(ids), index(index) {}
+		Iterator(b2ShapeId *p_ids, int p_index) :
+				shape_ids(p_ids), index(p_index) {}
 
 		b2ShapeId operator*() const {
 			return shape_ids[index];
@@ -110,7 +110,6 @@ public:
 	}
 
 private:
-	b2BodyId body_id;
 	b2ShapeId *shape_ids;
 	int shape_count = 0;
 };
@@ -119,7 +118,7 @@ private:
 class BodyJointRange {
 public:
 	explicit BodyJointRange(b2BodyId body_id) :
-			body_id(body_id), joint_ids(nullptr) {
+			joint_ids(nullptr) {
 		joint_count = b2Body_GetJointCount(body_id);
 		if (joint_count == 0) {
 			return;
@@ -134,8 +133,8 @@ public:
 
 	class Iterator {
 	public:
-		Iterator(b2JointId *ids, int index) :
-				joint_ids(ids), index(index) {}
+		Iterator(b2JointId *p_ids, int p_index) :
+				joint_ids(p_ids), index(p_index) {}
 
 		b2JointId operator*() const {
 			return joint_ids[index];
@@ -164,7 +163,6 @@ public:
 	}
 
 private:
-	b2BodyId body_id;
 	b2JointId *joint_ids;
 	int joint_count = 0;
 };
@@ -201,7 +199,8 @@ struct Box2DShapePrimitive {
 		b2ChainSegment chain_segment;
 	};
 
-	Box2DShapePrimitive() = default;
+	Box2DShapePrimitive() :
+			capsule{} {}
 
 	Box2DShapePrimitive(const b2Capsule &p_shape) :
 			type(b2ShapeType::b2_capsuleShape), capsule(p_shape) {}
@@ -260,36 +259,32 @@ struct Box2DShapePrimitive {
 			case b2ShapeType::b2_chainSegmentShape:
 				return b2MakeProxy(&chain_segment.segment.point1, 2, 0.0f);
 			default: {
-				ERR_FAIL_V_MSG(b2ShapeProxy{ 0 }, "Invalid shape type");
+				ERR_FAIL_V_MSG(b2ShapeProxy{}, "Invalid shape type");
 			}
 		}
 	}
 
 	Box2DShapePrimitive inflated(real_t p_radius) const {
-		Box2DShapePrimitive result;
-
+		Box2DShapePrimitive result = *this;
 		switch (type) {
 			case b2ShapeType::b2_capsuleShape: {
-				result = Box2DShapePrimitive(capsule);
 				result.capsule.radius += p_radius;
 				return result;
 			}
 			case b2ShapeType::b2_circleShape: {
-				result = Box2DShapePrimitive(circle);
 				result.circle.radius += p_radius;
 				return result;
 			}
 			case b2ShapeType::b2_polygonShape: {
-				result = Box2DShapePrimitive(polygon);
 				result.polygon.radius += p_radius;
 				return result;
 			}
 			case b2ShapeType::b2_segmentShape: {
-				b2Capsule capsule;
-				capsule.center1 = segment.point1;
-				capsule.center2 = segment.point2;
-				capsule.radius = p_radius;
-				return Box2DShapePrimitive(capsule);
+				b2Capsule inflated_capsule;
+				inflated_capsule.center1 = segment.point1;
+				inflated_capsule.center2 = segment.point2;
+				inflated_capsule.radius = p_radius;
+				return Box2DShapePrimitive(inflated_capsule);
 			}
 			case b2ShapeType::b2_chainSegmentShape: {
 				ERR_FAIL_V_MSG(Box2DShapePrimitive(chain_segment), "Chain segments cannot have a radius");

@@ -64,7 +64,7 @@ bool overlap_callback(b2ShapeId shapeId, void *context) {
 		collector->count++;
 	}
 
-	return collector->results.size() < collector->max_results;
+	return int64_t(collector->results.size()) < collector->max_results;
 }
 
 /// context = CastQueryCollector
@@ -108,7 +108,7 @@ real_t cast_callback(b2ShapeId shapeId, b2Pos point, b2Vec2 normal, real_t fract
 
 	if (collector->find_nearest) {
 		return fraction;
-	} else if (collector->results.size() >= collector->max_results) {
+	} else if (int64_t(collector->results.size()) >= collector->max_results) {
 		return 0;
 	}
 
@@ -118,7 +118,7 @@ real_t cast_callback(b2ShapeId shapeId, b2Pos point, b2Vec2 normal, real_t fract
 int find_nearest_cast_hit(LocalVector<CastHit> &p_results) {
 	ERR_FAIL_COND_V(p_results.size() == 0, -1);
 	int nearest_index = 0;
-	for (int i = 0; i < p_results.size(); i++) {
+	for (int i = 0; int64_t(i) < p_results.size(); i++) {
 		if (p_results[i].fraction < p_results[nearest_index].fraction) {
 			nearest_index = i;
 		}

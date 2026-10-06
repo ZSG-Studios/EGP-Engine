@@ -58,7 +58,6 @@ void Box2DCollisionObject2D::set_mode(PS2DE::BodyMode p_mode) {
 		return;
 	}
 
-	PS2DE::BodyMode previous_mode = mode;
 	mode = p_mode;
 
 	// Recycled contact points hold friction and presolve results across small motions, which reads
@@ -182,7 +181,7 @@ void Box2DCollisionObject2D::set_transform(const Transform2D &p_transform, bool 
 }
 
 RID Box2DCollisionObject2D::get_shape_rid(int p_index) const {
-	ERR_FAIL_INDEX_V(p_index, shapes.size(), RID());
+	ERR_FAIL_INDEX_V(p_index, int64_t(shapes.size()), RID());
 	const Box2DShapeInstance &shape = shapes[p_index];
 	Box2DShape2D *inst = shape.get_shape();
 	ERR_FAIL_COND_V(!inst, RID());
@@ -190,7 +189,7 @@ RID Box2DCollisionObject2D::get_shape_rid(int p_index) const {
 }
 
 void Box2DCollisionObject2D::set_shape_disabled(int p_index, bool p_disabled) {
-	ERR_FAIL_INDEX(p_index, shapes.size());
+	ERR_FAIL_INDEX(p_index, int64_t(shapes.size()));
 	Box2DShapeInstance &shape = shapes[p_index];
 	if (shape.get_disabled() == p_disabled) {
 		return;
@@ -230,7 +229,7 @@ void Box2DCollisionObject2D::add_shape(Box2DShape2D *p_shape, const Transform2D 
 }
 
 void Box2DCollisionObject2D::set_shape(int p_index, Box2DShape2D *p_shape) {
-	ERR_FAIL_INDEX(p_index, shapes.size());
+	ERR_FAIL_INDEX(p_index, int64_t(shapes.size()));
 	Box2DShapeInstance &shape = shapes[p_index];
 	shape.set_shape(p_shape);
 	build_shape(shape, true);
@@ -249,7 +248,7 @@ void Box2DCollisionObject2D::shape_updated(Box2DShape2D *p_shape) {
 }
 
 void Box2DCollisionObject2D::remove_shape(int p_index) {
-	ERR_FAIL_INDEX(p_index, shapes.size());
+	ERR_FAIL_INDEX(p_index, int64_t(shapes.size()));
 
 	shapes.remove_at(p_index);
 
@@ -261,7 +260,7 @@ void Box2DCollisionObject2D::remove_shape(int p_index) {
 void Box2DCollisionObject2D::remove_shape(Box2DShape2D *p_shape) {
 	ERR_FAIL_NULL(p_shape);
 
-	for (int i = 0; i < shapes.size(); i++) {
+	for (uint32_t i = 0; i < shapes.size(); i++) {
 		if (shapes[i].get_shape() == p_shape) {
 			shapes.remove_at(i);
 			i--;
@@ -287,7 +286,7 @@ void Box2DCollisionObject2D::reindex_all_shapes() {
 }
 
 void Box2DCollisionObject2D::set_shape_transform(int p_index, const Transform2D &p_transform) {
-	ERR_FAIL_INDEX(p_index, shapes.size());
+	ERR_FAIL_INDEX(p_index, int64_t(shapes.size()));
 	Box2DShapeInstance &shape = shapes[p_index];
 	if (shape.get_transform() == p_transform) {
 		return;
@@ -297,7 +296,7 @@ void Box2DCollisionObject2D::set_shape_transform(int p_index, const Transform2D 
 }
 
 Transform2D Box2DCollisionObject2D::get_shape_transform(int p_index) const {
-	ERR_FAIL_INDEX_V(p_index, shapes.size(), Transform2D());
+	ERR_FAIL_INDEX_V(p_index, int64_t(shapes.size()), Transform2D());
 	// TODO: more const references and pointers
 	const Box2DShapeInstance &shape = shapes[p_index];
 	return shape.get_transform();

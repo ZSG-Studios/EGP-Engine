@@ -296,20 +296,6 @@ void Box2DBody2D::set_sleep_enabled(bool p_can_sleep) {
 	b2Body_EnableSleep(body_id, p_can_sleep);
 }
 
-/// Optimized function for updating rotation and position while preserving scale and skew.
-/// The tradeoff is that values for scale and skew are subject to slight precision loss.
-static void set_rotation_and_position_fast(Transform2D &p_xf, b2Rot p_rot, Vector2 p_pos) {
-	TracyZoneScoped("Box2DBody2D::sync_state::set_rotation_and_position (fast)");
-
-	b2Rot current = { p_xf.columns[0].x, p_xf.columns[0].y };
-
-	real_t delta_angle = b2RelativeAngle(current, p_rot);
-
-	p_xf.columns[0] = p_xf.columns[0].rotated(delta_angle);
-	p_xf.columns[1] = p_xf.columns[1].rotated(delta_angle);
-	p_xf.columns[2] = p_pos;
-}
-
 /// Slower function for updating rotation and position. Consistent with Godot Physics.
 static void set_rotation_and_position(Transform2D &p_xf, real_t p_rot, Vector2 p_pos) {
 	TracyZoneScoped("Box2DBody2D::sync_state::set_rotation_and_position");
@@ -430,12 +416,12 @@ void Box2DBody2D::get_contacts(int p_max_count) {
 
 			contacts.push_back(contact);
 
-			if (contacts.size() >= p_max_count) {
+			if (int64_t(contacts.size()) >= p_max_count) {
 				return;
 			}
 		}
 
-		if (contacts.size() >= p_max_count) {
+		if (int64_t(contacts.size()) >= p_max_count) {
 			return;
 		}
 	}
@@ -450,63 +436,63 @@ int32_t Box2DBody2D::get_contact_count() {
 Vector2 Box2DBody2D::get_contact_local_position(int p_contact_idx) {
 	ERR_FAIL_COND_V(!in_space(), Vector2());
 	update_contacts();
-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), Vector2());
+	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), Vector2());
 	return contacts[p_contact_idx].local_position;
 }
 
 Vector2 Box2DBody2D::get_contact_local_normal(int p_contact_idx) {
 	ERR_FAIL_COND_V(!in_space(), Vector2());
 	update_contacts();
-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), Vector2());
+	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), Vector2());
 	return contacts[p_contact_idx].local_normal;
 }
 
 int Box2DBody2D::get_contact_local_shape(int p_contact_idx) {
 	ERR_FAIL_COND_V(!in_space(), -1);
 	update_contacts();
-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), -1);
+	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), -1);
 	return contacts[p_contact_idx].local_shape;
 }
 
 RID Box2DBody2D::get_contact_collider(int p_contact_idx) {
 	ERR_FAIL_COND_V(!in_space(), RID());
 	update_contacts();
-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), RID());
+	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), RID());
 	return contacts[p_contact_idx].collider;
 }
 
 Vector2 Box2DBody2D::get_contact_collider_position(int p_contact_idx) {
 	ERR_FAIL_COND_V(!in_space(), Vector2());
 	update_contacts();
-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), Vector2());
+	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), Vector2());
 	return contacts[p_contact_idx].collider_position;
 }
 
 uint64_t Box2DBody2D::get_contact_collider_id(int p_contact_idx) {
 	ERR_FAIL_COND_V(!in_space(), -1);
 	update_contacts();
-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), -1);
+	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), -1);
 	return contacts[p_contact_idx].collider_instance_id;
 }
 
 int Box2DBody2D::get_contact_collider_shape(int p_contact_idx) {
 	ERR_FAIL_COND_V(!in_space(), -1);
 	update_contacts();
-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), -1);
+	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), -1);
 	return contacts[p_contact_idx].collider_shape;
 }
 
 Vector2 Box2DBody2D::get_contact_impulse(int p_contact_idx) {
 	ERR_FAIL_COND_V(!in_space(), Vector2());
 	update_contacts();
-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), Vector2());
+	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), Vector2());
 	return contacts[p_contact_idx].impulse;
 }
 
 Vector2 Box2DBody2D::get_contact_collider_velocity_at_position(int p_contact_idx) {
 	ERR_FAIL_COND_V(!in_space(), Vector2());
 	update_contacts();
-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), Vector2());
+	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), Vector2());
 	return contacts[p_contact_idx].collider_velocity;
 }
 
@@ -549,8 +535,8 @@ void Box2DBody2D::rebuild_exception_joints(const Box2DPhysicsServer2D *p_server)
 		return;
 	}
 
-	for (RID rid : exceptions) {
-		Box2DBody2D *other = p_server->get_body(rid);
+	for (RID exception_rid : exceptions) {
+		Box2DBody2D *other = p_server->get_body(exception_rid);
 		if (!other || other->get_space() != space) {
 			continue;
 		}
@@ -568,8 +554,8 @@ TypedArray<RID> Box2DBody2D::get_collision_exceptions() const {
 	result.resize(exceptions.size());
 
 	int index = 0;
-	for (RID rid : exceptions) {
-		result[index] = rid;
+	for (RID exception_rid : exceptions) {
+		result[index] = exception_rid;
 		index++;
 	}
 
@@ -577,7 +563,7 @@ TypedArray<RID> Box2DBody2D::get_collision_exceptions() const {
 }
 
 void Box2DBody2D::set_shape_one_way_collision(int p_index, bool p_one_way, real_t p_margin, const Vector2 &p_direction) {
-	ERR_FAIL_INDEX(p_index, shapes.size());
+	ERR_FAIL_INDEX(p_index, int64_t(shapes.size()));
 	Box2DShapeInstance &shape = shapes[p_index];
 	shape.set_one_way_collision(p_one_way);
 	shape.set_one_way_collision_margin(p_margin);
@@ -585,7 +571,7 @@ void Box2DBody2D::set_shape_one_way_collision(int p_index, bool p_one_way, real_
 }
 
 bool Box2DBody2D::get_shape_one_way_collision(int p_index) {
-	ERR_FAIL_INDEX_V(p_index, shapes.size(), false);
+	ERR_FAIL_INDEX_V(p_index, int64_t(shapes.size()), false);
 	Box2DShapeInstance &shape = shapes[p_index];
 	return shape.has_one_way_collision();
 }

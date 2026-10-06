@@ -39,8 +39,8 @@ void Box2DArea2D::on_remove_from_space() {
 	// The overrides still have to come off, otherwise a body that was inside a gravity
 	// replacement keeps a zero gravity scale forever. Areas that remain reapply theirs
 	// at the top of the next step.
-	for (const auto &[rid, overlap_count] : object_overlap_count) {
-		auto *object = Box2DPhysicsServer2D::get_singleton()->get_object(rid);
+	for (const auto &[overlap_rid, overlap_count] : object_overlap_count) {
+		auto *object = Box2DPhysicsServer2D::get_singleton()->get_object(overlap_rid);
 		if (!object) {
 			continue;
 		}
@@ -149,8 +149,8 @@ void Box2DArea2D::update_overlaps() {
 }
 
 void Box2DArea2D::apply_overrides() {
-	for (const auto &[rid, overlap_count] : object_overlap_count) {
-		auto *object = Box2DPhysicsServer2D::get_singleton()->get_object(rid);
+	for (const auto &[overlap_rid, overlap_count] : object_overlap_count) {
+		auto *object = Box2DPhysicsServer2D::get_singleton()->get_object(overlap_rid);
 		if (!object) {
 			continue;
 		}
@@ -162,7 +162,6 @@ void Box2DArea2D::apply_overrides() {
 		Box2DBody2D::AreaOverrideAccumulator &overrides = body->area_overrides;
 
 		if (!overrides.ignore_remaining_gravity) {
-			Vector2 original_gravity = overrides.total_gravity;
 			overrides.ignore_remaining_gravity = integrate(
 					overrides.total_gravity,
 					compute_gravity(body->get_center_of_mass_global()),
@@ -175,7 +174,6 @@ void Box2DArea2D::apply_overrides() {
 		}
 
 		if (!overrides.ignore_remaining_linear_damp) {
-			real_t original_linear_damp = overrides.total_linear_damp;
 			overrides.ignore_remaining_linear_damp = integrate(
 					overrides.total_linear_damp,
 					linear_damp,
@@ -187,7 +185,6 @@ void Box2DArea2D::apply_overrides() {
 		}
 
 		if (!overrides.ignore_remaining_angular_damp) {
-			real_t original_angular_damp = overrides.total_angular_damp;
 			overrides.ignore_remaining_angular_damp = integrate(
 					overrides.total_angular_damp,
 					angular_damp,

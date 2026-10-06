@@ -9,8 +9,8 @@
 using namespace PhysicsServer2DEnums;
 
 class Box2DSpace2D;
-class CastHit;
-class ShapeOverlap;
+struct CastHit;
+struct ShapeOverlap;
 
 class Box2DDirectSpaceState2D : public PhysicsDirectSpaceState2D {
 	GDCLASS(Box2DDirectSpaceState2D, PhysicsDirectSpaceState2D);

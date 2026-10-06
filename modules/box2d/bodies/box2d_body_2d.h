@@ -62,12 +62,12 @@ public:
 	void reset_mass();
 	real_t get_mass() const { return mass_data.mass; }
 	real_t get_inverse_mass() const {
-		real_t mass = get_mass();
-		return mass > 0.0 ? 1.0 / mass : 0.0;
+		real_t body_mass = get_mass();
+		return body_mass > 0.0 ? 1.0 / body_mass : 0.0;
 	}
 	real_t get_inverse_inertia() const {
-		real_t intertia = get_inertia();
-		return intertia > 0.0 ? 1.0 / intertia : 0.0;
+		real_t inertia = get_inertia();
+		return inertia > 0.0 ? 1.0 / inertia : 0.0;
 	}
 	void set_mass(real_t p_mass);
 	real_t get_inertia() const { return to_godot(mass_data.rotationalInertia); }
@@ -232,7 +232,7 @@ protected:
 	real_t angular_damping = 0.0;
 
 	real_t mass = 1.0f;
-	b2MassData mass_data = b2MassData{ 0 };
+	b2MassData mass_data = b2MassData{};
 	bool override_center_of_mass = false;
 	Vector2 center_of_mass = Vector2();
 	bool override_inertia = false;

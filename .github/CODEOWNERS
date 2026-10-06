@@ -290,3 +290,5 @@ SCsub                                         @godotengine/buildsystem
 # EGP fork integrations
 
 /modules/egp_net/                              @ZSG-Studios
+/modules/box2d/                                @ZSG-Studios
+/modules/box3d/                                @ZSG-Studios

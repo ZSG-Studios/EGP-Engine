@@ -68,9 +68,6 @@ int32_t Box2DDirectSpaceState2D::_intersect_point(
 		result.shape = overlap.shape->get_index();
 		result.rid = overlap.object->get_rid();
 		result.collider_id = ObjectID(overlap.object->get_instance_id());
-		if (result.collider_id.is_valid()) {
-			result.collider = get_instance_hack(result.collider_id);
-		}
 	}
 
 	return collector.count;
@@ -107,9 +104,6 @@ bool Box2DDirectSpaceState2D::_intersect_ray(
 			p_result->shape = overlap.shape->get_index();
 			p_result->rid = overlap.object->get_rid();
 			p_result->collider_id = ObjectID(overlap.object->get_instance_id());
-			if (p_result->collider_id.is_valid()) {
-				p_result->collider = get_instance_hack(p_result->collider_id);
-			}
 			return true;
 		}
 	}
@@ -135,9 +129,6 @@ bool Box2DDirectSpaceState2D::_intersect_ray(
 	result.shape = hit.shape->get_index();
 	result.rid = hit.object->get_rid();
 	result.collider_id = ObjectID(hit.object->get_instance_id());
-	if (result.collider_id.is_valid()) {
-		result.collider = get_instance_hack(result.collider_id);
-	}
 
 	return true;
 }
@@ -186,9 +177,6 @@ int32_t Box2DDirectSpaceState2D::_intersect_shape(
 		result.shape = hit.shape->get_index();
 		result.rid = hit.object->get_rid();
 		result.collider_id = ObjectID(hit.object->get_instance_id());
-		if (result.collider_id.is_valid()) {
-			result.collider = get_instance_hack(result.collider_id);
-		}
 
 		count++;
 	}

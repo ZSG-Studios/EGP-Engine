@@ -197,8 +197,8 @@ void Box2DSpace2D::sync_state() {
 		integrations.push_back(body->get_rid());
 	}
 	integrations.sort();
-	for (RID rid : integrations) {
-		auto *body = server->get_body(rid);
+	for (RID body_rid : integrations) {
+		auto *body = server->get_body(body_rid);
 		if (body && body->get_space() == this) {
 			body->call_force_integration_callback();
 		}

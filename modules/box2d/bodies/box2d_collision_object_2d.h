@@ -22,6 +22,7 @@ public:
 	};
 
 	explicit Box2DCollisionObject2D(Type p_type);
+	virtual ~Box2DCollisionObject2D() = default;
 
 	Type get_type() const { return type; }
 

@@ -27,6 +27,7 @@ public:
 	ObjectID canvas_instance_id;
 	bool pick_point = false;
 	virtual bool is_excluded(const Box2DCollisionObject2D *p_object) const;
+	virtual ~QueryFilter() = default;
 };
 
 class BodyQueryFilter : public QueryFilter {
@@ -145,17 +146,17 @@ struct CastQueryCollector {
 	Box2DShapePrimitive shape = {};
 
 	explicit CastQueryCollector(const CastQuery &p_query, LocalVector<CastHit> &p_results, Box2DShapePrimitive p_shape) :
-			results(p_results),
 			max_results(p_query.max_results),
-			filter(p_query.filter),
 			find_nearest(p_query.find_nearest),
 			ignore_initial_overlaps(p_query.ignore_intial_overlaps),
+			filter(p_query.filter),
+			results(p_results),
 			shape(p_shape) {}
 
 	/// Ray casts have no shape to build a manifold from, so they always drop initial overlaps.
 	/// Godot reports a ray starting inside a shape through hit_from_inside instead.
 	explicit CastQueryCollector(int p_max_results, const QueryFilter p_filter, bool p_find_nearest, LocalVector<CastHit> &p_results) :
-			results(p_results), max_results(p_max_results), filter(p_filter), find_nearest(p_find_nearest), ignore_initial_overlaps(true) {}
+			max_results(p_max_results), find_nearest(p_find_nearest), ignore_initial_overlaps(true), filter(p_filter), results(p_results) {}
 };
 
 struct OverlapQueryCollector {
@@ -166,10 +167,10 @@ struct OverlapQueryCollector {
 	Box2DShapePrimitive shape = {};
 
 	explicit OverlapQueryCollector(const OverlapQuery &p_query, LocalVector<ShapeOverlap> &p_results, Box2DShapePrimitive p_shape) :
-			results(p_results), max_results(p_query.max_results), filter(p_query.filter), shape(p_shape) {}
+			max_results(p_query.max_results), filter(p_query.filter), results(p_results), shape(p_shape) {}
 
 	explicit OverlapQueryCollector(int p_max_results, const QueryFilter p_filter, LocalVector<ShapeOverlap> &p_results) :
-			results(p_results), max_results(p_max_results), filter(p_filter) {}
+			max_results(p_max_results), filter(p_filter), results(p_results) {}
 };
 
 bool overlap_callback(b2ShapeId shapeId, void *context);

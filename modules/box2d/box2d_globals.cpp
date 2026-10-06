@@ -45,7 +45,7 @@ ShapeCollideResult box2d_collide_shapes(
 	// The collide functions work in frame A and want B relative to it.
 	b2Transform xf = b2InvMulTransforms(xfa, xfb);
 
-	b2LocalManifold manifold = { 0 };
+	b2LocalManifold manifold = {};
 
 	switch (type_a) {
 		case b2ShapeType::b2_capsuleShape: {
@@ -143,7 +143,7 @@ ShapeCollideResult box2d_collide_shapes(
 			b2ChainSegment a = p_shape_a.chain_segment;
 			switch (type_b) {
 				case b2ShapeType::b2_capsuleShape: {
-					b2SimplexCache cache{ 0 };
+					b2SimplexCache cache{};
 					manifold = b2CollideChainSegmentAndCapsule(&a, &p_shape_b.capsule, xf, &cache);
 					break;
 				}
@@ -152,7 +152,7 @@ ShapeCollideResult box2d_collide_shapes(
 					break;
 				}
 				case b2ShapeType::b2_polygonShape: {
-					b2SimplexCache cache{ 0 };
+					b2SimplexCache cache{};
 					manifold = b2CollideChainSegmentAndPolygon(&a, &p_shape_b.polygon, xf, &cache);
 					break;
 				}

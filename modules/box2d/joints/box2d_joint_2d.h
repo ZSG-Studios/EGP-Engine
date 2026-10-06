@@ -8,7 +8,7 @@ class Box2DJoint2D {
 public:
 	Box2DJoint2D() = default;
 	explicit Box2DJoint2D(PS2DE::JointType p_type, Box2DBody2D *p_body_a, Box2DBody2D *p_body_b) :
-			type(p_type), body_a(p_body_a), body_b(p_body_b) {}
+			body_a(p_body_a), body_b(p_body_b), type(p_type) {}
 
 	virtual ~Box2DJoint2D();
 
