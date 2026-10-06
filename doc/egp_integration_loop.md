@@ -1,12 +1,11 @@
 # EGP integration and completion loop
 
-Automation stopped on 2026-10-06 at the user's request to cancel and remove all
-GitHub Actions. The original workflow and local action definitions are removed,
-and the recurring integration automation is deleted. A single manual unit-test
-replay workflow was subsequently added at the user's explicit request; it has no
-push, scheduled or recurring trigger and reuses an identified editor artifact.
-The acceptance criteria and historical receipts below remain as work records;
-this cancellation does not establish integration completion.
+Full automated testing and the recurring integration loop are restored on
+2026-10-06 following the user's clarification: cancellation was intended to clear
+obsolete runs, not replace the pipeline with an old-binary replay. All original
+workflows and their qualified fixes are restored. New source runs supersede older
+runs of the same workflow/ref instead of waiting behind an obsolete build.
+Completion still requires combined-source and matching-binary runtime evidence.
 
 The loop owns the combined EGP result, including handoffs and unfinished work from
 other EGP chats and worktrees. Resume every 5 minutes and finish concrete acceptance

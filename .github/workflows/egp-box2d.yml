@@ -1,0 +1,29 @@
+name: EGP pinned Box2D
+on:
+  push:
+    paths: ["thirdparty/box2d/**", "modules/box2d/**", "misc/scripts/validate_box2d.py", ".github/workflows/egp-box2d.yml"]
+  pull_request:
+    paths: ["thirdparty/box2d/**", "modules/box2d/**", "misc/scripts/validate_box2d.py", ".github/workflows/egp-box2d.yml"]
+  workflow_dispatch:
+concurrency:
+  group: egp-box2d-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        configuration: [Debug, Release]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python misc/scripts/validate_box2d.py --configuration ${{ matrix.configuration }}
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: box2d-${{ matrix.os }}-${{ matrix.configuration }}
+          path: .build/box2d-validation/

@@ -1,0 +1,27 @@
+name: EGP networking
+on:
+  push:
+    paths: ["modules/egp_net/**", "thirdparty/yojimbo/**", "misc/scripts/validate_egp_net.py", ".github/workflows/egp-networking.yml"]
+  pull_request:
+    paths: ["modules/egp_net/**", "thirdparty/yojimbo/**", "misc/scripts/validate_egp_net.py", ".github/workflows/egp-networking.yml"]
+concurrency:
+  group: egp-networking-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+jobs:
+  networking:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python misc/scripts/validate_egp_net.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: networking-${{ matrix.os }}
+          path: .build/egp-net-validation
