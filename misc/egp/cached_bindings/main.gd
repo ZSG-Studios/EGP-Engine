@@ -47,7 +47,12 @@ func probe_extra(blocked: bool) -> void:
 	checkpoint(stage + "-extra")
 	var expected: Array = ["", Vector3.ZERO, [], null, PackedByteArray(), null, false, 0.0] if blocked else ["live", Vector3(1, 2, 3), [91], victim, PackedByteArray([91]), "live", true, 91.5]
 	if mode.begins_with("validated"):
-		require(typed_extra() == expected, "typed builtin return defaults/recovery")
+		var actual := typed_extra()
+		require(typeof(actual[3]) == TYPE_OBJECT and actual[3] == (null if blocked else victim), "typed object default/recovery")
+		# A typed null Object and an untyped NIL differ in Array equality.
+		actual.remove_at(3)
+		expected.remove_at(3)
+		require(actual == expected, "typed builtin return defaults/recovery")
 	elif mode.begins_with("ptr"):
 		expected[3] = not blocked
 		expected.insert(4, blocked)
