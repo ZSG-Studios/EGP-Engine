@@ -30,6 +30,8 @@
 
 #include "project_settings_gdextension.h"
 
+#include "native_extension_editor.h"
+
 #include "core/config/project_settings.h"
 #include "core/extension/gdextension_manager.h"
 #include "core/io/config_file.h"
@@ -104,6 +106,7 @@ void ProjectSettingsGDExtension::_update_extension_tree() {
 }
 
 ProjectSettingsGDExtension::ProjectSettingsGDExtension() {
+	add_child(memnew(NativeExtensionEditor));
 	// Create the title label.
 	HBoxContainer *title_hb = memnew(HBoxContainer);
 	Label *label = memnew(Label(TTRC("Installed GDExtensions:")));

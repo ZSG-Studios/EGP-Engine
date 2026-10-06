@@ -439,6 +439,17 @@ Patches:
 - `0003-preprocessor-token-name-memcpy.patch` ([GH-123319](https://github.com/godotengine/godot/pull/123319))
 
 
+## godot-cpp
+
+- Upstream: https://github.com/godotengine/godot-cpp
+- Version: 10.0.0, pinned master commit 507ed9d840c01a3c5b2a39af8bb4000bfac30bf5 (2026)
+- License: MIT
+
+The upstream sources are retained as a pinned submodule. EGP generates and embeds
+the headers, binding sources, and license in its editor at build time; extension
+authors do not need to fetch the submodule or install Python/SCons.
+
+
 ## graphite
 
 - Upstream: https://github.com/silnrsi/graphite

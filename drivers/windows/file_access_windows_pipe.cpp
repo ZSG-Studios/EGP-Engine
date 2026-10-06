@@ -107,7 +107,13 @@ uint64_t FileAccessWindowsPipe::get_length() const {
 	ERR_FAIL_COND_V_MSG(fd[0] == nullptr, -1, "Pipe must be opened before use.");
 
 	DWORD buf_rem = 0;
-	ERR_FAIL_COND_V(!PeekNamedPipe(fd[0], nullptr, 0, nullptr, &buf_rem, nullptr), 0);
+	if (!PeekNamedPipe(fd[0], nullptr, 0, nullptr, &buf_rem, nullptr)) {
+		const DWORD error = GetLastError();
+		if (error == ERROR_BROKEN_PIPE || error == ERROR_PIPE_NOT_CONNECTED) {
+			return 0; // Normal EOF after the child process closes its output.
+		}
+		ERR_FAIL_V_MSG(0, "Could not query pipe output availability.");
+	}
 	return buf_rem;
 }
 

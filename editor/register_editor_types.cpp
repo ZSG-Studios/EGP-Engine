@@ -132,6 +132,7 @@
 #include "editor/settings/editor_command_palette.h"
 #include "editor/settings/editor_feature_profile.h"
 #include "editor/settings/editor_settings.h"
+#include "editor/settings/gdextension/native_extension_editor.h"
 #include "editor/shader/shader_editor_plugin.h"
 #include "editor/shader/shader_file_editor_plugin.h"
 #include "editor/translations/editor_translation_parser.h"
@@ -144,6 +145,7 @@
 #endif
 
 void register_editor_types() {
+	GDREGISTER_INTERNAL_CLASS(NativeExtensionEditor);
 	OS::get_singleton()->benchmark_begin_measure("Editor", "Register Types");
 
 	ResourceLoader::set_timestamp_on_load(true);

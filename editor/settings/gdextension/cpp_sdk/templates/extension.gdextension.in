@@ -1,0 +1,8 @@
+[configuration]
+entry_symbol = "@NAME@_init"
+compatibility_minimum = "@API@"
+reloadable = true
+
+[libraries]
+@PLATFORM@.debug.@ARCH@ = "res://extensions/@NAME@/bin/@NAME@.@PLATFORM@.debug.@ARCH@@SUFFIX@"
+@PLATFORM@.release.@ARCH@ = "res://extensions/@NAME@/bin/@NAME@.@PLATFORM@.release.@ARCH@@SUFFIX@"

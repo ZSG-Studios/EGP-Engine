@@ -331,6 +331,12 @@ Copyright: 2015-2020, Google, Inc.
   2002, NVIDIA Corporation.
 License: glslang
 
+Files: thirdparty/godot-cpp/*
+Comment: godot-cpp C++ GDExtension bindings
+Copyright: 2014-present, Godot Engine contributors
+ 2007-2014, Juan Linietsky, Ariel Manzur
+License: Expat
+
 Files: thirdparty/graphite/*
 Comment: Graphite engine
 Copyright: 2010, SIL International
