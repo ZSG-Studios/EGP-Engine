@@ -42,7 +42,7 @@ try:
     receipt["vendor_verified"] = True
     run("configure", ["cmake", "-S", ROOT / "modules/egp_net/tests", "-B", build, "-DCMAKE_BUILD_TYPE=" + args.configuration])
     run("build", ["cmake", "--build", build, "--config", args.configuration, "--parallel", "6", "--target",
-                  "egp_net_checks", "egp_net_process_check", "egp_net_interest_memory_check", "egp_net_state_pressure_check",
+                  "egp_net_checks", "egp_net_process_check", "egp_net_interest_memory_check", "egp_net_state_pressure_check", "egp_net_fairness_check",
                   "yojimbo_test", "yojimbo_custom_packet_io_test"], timeout=300)
     run("ctest", ["ctest", "--test-dir", build, "-C", args.configuration, "--output-on-failure"], timeout=90)
     executable = build / args.configuration / "egp_net_checks.exe" if sys.platform == "win32" else build / "egp_net_checks"

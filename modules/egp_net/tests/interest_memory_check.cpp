@@ -33,7 +33,29 @@ int main() {
         uint64_t handle = 0;
         if (server.spawn(1,{},-1,handle) != Result::Ok || server.set_visible(handle,peer,false) != Result::Ok || server.despawn(handle) != Result::Ok) return 4;
     }
-    const auto retained = live_allocations.load() - before;
-    std::cout << "EGP_INTEREST_RETAINED_ALLOCATIONS=" << retained << std::endl;
-    return retained == 0 ? 0 : 1;
+    const auto hidden_retained = live_allocations.load() - before;
+    if (hidden_retained != 0) return 1;
+    auto until = [&](auto done) {
+        const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(2);
+        do {
+            if (server.pump() != Result::Ok || client.pump() != Result::Ok) return false;
+            if (done()) return true;
+            std::this_thread::sleep_for(std::chrono::milliseconds(2));
+        } while (std::chrono::steady_clock::now() < end);
+        return false;
+    };
+    // Exercise real queued state lifetimes too: hiding before replication alone
+    // cannot detect retained acknowledgment tickets or peer revision records.
+    for (int i = 0; i < 64; ++i) {
+        uint64_t handle = 0;
+        if (server.spawn(1, {uint8_t(i)}, peer, handle) != Result::Ok) return 5;
+        if (!until([&] { return client.entities().count(handle); })) return 6;
+        if (server.update(handle, {uint8_t(i), 42}) != Result::Ok || server.pump() != Result::Ok) return 7;
+        if (server.despawn(handle) != Result::Ok) return 8;
+        if (!until([&] { return client.entities().empty(); })) return 9;
+    }
+    const auto visible_retained = live_allocations.load() - before;
+    std::cout << "EGP_INTEREST_RETAINED_ALLOCATIONS=" << visible_retained
+              << " hidden_cycles=1024 visible_cycles=64" << std::endl;
+    return visible_retained == 0 ? 0 : 1;
 }

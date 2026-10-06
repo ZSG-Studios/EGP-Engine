@@ -128,7 +128,13 @@ state message per entity; changes made while that message is pending are coalesc
 into the latest revision after acknowledgment. Intermediate states may be skipped.
 Use application messages for events that must each arrive. This prevents frequent
 updates to one entity from filling the reliable queue with its obsolete revisions;
-it does not guarantee a delivery deadline or fairness across thousands of entities.
+each peer resumes after its last queued entity when a queue/rate budget fills.
+Its initial ordered baseline completes after every visible entity has been queued,
+without requiring continuous game updates to become idle. Later revisions continue
+through the same ordered channel. Delivery time still depends on entity count,
+payload sizes, rate budgets, latency and loss; thousands of entities require scale
+qualification. Configure endpoint rate budgets for each role; server outgoing
+budgets and client incoming budgets need not be identical.
 The client's `server_tick` statistic includes accepted replicated entity ticks.
 
 `EGPNetPrediction` adds bounded local input/state history, authoritative correction and deterministic replay through game-provided capture/restore/simulate callbacks. Its default caps are 128 pending ticks, 64 KiB per local snapshot and 8 MiB of history. History pressure refuses new predictions; callback/state failures require an explicit baseline reset. Server input acknowledgments and complete predicted state are game contracts. Replay callbacks must suppress duplicate presentation effects. State sent over the network still obeys the 4096-byte wire limit.

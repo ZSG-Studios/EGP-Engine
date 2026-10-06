@@ -88,6 +88,7 @@ struct Session::Impl : yojimbo::Adapter {
     struct Link {
         int64_t handle = 0;
         bool begun = false, complete = false;
+        uint64_t last_entity_sent = 0;
         std::map<uint64_t, uint64_t> revisions;
         std::map<uint64_t, std::weak_ptr<uint8_t>> in_flight_states;
         std::set<uint64_t> hidden;
@@ -222,31 +223,42 @@ struct Session::Impl : yojimbo::Adapter {
                     it = link.revisions.erase(it);
                 } else ++it;
             }
-            bool caught_up = true;
-            for (const auto &record : entity_map) {
-                if (link.hidden.count(record.first)) continue;
-                const Entity &entity = record.second;
+            auto baseline_ready = [&] {
+                return std::all_of(entity_map.begin(), entity_map.end(), [&](const auto &record) {
+                    return link.hidden.count(record.first) || link.revisions.count(record.first);
+                });
+            };
+            // Finish the ordered initial snapshot before updates consume the next
+            // budget window. It need not wait for a changing world to become idle.
+            if (!link.complete && baseline_ready() && meta(slot, EndBaseline)) link.complete = true;
+            auto next = entity_map.upper_bound(link.last_entity_sent);
+            for (size_t remaining = entity_map.size(); remaining > 0; --remaining) {
+                if (next == entity_map.end()) next = entity_map.begin();
+                const Entity &entity = (next++)->second;
+                if (link.hidden.count(entity.handle)) continue;
                 auto revision = link.revisions.find(entity.handle);
                 if (revision != link.revisions.end() && revision->second == entity.revision) continue;
                 // One queued state per entity/peer bounds stale revisions under
                 // latency and leaves capacity for newly spawned owned entities.
                 auto pending = link.in_flight_states.find(entity.handle);
                 if (pending != link.in_flight_states.end() && !pending->second.expired()) {
-                    caught_up = false;
                     continue;
                 }
-                if (!room(slot, 0, entity.state.size() + 64)) { caught_up = false; break; }
+                if (!room(slot, 0, entity.state.size() + 64)) break;
                 auto *m = static_cast<State *>(create(slot, StateType));
-                if (!m) { caught_up = false; break; }
+                if (!m) break;
                 m->handle = entity.handle; m->revision = entity.revision; m->tick = entity.tick;
                 m->authority = uint64_t(entity.authority_peer); m->kind = entity.kind;
-                if (!attach(slot, m, entity.state)) { release(slot, m); caught_up = false; break; }
+                if (!attach(slot, m, entity.state)) { release(slot, m); break; }
                 m->in_flight = std::make_shared<uint8_t>(0);
                 link.in_flight_states[entity.handle] = m->in_flight;
                 queue(slot, 0, m, entity.state.size() + 64);
                 link.revisions[entity.handle] = entity.revision;
+                // Resume after the last admitted entity when the bounded queue
+                // or rate budget fills; lower IDs cannot monopolize each reset.
+                link.last_entity_sent = entity.handle;
             }
-            if (caught_up && !link.complete && meta(slot, EndBaseline)) link.complete = true;
+            if (!link.complete && baseline_ready() && meta(slot, EndBaseline)) link.complete = true;
         }
     }
     void reject(int slot) {
