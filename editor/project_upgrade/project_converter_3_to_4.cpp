@@ -107,6 +107,7 @@ public:
 	RegEx reg_os_get_borderless = RegEx("\\bOS\\.get_borderless_window\\s*\\(\\s*\\)");
 	RegEx reg_os_screen_orient_enum = RegEx("\\bOS\\.SCREEN_ORIENTATION_(\\w+)\\b"); // $1 - constant suffix
 
+	RegEx legacy_physics_backend = RegEx("\\b(?:Physics2DServerSW|GodotPhysicsServer2D)\\b");
 	// GDScript keywords.
 	RegEx keyword_gdscript_tool = RegEx("^tool");
 	RegEx legacy_networking = RegEx(
@@ -117,7 +118,8 @@ public:
 			"NetworkPeerDisconnected|NetworkPeerPacket|NetworkedMultiplayerCustom|NetworkedMultiplayerENet|NetworkedMultiplayerPeer|"
 			"RefuseNewNetworkConnections|Rpc|RpcConfig|RpcId|RpcUnreliable|RpcUnreliableId|Rset|RsetConfig|RsetId|RsetUnreliable|RsetUnreliableId|"
 			"SceneMultiplayer|ServerDisconnected|SetMultiplayer|SetMultiplayerAuthority|SetNetworkMaster|SetNetworkPeer|SetRefuseNewNetworkConnections|"
-			"WebRTCDataChannel|WebRTCMultiplayer|WebRTCMultiplayerPeer|WebRTCPeerConnection|WebSocketMultiplayerPeer|connected_to_server|"
+			"WebRTCDataChannel|WebRTCDataChannelExtension|WebRTCDataChannelGDNative|WebRTCMultiplayer|WebRTCMultiplayerPeer|"
+			"WebRTCPeerConnection|WebRTCPeerConnectionExtension|WebRTCPeerConnectionGDNative|WebSocketMultiplayerPeer|connected_to_server|"
 			"connection_failed|get_multiplayer|get_multiplayer_authority|get_network_connected_peers|get_network_master|get_network_peer|"
 			"get_network_unique_id|get_rpc_sender_id|has_network_peer|is_multiplayer_authority|is_network_master|is_network_server|"
 			"is_refusing_new_network_connections|multiplayer_peer|network_peer|network_peer_connected|network_peer_disconnected|network_peer_packet|"
@@ -289,6 +291,10 @@ bool ProjectConverter3To4::check_legacy_networking(const Vector<String> &p_files
 			}
 			if (p_regex.legacy_networking.search(line).is_valid()) {
 				print_error(vformat("EGP networking migration required at %s:%d. Legacy RPC/peer APIs cannot be converted automatically. Port this code to EGPNet messages, entity ownership and replication (modules/egp_net/README.md), then rerun conversion. No project files have been modified.", path, line_number));
+				supported = false;
+			}
+			if (p_regex.legacy_physics_backend.search(line).is_valid()) {
+				print_error(vformat("EGP physics migration required at %s:%d. The legacy software backend class has been removed. Port custom backend code to the supported PhysicsServer2D API before conversion. No project files have been modified.", path, line_number));
 				supported = false;
 			}
 		}
@@ -776,6 +782,10 @@ bool ProjectConverter3To4::test_conversion(RegExContainer &reg_container) {
 	valid = valid && reg_container.legacy_networking.search("network.host(\"127.0.0.1\")").is_null();
 	valid = valid && reg_container.legacy_networking.search("HTTPRequest.new()").is_null();
 	valid = valid && reg_container.legacy_networking.search("WebSocketPeer.new()").is_null();
+	valid = valid && reg_container.legacy_networking.search("WebRTCDataChannelGDNative.new()").is_valid();
+	valid = valid && reg_container.legacy_networking.search("WebRTCPeerConnectionExtension.new()").is_valid();
+	valid = valid && reg_container.legacy_physics_backend.search("extends Physics2DServerSW").is_valid();
+	valid = valid && reg_container.legacy_physics_backend.search("PhysicsServer2D.body_create()").is_null();
 
 	valid = valid && test_conversion_with_regex("tool", "@tool", &ProjectConverter3To4::fix_tool_declaration, "gdscript keyword", reg_container);
 	valid = valid && test_conversion_with_regex("\n    tool", "\n    tool", &ProjectConverter3To4::fix_tool_declaration, "gdscript keyword", reg_container);
