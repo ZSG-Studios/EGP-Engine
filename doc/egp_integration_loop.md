@@ -38,10 +38,10 @@ because these chats exist.
 | Library/build | Native and Mono builds; exact fork bindings; dependency/license manifests; lean server build; reproducible toolchain | Combined Mono editor, glue/assemblies, exact SDK and Debug/Release templates pass; lean server/platform/reproducibility gates remain |
 | Physics | Box2D/Box3D scene integration, joints, characters, queries, events, serialization, deterministic stepping and restore; unsupported capabilities exposed honestly | Combined Mono editor passes 19 Box2D runs and 28 Box3D cases; twelve relocated Debug/Release Box2D checks cover configured joints, events, explosions, canvas/casts, packed/vector polygons and invalid-input recovery; picking, broader shape/scaling/parity/platform gates remain |
 | Physics/network | Explicit fixed clock, fingerprint validation, authoritative state, commands, prediction/correction/replay and recovery | Existing limited fixtures; full game contract pending |
-| Networking | Encrypted admission, account/peer/entity identities, authority, ownership, interest, lifecycle, reconnect and backpressure | Native and language fixtures exist |
+| Networking | Encrypted admission, account/peer/entity identities, authority, ownership, interest, lifecycle, reconnect and backpressure | Native and language fixtures pass; per-entity pending states coalesce under WAN pressure, with late ownership and restored server-generation inputs verified; broader fairness/scale remains |
 | Advanced networking | Field deltas, bounded bandwidth/queues, input acknowledgments, lag compensation, scale/soak, malicious input rejection | Implementation/qualification gaps remain |
 | Network lab | Dedicated server, listen host, N clients, visible windows, latency/jitter/loss, directional simulation, reconnect, logs/watchdog/cleanup | Native host and packaged Mono Debug host/Release dedicated server pass simultaneous visible clients, WAN simulation and reconnect; broader matrix remains |
-| Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Pending |
+| Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Packaged Debug graceful and Release abrupt dedicated-server replacement pass with three persistent visible clients under WAN impairment; eight-second headless outage passes; broader controls/scale/soak remain |
 | C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Matching SDK/editor controls, mixed-language exports, dynamic signature changes and rejected hierarchy/class repair pass on Windows; raw cached bindings, arbitrary ABI changes and other platforms remain |
 | C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Two live Debug rebuilds preserve existing IDs, property state, callables and signals; failed compile retains published code; Missing/invalid DLL recovery and rejected base/extension-parent/ancestor/class-removal repair preserve extension and editable parent state; raw cached bindings, arbitrary ABI changes and soak remain |
 | C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Six combined native/managed reloads including corrupted-DLL and blocked-unload recovery preserve instances, properties and events; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
@@ -74,6 +74,8 @@ it on both endpoints increases the round trip accordingly. Simulation is stochas
 a passing short run does not establish reliability under every packet-loss sequence.
 The fixture checks authenticated identities, replies, ongoing authoritative tick
 replication and, when selected, distinct connection generations after reconnect.
+The [network lab guide](egp_network_lab.md) documents packaged runs, graceful/abrupt
+server replacement, outage bounds, fresh admission and explicit checkpoint scope.
 
 ## Initial evidence, 2026-10-06
 
@@ -892,3 +894,103 @@ Wider C# collection/resource/static-state reload, native picking and shape/scali
 double-precision, adversarial networking, ownership/interest scaling, authoritative
 physics gameplay, performance and package/build-version identity remain open.
 The loop remains ACTIVE; limited Windows fixtures do not establish AAA readiness.
+
+### Dedicated-server replacement and native state pressure
+
+Frozen combined source: `59b8f9bbd44df382aaa64c9102a734b3890649cc`.
+The rebuilt Mono editor hash is
+`10f5b5d247559d3446dc063e50884f3fa244af0c8ef03014d5c5b1c540628a24`;
+Debug/Release template hashes are
+`dab82b9b62ed43d9037bdf27a5b7554939f97f31c02e1b3ccad5bec8a1ca6407` and
+`402d4842bb5016c3b8f99c4f7df54cb19f6e76337ebe05602315902945914e31`.
+`.build/integration-server-restart-native-build/source.json` freezes tracked-source
+hashes; its receipt contains the exact editor/Debug/Release build commands. The
+public API and SDK fingerprints remain unchanged from the preceding increment.
+
+The new launcher options are `--server-restart-at`, `--server-restart-mode
+graceful|abrupt` and `--server-down-for`. Replacement keeps original client
+processes running and reuses the server endpoint with a new owned PID. Clients
+must observe transport disconnection, clear their old entities, obtain fresh
+server admission, reconnect and send owner-authorized inputs in each generation.
+The fixture restores an explicit application counter checkpoint and checks exact
+restoration plus advancement from the replacement server's inputs. It does not
+implement automatic engine/world persistence or production authentication.
+
+Initial exported Release evidence at
+`.build/integration-server-restart-abrupt/1791280118487943800` exposed a Windows
+file replacement/read race. Readiness and periodic health publications now use
+immutable filenames. Later failed evidence at `1791280370230964500` and
+`.build/integration-server-restart-diagnosis/1791280448500797100` then exposed a
+native reliable-state backlog: clients had hello replies but no owned entities,
+and the replicated root tick remained far behind the running server. All failed
+logs and receipts are retained.
+
+Native replication now retains at most one queued state for each entity/peer,
+using the reliable message's lifetime to wait for acknowledgment/reset. Further
+updates coalesce into the latest revision, allowing late owned entities into the
+bounded queue. Client server-tick statistics now include accepted entity ticks;
+previously the code sampled an empty local entity before decoding the message.
+Wire format and exposed API signatures are unchanged. Intermediate states may
+be skipped; individual gameplay events belong in application messages.
+
+The deterministic native pressure regression updates at 60 Hz for three seconds,
+then requires a late owned entity and the final coalesced state within 2.5 seconds
+under 100 ms outgoing latency on both endpoints. It also checks tick statistics,
+interest reentry and despawn with a state pending. The exact preceding committed
+core fails that late-ownership gate at
+`.build/integration-net-state-pressure-baseline/receipt.json`. Debug and Release
+native suites pass all six CTest cases and 101 native checks at
+`.build/integration-net-state-pressure-debug` and
+`.build/integration-net-state-pressure-release`. Current-source combined native,
+GDScript, secure admission/quarantine, lifecycle, separate-process, Box3D clock
+and 29 prediction/replay checks pass at
+`.build/integration-server-restart-native-session/receipt.json`.
+
+The final lab commands use `misc/scripts/launch_egp_network_lab.py` and matching
+binaries from `C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin`:
+
+- Release template plus matching editor: `--mode dedicated --clients 3 --visible
+  --preset wan --duration 20 --server-restart-at 6 --server-restart-mode abrupt
+  --output .build/integration-server-restart-release-final`; receipt
+  `1791280934461872600/receipt.json` passes, server PID 14576 becomes 21712.
+- Debug template plus matching editor: `--mode dedicated --clients 3 --visible
+  --preset wan --duration 20 --server-restart-at 6
+  --output .build/integration-server-restart-debug-final`; receipt
+  `1791281037361877300/receipt.json` passes, server PID 8832 becomes 8796.
+- Mono editor: `--mode dedicated --clients 3 --preset wan --duration 25
+  --server-restart-at 6 --server-down-for 8 --server-restart-mode abrupt
+  --output .build/integration-server-restart-long-outage`; receipt
+  `1791281037360875500/receipt.json` passes, server PID 3304 becomes 9868.
+
+Each final test restores counter 106 and reaches 112, verifies both generations'
+input acknowledgments and replicated server PIDs, and retains original client
+PIDs. Packaged cases observe all three client windows together. Simulation is
+100 ms latency, 25 ms jitter and 3% loss on both endpoints. Launcher evidence
+validation has twelve regressions rejecting incomplete/stale ownership, identity,
+checkpoint, disconnect and endpoint evidence; the command, hashes and results
+are in `.build/integration-server-restart-units/receipt.json`.
+
+`.build/integration-server-restart-native-qualification/receipt.json` passes the
+paired API/SDK/C#/compiled-doc audit, managed documentation, 19 Box2D runs,
+28 Box3D cases, 12 packaged Box2D checks, 59 mixed-language checks and exports,
+native signature/hierarchy/class-removal recovery, C# hot reload and default
+non-collectible runtime. Fresh Debug listen-host and Release dedicated tests also
+pass visible clients and manual reconnect. Exact commands and individual logs
+are recorded in that qualification receipt. Matching artifacts must be installed
+and canonical/local/remote publication verified in
+`.build/canonical-server-restart-artifacts.json` and
+`.build/integration-server-restart-publication.json` before reporting publication.
+
+All four original handoff chats remain idle/completed; their final snapshots are
+retained at `.build/integration-server-restart-handoffs.json`. The fresh inventory
+continues to account for seven trees, feature ancestors and historical dirty
+sources without overwriting current integration with stale qualification trees.
+Unrelated `Temp Plan.md` and `tagged_query_test.b3rec` remain preserved.
+
+Next concrete networking acceptance: measure ownership/interest fairness and
+bounded queues/memory with more entities and peers under state pressure, repeated
+resets and adverse conditions. Raw cached native MethodBind pointers, arbitrary
+ABI/layout/schema changes, wider C# state, physics shape/scaling/platform parity,
+production persistence/authentication, full authoritative gameplay, performance
+and package/build-version identity remain open. The loop remains ACTIVE; these
+bounded Windows fixtures do not establish full feature completion or AAA readiness.
