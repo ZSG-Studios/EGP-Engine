@@ -44,7 +44,7 @@ because these chats exist.
 | Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Packaged Debug graceful and Release abrupt dedicated-server replacement pass with three persistent visible clients under WAN impairment; eight-second headless outage passes; single and repeated selected-client recovery and same-process server clock rejection/checkpoint/fresh admission/ownership recovery pass in editor and packaged Debug host/Release dedicated WAN runs; retired-token and retired-entity input rejection are covered; broader controls/scale/soak remain |
 | C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Matching SDK/editor controls, mixed-language exports, dynamic signature changes and rejected hierarchy/class repair pass on Windows; six cached instance/static call paths and nine return kinds now pass on Windows Debug SDK; arbitrary ABI changes and other platforms remain |
 | C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Two live Debug rebuilds preserve existing IDs, property state, callables and signals; failed compile retains published code; Missing/invalid DLL recovery and rejected base/extension-parent/ancestor/class-removal repair preserve extension and editable parent state; cached binding failure/default-return and compatible repair checks now pass; arbitrary ABI changes and soak remain |
-| C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Combined native/managed reload and corrupted-DLL/blocked-unload repair preserve instances, properties and events; public low-level C# session ownership handoff preserves connected/stopped sessions and exact signal connection counts; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
+| C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Combined native/managed reload and corrupted-DLL/blocked-unload repair preserve instances, properties and events; public low-level C# session handoff and high-level NetNode reload preserve connected/stopped sessions and exact signal counts; high-level tree exit/reentry and freed codec replacement pass; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
 | Export/platform | Relocated Debug/Release games with C#/GDScript/C++ and Box physics/networking; platform-specific binaries and missing-binary diagnostics | Relocated Windows Debug/Release trilingual games pass on the matching API; broader platform/export matrix remains |
 | Performance | Identical-scenes upstream comparison; p95/p99, CPU/GPU/memory/allocations, server tick, bandwidth and long sessions | No AAA readiness claim |
 
@@ -2625,3 +2625,90 @@ authority/client pair and one Box3D body per game. Configured loss does not
 quantify real packet drops or WAN performance. Arbitrary ABI/game/closure state
 is not covered; full feature acceptance and AAA readiness remain open and the
 loop stays ACTIVE.
+
+
+### 2026-10-06 — high-level C# NetNode reload and forwarding lifecycle
+
+The public helper and its sample mirror now implement serialization hooks using
+named Godot object methods for all eleven codec signals. Serialization disconnects
+forwarding without closing the codec or native session, then reconnects the same
+codec child. The owner's ordinary C# events explicitly resubscribe after reload;
+registered message handlers use named Godot methods. Derived NetNode serialization
+overrides must call base. Tree exit closes the session before disconnecting
+forwarding; reentry reconnects the existing codec child exactly once. Starting a
+new session after reentry remains an explicit host/join operation. Replacing a
+freed codec child also restores forwarding and the AutoPoll policy.
+
+The preserved legacy control `.build/integration-csharp-node-exit-control/1791306878199218400/receipt.json`
+passed all six live traffic phases but failed because tree exit left all eleven
+signal connections attached. Its source, generated binaries and logs remain
+recorded. An earlier control's packed-byte JSON representation failed the reader;
+that was a fixture formatting error, corrected to byte-exact hex evidence.
+
+Current API/fixture source commit: `f408f1eabc38b0db38bfa532784713fd2cd2b08c`. These final receipts
+replace the intermediate f5c28f7306 checks; six managed runtime checks also verify
+freed-child replacement, callback counts, packet contents/channel/delivery and
+retained manual poll policy.
+
+| Check | Exact evidence |
+| --- | --- |
+| Full live C#/C++ repair and high-level reload | `.build/integration-csharp-node-live-final/1791307825361109600/receipt.json`; editor 19052, game 2944; six message/handler/owned-input/raw-packet exchanges each direction; unowned input rejected; native/codec/node IDs and admission retained; restores [0, 0, 0, 1, 1, 2] |
+| Full stopped-authority fault and recovery | `.build/integration-csharp-node-stopped-final/1791307666927699400/receipt.json`; editor 21024, game 12580; 64 continuing client polls during 550 ms gap; native sessions retained; explicit peer 257 -> 513, entity 1 -> 2; retired handles return 33 |
+| Tree exit/reentry | Both final node receipts: all eleven connections exactly 1 before exit, 0 after exit and 1 after reentry; same node/codec IDs and one child; closed sessions and zero peer/entity caches |
+| Low-level facade and Box3D regression | `.build/integration-csharp-node-low-regression/1791308112944124900/receipt.json`; current fixture retains native sessions, facade handoff/events, all seven native connection counts and authoritative world across six live phases |
+| Runtime default regression | `.build/integration-csharp-node-default/1791308181535905100/receipt.json`; non-collectible default unchanged |
+| Trilingual/exported helper compatibility | `.build/integration-csharp-node-languages-final/receipt.json`; fresh 27 stages, [('interop', 33160, 197), ('export-interop', 32664, 197), ('export-interop-release', 24212, 197)]; each configuration passes 197 assertions, including independent high-level C#/C++ process fault cycles |
+| Reader/options/tools | `.build/integration-csharp-node-tool-final/receipt.json`; 208 semantic tests, 15 invalid CLI cases, help, Ruff/format/mypy pass; existing Python 3.9 configuration warning retained |
+
+Both full fixtures first reject and recover corrupted managed assemblies,
+blocked unload and incompatible/missing native classes on their generic live
+reload probes, then create the network nodes. The high-level live node phases
+cover failed managed/native compilation and C#-only, C++-only and combined reload;
+the stopped node phase covers combined reload before explicit fresh admission.
+Corrupt-assembly, blocked-unload and rejected ABI repair while those network
+nodes are already authenticated remain an additional acceptance item.
+Game logs retain the deliberately injected diagnostics and reject stale managed
+callables, script errors and invalid asynchronous debugger capture returns.
+Live authority ticks [47, 133, 229, 440, 680, 991] and baseline revisions
+[1, 2, 3, 4, 5, 6] advance without reconnect. Both outbound simulators
+are configured to {'simulated_latency_ms': 30, 'simulated_jitter_ms': 5, 'simulated_loss': 5}; this does not measure actual packet
+drop rates or WAN performance.
+
+Exact commands:
+
+```powershell
+$egpPython = 'C:/Users/Rose-X/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe'
+& $egpPython misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --output .build/integration-csharp-node-stopped-final --network-recovery --network-csharp-node --assembly-recovery --unload-recovery --native-recovery --native-abi-recovery
+& $egpPython misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --output .build/integration-csharp-node-live-final --network-live-reload --network-csharp-node --assembly-recovery --unload-recovery --native-recovery --native-abi-recovery
+& $egpPython misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --output .build/integration-csharp-node-low-regression --network-live-reload --network-csharp-facade --network-physics
+& $egpPython misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --output .build/integration-csharp-node-default --disable-runtime
+```
+
+Trilingual command is the preceding entry's exact SDK/template command with
+`--output .build/integration-csharp-node-languages-final`; its complete argv,
+20 input hashes and matching SDK archives are in `source.json` there. Engine SHA
+`20be5396d78b4c9873d4a355132f62366be58fcf9b1519bb595006fb07e74342` and compiled native source
+`4d64b38c554ab3dc491285f4ffa5119c001da56f` remain unchanged; no native rebuild.
+Fresh trilingual Debug DLL `2af18ef391c75ba7bb149b03fbb56f78208ec9ac132b7382f2eb40aa4dde24dd`, Release DLL
+`297a47ef8acb5dcdfb73421428a96239a9b7a39102dbda6c376129b1fbb5f966` and C# assembly `2ae987788774deb1701018fc32e2d31e873f13f04859c044b6eee8f10d7be731`
+qualify the changed external helpers. Every final reload receipt retains helper,
+fixture, runtime, generated assembly/DLL and game/build log hashes.
+
+`.build/integration-csharp-node-publication.json` verifies canonical/remote master
+equality after normal push, original handoff ancestry, seven actual worktrees,
+unchanged foreign tracked patches and untracked bytes, zero open PRs and 86
+unchanged installed artifacts. Native 120-check/ten-test suites, 72 admission
+cases and seven GDScript-only physics lab cases retain their unchanged executed
+inputs. Unused historical C# manifest entries are replaced by these fresh helper
+builds. Foreign worktree leftovers remain preserved and accounted for, not
+declared clean or universally merged. The original four engine chats are completed;
+documentation/website receives a separate qualified handoff.
+
+Next: high-level C++/NetBox3D adapter ownership, explicit application/physics
+restoration policy, traffic after tree reentry, independent-process low-level
+fault/reload, concurrent/in-flight and exported-runtime reload, automatic client
+physics prediction/rollback, arbitrary ABI/game/closure state, production
+admission/retry/checkpoint delivery, larger worlds and WAN/scale/soak/platform
+performance. One local Windows Debug authority/client pair shares the game
+process during reload. Full feature acceptance and AAA readiness remain open;
+the loop stays ACTIVE.
