@@ -406,3 +406,5 @@ $RECYCLE.BIN/
 *.generated.props
 .build/
 modules/egp_net/samples/gdscript/.godot/
+misc/egp/network_lab/.godot/
+misc/egp/network_lab/addons/

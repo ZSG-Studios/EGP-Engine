@@ -5,6 +5,18 @@ host. Each run copies the fixture and current shared helpers into its own eviden
 directory, imports them, and retains individual logs and a combined `receipt.json`.
 Encrypted admission tokens live only in a temporary trusted local handoff.
 
+To inspect the source fixture in the editor, install its shared helpers first:
+
+```powershell
+python misc/scripts/install_egp_net_helpers.py --project misc/egp/network_lab
+bin/godot.windows.editor.dev.x86_64.mono.exe --editor --path misc/egp/network_lab
+```
+
+The launcher supplies process roles and admission files for networking runs.
+Use the launcher commands below to run the lab; pressing Play in the source
+project alone does not supply those arguments. Installing helpers for editor
+inspection is compatible with subsequent launcher runs.
+
 ```powershell
 python misc/scripts/launch_egp_network_lab.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --clients 3 --visible
 python misc/scripts/launch_egp_network_lab.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --mode host --clients 3 --visible --preset wan --duration 20 --reconnect-at 8

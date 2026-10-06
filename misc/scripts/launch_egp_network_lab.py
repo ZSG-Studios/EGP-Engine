@@ -555,7 +555,7 @@ def main():
             encoding="utf-8",
         )
     helpers = project / "addons/egp_net"
-    helpers.mkdir(parents=True)
+    helpers.mkdir(parents=True, exist_ok=True)
     for source in (ROOT / "modules/egp_net/gdscript").glob("*.gd"):
         shutil.copy2(source, helpers / source.name)
     source_hashes = {
