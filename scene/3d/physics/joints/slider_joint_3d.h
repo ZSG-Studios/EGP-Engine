@@ -60,6 +60,12 @@ protected:
 public:
 	void set_param(Param p_param, real_t p_value);
 	real_t get_param(Param p_param) const;
+	void set_limit_enabled(bool p_enabled) { set_param(PARAM_LIMIT_ENABLED, p_enabled ? 1.0 : 0.0); }
+	bool is_limit_enabled() const { return get_param(PARAM_LIMIT_ENABLED) != 0.0; }
+	void set_motor_enabled(bool p_enabled) { set_param(PARAM_MOTOR_ENABLED, p_enabled ? 1.0 : 0.0); }
+	bool is_motor_enabled() const { return get_param(PARAM_MOTOR_ENABLED) != 0.0; }
+	void set_spring_enabled(bool p_enabled) { set_param(PARAM_SPRING_ENABLED, p_enabled ? 1.0 : 0.0); }
+	bool is_spring_enabled() const { return get_param(PARAM_SPRING_ENABLED) != 0.0; }
 
 	SliderJoint3D();
 };

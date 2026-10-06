@@ -39,6 +39,15 @@
 				Sets the value of the specified parameter.
 			</description>
 		</method>
+		<method name="is_spring_enabled" qualifiers="const">
+			<return type="bool" />
+			<description>Returns whether [member spring/enabled] is enabled.</description>
+		</method>
+		<method name="set_spring_enabled">
+			<return type="void" />
+			<param index="0" name="enabled" type="bool" />
+			<description>Enables or disables [member spring/enabled]. This boolean API updates the corresponding native joint parameter.</description>
+		</method>
 	</methods>
 	<members>
 		<member name="angular_limit/enable" type="bool" setter="set_flag" getter="get_flag" default="false">
@@ -54,10 +63,13 @@
 			When activated, a motor turns the hinge.
 		</member>
 		<member name="motor/max_torque" type="float" setter="set_param" getter="get_param" default="1.0">
-			Maximum acceleration for the motor.
+			Maximum torque applied by the native hinge motor.
 		</member>
 		<member name="motor/target_velocity" type="float" setter="set_param" getter="get_param" default="1.0">
 			Target speed for the motor.
+		</member>
+		<member name="spring/enabled" type="bool" setter="set_spring_enabled" getter="is_spring_enabled">
+			Enables the native joint spring. Use the corresponding frequency, target and force or torque parameters to tune its behavior.
 		</member>
 	</members>
 	<constants>
@@ -71,7 +83,7 @@
 			Target speed for the motor.
 		</constant>
 		<constant name="PARAM_MOTOR_MAX_TORQUE" value="7" enum="Param">
-			Maximum acceleration for the motor.
+			Maximum torque applied by the native hinge motor.
 		</constant>
 		<constant name="PARAM_MAX" value="8" enum="Param">
 			Represents the size of the [enum Param] enum.

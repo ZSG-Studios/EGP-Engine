@@ -157,6 +157,7 @@ def main():
             constants = {value["name"] for enum in row.get("enums", []) for value in enum["values"]}
             constants.update(constant["name"] for constant in row.get("constants", []))
             signals = {signal["name"] for signal in row.get("signals", [])}
+            properties = {prop["name"] for prop in row.get("properties", [])}
             for method in sorted(methods):
                 if method not in cs_names and method not in native_only.get(name, []):
                     failures.append(f"C# omits {name}.{method}")
@@ -173,7 +174,12 @@ def main():
                     failures.append(f"C# omits {name} property {prop['name']}")
             for direction in ("required", "removed"):
                 delta = changes.get(direction, {}).get(name, {})
-                for kind, names in (("methods", methods), ("constants", constants), ("signals", signals)):
+                for kind, names in (
+                    ("methods", methods),
+                    ("constants", constants),
+                    ("signals", signals),
+                    ("properties", properties),
+                ):
                     for member in delta.get(kind, []):
                         if (member in names) != (direction == "required"):
                             failures.append(f"{direction} {kind} check failed: {name}.{member}")

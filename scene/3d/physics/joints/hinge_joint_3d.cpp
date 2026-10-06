@@ -34,6 +34,8 @@
 
 void HingeJoint3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_param", "param", "value"), &HingeJoint3D::set_param);
+	ClassDB::bind_method(D_METHOD("set_spring_enabled", "enabled"), &HingeJoint3D::set_spring_enabled);
+	ClassDB::bind_method(D_METHOD("is_spring_enabled"), &HingeJoint3D::is_spring_enabled);
 	ClassDB::bind_method(D_METHOD("get_param", "param"), &HingeJoint3D::get_param);
 
 	ClassDB::bind_method(D_METHOD("set_flag", "flag", "enabled"), &HingeJoint3D::set_flag);
@@ -51,7 +53,7 @@ void HingeJoint3D::_bind_methods() {
 	BIND_ENUM_CONSTANT(PARAM_LIMIT_LOWER);
 	BIND_ENUM_CONSTANT(PARAM_MOTOR_TARGET_VELOCITY);
 	BIND_ENUM_CONSTANT(PARAM_MOTOR_MAX_TORQUE);
-	ADD_PROPERTYI(PropertyInfo(Variant::BOOL, "spring/enabled"), "set_param", "get_param", PARAM_SPRING_ENABLED);
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "spring/enabled"), "set_spring_enabled", "is_spring_enabled");
 	BIND_ENUM_CONSTANT(PARAM_SPRING_ENABLED);
 	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "spring/frequency", PROPERTY_HINT_RANGE, "0,1000,0.01,or_greater"), "set_param", "get_param", PARAM_SPRING_HERTZ);
 	BIND_ENUM_CONSTANT(PARAM_SPRING_HERTZ);

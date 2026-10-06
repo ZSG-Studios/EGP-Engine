@@ -24,6 +24,33 @@
 				Assigns [param value] to the given parameter.
 			</description>
 		</method>
+		<method name="is_limit_enabled" qualifiers="const">
+			<return type="bool" />
+			<description>Returns whether [member linear_limit/enabled] is enabled.</description>
+		</method>
+		<method name="set_limit_enabled">
+			<return type="void" />
+			<param index="0" name="enabled" type="bool" />
+			<description>Enables or disables [member linear_limit/enabled]. This boolean API updates the corresponding native joint parameter.</description>
+		</method>
+		<method name="is_motor_enabled" qualifiers="const">
+			<return type="bool" />
+			<description>Returns whether [member motor/enabled] is enabled.</description>
+		</method>
+		<method name="set_motor_enabled">
+			<return type="void" />
+			<param index="0" name="enabled" type="bool" />
+			<description>Enables or disables [member motor/enabled]. This boolean API updates the corresponding native joint parameter.</description>
+		</method>
+		<method name="is_spring_enabled" qualifiers="const">
+			<return type="bool" />
+			<description>Returns whether [member spring/enabled] is enabled.</description>
+		</method>
+		<method name="set_spring_enabled">
+			<return type="void" />
+			<param index="0" name="enabled" type="bool" />
+			<description>Enables or disables [member spring/enabled]. This boolean API updates the corresponding native joint parameter.</description>
+		</method>
 	</methods>
 	<members>
 		<member name="linear_limit/lower_distance" type="float" setter="set_param" getter="get_param" default="-1.0">
@@ -31,6 +58,15 @@
 		</member>
 		<member name="linear_limit/upper_distance" type="float" setter="set_param" getter="get_param" default="1.0">
 			The maximum difference between the pivot points on their X axis before damping happens.
+		</member>
+		<member name="linear_limit/enabled" type="bool" setter="set_limit_enabled" getter="is_limit_enabled">
+			Enables the native joint limit. Use the corresponding frequency, target and force or torque parameters to tune its behavior.
+		</member>
+		<member name="motor/enabled" type="bool" setter="set_motor_enabled" getter="is_motor_enabled">
+			Enables the native joint motor. Use the corresponding frequency, target and force or torque parameters to tune its behavior.
+		</member>
+		<member name="spring/enabled" type="bool" setter="set_spring_enabled" getter="is_spring_enabled">
+			Enables the native joint spring. Use the corresponding frequency, target and force or torque parameters to tune its behavior.
 		</member>
 	</members>
 	<constants>

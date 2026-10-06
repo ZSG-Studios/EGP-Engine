@@ -71,7 +71,6 @@ void CollisionPolygon3D::_build_polygon() {
 		}
 
 		convex->set_points(cp);
-		convex->set_margin(margin);
 		convex->set_debug_color(debug_color);
 		convex->set_debug_fill(debug_fill);
 		collision_object->shape_owner_add_shape(owner_id, convex);
@@ -223,17 +222,6 @@ void CollisionPolygon3D::_validate_property(PropertyInfo &p_property) const {
 
 #endif // DEBUG_ENABLED
 
-real_t CollisionPolygon3D::get_margin() const {
-	return margin;
-}
-
-void CollisionPolygon3D::set_margin(real_t p_margin) {
-	margin = p_margin;
-	if (collision_object) {
-		_build_polygon();
-	}
-}
-
 PackedStringArray CollisionPolygon3D::get_configuration_warnings() const {
 	PackedStringArray warnings = Node3D::get_configuration_warnings();
 
@@ -273,15 +261,11 @@ void CollisionPolygon3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_enable_debug_fill", "enable"), &CollisionPolygon3D::set_debug_fill_enabled);
 	ClassDB::bind_method(D_METHOD("get_enable_debug_fill"), &CollisionPolygon3D::get_debug_fill_enabled);
 
-	ClassDB::bind_method(D_METHOD("set_margin", "margin"), &CollisionPolygon3D::set_margin);
-	ClassDB::bind_method(D_METHOD("get_margin"), &CollisionPolygon3D::get_margin);
-
 	ClassDB::bind_method(D_METHOD("_is_editable_3d_polygon"), &CollisionPolygon3D::_is_editable_3d_polygon);
 
 	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "depth", PROPERTY_HINT_NONE, "suffix:m"), "set_depth", "get_depth");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "disabled"), "set_disabled", "is_disabled");
 	ADD_PROPERTY(PropertyInfo(Variant::PACKED_VECTOR2_ARRAY, "polygon"), "set_polygon", "get_polygon");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "margin", PROPERTY_HINT_RANGE, "0.001,10,0.001,suffix:m"), "set_margin", "get_margin");
 
 	ADD_PROPERTY(PropertyInfo(Variant::COLOR, "debug_color"), "set_debug_color", "get_debug_color");
 	// Default value depends on a project setting, override for doc generation purposes.

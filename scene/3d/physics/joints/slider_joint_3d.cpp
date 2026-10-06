@@ -34,6 +34,12 @@
 
 void SliderJoint3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_param", "param", "value"), &SliderJoint3D::set_param);
+	ClassDB::bind_method(D_METHOD("set_limit_enabled", "enabled"), &SliderJoint3D::set_limit_enabled);
+	ClassDB::bind_method(D_METHOD("is_limit_enabled"), &SliderJoint3D::is_limit_enabled);
+	ClassDB::bind_method(D_METHOD("set_motor_enabled", "enabled"), &SliderJoint3D::set_motor_enabled);
+	ClassDB::bind_method(D_METHOD("is_motor_enabled"), &SliderJoint3D::is_motor_enabled);
+	ClassDB::bind_method(D_METHOD("set_spring_enabled", "enabled"), &SliderJoint3D::set_spring_enabled);
+	ClassDB::bind_method(D_METHOD("is_spring_enabled"), &SliderJoint3D::is_spring_enabled);
 	ClassDB::bind_method(D_METHOD("get_param", "param"), &SliderJoint3D::get_param);
 
 	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "linear_limit/upper_distance", PROPERTY_HINT_RANGE, "-1024,1024,0.01,suffix:m"), "set_param", "get_param", PARAM_LINEAR_LIMIT_UPPER);
@@ -42,15 +48,15 @@ void SliderJoint3D::_bind_methods() {
 	BIND_ENUM_CONSTANT(PARAM_LINEAR_LIMIT_UPPER);
 	BIND_ENUM_CONSTANT(PARAM_LINEAR_LIMIT_LOWER);
 
-	ADD_PROPERTYI(PropertyInfo(Variant::BOOL, "linear_limit/enabled"), "set_param", "get_param", PARAM_LIMIT_ENABLED);
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "linear_limit/enabled"), "set_limit_enabled", "is_limit_enabled");
 	BIND_ENUM_CONSTANT(PARAM_LIMIT_ENABLED);
-	ADD_PROPERTYI(PropertyInfo(Variant::BOOL, "motor/enabled"), "set_param", "get_param", PARAM_MOTOR_ENABLED);
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "motor/enabled"), "set_motor_enabled", "is_motor_enabled");
 	BIND_ENUM_CONSTANT(PARAM_MOTOR_ENABLED);
 	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "motor/target_velocity", PROPERTY_HINT_RANGE, "-1000,1000,0.01,or_greater,or_less"), "set_param", "get_param", PARAM_MOTOR_TARGET_VELOCITY);
 	BIND_ENUM_CONSTANT(PARAM_MOTOR_TARGET_VELOCITY);
 	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "motor/max_force", PROPERTY_HINT_RANGE, "0,1000,0.01,or_greater"), "set_param", "get_param", PARAM_MOTOR_MAX_FORCE);
 	BIND_ENUM_CONSTANT(PARAM_MOTOR_MAX_FORCE);
-	ADD_PROPERTYI(PropertyInfo(Variant::BOOL, "spring/enabled"), "set_param", "get_param", PARAM_SPRING_ENABLED);
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "spring/enabled"), "set_spring_enabled", "is_spring_enabled");
 	BIND_ENUM_CONSTANT(PARAM_SPRING_ENABLED);
 	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "spring/frequency", PROPERTY_HINT_RANGE, "0,1000,0.01,or_greater"), "set_param", "get_param", PARAM_SPRING_HERTZ);
 	BIND_ENUM_CONSTANT(PARAM_SPRING_HERTZ);

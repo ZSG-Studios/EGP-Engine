@@ -63,6 +63,8 @@ protected:
 public:
 	void set_param(Param p_param, real_t p_value);
 	real_t get_param(Param p_param) const;
+	void set_spring_enabled(bool p_enabled) { set_param(PARAM_SPRING_ENABLED, p_enabled ? 1.0 : 0.0); }
+	bool is_spring_enabled() const { return get_param(PARAM_SPRING_ENABLED) != 0.0; }
 
 	void set_flag(Flag p_flag, bool p_value);
 	bool get_flag(Flag p_flag) const;

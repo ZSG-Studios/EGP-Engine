@@ -81,6 +81,10 @@ def main():
         "processes": [],
         "scope": "Local encrypted admission, account identity, replies, tick replication and optional reconnect. Host mode includes a server-owned test entity. No gameplay, physics rollback, remote auth or performance qualification.",
     }
+    engine_main = engine.with_name(engine.name.replace(".console.exe", ".exe"))
+    receipt["engine_artifacts"] = {
+        str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in {engine, engine_main} if path.is_file()
+    }
     children = []
     logs = []
     started = time.monotonic()
@@ -146,15 +150,6 @@ def main():
                 if time.monotonic() > deadline:
                     raise RuntimeError("Lab watchdog expired")
                 time.sleep(0.05)
-        for ordinal, child in enumerate(children):
-            logs[ordinal].close()
-            name = "server" if ordinal == 0 else f"client-{ordinal - 1}"
-            text = (output / (name + ".log")).read_text(encoding="utf-8", errors="replace")
-            match = re.search(r"EGP_NETWORK_LAB (\{[^\n]+\})", text)
-            result = json.loads(match.group(1)) if match else {"passed": False, "message": "missing result marker"}
-            receipt["processes"].append({"name": name, "exit_code": child.returncode, "result": result})
-            if child.returncode or not result["passed"] or "ERROR:" in text:
-                raise RuntimeError(f"{name} did not pass cleanly; see its log")
         receipt["passed"] = True
     except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
         receipt["error"] = str(error)
@@ -170,6 +165,18 @@ def main():
                 child.wait(timeout=5)
         for log in logs:
             log.close()
+        for ordinal, child in enumerate(children):
+            name = "server" if ordinal == 0 else f"client-{ordinal - 1}"
+            text = (output / (name + ".log")).read_text(encoding="utf-8", errors="replace")
+            match = re.search(r"EGP_NETWORK_LAB (\{[^\n]+\})", text)
+            try:
+                result = json.loads(match.group(1)) if match else {"passed": False, "message": "missing result marker"}
+            except ValueError:
+                result = {"passed": False, "message": "invalid result marker"}
+            receipt["processes"].append({"name": name, "exit_code": child.returncode, "result": result})
+            if child.returncode or not result.get("passed") or "ERROR:" in text:
+                receipt["passed"] = False
+                receipt.setdefault("error", f"{name} did not pass cleanly; see its log")
         receipt["elapsed_seconds"] = round(time.monotonic() - started, 3)
         (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     print(f"{'PASS' if receipt['passed'] else 'FAIL'}: {output / 'receipt.json'}", flush=True)

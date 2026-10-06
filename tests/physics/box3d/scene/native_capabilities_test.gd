@@ -15,6 +15,17 @@ func _frames(count: int) -> void:
 		await physics_frame
 
 func _run() -> void:
+	var hinge := HingeJoint3D.new()
+	hinge.set("spring/enabled", true)
+	_check(hinge.is_spring_enabled() and hinge.get_param(HingeJoint3D.PARAM_SPRING_ENABLED) == 1.0, "hinge boolean spring maps to native parameter")
+	hinge.free()
+	var slider := SliderJoint3D.new()
+	for property in ["spring/enabled", "motor/enabled", "linear_limit/enabled"]:
+		slider.set(property, true)
+		_check(slider.get(property) is bool and slider.get(property), "slider boolean property: " + property)
+		slider.set(property, false)
+		_check(not slider.get(property), "slider boolean reset: " + property)
+	slider.free()
 	_check(not ClassDB.class_exists("SeparationRayShape3D"), "unsupported 3D separation-ray resource is removed")
 	for method in ["shape_set_margin", "shape_get_margin", "custom_shape_create", "separation_ray_shape_create", "body_set_collision_priority", "joint_set_solver_priority", "shape_set_custom_solver_bias"]:
 		_check(not PhysicsServer3D.has_method(method), "removed server method: " + method)

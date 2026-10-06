@@ -1430,8 +1430,7 @@
 			Represents the size of the [enum JointType] enum.
 		</constant>
 		<constant name="PIN_JOINT_SPRING_HERTZ" value="0" enum="PinJointParam">
-			The strength with which the pinned objects try to stay in positional relation to each other. The higher, the stronger.
-			[b]Note:[/b] This compatibility parameter is not implemented by the Box3D backend.
+			Frequency in hertz of the native pin spring. Higher frequencies produce a stiffer positional constraint.
 		</constant>
 		<constant name="PIN_JOINT_DAMPING" value="1" enum="PinJointParam">
 			The strength with which the pinned objects try to stay in velocity relation to each other. The higher, the stronger.
@@ -1447,7 +1446,7 @@
 			Target speed for the motor.
 		</constant>
 		<constant name="HINGE_JOINT_MOTOR_MAX_TORQUE" value="7" enum="HingeJointParam">
-			Maximum acceleration for the motor.
+			Maximum torque applied by the native hinge motor.
 		</constant>
 		<constant name="HINGE_JOINT_FLAG_USE_LIMIT" value="0" enum="HingeJointFlag">
 			If [code]true[/code], the Hinge has a maximum and a minimum rotation.
@@ -1793,7 +1792,7 @@
 			Whether cached constraint impulses are reused (0 or 1).
 		</constant>
 		<constant name="SPACE_PARAM_RESTITUTION_ITERATIONS" value="9" enum="SpaceParameter">
-			Number of iterations in the native restitution solver (integer from 1 through 20).
+			Number of iterations in the native restitution solver (integer from 1 through 63).
 		</constant>
 		<constant name="SPACE_PARAM_RESTITUTION_PROPAGATION_ENABLED" value="10" enum="SpaceParameter">
 			Whether native restitution propagation is enabled (0 or 1).

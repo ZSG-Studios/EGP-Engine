@@ -1,24 +1,451 @@
 {
   "native_only_hooks": {
-    "ScriptExtension": ["_instance_create", "_placeholder_erased", "_placeholder_instance_create"],
-    "PhysicsDirectSpaceState2DExtension": ["_cast_motion", "_collide_shape", "_intersect_point", "_intersect_ray", "_intersect_shape", "_rest_info"],
-    "PhysicsDirectSpaceState3DExtension": ["_cast_motion", "_collide_shape", "_intersect_point", "_intersect_ray", "_intersect_shape", "_rest_info"],
-    "PhysicsServer2DExtension": ["_body_collide_shape", "_body_test_motion", "_shape_collide"],
-    "PhysicsServer3DExtension": ["_body_test_motion"]
+    "ScriptExtension": [
+      "_instance_create",
+      "_placeholder_erased",
+      "_placeholder_instance_create"
+    ],
+    "PhysicsDirectSpaceState2DExtension": [
+      "_cast_motion",
+      "_collide_shape",
+      "_intersect_point",
+      "_intersect_ray",
+      "_intersect_shape",
+      "_rest_info"
+    ],
+    "PhysicsDirectSpaceState3DExtension": [
+      "_cast_motion",
+      "_collide_shape",
+      "_intersect_point",
+      "_intersect_ray",
+      "_intersect_shape",
+      "_rest_info"
+    ],
+    "PhysicsServer2DExtension": [
+      "_body_collide_shape",
+      "_body_test_motion",
+      "_shape_collide"
+    ],
+    "PhysicsServer3DExtension": [
+      "_body_test_motion"
+    ]
   },
   "required": {
     "EGPNetSession": {
-      "methods": ["configure", "listen", "connect_to_server", "connect_token", "issue_token", "poll", "stop", "close", "get_state", "get_fingerprint", "get_statistics", "send_application", "command"],
-      "signals": ["state_changed", "peer_connected", "peer_disconnected", "application_received", "packet_received", "simulation_tick", "diagnostic"]
+      "methods": [
+        "configure",
+        "listen",
+        "connect_to_server",
+        "connect_token",
+        "issue_token",
+        "poll",
+        "stop",
+        "close",
+        "get_state",
+        "get_fingerprint",
+        "get_statistics",
+        "send_application",
+        "command"
+      ],
+      "signals": [
+        "state_changed",
+        "peer_connected",
+        "peer_disconnected",
+        "application_received",
+        "packet_received",
+        "simulation_tick",
+        "diagnostic"
+      ]
     },
     "EGPBox3DWorld": {
-      "methods": ["configure", "queue_create_box", "queue_create_sphere", "queue_create_capsule", "queue_destroy_body", "queue_impulse", "queue_linear_velocity", "queue_body_state", "apply_queued_commands", "clear_pending_commands", "step_tick", "get_tick", "get_body_count", "get_body_state", "capture_snapshot", "restore_snapshot", "get_state_hash", "get_simulation_fingerprint"]
+      "methods": [
+        "configure",
+        "queue_create_box",
+        "queue_create_sphere",
+        "queue_create_capsule",
+        "queue_destroy_body",
+        "queue_impulse",
+        "queue_linear_velocity",
+        "queue_body_state",
+        "apply_queued_commands",
+        "clear_pending_commands",
+        "step_tick",
+        "get_tick",
+        "get_body_count",
+        "get_body_state",
+        "capture_snapshot",
+        "restore_snapshot",
+        "get_state_hash",
+        "get_simulation_fingerprint"
+      ]
+    },
+    "PhysicsServer2D": {
+      "methods": [
+        "joint_get_configuration",
+        "joint_get_constraint_force",
+        "joint_get_constraint_torque",
+        "joint_make_configured",
+        "joint_set_configuration",
+        "space_apply_explosion",
+        "space_get_contact_count",
+        "space_get_contact_hit_events",
+        "space_get_contacts",
+        "space_get_joint_events",
+        "space_set_debug_contacts"
+      ],
+      "constants": [
+        "BODY_PARAM_CONTACT_REPORT_SPECULATIVE",
+        "BODY_PARAM_HIT_EVENTS_ENABLED",
+        "BODY_PARAM_SLEEP_THRESHOLD",
+        "JOINT_PARAM_DAMPING_RATIO",
+        "JOINT_PARAM_HERTZ",
+        "JOINT_TYPE_DISTANCE",
+        "JOINT_TYPE_FILTER",
+        "JOINT_TYPE_MOTOR",
+        "JOINT_TYPE_PRISMATIC",
+        "JOINT_TYPE_REVOLUTE",
+        "JOINT_TYPE_WELD",
+        "JOINT_TYPE_WHEEL",
+        "SPACE_PARAM_CONTACT_DAMPING_RATIO",
+        "SPACE_PARAM_CONTACT_HERTZ",
+        "SPACE_PARAM_CONTACT_MAX_PUSH_SPEED",
+        "SPACE_PARAM_CONTINUOUS_ENABLED",
+        "SPACE_PARAM_MAXIMUM_LINEAR_SPEED",
+        "SPACE_PARAM_RESTITUTION_THRESHOLD",
+        "SPACE_PARAM_SLEEP_ENABLED",
+        "SPACE_PARAM_WARM_STARTING_ENABLED"
+      ]
+    },
+    "PhysicsServer3D": {
+      "methods": [
+        "joint_get_configuration",
+        "joint_get_constraint_force",
+        "joint_get_constraint_torque",
+        "joint_make_configured",
+        "joint_set_configuration",
+        "space_apply_explosion",
+        "space_get_contact_count",
+        "space_get_contact_hit_events",
+        "space_get_contacts",
+        "space_get_joint_events",
+        "space_set_debug_contacts"
+      ],
+      "constants": [
+        "BODY_PARAM_CCD_SAFETY_FACTOR",
+        "BODY_PARAM_CONTACT_RECYCLING_ENABLED",
+        "BODY_PARAM_CONTACT_REPORT_SPECULATIVE",
+        "BODY_PARAM_HIT_EVENTS_ENABLED",
+        "BODY_PARAM_SLEEP_THRESHOLD",
+        "HINGE_JOINT_MOTOR_MAX_TORQUE",
+        "HINGE_JOINT_SPRING_DAMPING_RATIO",
+        "HINGE_JOINT_SPRING_ENABLED",
+        "HINGE_JOINT_SPRING_HERTZ",
+        "HINGE_JOINT_SPRING_TARGET_ANGLE",
+        "JOINT_TYPE_DISTANCE",
+        "JOINT_TYPE_FILTER",
+        "JOINT_TYPE_MOTOR",
+        "JOINT_TYPE_PARALLEL",
+        "JOINT_TYPE_PRISMATIC",
+        "JOINT_TYPE_REVOLUTE",
+        "JOINT_TYPE_SPHERICAL",
+        "JOINT_TYPE_WELD",
+        "JOINT_TYPE_WHEEL",
+        "PIN_JOINT_SPRING_HERTZ",
+        "SLIDER_JOINT_LIMIT_ENABLED",
+        "SLIDER_JOINT_MOTOR_ENABLED",
+        "SLIDER_JOINT_MOTOR_MAX_FORCE",
+        "SLIDER_JOINT_MOTOR_TARGET_VELOCITY",
+        "SLIDER_JOINT_SPRING_DAMPING_RATIO",
+        "SLIDER_JOINT_SPRING_ENABLED",
+        "SLIDER_JOINT_SPRING_HERTZ",
+        "SLIDER_JOINT_SPRING_TARGET_TRANSLATION",
+        "SPACE_PARAM_CONTACT_DAMPING_RATIO",
+        "SPACE_PARAM_CONTACT_HERTZ",
+        "SPACE_PARAM_CONTACT_MAX_PUSH_SPEED",
+        "SPACE_PARAM_CONTINUOUS_ENABLED",
+        "SPACE_PARAM_MAXIMUM_LINEAR_SPEED",
+        "SPACE_PARAM_RESTITUTION_ITERATIONS",
+        "SPACE_PARAM_RESTITUTION_PROPAGATION_ENABLED",
+        "SPACE_PARAM_RESTITUTION_THRESHOLD",
+        "SPACE_PARAM_SLEEP_ENABLED",
+        "SPACE_PARAM_WARM_STARTING_ENABLED"
+      ]
+    },
+    "Shape2D": {
+      "methods": [],
+      "constants": []
+    },
+    "Shape3D": {
+      "methods": [],
+      "constants": []
+    },
+    "Joint3D": {
+      "methods": [],
+      "constants": []
+    },
+    "PinJoint2D": {
+      "methods": [],
+      "constants": []
+    },
+    "PinJoint3D": {
+      "methods": [],
+      "constants": [
+        "PARAM_SPRING_HERTZ"
+      ]
+    },
+    "HingeJoint3D": {
+      "methods": [
+        "is_spring_enabled",
+        "set_spring_enabled"
+      ],
+      "constants": [
+        "PARAM_MOTOR_MAX_TORQUE",
+        "PARAM_SPRING_DAMPING_RATIO",
+        "PARAM_SPRING_ENABLED",
+        "PARAM_SPRING_HERTZ",
+        "PARAM_SPRING_TARGET_ANGLE"
+      ],
+      "properties": [
+        "spring/enabled"
+      ]
+    },
+    "SliderJoint3D": {
+      "methods": [
+        "is_limit_enabled",
+        "is_motor_enabled",
+        "is_spring_enabled",
+        "set_limit_enabled",
+        "set_motor_enabled",
+        "set_spring_enabled"
+      ],
+      "constants": [
+        "PARAM_LIMIT_ENABLED",
+        "PARAM_MOTOR_ENABLED",
+        "PARAM_MOTOR_MAX_FORCE",
+        "PARAM_MOTOR_TARGET_VELOCITY",
+        "PARAM_SPRING_DAMPING_RATIO",
+        "PARAM_SPRING_ENABLED",
+        "PARAM_SPRING_HERTZ",
+        "PARAM_SPRING_TARGET_TRANSLATION"
+      ],
+      "properties": [
+        "linear_limit/enabled",
+        "motor/enabled",
+        "spring/enabled"
+      ]
+    },
+    "RigidBody2D": {
+      "methods": [],
+      "constants": []
     }
   },
   "removed": {
-    "Script": {"methods": ["get_rpc_config"]},
-    "ScriptExtension": {"methods": ["_get_rpc_config"]},
-    "Node": {"methods": ["rpc", "rpc_id", "rpc_config", "get_multiplayer", "set_multiplayer_authority", "get_multiplayer_authority", "is_multiplayer_authority"]},
-    "SceneTree": {"methods": ["get_multiplayer", "set_multiplayer"]}
-  }
+    "Script": {
+      "methods": [
+        "get_rpc_config"
+      ]
+    },
+    "ScriptExtension": {
+      "methods": [
+        "_get_rpc_config"
+      ]
+    },
+    "Node": {
+      "methods": [
+        "rpc",
+        "rpc_id",
+        "rpc_config",
+        "get_multiplayer",
+        "set_multiplayer_authority",
+        "get_multiplayer_authority",
+        "is_multiplayer_authority"
+      ]
+    },
+    "SceneTree": {
+      "methods": [
+        "get_multiplayer",
+        "set_multiplayer"
+      ]
+    },
+    "PhysicsServer2D": {
+      "methods": [],
+      "constants": [
+        "CCD_MODE_CAST_RAY",
+        "JOINT_PARAM_BIAS",
+        "JOINT_PARAM_MAX_BIAS",
+        "JOINT_PARAM_MAX_FORCE",
+        "PIN_JOINT_SOFTNESS",
+        "SHAPE_CUSTOM",
+        "SPACE_PARAM_BODY_ANGULAR_VELOCITY_SLEEP_THRESHOLD",
+        "SPACE_PARAM_BODY_LINEAR_VELOCITY_SLEEP_THRESHOLD",
+        "SPACE_PARAM_BODY_TIME_TO_SLEEP",
+        "SPACE_PARAM_CONSTRAINT_DEFAULT_BIAS",
+        "SPACE_PARAM_CONTACT_DEFAULT_BIAS",
+        "SPACE_PARAM_CONTACT_MAX_ALLOWED_PENETRATION",
+        "SPACE_PARAM_CONTACT_MAX_SEPARATION",
+        "SPACE_PARAM_CONTACT_RECYCLE_RADIUS",
+        "SPACE_PARAM_SOLVER_ITERATIONS"
+      ]
+    },
+    "PhysicsServer3D": {
+      "methods": [
+        "body_get_collision_priority",
+        "body_set_collision_priority",
+        "custom_shape_create",
+        "joint_get_solver_priority",
+        "joint_set_solver_priority",
+        "separation_ray_shape_create",
+        "shape_get_margin",
+        "shape_set_margin"
+      ],
+      "constants": [
+        "HINGE_JOINT_BIAS",
+        "HINGE_JOINT_LIMIT_BIAS",
+        "HINGE_JOINT_LIMIT_RELAXATION",
+        "HINGE_JOINT_LIMIT_SOFTNESS",
+        "HINGE_JOINT_MOTOR_MAX_IMPULSE",
+        "PIN_JOINT_BIAS",
+        "PIN_JOINT_IMPULSE_CLAMP",
+        "SHAPE_CUSTOM",
+        "SHAPE_SEPARATION_RAY",
+        "SLIDER_JOINT_ANGULAR_LIMIT_DAMPING",
+        "SLIDER_JOINT_ANGULAR_LIMIT_LOWER",
+        "SLIDER_JOINT_ANGULAR_LIMIT_RESTITUTION",
+        "SLIDER_JOINT_ANGULAR_LIMIT_SOFTNESS",
+        "SLIDER_JOINT_ANGULAR_LIMIT_UPPER",
+        "SLIDER_JOINT_ANGULAR_MOTION_DAMPING",
+        "SLIDER_JOINT_ANGULAR_MOTION_RESTITUTION",
+        "SLIDER_JOINT_ANGULAR_MOTION_SOFTNESS",
+        "SLIDER_JOINT_ANGULAR_ORTHOGONAL_DAMPING",
+        "SLIDER_JOINT_ANGULAR_ORTHOGONAL_RESTITUTION",
+        "SLIDER_JOINT_ANGULAR_ORTHOGONAL_SOFTNESS",
+        "SLIDER_JOINT_LINEAR_LIMIT_DAMPING",
+        "SLIDER_JOINT_LINEAR_LIMIT_RESTITUTION",
+        "SLIDER_JOINT_LINEAR_LIMIT_SOFTNESS",
+        "SLIDER_JOINT_LINEAR_MOTION_DAMPING",
+        "SLIDER_JOINT_LINEAR_MOTION_RESTITUTION",
+        "SLIDER_JOINT_LINEAR_MOTION_SOFTNESS",
+        "SLIDER_JOINT_LINEAR_ORTHOGONAL_DAMPING",
+        "SLIDER_JOINT_LINEAR_ORTHOGONAL_RESTITUTION",
+        "SLIDER_JOINT_LINEAR_ORTHOGONAL_SOFTNESS",
+        "SPACE_PARAM_BODY_ANGULAR_VELOCITY_SLEEP_THRESHOLD",
+        "SPACE_PARAM_BODY_LINEAR_VELOCITY_SLEEP_THRESHOLD",
+        "SPACE_PARAM_BODY_TIME_TO_SLEEP",
+        "SPACE_PARAM_CONTACT_DEFAULT_BIAS",
+        "SPACE_PARAM_CONTACT_MAX_ALLOWED_PENETRATION",
+        "SPACE_PARAM_CONTACT_MAX_SEPARATION",
+        "SPACE_PARAM_SOLVER_ITERATIONS"
+      ]
+    },
+    "Shape2D": {
+      "methods": [
+        "get_custom_solver_bias",
+        "set_custom_solver_bias"
+      ],
+      "constants": []
+    },
+    "Shape3D": {
+      "methods": [
+        "get_custom_solver_bias",
+        "get_margin",
+        "set_custom_solver_bias",
+        "set_margin"
+      ],
+      "constants": []
+    },
+    "Joint3D": {
+      "methods": [
+        "get_solver_priority",
+        "set_solver_priority"
+      ],
+      "constants": []
+    },
+    "PinJoint2D": {
+      "methods": [
+        "get_softness",
+        "set_softness"
+      ],
+      "constants": []
+    },
+    "PinJoint3D": {
+      "methods": [],
+      "constants": [
+        "PARAM_BIAS",
+        "PARAM_IMPULSE_CLAMP"
+      ]
+    },
+    "HingeJoint3D": {
+      "methods": [],
+      "constants": [
+        "PARAM_BIAS",
+        "PARAM_LIMIT_BIAS",
+        "PARAM_LIMIT_RELAXATION",
+        "PARAM_LIMIT_SOFTNESS",
+        "PARAM_MOTOR_MAX_IMPULSE"
+      ]
+    },
+    "SliderJoint3D": {
+      "methods": [],
+      "constants": [
+        "PARAM_ANGULAR_LIMIT_DAMPING",
+        "PARAM_ANGULAR_LIMIT_LOWER",
+        "PARAM_ANGULAR_LIMIT_RESTITUTION",
+        "PARAM_ANGULAR_LIMIT_SOFTNESS",
+        "PARAM_ANGULAR_LIMIT_UPPER",
+        "PARAM_ANGULAR_MOTION_DAMPING",
+        "PARAM_ANGULAR_MOTION_RESTITUTION",
+        "PARAM_ANGULAR_MOTION_SOFTNESS",
+        "PARAM_ANGULAR_ORTHOGONAL_DAMPING",
+        "PARAM_ANGULAR_ORTHOGONAL_RESTITUTION",
+        "PARAM_ANGULAR_ORTHOGONAL_SOFTNESS",
+        "PARAM_LINEAR_LIMIT_DAMPING",
+        "PARAM_LINEAR_LIMIT_RESTITUTION",
+        "PARAM_LINEAR_LIMIT_SOFTNESS",
+        "PARAM_LINEAR_MOTION_DAMPING",
+        "PARAM_LINEAR_MOTION_RESTITUTION",
+        "PARAM_LINEAR_MOTION_SOFTNESS",
+        "PARAM_LINEAR_ORTHOGONAL_DAMPING",
+        "PARAM_LINEAR_ORTHOGONAL_RESTITUTION",
+        "PARAM_LINEAR_ORTHOGONAL_SOFTNESS"
+      ]
+    },
+    "RigidBody2D": {
+      "methods": [
+        "_integrate_forces"
+      ],
+      "constants": [
+        "CCD_MODE_CAST_RAY"
+      ]
+    },
+    "CSGShape3D": {
+      "methods": [
+        "get_collision_priority",
+        "set_collision_priority"
+      ],
+      "properties": [
+        "collision_priority"
+      ]
+    },
+    "GridMap": {
+      "methods": [
+        "get_collision_priority",
+        "set_collision_priority"
+      ],
+      "properties": [
+        "collision_priority"
+      ]
+    },
+    "CollisionPolygon3D": {
+      "methods": [
+        "get_margin",
+        "set_margin"
+      ],
+      "properties": [
+        "margin"
+      ]
+    }
+  },
+  "removed_classes": [
+    "SeparationRayShape3D"
+  ]
 }
