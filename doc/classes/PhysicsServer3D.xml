@@ -1342,6 +1342,16 @@
 				Creates a space. A space is a collection of parameters for the physics engine that can be assigned to an area or a body. It can be assigned to an area with [method area_set_space], or to a body with [method body_set_space].
 			</description>
 		</method>
+		<method name="space_get_contact_count" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="space" type="RID" />
+			<description>Returns the number of debug contact points captured in the last physics step. Enable collection with [method space_set_debug_contacts].</description>
+		</method>
+		<method name="space_get_contacts" qualifiers="const">
+			<return type="PackedVector3Array" />
+			<param index="0" name="space" type="RID" />
+			<description>Returns a copy of the debug contact positions in world coordinates from the last physics step. Collection is bounded by [method space_set_debug_contacts].</description>
+		</method>
 		<method name="space_get_direct_state">
 			<return type="PhysicsDirectSpaceState3D" />
 			<param index="0" name="space" type="RID" />
@@ -1371,6 +1381,12 @@
 			<description>
 				Marks a space as active. It will not have an effect, unless it is assigned to an area or body.
 			</description>
+		</method>
+		<method name="space_set_debug_contacts">
+			<return type="void" />
+			<param index="0" name="space" type="RID" />
+			<param index="1" name="max_contacts" type="int" />
+			<description>Sets the maximum number of debug contact points collected per physics step. A value of [code]0[/code] disables collection. Use [method space_get_contacts] and [method space_get_contact_count] to read the captured points.</description>
 		</method>
 		<method name="space_set_param">
 			<return type="void" />

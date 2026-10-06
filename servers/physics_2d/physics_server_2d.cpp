@@ -95,6 +95,9 @@ void PhysicsServer2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("space_set_param", "space", "param", "value"), &PhysicsServer2D::space_set_param);
 	ClassDB::bind_method(D_METHOD("space_get_param", "space", "param"), &PhysicsServer2D::space_get_param);
 	ClassDB::bind_method(D_METHOD("space_get_direct_state", "space"), &PhysicsServer2D::space_get_direct_state);
+	ClassDB::bind_method(D_METHOD("space_set_debug_contacts", "space", "max_contacts"), &PhysicsServer2D::space_set_debug_contacts);
+	ClassDB::bind_method(D_METHOD("space_get_contacts", "space"), &PhysicsServer2D::space_get_contacts);
+	ClassDB::bind_method(D_METHOD("space_get_contact_count", "space"), &PhysicsServer2D::space_get_contact_count);
 
 	ClassDB::bind_method(D_METHOD("area_create"), &PhysicsServer2D::area_create);
 	ClassDB::bind_method(D_METHOD("area_set_space", "area", "space"), &PhysicsServer2D::area_set_space);

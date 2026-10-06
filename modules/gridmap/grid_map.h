@@ -162,7 +162,6 @@ class GridMap : public Node3D {
 #ifndef PHYSICS_3D_DISABLED
 	uint32_t collision_layer = 1;
 	uint32_t collision_mask = 1;
-	real_t collision_priority = 1.0;
 	DebugVisibilityMode collision_visibility_mode = DEBUG_VISIBILITY_MODE_DEFAULT;
 	Ref<PhysicsMaterial> physics_material;
 #endif // PHYSICS_3D_DISABLED
@@ -280,9 +279,6 @@ public:
 
 	void set_collision_mask_value(int p_layer_number, bool p_value);
 	bool get_collision_mask_value(int p_layer_number) const;
-
-	void set_collision_priority(real_t p_priority);
-	real_t get_collision_priority() const;
 
 	void set_collision_visibility_mode(DebugVisibilityMode p_visibility_mode);
 	DebugVisibilityMode get_collision_visibility_mode() const;

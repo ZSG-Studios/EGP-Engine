@@ -1,4 +1,11 @@
 {
+  "native_only_hooks": {
+    "ScriptExtension": ["_instance_create", "_placeholder_erased", "_placeholder_instance_create"],
+    "PhysicsDirectSpaceState2DExtension": ["_cast_motion", "_collide_shape", "_intersect_point", "_intersect_ray", "_intersect_shape", "_rest_info"],
+    "PhysicsDirectSpaceState3DExtension": ["_cast_motion", "_collide_shape", "_intersect_point", "_intersect_ray", "_intersect_shape", "_rest_info"],
+    "PhysicsServer2DExtension": ["_body_collide_shape", "_body_test_motion", "_shape_collide"],
+    "PhysicsServer3DExtension": ["_body_test_motion"]
+  },
   "required": {
     "EGPNetSession": {
       "methods": ["configure", "listen", "connect_to_server", "connect_token", "issue_token", "poll", "stop", "close", "get_state", "get_fingerprint", "get_statistics", "send_application", "command"],

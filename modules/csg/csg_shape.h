@@ -73,7 +73,6 @@ private:
 	bool use_collision = false;
 	uint32_t collision_layer = 1;
 	uint32_t collision_mask = 1;
-	real_t collision_priority = 1.0;
 	Ref<ConcavePolygonShape3D> root_collision_shape;
 	RID root_collision_body;
 	RID root_collision_debug_instance;
@@ -153,8 +152,6 @@ public:
 
 	RID _get_root_collision_instance() const;
 
-	void set_collision_priority(real_t p_priority);
-	real_t get_collision_priority() const;
 #endif // PHYSICS_3D_DISABLED
 
 	void set_autosmooth(bool p_smooth);

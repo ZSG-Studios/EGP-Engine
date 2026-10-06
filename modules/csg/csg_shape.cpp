@@ -117,7 +117,6 @@ void CSGShape3D::set_use_collision(bool p_enable) {
 		PhysicsServer3D::get_singleton()->body_attach_object_instance_id(root_collision_body, get_instance_id());
 		set_collision_layer(collision_layer);
 		set_collision_mask(collision_mask);
-		set_collision_priority(collision_priority);
 		_make_dirty(); //force update
 	} else {
 		PhysicsServer3D::get_singleton()->free_rid(root_collision_body);
@@ -200,16 +199,6 @@ RID CSGShape3D::_get_root_collision_instance() const {
 	return RID();
 }
 
-void CSGShape3D::set_collision_priority(real_t p_priority) {
-	collision_priority = p_priority;
-	if (root_collision_body.is_valid()) {
-		PhysicsServer3D::get_singleton()->body_set_collision_priority(root_collision_body, p_priority);
-	}
-}
-
-real_t CSGShape3D::get_collision_priority() const {
-	return collision_priority;
-}
 #endif // PHYSICS_3D_DISABLED
 
 void CSGShape3D::set_autosmooth(bool p_smooth) {
@@ -1051,7 +1040,6 @@ void CSGShape3D::_notification(int p_what) {
 				PhysicsServer3D::get_singleton()->body_attach_object_instance_id(root_collision_body, get_instance_id());
 				set_collision_layer(collision_layer);
 				set_collision_mask(collision_mask);
-				set_collision_priority(collision_priority);
 				debug_shape_old_transform = get_global_transform();
 				_make_dirty();
 			}
@@ -1183,9 +1171,6 @@ void CSGShape3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_collision_layer_value", "layer_number", "value"), &CSGShape3D::set_collision_layer_value);
 	ClassDB::bind_method(D_METHOD("get_collision_layer_value", "layer_number"), &CSGShape3D::get_collision_layer_value);
 
-	ClassDB::bind_method(D_METHOD("set_collision_priority", "priority"), &CSGShape3D::set_collision_priority);
-	ClassDB::bind_method(D_METHOD("get_collision_priority"), &CSGShape3D::get_collision_priority);
-
 	ClassDB::bind_method(D_METHOD("bake_collision_shape"), &CSGShape3D::bake_collision_shape);
 #endif // PHYSICS_3D_DISABLED
 
@@ -1216,7 +1201,6 @@ void CSGShape3D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "use_collision"), "set_use_collision", "is_using_collision");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "collision_layer", PROPERTY_HINT_LAYERS_3D_PHYSICS), "set_collision_layer", "get_collision_layer");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "collision_mask", PROPERTY_HINT_LAYERS_3D_PHYSICS), "set_collision_mask", "get_collision_mask");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "collision_priority"), "set_collision_priority", "get_collision_priority");
 #endif // PHYSICS_3D_DISABLED
 
 	BIND_ENUM_CONSTANT(OPERATION_UNION);

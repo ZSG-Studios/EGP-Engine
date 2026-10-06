@@ -951,6 +951,16 @@
 				Creates a 2D space in the physics server, and returns the [RID] that identifies it. A space contains bodies and areas, and controls the stepping of the physics simulation of the objects in it.
 			</description>
 		</method>
+		<method name="space_get_contact_count" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="space" type="RID" />
+			<description>Returns the number of debug contact points captured in the last physics step. Enable collection with [method space_set_debug_contacts].</description>
+		</method>
+		<method name="space_get_contacts" qualifiers="const">
+			<return type="PackedVector2Array" />
+			<param index="0" name="space" type="RID" />
+			<description>Returns a copy of the debug contact positions in world coordinates from the last physics step. Collection is bounded by [method space_set_debug_contacts].</description>
+		</method>
 		<method name="space_get_direct_state">
 			<return type="PhysicsDirectSpaceState2D" />
 			<param index="0" name="space" type="RID" />
@@ -980,6 +990,12 @@
 			<description>
 				Activates or deactivates the space. If [param active] is [code]false[/code], then the physics server will not do anything with this space in its physics step.
 			</description>
+		</method>
+		<method name="space_set_debug_contacts">
+			<return type="void" />
+			<param index="0" name="space" type="RID" />
+			<param index="1" name="max_contacts" type="int" />
+			<description>Sets the maximum number of debug contact points collected per physics step. A value of [code]0[/code] disables collection. Use [method space_get_contacts] and [method space_get_contact_count] to read the captured points.</description>
 		</method>
 		<method name="space_set_param">
 			<return type="void" />

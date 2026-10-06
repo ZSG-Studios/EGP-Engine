@@ -82,7 +82,6 @@ class PhysicsServer3DWrapMT : public PhysicsServer3D {
 public:
 	//FUNC1RID(shape,PS3DE::ShapeType); todo fix
 	FUNCRID(world_boundary_shape)
-	FUNCRID(separation_ray_shape)
 	FUNCRID(sphere_shape)
 	FUNCRID(box_shape)
 	FUNCRID(capsule_shape)
@@ -90,7 +89,6 @@ public:
 	FUNCRID(convex_polygon_shape)
 	FUNCRID(concave_polygon_shape)
 	FUNCRID(heightmap_shape)
-	FUNCRID(custom_shape)
 
 	FUNC2(shape_set_data, RID, const Variant &);
 

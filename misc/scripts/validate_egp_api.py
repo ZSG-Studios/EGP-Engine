@@ -93,7 +93,7 @@ def main():
     parser.add_argument("--changes", type=Path, help="Required and removed API manifest")
     parser.add_argument("--output", type=Path, default=Path(".build/egp-api-validation/receipt.json"))
     args = parser.parse_args()
-    receipt = {"passed": False, "checks": [], "failures": []}
+    receipt = {"passed": False, "checks": [], "native_only_hooks": [], "failures": []}
     failures = receipt["failures"]
     try:
         api = json.loads(args.api.read_text(encoding="utf-8"))
@@ -107,6 +107,21 @@ def main():
         if metadata.get("precision") != api["header"]["precision"]:
             failures.append("C++ SDK precision differs from the actual editor API")
         changes = json.loads(args.changes.read_text(encoding="utf-8")) if args.changes else {}
+        native_only = changes.get("native_only_hooks", {})
+        for name, members in native_only.items():
+            methods_by_name = {method["name"]: method for method in classes.get(name, {}).get("methods", [])}
+            for member in members:
+                method = methods_by_name.get(member, {})
+                types = [arg["type"] for arg in method.get("arguments", [])]
+                types.append(method.get("return_value", {}).get("type", "void"))
+                if (
+                    not name.endswith("Extension")
+                    or not method.get("is_virtual")
+                    or not any("*" in kind for kind in types)
+                ):
+                    failures.append(f"Invalid native-only pointer hook declaration: {name}.{member}")
+                else:
+                    receipt["native_only_hooks"].append({"class": name, "method": member, "types": types})
         removed = LEGACY_CLASSES | set(changes.get("removed_classes", []))
         required = REQUIRED_CLASSES | set(changes.get("required_classes", [])) | set(changes.get("required", {}))
         for name in sorted(required):
@@ -143,13 +158,19 @@ def main():
             constants.update(constant["name"] for constant in row.get("constants", []))
             signals = {signal["name"] for signal in row.get("signals", [])}
             for method in sorted(methods):
-                if method not in cs_names:
+                if method not in cs_names and method not in native_only.get(name, []):
                     failures.append(f"C# omits {name}.{method}")
                 if not re.search(r"\b" + re.escape(method) + r"\s*\(", cpp_text):
                     failures.append(f"C++ omits {name}.{method}")
             for constant in sorted(constants):
                 if not re.search(r"\b" + re.escape(constant) + r"\b", cpp_text):
                     failures.append(f"C++ omits {name}.{constant}")
+            for signal in sorted(signals):
+                if signal not in cs_names:
+                    failures.append(f"C# omits {name} signal {signal}")
+            for prop in row.get("properties", []):
+                if prop["name"] not in cs_names:
+                    failures.append(f"C# omits {name} property {prop['name']}")
             for direction in ("required", "removed"):
                 delta = changes.get(direction, {}).get(name, {})
                 for kind, names in (("methods", methods), ("constants", constants), ("signals", signals)):

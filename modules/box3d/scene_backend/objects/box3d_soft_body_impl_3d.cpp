@@ -407,7 +407,7 @@ Variant Box3DSoftBodyImpl3D::get_state(PS3DE::BodyState state) const {
 	}
 	if (state == PS3DE::BODY_STATE_ANGULAR_VELOCITY) {
 		Vector3 momentum;
-		Basis inertia(Vector3(), Vector3(), Vector3());
+		Basis inertia{ Vector3(), Vector3(), Vector3() };
 		for (const auto &node : nodes) {
 			Vector3 r = node.body->get_transform().origin - transform.origin;
 			momentum += r.cross(node.body->get_linear_velocity());
