@@ -121,6 +121,7 @@ def main():
     logs = []
     visible_process_ids = set()
     windows_observed = {}
+    max_visible_window_count = 0
     started = time.monotonic()
     try:
         with (output / "import.log").open("w", encoding="utf-8") as log:
@@ -185,7 +186,9 @@ def main():
             deadline = time.monotonic() + args.duration + 15
             while any(child.poll() is None for child in children):
                 if args.visible and os.name == "nt":
-                    windows_observed.update(visible_windows(visible_process_ids))
+                    current_windows = visible_windows(visible_process_ids)
+                    windows_observed.update(current_windows)
+                    max_visible_window_count = max(max_visible_window_count, len(current_windows))
                 if any(child.poll() not in (None, 0) for child in children):
                     raise RuntimeError("A lab process failed; see individual logs")
                 if time.monotonic() > deadline:
@@ -193,6 +196,8 @@ def main():
                 time.sleep(0.05)
             if args.visible and os.name == "nt" and set(windows_observed) != visible_process_ids:
                 raise RuntimeError("A requested client/host window was never observed as visible")
+            if args.visible and os.name == "nt" and max_visible_window_count != len(visible_process_ids):
+                raise RuntimeError("Requested client/host windows were not observed visible together")
         receipt["passed"] = True
     except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
         receipt["error"] = str(error)
@@ -227,6 +232,7 @@ def main():
                 receipt.setdefault("error", f"{name} did not pass cleanly; see its log")
         receipt["elapsed_seconds"] = round(time.monotonic() - started, 3)
         receipt["visible_window_observations"] = list(windows_observed.values())
+        receipt["max_simultaneous_visible_windows"] = max_visible_window_count
         (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     print(f"{'PASS' if receipt['passed'] else 'FAIL'}: {output / 'receipt.json'}", flush=True)
     return 0 if receipt["passed"] else 1

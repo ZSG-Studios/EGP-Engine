@@ -36,11 +36,11 @@ because these chats exist.
 | Public API | Actual ClassDB dump matches embedded SDK, generated C# and docs; signatures, enums, properties, signals, defaults and errors consistent | Paired live dumps and 77-class audit added; refreshed binding gate pending; behavioral/signature coverage incomplete |
 | API usability | Familiar naming; typed options/results; actionable errors; examples for GDScript/C#/C++; threading and ownership documented | Audit pending |
 | Library/build | Native and Mono builds; exact fork bindings; dependency/license manifests; lean server build; reproducible toolchain | Earlier receipts exist; combined snapshot pending |
-| Physics | Box2D/Box3D scene integration, joints, characters, queries, events, serialization, deterministic stepping and restore; unsupported capabilities exposed honestly | Handoff consolidated; Box2D 12 runs passed; Box3D 26/28 passed before fixing missing query bindings; rerun pending |
+| Physics | Box2D/Box3D scene integration, joints, characters, queries, events, serialization, deterministic stepping and restore; unsupported capabilities exposed honestly | Handoff consolidated; refreshed native engine passed 14 Box2D runs and all 28 Box3D cases; wider parity/scale/platform gates remain |
 | Physics/network | Explicit fixed clock, fingerprint validation, authoritative state, commands, prediction/correction/replay and recovery | Existing limited fixtures; full game contract pending |
 | Networking | Encrypted admission, account/peer/entity identities, authority, ownership, interest, lifecycle, reconnect and backpressure | Native and language fixtures exist |
 | Advanced networking | Field deltas, bounded bandwidth/queues, input acknowledgments, lag compensation, scale/soak, malicious input rejection | Implementation/qualification gaps remain |
-| Network lab | Dedicated server, listen host, N clients, visible windows, latency/jitter/loss, directional simulation, reconnect, logs/watchdog/cleanup | Dedicated/host headless runs passed; host plus 3 verified visible windows passed on earlier engine; final combined rerun pending |
+| Network lab | Dedicated server, listen host, N clients, visible windows, latency/jitter/loss, directional simulation, reconnect, logs/watchdog/cleanup | Dedicated/host headless runs passed; refreshed native engine passed host plus 3 clients with four simultaneously visible windows and reconnect; final Mono/export matrix pending |
 | Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Pending |
 | C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Handoff/tip merged locally; headless editor regression passed; combined Debug/Release exports pending |
 | C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Partial editor smoke exists; full acceptance pending |
@@ -124,7 +124,7 @@ Remote master remains `f4389f3a`; publication/final merge is pending combined ga
 
 Current build supervision (do not start duplicates):
 
-- Native physics editor: shell session `69971`, runner `.build/build_box3d_parity.py`,
+- Native physics editor: shell session `69971` completed successfully, runner `.build/build_box3d_parity.py`,
   worktree `box3d-parity/EGP`. Log `.build/box3d-parity-editor-build.log`; receipt
   `.build/box3d-parity-editor-build.json`. Frozen source manifest
   `.build/box3d-parity-source-snapshot.json`. Inspect receipt timestamps; older
@@ -238,3 +238,41 @@ scene-integrator fixtures), repair genuine behavior failures, then capture and a
 the final Mono API with `--classdb`, the freshly extracted SDK and newly generated
 managed files. Continue existing Debug/Release build ownership rather than starting
 duplicates. Remote final merge and actual running-game reload remain unfinished.
+
+### Refreshed native verification
+
+Native build `69971` finished with exit code 0 in 561.875 seconds on frozen engine
+source `557887f4b252e8aeaa76e6a7d03517d7eda74d35`. Actual editor SHA256 is
+`3f8ec2b0e34ebe73b908c2fda463a15c2c985ab04002cca39d5f4bdc3af2ead9`.
+
+- `python misc/scripts/validate_box2d_scene.py --engine C:/Users/Rose-X/.codex/worktrees/box3d-parity/EGP/bin/godot.windows.editor.dev.x86_64.exe --output .build/integration-box2d-query-scenes`
+  passed all 14 runs, including the new scene `_integrate_forces` callback and
+  server query fixtures, owned-result mutation isolation, and matching one/four
+  worker trajectories. Receipt `.build/integration-box2d-query-scenes/receipt.json`.
+- `python misc/scripts/validate_box3d_scene.py --engine C:/Users/Rose-X/.codex/worktrees/box3d-parity/EGP/bin/godot.windows.editor.dev.x86_64.exe --output .build/integration-box3d-query-scenes`
+  passed all 28 cases. The damping threshold and soft-body fixtures now execute
+  and pass, including mesh/pins/gravity/floor contacts, ray query, owned exclusion
+  result, space migration and teardown. Receipt
+  `.build/integration-box3d-query-scenes/receipt.json`. These cases do not establish
+  triangle-based soft collision, all queries, broad rollback or full parity.
+- `python misc/scripts/capture_egp_api.py --engine C:/Users/Rose-X/.codex/worktrees/box3d-parity/EGP/bin/godot.windows.editor.dev.x86_64.console.exe --output .build/integration-native-api-query-capture`
+  passed; receipt `1791265997225959900/receipt.json` under that output. Actual API
+  SHA256 is `6516096bb9a4ec2ff9a4f08627595a8cad38a935e5d81c2d724d624eb910493c`.
+  All seven new methods are present; exclusion queries return `typedarray::RID`.
+  ClassDB reports Variant BOOL (type 1) for Hinge spring and Slider limit/motor/spring
+  toggles. This native editor's embedded SDK still requires matching regeneration;
+  final C#/C++ parity must use the combined Mono build.
+- `python misc/scripts/launch_egp_network_lab.py --engine C:/Users/Rose-X/.codex/worktrees/box3d-parity/EGP/bin/godot.windows.editor.dev.x86_64.console.exe --mode host --clients 3 --visible --preset wan --duration 10 --reconnect-at 4 --output .build/integration-network-windows-concurrent`
+  passed with **four windows visible simultaneously**, authoritative ticks/replies,
+  distinct reconnect generations and clean exits. Receipt
+  `.build/integration-network-windows-concurrent/1791266120084153400/receipt.json`.
+  The launcher now rejects requests whose windows were only observed at separate
+  times. An earlier refreshed-native visible pass is retained at
+  `.build/integration-network-windows-query-engine/1791266055561160000/receipt.json`.
+
+The previous next step (native scene rerun) is complete. Continue session `94709`
+through matching Mono SDK/editor, glue, managed assemblies and Debug/Release
+templates. Re-run paired capture, exact API audit, C++ editor controls, trilingual
+exports and network/physics fixtures on those final artifacts. The canonical source
+includes the current fixes; remote master publication and running-game hot reload
+acceptance remain pending. Preserve both unrelated root artifacts untracked.
