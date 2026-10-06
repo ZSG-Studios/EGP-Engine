@@ -1,8 +1,10 @@
 # EGP integration and completion loop
 
 Automation stopped on 2026-10-06 at the user's request to cancel and remove all
-GitHub Actions. Repository Actions are disabled, workflow and local action
-definitions are removed, and the recurring integration automation is deleted.
+GitHub Actions. The original workflow and local action definitions are removed,
+and the recurring integration automation is deleted. A single manual unit-test
+replay workflow was subsequently added at the user's explicit request; it has no
+push, scheduled or recurring trigger and reuses an identified editor artifact.
 The acceptance criteria and historical receipts below remain as work records;
 this cancellation does not establish integration completion.
 
