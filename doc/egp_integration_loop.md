@@ -38,7 +38,7 @@ because these chats exist.
 | Library/build | Native and Mono builds; exact fork bindings; dependency/license manifests; lean server build; reproducible toolchain | Combined Mono editor, glue/assemblies, exact SDK and Debug/Release templates pass; lean server/platform/reproducibility gates remain |
 | Physics | Box2D/Box3D scene integration, joints, characters, queries, events, serialization, deterministic stepping and restore; unsupported capabilities exposed honestly | Combined Mono editor passes 19 Box2D runs and 28 Box3D cases; twelve relocated Debug/Release Box2D checks cover configured joints, events, explosions, canvas/casts, packed/vector polygons and invalid-input recovery; picking, broader shape/scaling/parity/platform gates remain |
 | Physics/network | Explicit fixed clock, fingerprint validation, authoritative state, commands, prediction/correction/replay and recovery | Existing limited fixtures; full game contract pending |
-| Networking | Encrypted admission, account/peer/entity identities, authority, ownership, interest, lifecycle, reconnect and backpressure | Native and language fixtures pass; WAN coalescing/restart and two-client, 64-entity fairness at a low outgoing budget pass, including baseline, interest and repeated reconnect/revocation; larger WAN worlds, receive-window behavior and scale remain |
+| Networking | Encrypted admission, account/peer/entity identities, authority, ownership, interest, lifecycle, reconnect and backpressure | Native/language fixtures, matching-budget 64-entity fairness, bounded receive bursts and eight encrypted WAN clients with changing 4096-byte states pass; baseline, interest, revocation and reconnect are covered; larger worlds, peak load and soak remain |
 | Advanced networking | Field deltas, bounded bandwidth/queues, input acknowledgments, lag compensation, scale/soak, malicious input rejection | Implementation/qualification gaps remain |
 | Network lab | Dedicated server, listen host, N clients, visible windows, latency/jitter/loss, directional simulation, reconnect, logs/watchdog/cleanup | Native host and packaged Mono Debug host/Release dedicated server pass simultaneous visible clients, WAN simulation and reconnect; broader matrix remains |
 | Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Packaged Debug graceful and Release abrupt dedicated-server replacement pass with three persistent visible clients under WAN impairment; eight-second headless outage passes; broader controls/scale/soak remain |
@@ -1083,3 +1083,121 @@ large WAN worlds or production scale. Raw cached native bindings, arbitrary ABI
 changes, wider managed state, physics shape/scaling/platform parity, full
 production persistence/authentication/gameplay, performance and package/build
 identity remain open. The loop remains ACTIVE.
+
+
+## Receive budgets and fragmented WAN replication, 2026-10-06
+
+Source increment `56b38cf0b8` fixes false receive-rate rejection. The published
+`a2f0509e55` core failure is preserved in
+`.build/integration-receive-jitter-baseline/receipt.json`, `run.log` and the exact
+baseline fixture copy. With matching 32-message/8192-estimated-byte budgets,
+outgoing simulation at 1000 ms latency/600 ms jitter and zero loss, 64 messages
+were legally admitted; 32 were delivered and 32 rejected as abuse, disconnecting
+the client. A separate matching-budget loopback fairness run passes; that alone
+therefore did not cover delayed arrival.
+
+Incoming and outgoing budget windows are independent. Valid incoming envelopes
+wait for delivery quota in bounded queues. The wrapper retains at most one
+copied envelope per channel; remaining messages stay in Yojimbo's bounded queues.
+Channel delivery advances in rounds, retaining ordered-channel order and avoiding
+application/raw starvation behind replication. State byte charges match outgoing
+estimates (payload+64); other envelopes use payload+32. Receive counters exclude
+valid pending copies, which stop/disconnect clears. Malformed or unauthorized
+traffic still rejects a connection, and already-rejected server peers receive
+no further deliveries/replication before deferred disconnect completes.
+
+This bounds application delivery and wrapper buffering, not wire/retransmission
+bandwidth or every transport decoding operation. Sustained valid excess traffic
+can exhaust transport queues/TLSF allocation and disconnect. Games still need
+per-action input validation and abuse policies. Native option comments, README,
+compiled help and regenerated C# documentation describe these limits.
+
+New gates cover 128 delayed zero-loss messages, 128 reliable messages across all
+four raw channels at 32 deliveries/second, 11 fragmented 4096-byte raw/application
+messages at 8192 estimated bytes/second, order/payload/counters, and an authenticated
+peer sending forged server-only replication metadata followed by a healthy peer
+joining the same server. The first combined Debug attempt is preserved at
+`.build/integration-receive-native-debug`: its adversarial fixture used upstream's
+256-message packet encoding instead of EGP's 32-message encoding, disconnecting
+at transport decode before the intended envelope rejection. The corrected
+matching-encoding fixture passes focused rejection and recovery.
+
+The eight-client fixture checks eight changing 4096-byte owned states at 60 Hz
+under 100 ms outgoing latency, 25 ms jitter and 3% loss on both endpoints: all
+baselines, every entity's advancement and full-state integrity on all clients,
+final coalesced convergence, interest removal/reentry, revocation reaching all
+seven remaining clients and a fresh reconnect without inherited ownership. Its
+focused run passes. This stochastic, short single-process run does not establish
+production scale, peak memory, atomic physics snapshots or gameplay prediction.
+
+The matching build and fresh native Debug/Release, API, physics, hot reload,
+relocated exports and visible lab gates belong under `.build/integration-receive-*`.
+Installation/publication must pass `.build/canonical-receive-artifacts.json` and
+`.build/integration-receive-publication.json` before this increment is reported
+published. Seven-tree provenance preserves historical dirty trees, original
+handoffs, prior evidence and unrelated user files. The loop remains ACTIVE.
+
+
+The complete current increment passes:
+
+- `python misc/scripts/validate_egp_net.py --configuration Debug --output
+  .build/integration-receive-debug-source`: ten CTest cases and 101 native checks.
+- `python misc/scripts/validate_egp_net.py --configuration Release --output
+  .build/integration-receive-release-final`: ten CTest cases and 101 native checks.
+- `python misc/scripts/validate_egp_net.py --configuration Debug --engine
+  C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe
+  --output .build/integration-receive-native-session-final`: ten CTest cases,
+  101 native checks, 24 GDScript cases, eight raw-channel cases, encrypted token
+  quarantine, lifecycle, separate processes, Box3D clock and 29 prediction checks.
+- `.build/integration-receive-native-qualification/receipt.json`: fresh paired
+  API/ClassDB/SDK/managed and compiled-help checks (77 classes, 1299 methods,
+  55 signals, 371 enum constants and 1358 descriptions), matching new native/
+  generated C# receive-budget help, 19 Box2D runs, 28 Box3D cases, twelve packaged
+  Box2D checks, 59 trilingual checks plus relocated Debug/Release process cases,
+  C++ signature/hierarchy/class/DLL recovery, C# reload and default runtime.
+  Packaged Debug listen host (four simultaneous visible windows) and Release
+  dedicated server (three visible clients) both pass WAN manual reconnect.
+- Release lab command with matching editor: `python
+  misc/scripts/launch_egp_network_lab.py --engine
+  C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.template_release.x86_64.mono.exe
+  --editor C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe
+  --mode dedicated --clients 3 --visible --preset wan --duration 20
+  --server-restart-at 6 --server-restart-mode abrupt --output
+  .build/integration-receive-restart` passes at
+  `1791284713741972100/receipt.json`: server PID 27840 becomes 19604 while client
+  PIDs persist, checkpoint counter 106 is restored and reaches 112, caches clear,
+  fresh ownership inputs and both replicated server identities are checked.
+
+Frozen engine/native test source is `56b38cf0b8e1cbf020121a1565039efb63300157`.
+The editor SHA256 is
+`b0286e2b389c3480ae6d37686c567d30157577abb3381a28c11d5d3e8678defc`;
+Debug template is
+`df14cf19dca8bc69b766b5c3c9bb2acf3edf86b4aa80665de8eb471d14ac65c9`;
+Release template is
+`dd837bd15c5a6fd969505914a2ab3f95b84dca41c1f3aea2f6144b34ba5f8df4`.
+The plain API fingerprint remains
+`e84e140b923451849e88aab8300021fd9d32f95c31825bb6d7e25a4235953271`.
+The display/NuGet development version is still the historical checkout identity;
+these source and binary receipts provide the qualification identity.
+
+`.build/canonical-receive-artifacts.json` verifies 86 installed engine/managed
+files against eighteen passed receipts; twenty files changed, including freshly
+regenerated managed documentation/assemblies/packages, with backups retained.
+`.build/integration-receive-canonical-runtime/receipt.json` then runs the installed
+root-bin engine and passes all 59 trilingual checks. Final canonical/local/remote
+heads, merge ancestry, seven-tree inventory and preserved unrelated files belong
+in `.build/integration-receive-publication.json`. All four original handoff chats
+are idle/completed, recorded in `.build/integration-receive-handoffs.json`.
+
+Next concrete C++ gate: isolate cached native MethodBind call/validated_call/
+ptrcall after missing/invalid DLL reload, then verify compatible repair and class
+removal/signature rejection. Source inspection shows prepare_reload marks
+is_reloading, while the call guards/is_valid currently test valid; failed library
+open returns before finish_reload. The passing dynamic lookup/Callable recovery
+fixtures do not qualify that raw cached-binding path. Reproduce it in a supervised
+child process before changing guards or claiming safety. Larger WAN worlds,
+transport decode/allocator peaks, sustained queue excess, soak, wider C# state,
+physics shape/scaling/platform parity, production persistence/authentication/
+gameplay, lean server, package/default template identity and performance remain
+open. This increment does not establish complete AAA readiness; the loop stays
+ACTIVE.
