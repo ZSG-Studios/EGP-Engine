@@ -1831,3 +1831,86 @@ process on Windows. Remote/back-end authentication, arbitrary game/ABI state,
 automatic client physics rollback, cross-platform parity, scale/soak and
 performance remain separate gates. The loop stays ACTIVE; full feature completion
 and AAA readiness are not claimed.
+
+### Repeated C#/C++ clock recovery — 2026-10-06
+
+Source `4cd4f9b317606a387cdde587be23785a96a9ba7f` fixes the C++ trilingual
+sample's `poll()` binding: it now returns the first high-/low-level native error
+instead of discarding it. C# fixture pumps check that result. Native clock failure
+already stopped authority; this fixes its visibility to sample callers. Public
+engine/library/ClassDB/generated glue and external helper APIs are unchanged.
+
+Fresh C++ Debug/Release extensions and C# assemblies pass all 21 language
+validator steps. Editor, relocated Debug and relocated Release each pass 93
+interop assertions, including the existing encrypted separate-process
+C#/GDScript/C++ fixtures. The new recovery sequence exercises three successive
+clock failures on each language's high-level and low-level session: 12 faults per
+configuration, 36 total. Each intentional polling gap is at least 550 ms.
+
+| Configuration | Interop PID | Assertions | Clock faults |
+| --- | --- | --- | --- |
+| Mono editor | 23324 | 93 | 12 |
+| relocated Debug | 3364 | 93 | 12 |
+| relocated Release | 26436 | 93 | 12 |
+
+Every cycle requires `FAILED`, the native catch-up diagnostic, cleared authority,
+rejected work while stopped, the same retained session and port, and a fresh
+entity handle with the old handle absent/rejected. High-level C# and C++ also
+detach their Box3D adapter, deliberately advance the solver, restore a trusted
+local checkpoint with exact hash/tick equality, then attach a fresh entity to the
+same stable physics body (10000/20000). Eight new authority ticks must advance the
+world from its checkpoint offset. Across the three cycles, C# checkpoint ticks
+are 30/38/46 and C++ ticks are 8/16/24. These local snapshots never enter network
+messages or receipts. Both high- and low-level sessions require exactly three
+diagnostics; session retention and monotonically fresh handles are independently
+checked by the Python evidence reader.
+
+`.build/integration-language-clock-final/{source,receipt}.json` freezes the exact
+command, source hashes, SDK archives, fixture assemblies/extensions, exported
+runtime/PCK hashes and process identities. Engine source remains
+`4d64b38c554ab3dc491285f4ffa5119c001da56f`; installed editor SHA-256 remains
+`20be5396d78b4c9873d4a355132f62366be58fcf9b1519bb595006fb07e74342`.
+Debug/Release templates remain
+`b8a7f178491ba56e02a8950a7ec337f33c6197a16a27b3cf295b85448cd91c82` /
+`9e0c7883787974351153cc5bc30c92d4425b81184c264f4a4f9b74f995a68910`.
+SDK fingerprint `4bc13481314e7023`, ClassDB signature
+`e84e140b923451849e88aab8300021fd9d32f95c31825bb6d7e25a4235953271`.
+Fresh Debug extension SHA-256
+`1153f528705d6af22ab1882065b5f3c446d79ce4ae5b2ea7af3403b2be2c16a0`;
+Release extension
+`e33fcb74a1e7b7c7edf1b8fa62c910f44fa7b8aa5e1e95210df5b3fe03a0af10`;
+editor fixture assembly
+`7282ff98411a3d5beff825fbbb7df34b1d47fa7c0e6b681550b3ad381d822872`.
+
+Reproduction command (choose a new output directory to preserve this evidence):
+
+```powershell
+& 'C:/Users/Rose-X/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' misc/scripts/validate_egp_net_languages.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --sdk C:/Users/Rose-X/AppData/Local/Godot/egp_cpp/sdk/4bc13481314e7023 --sdk-library C:/Users/Rose-X/AppData/Local/Godot/egp_cpp/lib/4bc13481314e7023/MSVC-19.51.36260.0-Windows-AMD64-x64/Debug/egp_godot_cpp.lib --release-sdk-library C:/Users/Rose-X/AppData/Local/Godot/egp_cpp/lib/4bc13481314e7023/MSVC-19.51.36260.0-Windows-AMD64-x64/Release/egp_godot_cpp.lib --packages bin/GodotSharp/Tools/nupkgs --template bin/godot.windows.template_debug.x86_64.mono.exe --release-template bin/godot.windows.template_release.x86_64.mono.exe --output .build/integration-language-clock-new
+```
+
+`.build/integration-language-clock-poll-control-final/receipt.json` compares the
+preceding and corrected C++ DLLs against the same installed engine and isolated
+GDScript fixture. Both stop at the intentional clock fault; the preceding dynamic
+`poll` call returns NIL and masks the native error, while the corrected call
+returns `FAILED` (1). The preceding typed-call fixture's script error/watchdog
+logs remain preserved separately; the final control uses dynamic `call` to
+observe both return values directly. No engine timeout or clock rule changed.
+
+`.build/integration-language-clock-tool-checks/receipt.json` records eight semantic
+tests plus passing Ruff/format and mypy (the existing Python 3.9 configuration
+warning remains). Tests reject incomplete cycles, handle reuse, session loss,
+physics clock reset, missing failures and incorrect diagnostics.
+
+`.build/integration-language-clock-publication.json` is the publication gate:
+canonical/remote master equality, original handoff ancestry, all 86 installed
+artifacts, seven preserved worktrees, branch/PR inventory and current source/binary
+evidence. The former 60-assertion language fixture is historical; the fresh
+93-assertion runs supersede it. Prior native/physics/admission/lab/reload evidence
+is reused only for unchanged inputs. No duplicate engine build was necessary.
+
+Remaining: peer/client reconnect during these repeated C#/C++ faults, hot reload
+during faults, larger authoritative physics worlds and arbitrary application/ABI
+state recovery. These new fault cycles have no connected remote peers. Existing
+separate-process networking evidence remains a separate, bounded check. Windows
+editor/Debug/Release results do not establish other platforms, scale/soak,
+production admission or performance. The loop stays ACTIVE.
