@@ -2297,3 +2297,105 @@ This newly qualified case is Windows Debug, one local pair sharing the game
 process, with reload performed after the authority has stopped. It does not
 establish arbitrary application/ABI state, automatic physics rollback, exported
 runtime reload, platform parity or performance. The loop remains ACTIVE.
+
+
+### Uninterrupted live C++/C# reload with network impairment — 2026-10-06
+
+Source `66454513346e224151c1656b505505722aac5928` extends the isolated real-debugger/build-panel
+fixture with `--network-live-reload` and explicit simulation options. It is
+committed on canonical master above `ca35e9c266c1ffaa3163b80e7bc81199a65159e2`.
+The public/native APIs, core, physics, ClassDB fingerprint, SDK, installed
+engine and managed runtime are unchanged. This increment adds qualification
+and testing options; it does not claim an engine behavior repair.
+
+The full live run passes at `.build/integration-live-reload-qualified/1791302303954586800/receipt.json`. Headless
+editor PID 9492 launches separate game PID 35252.
+Before admission, the same current fixture freshly passes managed corruption,
+blocked unload/retry, native missing/invalid library recovery, method signature
+changes, rejected direct/extension/ancestor base changes and class removal with
+compatible repair. Counters, identities, parent/vector/reference state,
+dynamic callables, signal/delegate counts and managed lifecycle hooks survive.
+
+The live stage configures both authority and client outbound simulators with
+30 ms latency, 5 ms jitter and 5 percent loss. While connected, deliberately
+failed C# and C++ builds retain the preceding live code; the failed C++ build
+must leave the published descriptor unchanged. Separate C# reload, separate
+C++ reload and combined reload then replace executable method versions. The
+C++-only stage must leave managed deserialization count unchanged; the C# and
+combined stages must advance it. Final native method version is 5 and managed
+method version is 7.
+
+| Checkpoint | Authority tick | Entity revision | Language-driven client polls | C++/C# callbacks |
+| --- | --- | --- | --- | --- |
+| initial | 33 | 1 | 70 | 1/1 |
+| managed-compile-failure | 128 | 2 | 260 | 2/2 |
+| native-compile-failure | 220 | 3 | 444 | 3/3 |
+| csharp-reload | 424 | 4 | 846 | 4/4 |
+| cpp-reload | 656 | 5 | 1310 | 5/5 |
+| combined-reload | 947 | 6 | 1890 | 6/6 |
+
+All six checkpoints retain the same game PID, native authority/client ObjectIDs,
+bound port, authenticated peer handle 257 and entity handle
+1. The only client state history is
+`Connecting -> Synchronizing -> Connected`; no stop, disconnect or readmission
+is permitted, and no authority diagnostics occur. Native session references in
+both languages' serialized dictionaries remain identical after reconstruction.
+The fixed clock, entity revision and language pumps advance at every checkpoint.
+
+Each checkpoint exchanges one application payload in each direction. Server
+receives `0100ff2a` through `0600ff2a` from the same authenticated peer; client
+receives `8100ff2a` through `8600ff2a` from native server peer 0. Callback payload,
+sender and cumulative counts must match exactly; native-session method-name
+Callables into C++ and C# each fire once per payload. The same replicated entity
+receives fresh exact bytes and owner metadata at every stage. Raw transport/
+ownership metadata does not authorize opaque gameplay messages.
+
+Reproduce using a new output directory:
+
+```powershell
+python misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --assembly-recovery --unload-recovery --native-recovery --native-abi-recovery --network-live-reload --network-latency-ms 30 --network-jitter-ms 5 --network-loss-percent 5 --output .build/integration-live-reload-qualified
+```
+
+Latency and jitter accept finite values in 0–5000 ms; loss is explicitly a
+percentage in 0–100, applied to each configured outbound simulator. These
+options require live-reload mode. Stopped-authority recovery and runtime-disabled
+modes use separate isolated fixtures. Ten invalid-option tests reject conflicting
+modes, simulation options outside live mode, nonfinite values and invalid ranges
+before creating an output directory.
+
+Final fixture C++ DLL SHA-256 is `130b67973598d32800d0a0d7b722467d236dfc7d63847b200dabd21b880f0565`; managed assembly is `b2fd80fd4cb0359af4049896876df3851409ebb5974afb1c861e330d5d58ac49`.
+The receipt records source/input/runtime and generated artifact hashes, editor/
+game identities, commands, compile diagnostics and samples. Native editor remains
+`20be5396d78b4c9873d4a355132f62366be58fcf9b1519bb595006fb07e74342`, compiled from
+`4d64b38c554ab3dc491285f4ffa5119c001da56f`; matching Debug SDK/ClassDB/glue
+identities remain as recorded above. No duplicate engine build was required.
+
+Current stopped-authority regression passes at
+`.build/integration-live-reload-stopped-regression/1791302442657405100/receipt.json` with explicit fresh admission and
+retired-handle rejection. Current runtime-disabled regression passes at
+`.build/integration-live-reload-default/1791302480570457100/receipt.json` with a non-collectible separate player.
+`.build/integration-live-reload-tool-checks/receipt.json` passes 29 semantic
+tests (14 stopped recovery and 15 live reload), ten invalid CLI cases, help,
+Ruff/format and mypy, retaining the existing Python 3.9 configuration warning.
+New negatives reject reconnect/replaced entities/sessions, ignored simulation,
+connection interruption, authority faults, lost/corrupt replies, duplicate
+managed callbacks, stale baselines and stalled clocks/revisions/language pumps.
+
+`.build/integration-live-reload-publication.json` verifies original handoff
+ancestry, canonical/remote master equality after normal publication, all 86
+installed artifacts, all actual seven EGP worktrees, preserved foreign patches/
+untracked bytes and no open PRs. The unchanged 197-check editor/Debug/Release
+language builds, 36 networking semantic tests, native 120-check/ten-case suites,
+seven physics lab cases and 72 admission cases remain bounded to verified
+unchanged source/binary inputs. Changed reload fixtures use the three fresh
+runs above. Other worktree leftovers stay preserved; the four original engine
+chats remain completed and documentation/website keeps separate ownership.
+
+Next: independent-process low-level fault/reload, deliberately in-flight callbacks
+and concurrent reload, physics checkpoint recovery during reload, managed facade/
+event-closure persistence, production admission/retry, hard outages/crashes,
+larger worlds and sustained WAN/scale/soak. This is Windows Debug with one local
+authority/client pair sharing the game process. Configured loss does not measure
+actual dropped packets or real WAN behavior; poll/tick counts are fixture health
+evidence, not performance. Arbitrary application/ABI state, physics rollback,
+exported runtime reload and platform parity remain open. The loop stays ACTIVE.
