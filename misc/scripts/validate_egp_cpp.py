@@ -76,10 +76,13 @@ func _ready():
     )
     cli = [editor, "--headless", "--editor", "--max-fps", "30", "--path", str(project), "--"]
     run(
-        "cli-check-create-build",
-        cli + ["--cpp-check", "--cpp-create=smoke", "--cpp-build=smoke:debug"],
+        "cli-check-create",
+        cli + ["--cpp-check", "--cpp-create=smoke"],
         marker="EGP_CPP_CLI_PASSED",
     )
+    # Build in a separate editor session, matching the interactive Create/Build
+    # workflow and ensuring discovery is not rescued by the initial project scan.
+    run("cli-build-debug", cli + ["--cpp-build=smoke:debug"], marker="EGP_CPP_CLI_PASSED")
     run(
         "native-game-after-first-build",
         [editor, "--headless", "--max-fps", "30", "--path", str(project)],
