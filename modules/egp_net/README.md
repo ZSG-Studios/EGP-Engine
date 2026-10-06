@@ -216,9 +216,17 @@ Configuration defaults and principal limits:
 
 Poll automatically through the helper's Node processing, or set `auto_poll=false`
 and call `poll()` once from your main-thread loop. Connect `diagnostic` to your
-game's logging and check each returned `Error`. A gap above 0.5 seconds stops
-the session rather than silently skipping simulation history. Reconnect and
-receive a fresh baseline after this diagnostic. `server_tick` reports the latest
+game's logging and check each returned `Error`. At most eight fixed ticks run per
+poll. If unprocessed simulation time exceeds 0.5 seconds, poll emits the catch-up
+diagnostic, returns `FAILED`, stops the endpoint, clears entities and resets ticks.
+Recovery is explicit: after poll returns, close/reconfigure the language facade,
+obtain a fresh admission token and reconnect for a new authoritative baseline.
+Do not reconfigure from synchronous poll callbacks. The server must revoke old
+connection ownership and grant a new entity/authority to the new peer; account
+identity alone does not restore ownership. A server that stops must restore its
+game state explicitly. The [network lab guide](../../doc/egp_network_lab.md)
+provides `--client-stall-at`, `--client-stall-ms` and `--client-stall-index` to
+exercise this recovery without increasing the engine budget. `server_tick` reports the latest
 replicated server tick, not a continuously synchronized idle clock.
 
 For named messages, register the same message contract at each receiving

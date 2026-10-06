@@ -97,6 +97,7 @@
 			<return type="int" enum="Error" />
 			<description>
 				Receives packets, advances transport time, emits connection/message signals, runs accumulated fixed simulation ticks, and sends queued packets. Call regularly on the creating thread, including while connecting. Returns [constant ERR_BUSY] for a different thread or recursive polling and [constant ERR_UNCONFIGURED] before [method configure]. Signal handlers execute synchronously on this thread. Calling [method stop] inside a handler defers teardown until polling completes.
+				At most eight fixed ticks run per poll. If accumulated simulation time exceeds 0.5 seconds, emits [signal diagnostic], stops the transport, clears session entities and resets simulation ticks, and returns [constant FAILED]. This protects the simulation from an unbounded catch-up; it does not silently skip time or automatically reconnect. After polling returns, the application must resynchronize through fresh admission and a new authoritative baseline. For token connections, obtain a fresh token before calling [method connect_token] again. High-level language facades may require closing and reconfiguring their wrapper first. Keep recovery out of synchronous poll callbacks. Servers must restore authoritative game state explicitly; the session does not provide automatic persistence.
 			</description>
 		</method>
 		<method name="send_application">

@@ -42,6 +42,14 @@ var input_clients: Dictionary = {}
 var owned_entities: Dictionary = {}
 var last_health := 0
 var health_sequence := 0
+var stall_enabled := false
+var stall_injected := false
+var stall_recovered := false
+var stall_proof: Dictionary = {}
+var input_generations: Dictionary = {}
+
+func checks_ownership() -> bool:
+	return restart_enabled or stall_enabled
 
 func _ready() -> void:
 	for argument in OS.get_cmdline_user_args():
@@ -55,6 +63,7 @@ func _ready() -> void:
 	duration = float(options.get("duration", 8))
 	reconnect_at = float(options.get("reconnect-at", 0))
 	restart_enabled = options.get("restart-enabled", "0") == "1"
+	stall_enabled = float(options.get("client-stall-at", 0)) > 0
 	epoch = int(options.get("generation", 1))
 	restored_value = int(options.get("checkpoint-value", 0))
 	persistent_value = restored_value if epoch > 1 else 100
@@ -102,7 +111,7 @@ func _ready() -> void:
 func configure() -> bool:
 	var error: Error = net.configure({
 		"game_protocol": "egp-network-lab-v1", "max_players": clients,
-		"max_entities": maxi(4, clients + 1), "timeout_seconds": 3 if restart_enabled else 10, "token_lifetime_seconds": 120,
+		"max_entities": maxi(4, clients + 1), "timeout_seconds": 3 if checks_ownership() else 10, "token_lifetime_seconds": 120,
 		"simulated_latency_ms": float(options.get("latency", 0)),
 		"simulated_jitter_ms": float(options.get("jitter", 0)),
 		"simulated_loss": float(options.get("loss", 0)),
@@ -148,25 +157,31 @@ func receive_hello(peer: int, arguments: Array) -> void:
 			connections[peer] = true
 			generations[arguments[0]] = connections
 			var reply: Array = [arguments[0]]
-			if restart_enabled:
-				var owned: int = net.spawn(2, {"account": record.client_id, "generation": epoch}, peer)
+			if checks_ownership():
+				if stall_enabled and owned_entities.has(arguments[0]):
+					var old: int = owned_entities[arguments[0]]
+					if net.get_entity(old).get("authority_peer", -2) != -1 or net.despawn(old) != OK:
+						finish(false, "old connection ownership was not revoked")
+						return
+				var generation: int = connections.size() if stall_enabled else epoch
+				var owned: int = net.spawn(2, {"account": record.client_id, "generation": generation}, peer)
 				if owned == 0:
 					finish(false, "client authority spawn failed")
 					return
 				owned_entities[arguments[0]] = owned
-				reply = [arguments[0], epoch, peer, owned]
+				reply = [arguments[0], generation, peer, owned]
 			if net.send_message(peer, &"reply", reply) != OK:
 				finish(false, "reply enqueue failed")
 			return
 	finish(false, "unknown authenticated peer")
 
 func receive_reply(_peer: int, arguments: Array) -> void:
-	if (not restart_enabled and arguments != [index]) or (restart_enabled and (arguments.size() != 4 or arguments[0] != index or arguments[1] != epoch)):
+	if (not checks_ownership() and arguments != [index]) or (checks_ownership() and (arguments.size() != 4 or arguments[0] != index or arguments[1] != epoch)):
 		finish(false, "reply contract mismatch")
 		return
 	replies += 1
 	epoch_replies[epoch] = true
-	if restart_enabled:
+	if checks_ownership():
 		owner_peer = arguments[2]
 		owned_entity = arguments[3]
 
@@ -197,24 +212,28 @@ func observe_state(state: String) -> void:
 		restart_wait_started = Time.get_ticks_msec()
 
 func receive_input(peer: int, handle: int, input: Dictionary) -> void:
-	if not restart_enabled:
+	if not checks_ownership():
 		return
 	for record in net.get_peers():
 		if record.peer_id != peer:
 			continue
 		var client: int = record.client_id - 10000
-		if client < 0 or client >= clients or owned_entities.get(client, 0) != handle or input != {"account": record.client_id, "generation": epoch, "sequence": 1} or input_clients.has(client):
+		var generation: int = generations.get(client, {}).size() if stall_enabled else epoch
+		var accepted: Dictionary = input_generations.get(client, {})
+		if client < 0 or client >= clients or owned_entities.get(client, 0) != handle or input != {"account": record.client_id, "generation": generation, "sequence": 1} or accepted.has(generation):
 			finish(false, "owner-authorized input contract failed")
 			return
 		input_clients[client] = true
+		accepted[generation] = true
+		input_generations[client] = accepted
 		persistent_value += client + 1
-		if net.send_message(peer, &"input_reply", [client, epoch]) != OK:
+		if net.send_message(peer, &"input_reply", [client, generation]) != OK:
 			finish(false, "input acknowledgment enqueue failed")
 		return
 	finish(false, "input from unknown authenticated peer")
 
 func receive_input_reply(_peer: int, arguments: Array) -> void:
-	if not restart_enabled or arguments != [index, epoch]:
+	if not checks_ownership() or arguments != [index, epoch]:
 		finish(false, "input acknowledgment contract failed")
 		return
 	epoch_inputs[epoch] = true
@@ -243,6 +262,37 @@ func recover_server() -> void:
 	if configure():
 		join("-epoch-2")
 
+func request_reconnect() -> void:
+	net.close()
+	reconnect_wait = true
+	reconnect_started = Time.get_ticks_msec()
+	sent = false
+	input_sent = false
+	owned_entity = 0
+	owner_peer = -1
+	# This is the lab's trusted local backend. Production games use their auth service.
+	var request := FileAccess.open(directory.path_join("reconnect-%d.request" % index), FileAccess.WRITE)
+	if request == null:
+		finish(false, "admission refresh request failed")
+		return
+	request.close()
+
+func recover_stall(error: Error) -> bool:
+	if not stall_injected or stall_recovered or error != FAILED or diagnostics != ["Fixed simulation exceeded its catch-up budget; resynchronization required."]:
+		return false
+	stall_proof.poll_error = error
+	stall_proof.state_after_failure = net.get_state()
+	stall_proof.entities_after_failure = net.get_entities().size()
+	stall_proof.tick_after_failure = net.get_statistics().get("tick", -1)
+	stall_proof.input_after_failure = net.send_input(stall_proof.old_entity, {})
+	if stall_proof.state_after_failure != "Stopped" or stall_proof.entities_after_failure != 0 or stall_proof.tick_after_failure != 0 or stall_proof.input_after_failure != ERR_UNCONFIGURED:
+		return false
+	stall_recovered = true
+	epoch = 2
+	# Poll has returned. Close/reconfigure safely, then obtain a fresh token/socket.
+	request_reconnect()
+	return not finished
+
 func _process(_delta: float) -> void:
 	if finished or net == null:
 		return
@@ -251,18 +301,10 @@ func _process(_delta: float) -> void:
 		recover_server()
 		return
 	if role == "client" and reconnect_at > 0 and elapsed >= reconnect_at and not reconnected:
-		net.close()
 		reconnected = true
-		reconnect_wait = true
-		reconnect_started = Time.get_ticks_msec()
-		sent = false
-		# A fresh token is required for the new socket: reusing admission would
-		# trip netcode's replay protection. The lab backend refreshes it locally.
-		var request := FileAccess.open(directory.path_join("reconnect-%d.request" % index), FileAccess.WRITE)
-		if request == null:
-			finish(false, "admission refresh request failed")
+		request_reconnect()
+		if finished:
 			return
-		request.close()
 	if reconnect_wait:
 		if Time.get_ticks_msec() - reconnect_started > 5000:
 			finish(false, "admission refresh watchdog")
@@ -272,11 +314,19 @@ func _process(_delta: float) -> void:
 		reconnect_wait = false
 		if not configure():
 			return
-		net.register_message(&"reply", receive_reply, Net.Sender.SERVER)
 		join("-reconnect")
 		if finished:
 			return
-	if net.poll() != OK:
+	if stall_enabled and role == "client" and index == int(options.get("client-stall-index", 0)) and not stall_injected and elapsed >= float(options["client-stall-at"]) and epoch_inputs.has(1) and net.get_state() == "Connected":
+		stall_injected = true
+		stall_proof = {"old_peer": owner_peer, "old_entity": owned_entity, "before_tick": highest_tick, "before_value": persistent_value}
+		var before := Time.get_ticks_msec()
+		OS.delay_msec(int(options.get("client-stall-ms", 750)))
+		stall_proof.elapsed_ms = Time.get_ticks_msec() - before
+	var poll_error: Error = net.poll()
+	if poll_error != OK:
+		if stall_enabled and role == "client" and recover_stall(poll_error):
+			return
 		finish(false, "poll failed")
 		return
 	if restart_wait:
@@ -296,9 +346,11 @@ func _process(_delta: float) -> void:
 				return
 			finish(admissions.size() == clients and input_clients.size() == clients, "graceful restart checkpoint")
 			return
-	if role != "client" and reconnect_at > 0:
+	if role != "client" and (reconnect_at > 0 or stall_enabled):
 		for client in range(clients):
 			if FileAccess.file_exists(directory.path_join("reconnect-%d.request" % client)) and not FileAccess.file_exists(directory.path_join("client-%d-reconnect.bin" % client)):
+				if stall_enabled and net.get_peers().any(func(peer: Dictionary): return peer.client_id == 10000 + client):
+					continue # Wait for native transport disconnect/ownership revocation.
 				if not publish_token(client, "-reconnect"):
 					return
 	if role == "client":
@@ -306,21 +358,28 @@ func _process(_delta: float) -> void:
 			var record: Dictionary = net.get_entity(handle)
 			var state: Dictionary = record.state
 			highest_tick = maxi(highest_tick, int(state.get("tick", 0)))
-			if restart_enabled and record.kind == 1:
-				if record.authority_peer != -1 or int(state.get("generation", 0)) != epoch:
+			if checks_ownership() and record.kind == 1:
+				if record.authority_peer != -1 or int(state.get("generation", 0)) != (1 if stall_enabled else epoch):
 					finish(false, "stale generation or root authority")
 					return
 				epoch_ticks[epoch] = maxi(int(epoch_ticks.get(epoch, 0)), int(state.get("tick", 0)))
 				epoch_server_pids[epoch] = int(state.get("server_pid", 0))
-				if epoch == 2:
+				if epoch == 2 or stall_enabled:
 					restored_value = int(state.get("restored_value", 0))
 					persistent_value = int(state.get("persistent_value", 0))
-		if restart_enabled and owned_entity != 0 and not input_sent and net.get_state() == "Connected":
+		if checks_ownership() and owned_entity != 0 and not input_sent and net.get_state() == "Connected":
 			var record: Dictionary = net.get_entity(owned_entity)
 			if not record.is_empty():
 				if record.authority_peer != owner_peer or record.state != {"account": 10000 + index, "generation": epoch}:
 					finish(false, "client ownership mismatch")
 					return
+				if stall_recovered:
+					stall_proof.new_peer = owner_peer
+					stall_proof.new_entity = owned_entity
+					if owner_peer == stall_proof.old_peer or owned_entity == stall_proof.old_entity or net.send_input(stall_proof.old_entity, {"account": 10000 + index, "generation": epoch, "sequence": 1}) != OK:
+						finish(false, "fresh owner or stale-input enqueue failed")
+						return
+					stall_proof.stale_input_enqueued = true # Server must drop this revoked entity input.
 				if net.send_input(owned_entity, {"account": 10000 + index, "generation": epoch, "sequence": 1}) != OK:
 					finish(false, "owner input enqueue failed")
 					return
@@ -341,19 +400,29 @@ func _process(_delta: float) -> void:
 				return
 	if label != null:
 		label.text = "EGP Network Lab\n%s %d · %s\n%.1f / %.1f seconds\nPeers: %d · server tick: %d\nLatency: %s ms · jitter: %s ms · loss: %s%%\nReplies: %d · diagnostics: %d" % [role, index, net.get_state(), elapsed, duration, net.get_peers().size(), highest_tick, options.get("latency", "0"), options.get("jitter", "0"), options.get("loss", "0"), replies, diagnostics.size()]
+		if stall_enabled:
+			label.text += "\nClient %s stall: %s ms · recovered: %s" % [options.get("client-stall-index", "0"), options.get("client-stall-ms", "750"), stall_recovered]
 	if elapsed >= duration + (2.0 if role != "client" else 0.0):
 		if role == "client":
-			var passed := replies >= (2 if reconnect_at > 0 or restart_enabled else 1) and highest_tick > 1
+			var stalled_client := stall_enabled and index == int(options.get("client-stall-index", 0))
+			var passed := replies >= (2 if reconnect_at > 0 or restart_enabled or stalled_client else 1) and highest_tick > 1
 			if restart_enabled:
 				passed = passed and disconnected and cleared_on_disconnect and epoch == 2 and epoch_ticks.get(1, 0) > 1 and epoch_ticks.get(2, 0) > 1 and epoch_inputs.has(1) and epoch_inputs.has(2) and restored_value >= 100 and persistent_value > restored_value
+			if stall_enabled:
+				passed = passed and epoch_inputs.has(1) and epoch_ticks.get(1, 0) > 1
+				if stalled_client:
+					passed = passed and stall_injected and stall_recovered and epoch_inputs.has(2) and epoch_ticks.get(2, 0) > stall_proof.before_tick and persistent_value > stall_proof.before_value and epoch_server_pids.get(1) == epoch_server_pids.get(2)
 			finish(passed, "encrypted admission, replies and replicated tick; restart authority/state when requested")
 		else:
 			var passed := admissions.size() == clients
-			if restart_enabled:
+			if checks_ownership():
 				passed = passed and input_clients.size() == clients
 			if reconnect_at > 0:
 				for client in range(clients):
 					passed = passed and generations.get(client, {}).size() >= 2
+			if stall_enabled:
+				for client in range(clients):
+					passed = passed and generations.get(client, {}).size() == (2 if client == int(options.get("client-stall-index", 0)) else 1)
 			finish(passed, "authenticated clients and connection generations")
 
 func finish(passed: bool, message: String) -> void:
@@ -367,5 +436,6 @@ func finish(passed: bool, message: String) -> void:
 		"generation": epoch, "restart_enabled": restart_enabled, "disconnected": disconnected,
 		"cleared_on_disconnect": cleared_on_disconnect, "connection_states": connection_states,
 		"epoch_ticks": epoch_ticks, "epoch_inputs": epoch_inputs, "epoch_server_pids": epoch_server_pids,
-		"restored_value": restored_value, "persistent_value": persistent_value, "input_clients": input_clients.size()}))
+		"restored_value": restored_value, "persistent_value": persistent_value, "input_clients": input_clients.size(),
+		"stall_enabled": stall_enabled, "stall_proof": stall_proof, "peer_generations": generations, "input_generations": input_generations}))
 	get_tree().quit(0 if passed else 1)

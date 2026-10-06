@@ -28,6 +28,9 @@ python misc/scripts/launch_egp_network_lab.py --engine bin/godot.windows.templat
 | `--latency`, `--jitter`, `--loss` | Override preset values; finite bounded numbers required |
 | `--simulate-on both` / `server` / `clients` | Impairment direction; latency on both endpoints increases round-trip time |
 | `--reconnect-at SECONDS` | Close and readmit each client once with refreshed admission; requires three seconds afterward |
+| `--client-stall-at SECONDS` | Delay one fully admitted client's poll beyond the fixed-clock budget, then verify explicit fresh admission/ownership recovery |
+| `--client-stall-ms MILLISECONDS` | Gap from 550 to 5000 ms, default 750; does not change the engine catch-up budget |
+| `--client-stall-index INDEX` | Client to stall, default 0; other clients keep their connections |
 | `--server-restart-at SECONDS` | Replace the dedicated server while keeping the original clients alive |
 | `--server-restart-mode graceful` / `abrupt` | Request a final checkpoint and clean exit, or forcibly terminate the owned server after verifying its latest health checkpoint |
 | `--server-down-for SECONDS` | Outage before replacement, 0..10 seconds; default 1 |
@@ -39,6 +42,33 @@ Replacement requires dedicated mode and cannot be combined with `--reconnect-at`
 It requires at least three seconds before replacement and seven seconds after the
 requested outage. High impairment can still fail those bounds; a failed run is
 retained rather than counted as success. Use `--help` for all numeric limits.
+
+To test recovery after a scheduling stall, use a dedicated server or listen host:
+
+```powershell
+python misc/scripts/launch_egp_network_lab.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --clients 3 --visible --preset wan --duration 20 --client-stall-at 4 --client-stall-ms 750 --client-stall-index 0
+```
+
+The stall cannot overlap manual reconnect or server replacement. It requires
+three seconds before injection and seven seconds after the gap. Injection waits
+for the chosen client's authenticated reply and owner-input acknowledgment.
+The child deliberately delays its next poll; the engine must return `FAILED`,
+emit the catch-up diagnostic, stop its endpoint and clear entities/ticks. Recovery
+runs after poll returns, closes/reconfigures the facade and requests a fresh token
+from the lab backend. The server waits for the old peer to disconnect, verifies
+revoked ownership, removes the abandoned entity and gives the new peer a new owned
+entity. Old-entity input is deliberately sent and must not affect the server's
+counter. New owner input must be acknowledged exactly once.
+
+The receipt independently checks stopped state, cleared caches, reset ticks,
+different peer/entity identities, both connections' input acknowledgments, the
+same authoritative server PID and continued tick/state progress. Other clients
+must retain their original connection and receive the advancing authoritative
+state. All original process PIDs stay alive; no engine budget or timeout is raised.
+This is an explicit application recovery example using a local trusted backend,
+not automatic transport reconnect or production authentication. It covers one
+client stall; server stalls, repeated stalls and physics rollback need separate
+qualification.
 
 The restart fixture checks actual server PID replacement on the same endpoint,
 transport disconnect, cleared client entities, fresh encrypted admission and

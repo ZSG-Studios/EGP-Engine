@@ -124,6 +124,78 @@ def restart_failure(receipt):
     return None
 
 
+def stall_failure(receipt):
+    """Verify a real rejected clock gap and fresh authority in the same processes."""
+    fault = receipt["client_stall"]
+    records = receipt["processes"]
+    servers = [r for r in records if r["role"] in ("server", "host")]
+    peers = [r for r in records if r["role"] == "client"]
+    if len(servers) != 1 or len(peers) != receipt["clients"]:
+        return "Stall test lost its persistent server/client processes"
+    server = servers[0]
+    target = next((r for r in peers if r["result"].get("index") == fault["index"]), None)
+    if target is None:
+        return "Missing stalled-client evidence"
+    result = target["result"]
+    proof = result.get("stall_proof", {})
+    if (
+        not result.get("passed")
+        or target["exit_code"] != 0
+        or proof.get("elapsed_ms", 0) < fault["milliseconds"]
+        or proof.get("elapsed_ms", 0) <= 500
+        or proof.get("poll_error") != 1
+        or proof.get("state_after_failure") != "Stopped"
+        or proof.get("entities_after_failure") != 0
+        or proof.get("tick_after_failure") != 0
+        or proof.get("input_after_failure") != 3
+        or proof.get("stale_input_enqueued") is not True
+        or not proof.get("old_peer")
+        or proof.get("old_peer") == proof.get("new_peer")
+        or not proof.get("old_entity")
+        or proof.get("old_entity") == proof.get("new_entity")
+        or result.get("diagnostics") != ["Fixed simulation exceeded its catch-up budget; resynchronization required."]
+        or result.get("epoch_inputs", {}).get("1") is not True
+        or result.get("epoch_inputs", {}).get("2") is not True
+        or result.get("epoch_ticks", {}).get("2", 0) <= proof.get("before_tick", 0)
+        or any(result.get("epoch_server_pids", {}).get(str(i)) != server["pid"] for i in (1, 2))
+    ):
+        return "Stall test lacks rejected poll, cleared state, fresh peer/owner or authoritative recovery evidence"
+    states = result.get("connection_states", [])
+    if "Stopped" not in states:
+        return "Stalled transport never stopped"
+    split = states.index("Stopped")
+    if "Connected" not in states[:split] or "Connected" not in states[split + 1 :]:
+        return "Stalled client did not reconnect after the rejected poll"
+    authoritative = server["result"]
+    expected = 100 + receipt["clients"] * (receipt["clients"] + 1) // 2 + fault["index"] + 1
+    if authoritative.get("persistent_value") != expected or result.get("persistent_value") != expected:
+        return "Server/client counter includes missing or extra owner-authorized input"
+    for peer in peers:
+        data = peer["result"]
+        index = data.get("index")
+        expected_generations = 2 if index == fault["index"] else 1
+        if (
+            not data.get("passed")
+            or peer["exit_code"] != 0
+            or data.get("highest_tick", 0) <= proof.get("before_tick", 0)
+            or len(authoritative.get("peer_generations", {}).get(str(index), {})) != expected_generations
+            or len(authoritative.get("input_generations", {}).get(str(index), {})) != expected_generations
+            or (
+                index != fault["index"]
+                and (
+                    data.get("diagnostics")
+                    or data.get("generation") != 1
+                    or data.get("replies") != 1
+                    or data.get("connection_states", []).count("Connected") != 1
+                    or "Stopped" in data.get("connection_states", [])[:-1]
+                    or "Disconnected" in data.get("connection_states", [])
+                )
+            )
+        ):
+            return "Healthy-client progress or per-connection ownership input evidence failed"
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, required=True, help="EGP editor or template containing EGPNetSession")
@@ -135,6 +207,18 @@ def main():
     parser.add_argument("--visible", action="store_true", help="Show client windows and the listen-host window")
     parser.add_argument("--duration", type=bounded_float(5, 100), default=8.0, help="Client lifetime in seconds")
     parser.add_argument("--reconnect-at", type=bounded_float(0, 90), default=0.0, help="Reconnect every client once")
+    parser.add_argument(
+        "--client-stall-at",
+        type=bounded_float(0, 90),
+        default=0.0,
+        help="Delay one admitted client's poll, then verify explicit fresh admission and ownership recovery",
+    )
+    parser.add_argument(
+        "--client-stall-ms", type=int, default=750, help="Injected clock gap in milliseconds (550..5000)"
+    )
+    parser.add_argument(
+        "--client-stall-index", type=int, default=0, help="Client to stall; the other clients remain connected"
+    )
     parser.add_argument(
         "--server-restart-at",
         type=bounded_float(0, 90),
@@ -163,6 +247,15 @@ def main():
         parser.error("--port must be 0..65535")
     if args.reconnect_at and not 1 <= args.reconnect_at <= args.duration - 3:
         parser.error("--reconnect-at must leave at least 3 seconds before the duration ends")
+    if not 550 <= args.client_stall_ms <= 5000 or not 0 <= args.client_stall_index < args.clients:
+        parser.error("--client-stall-ms must be 550..5000 and --client-stall-index must name an existing client")
+    if args.client_stall_at:
+        if args.reconnect_at or args.server_restart_at:
+            parser.error("--client-stall-at cannot overlap --reconnect-at or --server-restart-at")
+        if not 3 <= args.client_stall_at <= args.duration - args.client_stall_ms / 1000 - 7:
+            parser.error("--client-stall-at must allow 3 seconds before the stall and 7 seconds after it")
+    elif args.client_stall_ms != 750 or args.client_stall_index != 0:
+        parser.error("--client-stall-ms and --client-stall-index require --client-stall-at")
     if args.server_restart_at:
         if args.mode != "dedicated" or args.reconnect_at:
             parser.error("--server-restart-at requires dedicated mode without --reconnect-at")
@@ -198,6 +291,12 @@ def main():
         "visible": args.visible,
         "duration_seconds": args.duration,
         "reconnect_at_seconds": args.reconnect_at,
+        "client_stall": {
+            "requested": bool(args.client_stall_at),
+            "at_seconds": args.client_stall_at,
+            "milliseconds": args.client_stall_ms,
+            "index": args.client_stall_index,
+        },
         "server_restart": {
             "requested": bool(args.server_restart_at),
             "at_seconds": args.server_restart_at,
@@ -320,6 +419,9 @@ def main():
                     f"--admissions={admission}",
                     f"--duration={args.duration if lifetime is None else lifetime}",
                     f"--reconnect-at={args.reconnect_at}",
+                    f"--client-stall-at={args.client_stall_at}",
+                    f"--client-stall-ms={args.client_stall_ms}",
+                    f"--client-stall-index={args.client_stall_index}",
                     f"--port={args.port if port is None else port}",
                     f"--restart-enabled={int(bool(args.server_restart_at))}",
                     f"--generation={generation}",
@@ -465,6 +567,11 @@ def main():
                 receipt.setdefault("error", f"{name} did not pass cleanly; see its log")
         if args.server_restart_at and receipt["passed"]:
             failure = restart_failure(receipt)
+            if failure:
+                receipt["passed"] = False
+                receipt["error"] = failure
+        if args.client_stall_at and receipt["passed"]:
+            failure = stall_failure(receipt)
             if failure:
                 receipt["passed"] = False
                 receipt["error"] = failure
