@@ -117,6 +117,7 @@ def main():
         dirs_exist_ok=True,
     )
     shutil.copy2(ROOT / "modules/egp_net/samples/gdscript/processes.gd", project / "ProcessPeer.gd")
+    shutil.copy2(ROOT / "misc/egp/network_lab/process_clock_server.gd", project / "ClockServer.gd")
     env = os.environ.copy()
     # Godot packages all have the same development version: never reuse a stale cache.
     env["NUGET_PACKAGES"] = str(output / "nuget-packages")
@@ -145,6 +146,9 @@ def main():
             "modules/egp_net/samples/trilingual/extension/probe.cpp",
             "misc/scripts/validate_egp_net_languages.py",
             "misc/scripts/test_egp_net_language_clock.py",
+            "misc/egp/network_lab/process_clock_server.gd",
+            "misc/scripts/validate_egp_net_clock_process.py",
+            "misc/scripts/test_egp_net_clock_process.py",
         )
     })
 
@@ -191,6 +195,12 @@ def main():
                 if failure:
                     checks[-1]["passed"] = passed = False
                     checks[-1]["evidence_failure"] = failure
+        elif marker == "EGP_CLOCK_PROCESSES":
+            match = re.search(r"EGP_CLOCK_PROCESSES (\{[^\n]+\})", text)
+            if match:
+                receipt[label] = json.loads(match.group(1))
+                if receipt[label].get("passed") is not True:
+                    checks[-1]["passed"] = passed = False
         (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
         print(label, "PASS" if passed else "FAIL", flush=True)
         if not passed:
@@ -243,6 +253,22 @@ def main():
                 ],
                 40,
                 "EGP_NETWORK_PROCESSES",
+            )
+        for language in ("csharp", "cpp"):
+            run(
+                "clock-processes-" + language,
+                [
+                    sys.executable,
+                    ROOT / "misc/scripts/validate_egp_net_clock_process.py",
+                    "--engine",
+                    engine,
+                    "--project",
+                    project,
+                    "--client-language",
+                    language,
+                ],
+                50,
+                "EGP_CLOCK_PROCESSES",
             )
         if args.release_template:
             command = [
@@ -329,6 +355,21 @@ debug/export_console_wrapper=0
                     ],
                     40,
                     "EGP_NETWORK_PROCESSES",
+                    cwd=relocated,
+                )
+            for language in ("csharp", "cpp"):
+                run(
+                    "export-clock-processes-" + language + suffix,
+                    [
+                        sys.executable,
+                        ROOT / "misc/scripts/validate_egp_net_clock_process.py",
+                        "--engine",
+                        game,
+                        "--client-language",
+                        language,
+                    ],
+                    50,
+                    "EGP_CLOCK_PROCESSES",
                     cwd=relocated,
                 )
             receipt[configuration + "_export"] = {

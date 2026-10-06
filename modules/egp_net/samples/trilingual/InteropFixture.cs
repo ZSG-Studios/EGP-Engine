@@ -26,6 +26,12 @@ public partial class InteropFixture : Node
     {
         try {
             var args = OS.GetCmdlineUserArgs();
+            if (System.Array.IndexOf(args, "--fixture=clock-processes") >= 0) {
+                string handoff = "", language = "csharp";
+                foreach (var arg in args) { if (arg.StartsWith("--handoff=")) handoff = arg[10..]; if (arg.StartsWith("--language=")) language = arg[11..]; }
+                if (System.Array.IndexOf(args, "--role=server") >= 0) { AddChild((Node)ResourceLoader.Load<Script>("res://ClockServer.gd").Call("new").AsGodotObject()); return; }
+                await RunClockClient(handoff, language); Cleanup(); GetTree().Quit(); return;
+            }
             if (System.Array.IndexOf(args, "--fixture=processes") >= 0) {
                 if (System.Array.IndexOf(args, "--role=client") >= 0 && System.Array.IndexOf(args, "--language=gdscript") >= 0) {
                     AddChild((Node)ResourceLoader.Load<Script>("res://ProcessPeer.gd").Call("new").AsGodotObject()); return;
@@ -84,6 +90,59 @@ public partial class InteropFixture : Node
         bool passed = role == "server" ? drain >= 15 : cppPeer != null ? cppPeer.Call("status").AsGodotDictionary()["process_passed"].AsBool() : sawEntity && replied;
         Check(passed, "separate process watchdog/result");
         GD.Print("EGP_NETWORK_PROCESS " + Json.Stringify(new Dictionary { ["passed"] = true, ["role"] = role, ["language"] = language, ["message"] = "encrypted admission, identity, baseline and reply" }));
+    }
+    private async Task RunClockClient(string handoff, string language)
+    {
+        if (language == "cpp") {
+            cppPeer = (Node)ClassDB.Instantiate("EGPNetCppProbe").AsGodotObject(); AddChild(cppPeer);
+            Check(CallError(cppPeer, "start_clock_process", handoff, System.IO.File.ReadAllText(System.IO.Path.Combine(handoff, "profile.txt"))) == Error.Ok, "C++ clock process configure");
+            ulong deadline = Time.GetTicksMsec() + 30000;
+            while (Time.GetTicksMsec() < deadline) {
+                var result = cppPeer.Call("clock_process_tick").AsGodotDictionary();
+                if (result["done"].AsBool()) { Check(result["passed"].AsBool(), "C++ clock process result: " + result["message"].AsString()); GD.Print("EGP_CLOCK_PROCESS " + Json.Stringify(result)); return; }
+                await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+            }
+            throw new InvalidOperationException("C++ clock process watchdog");
+        }
+        server = new NetNode { AutoPoll = false }; AddChild(server);
+        var states = new Array(); var polls = new Array(); var epochs = new Array(); var disconnects = new Array();
+        server.StateChanged += s => states.Add(s);
+        Check(server.Configure(new NetOptions { SimulationFingerprint = System.IO.File.ReadAllText(System.IO.Path.Combine(handoff, "profile.txt")), MaxPlayers = 1, MaxEntities = 2, SimulatedLatencyMs = 20, SimulatedJitterMs = 5 }) == Error.Ok, "C# clock process profile");
+        ulong native = server.NativeSession!.GetInstanceId(); int epoch = 1, drain = 0; long entity = 0, retired = 0;
+        bool joined = false, sent = false, reply = false; byte[] previous = System.Array.Empty<byte>();
+        server.RegisterMessage("reply", Callable.From<long, Array>((_, args) => { Check(args.Count == 1 && args[0].AsInt32() == epoch, "C# epoch reply"); reply = true; }), Sender.Server);
+        ulong start = Time.GetTicksMsec();
+        while (Time.GetTicksMsec() - start < 30000) {
+            polls.Add(DateTimeOffset.UtcNow.ToUnixTimeMilliseconds()); CheckPoll(server.Poll());
+            if (server.State == "Disconnected") {
+                Check(epoch < 4 && sent && server.GetEntities().Count == 0 && server.SendInput(entity, new()) == Error.Unconfigured, "C# native disconnect clears physics baseline");
+                disconnects.Add(new Dictionary { ["epoch"] = epoch, ["entity"] = entity, ["utc_ms"] = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), ["cleared"] = true });
+                server.Stop(); epoch++; retired = entity; joined = sent = reply = false; drain = 0;
+            }
+            if (!joined) {
+                string path = System.IO.Path.Combine(handoff, $"epoch-{epoch}.bin");
+                if (System.IO.File.Exists(path) && new System.IO.FileInfo(path).Length == 2048) {
+                    byte[] token = System.IO.File.ReadAllBytes(path);
+                    Check(!token.AsSpan().SequenceEqual(previous) && server.JoinToken(9876, token) == Error.Ok && server.NativeSession!.GetInstanceId() == native, "C# fresh process admission retains session");
+                    previous = token; joined = true;
+                }
+            }
+            if (server.State == "Connected" && !sent && server.GetEntities().Count == 1) {
+                entity = server.GetEntities()[0].AsInt64(); var record = server.GetEntity(entity); var state = record["state"].AsGodotDictionary();
+                if (PhysicsTick(record) > 0 && state["epoch"].AsInt32() == epoch) {
+                    Check(entity != retired && server.GetEntity(retired).Count == 0 && record["authority_peer"].AsInt64() > 0, "C# fresh owned process physics baseline");
+                    Check(server.SendInput(entity, new() { ["epoch"] = epoch }) == Error.Ok && server.SendMessage(0, "ready", new Array { epoch, entity, PhysicsTick(record) }) == Error.Ok, "C# process input/ready");
+                    epochs.Add(new Dictionary { ["epoch"] = epoch, ["entity"] = entity, ["physics_tick"] = PhysicsTick(record), ["same_session"] = true, ["fresh_token"] = true, ["retired_absent"] = true }); sent = true;
+                }
+            }
+            if (reply && drain == 0) { Check(server.SendMessage(0, "ack", new Array { epoch }) == Error.Ok, "C# process reply ack"); drain = 1; }
+            if (epoch == 4 && drain > 0 && ++drain >= 15) {
+                server.Stop();
+                GD.Print("EGP_CLOCK_PROCESS " + Json.Stringify(new Dictionary { ["passed"] = true, ["role"] = "client", ["language"] = "csharp", ["pid"] = OS.GetProcessId(), ["epochs"] = epochs, ["disconnects"] = disconnects, ["states"] = states, ["poll_utc_ms"] = polls, ["message"] = "independent authority disconnect and fresh physics baseline" })); return;
+            }
+            await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+        }
+        throw new InvalidOperationException("C# clock process watchdog");
     }
     private void Cleanup()
     {

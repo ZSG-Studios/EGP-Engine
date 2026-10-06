@@ -5,6 +5,7 @@
 #include <godot_cpp/variant/callable_method_pointer.hpp>
 #include <godot_cpp/classes/os.hpp>
 #include <godot_cpp/classes/time.hpp>
+#include <godot_cpp/classes/file_access.hpp>
 #include <memory>
 using namespace godot;
 namespace net = egp::networking;
@@ -31,6 +32,18 @@ class EGPNetCppProbe : public Node {
     Array recovery_client_states;
     int64_t recovery_peer = 0, recovery_entity = 0;
     int recovery_cycle = 0, recovery_inputs = 0, recovery_invalid_inputs = 0;
+    String clock_handoff, clock_message;
+    int clock_epoch = 1, clock_drain = 0;
+    int64_t clock_entity = 0, clock_retired = 0;
+    bool clock_joined = false, clock_sent = false, clock_reply_seen = false, clock_done = false;
+    Ref<RefCounted> clock_client_native;
+    PackedByteArray clock_previous_token;
+    Array clock_epochs, clock_disconnects, clock_states, clock_polls;
+    void clock_state(const String &state) { clock_states.push_back(state); }
+    void clock_reply(int64_t peer, const Array &args) {
+        if (peer != 0 || args.size() != 1 || int64_t(args[0]) != clock_epoch) { clock_done = true; clock_message = "unexpected epoch reply"; }
+        else clock_reply_seen = true;
+    }
     void clock_diagnostic(const String &message) { clock_diagnostics.push_back(message); }
     void recovery_state(const String &state) { recovery_client_states.push_back(state); }
     void recovery_input(int64_t peer, int64_t entity, const Dictionary &input) {
@@ -63,6 +76,8 @@ protected:
         ClassDB::bind_method(D_METHOD("start_process", "token"), &EGPNetCppProbe::start_process);
         ClassDB::bind_method(D_METHOD("stop"), &EGPNetCppProbe::stop);
         ClassDB::bind_method(D_METHOD("clock_recovery_check"), &EGPNetCppProbe::clock_recovery_check);
+        ClassDB::bind_method(D_METHOD("start_clock_process", "handoff", "fingerprint"), &EGPNetCppProbe::start_clock_process);
+        ClassDB::bind_method(D_METHOD("clock_process_tick"), &EGPNetCppProbe::clock_process_tick);
     }
 public:
     int start(const PackedByteArray &token, const PackedByteArray &low_token) {
@@ -133,6 +148,55 @@ public:
         net::Options options; options.game_protocol = "egp-process-fixture-v1"; options.max_players = 2; options.max_entities = 2;
         if (high->configure(options) != OK || high->register_message("reply", callable_mp(this, &EGPNetCppProbe::process_reply), net::Sender::Server) != OK) return FAILED;
         process_mode = true; return high->join_token(9876, token);
+    }
+    int start_clock_process(const String &handoff, const String &fingerprint) {
+        stop(); clock_handoff = handoff;
+        high = std::make_unique<net::Net>(*this); high->set_auto_poll(false);
+        net::Options options; options.simulation_fingerprint = fingerprint; options.max_players = 1; options.max_entities = 2;
+        options.simulated_latency_ms = 20; options.simulated_jitter_ms = 5;
+        if (high->connect("state_changed", callable_mp(this, &EGPNetCppProbe::clock_state)) != OK || high->configure(options) != OK
+            || high->register_message("reply", callable_mp(this, &EGPNetCppProbe::clock_reply), net::Sender::Server) != OK) return FAILED;
+        clock_client_native = high->native_session(); return OK;
+    }
+    Dictionary clock_process_tick() {
+        auto finish = [&](bool passed, const String &message) {
+            Dictionary r; r["done"] = true; r["passed"] = passed; r["role"] = "client"; r["language"] = "cpp"; r["pid"] = OS::get_singleton()->get_process_id();
+            r["epochs"] = clock_epochs; r["disconnects"] = clock_disconnects; r["states"] = clock_states; r["poll_utc_ms"] = clock_polls; r["message"] = message; return r;
+        };
+        if (clock_done) return finish(false, clock_message);
+        clock_polls.push_back(int64_t(Time::get_singleton()->get_unix_time_from_system() * 1000));
+        if (poll() != OK) return finish(false, "independent client polling failed");
+        if (high->state() == "Disconnected") {
+            if (clock_epoch >= 4 || !clock_sent || !high->entities().is_empty() || high->send_input(clock_entity, Dictionary()) != ERR_UNCONFIGURED) return finish(false, "native disconnect baseline/input");
+            Dictionary d; d["epoch"] = clock_epoch; d["entity"] = clock_entity; d["cleared"] = true; d["utc_ms"] = int64_t(Time::get_singleton()->get_unix_time_from_system() * 1000); clock_disconnects.push_back(d);
+            high->stop(); ++clock_epoch; clock_retired = clock_entity; clock_joined = clock_sent = clock_reply_seen = false; clock_drain = 0;
+        }
+        if (!clock_joined) {
+            const String path = clock_handoff.path_join("epoch-" + String::num_int64(clock_epoch) + ".bin");
+            if (FileAccess::file_exists(path)) {
+                PackedByteArray token = FileAccess::get_file_as_bytes(path);
+                if (token.size() == 2048) {
+                    if (token == clock_previous_token || high->join_token(9876, token) != OK || high->native_session() != clock_client_native) return finish(false, "fresh admission/session retention");
+                    clock_previous_token = token; clock_joined = true;
+                }
+            }
+        }
+        if (high->state() == "Connected" && !clock_sent && high->entities().size() == 1) {
+            clock_entity = high->entities()[0]; Dictionary record = high->entity(clock_entity); Dictionary state = record["state"];
+            const int64_t tick = state.get("physics_tick", 0);
+            if (tick > 0 && int64_t(state.get("epoch", 0)) == clock_epoch) {
+                if (clock_entity == clock_retired || !high->entity(clock_retired).is_empty() || int64_t(record["authority_peer"]) <= 0) return finish(false, "fresh owned physics baseline");
+                Dictionary input; input["epoch"] = clock_epoch; Array args; args.push_back(clock_epoch); args.push_back(clock_entity); args.push_back(tick);
+                if (high->send_input(clock_entity, input) != OK || high->send_message(0, "ready", args) != OK) return finish(false, "owner input/ready");
+                Dictionary d; d["epoch"] = clock_epoch; d["entity"] = clock_entity; d["physics_tick"] = tick; d["same_session"] = true; d["fresh_token"] = true; d["retired_absent"] = true; clock_epochs.push_back(d); clock_sent = true;
+            }
+        }
+        if (clock_reply_seen && clock_drain == 0) {
+            Array args; args.push_back(clock_epoch);
+            if (high->send_message(0, "ack", args) != OK) return finish(false, "epoch reply acknowledgement"); clock_drain = 1;
+        }
+        if (clock_epoch == 4 && clock_drain > 0 && ++clock_drain >= 15) { high->stop(); return finish(true, "independent authority disconnect and fresh physics baseline"); }
+        Dictionary pending; pending["done"] = false; return pending;
     }
     Dictionary clock_recovery_check() {
         Dictionary proof; Array cycles; proof["passed"] = false; proof["cycles"] = cycles;
