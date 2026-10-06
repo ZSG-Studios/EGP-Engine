@@ -39,15 +39,6 @@
 				Sets the value of the specified parameter.
 			</description>
 		</method>
-		<method name="is_spring_enabled" qualifiers="const">
-			<return type="bool" />
-			<description>Returns whether [member spring/enabled] is enabled.</description>
-		</method>
-		<method name="set_spring_enabled">
-			<return type="void" />
-			<param index="0" name="enabled" type="bool" />
-			<description>Enables or disables [member spring/enabled]. This boolean API updates the corresponding native joint parameter.</description>
-		</method>
 	</methods>
 	<members>
 		<member name="angular_limit/enable" type="bool" setter="set_flag" getter="get_flag" default="false">
@@ -68,8 +59,14 @@
 		<member name="motor/target_velocity" type="float" setter="set_param" getter="get_param" default="1.0">
 			Target speed for the motor.
 		</member>
-		<member name="spring/enabled" type="bool" setter="set_spring_enabled" getter="is_spring_enabled">
+		<member name="spring/damping_ratio" type="float" setter="set_param" getter="get_param" default="1.0">
+		</member>
+		<member name="spring/enabled" type="bool" setter="set_spring_enabled" getter="is_spring_enabled" default="false">
 			Enables the native joint spring. Use the corresponding frequency, target and force or torque parameters to tune its behavior.
+		</member>
+		<member name="spring/frequency" type="float" setter="set_param" getter="get_param" default="0.0">
+		</member>
+		<member name="spring/target_angle" type="float" setter="set_param" getter="get_param" default="0.0">
 		</member>
 	</members>
 	<constants>

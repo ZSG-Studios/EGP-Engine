@@ -47,6 +47,7 @@ Validate extension JSON: API was removed: classes/MultiplayerSynchronizer
 Validate extension JSON: API was removed: classes/Node/methods/get_multiplayer
 Validate extension JSON: API was removed: classes/Node/methods/get_multiplayer_authority
 Validate extension JSON: API was removed: classes/Node/methods/get_node_rpc_config
+Validate extension JSON: API was removed: classes/Node/methods/get_rpc_config
 Validate extension JSON: API was removed: classes/Node/methods/is_multiplayer_authority
 Validate extension JSON: API was removed: classes/Node/methods/rpc
 Validate extension JSON: API was removed: classes/Node/methods/rpc_config

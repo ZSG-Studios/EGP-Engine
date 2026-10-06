@@ -12,6 +12,7 @@ class ForkCompatibilityTests(unittest.TestCase):
     def test_removed_classes_and_methods(self):
         self.assertTrue(compatibility.is_retired_api("classes/ENetConnection/methods/create_host"))
         self.assertTrue(compatibility.is_retired_api("classes/Node/methods/rpc_id"))
+        self.assertTrue(compatibility.is_retired_api("classes/Node/methods/get_rpc_config"))
         self.assertTrue(compatibility.is_retired_api("builtin_classes/Callable/methods/rpc"))
 
     def test_retained_and_unrecognized_apis_remain_checked(self):

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="Box3DPhysicsDirectBodyState3D" inherits="PhysicsDirectBodyState3D" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
+	<brief_description>
+		Direct body state provided by the Box3D physics backend.
+	</brief_description>
+	<description>
+		Implements [PhysicsDirectBodyState3D] for Box3D bodies. The inherited body-state API is used by [PhysicsServer3D] and [RigidBody3D] force integration. Follow the lifetime and physics-step requirements of [PhysicsDirectBodyState3D].
+	</description>
+	<tutorials>
+	</tutorials>
+</class>

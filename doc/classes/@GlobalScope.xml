@@ -1553,6 +1553,9 @@
 		<member name="AudioServer" type="AudioServer" setter="" getter="">
 			The [AudioServer] singleton.
 		</member>
+		<member name="Box2DPhysicsServer2D" type="Box2DPhysicsServer2D" setter="" getter="">
+			The [Box2DPhysicsServer2D] singleton, implementing [PhysicsServer2D].
+		</member>
 		<member name="CameraServer" type="CameraServer" setter="" getter="">
 			The [CameraServer] singleton.
 		</member>
@@ -1630,13 +1633,13 @@
 		<member name="Performance" type="Performance" setter="" getter="">
 			The [Performance] singleton.
 		</member>
-		<member name="PhysicsServer2D" type="PhysicsServer2D" setter="" getter="">
+		<member name="PhysicsServer2D" type="Box2DPhysicsServer2D" setter="" getter="">
 			The [PhysicsServer2D] singleton.
 		</member>
 		<member name="PhysicsServer2DManager" type="PhysicsServer2DManager" setter="" getter="">
 			The [PhysicsServer2DManager] singleton.
 		</member>
-		<member name="PhysicsServer3D" type="PhysicsServer3D" setter="" getter="">
+		<member name="PhysicsServer3D" type="Box3DPhysicsServer3D" setter="" getter="">
 			The [PhysicsServer3D] singleton.
 		</member>
 		<member name="PhysicsServer3DManager" type="PhysicsServer3DManager" setter="" getter="">

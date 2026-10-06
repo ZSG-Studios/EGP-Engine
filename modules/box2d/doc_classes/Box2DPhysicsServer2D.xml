@@ -1,7 +1,11 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="Box2DPhysicsServer2D" inherits="PhysicsServer2D" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
-	<brief_description>Native Box2D physics server with body metadata and move events.</brief_description>
-	<description>This backend is provided when the Box2D module is enabled. Obtain the active server or world direct state; do not instantiate this abstract class directly.</description>
+<class name="Box2DPhysicsServer2D" inherits="PhysicsServer2D" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Native Box2D physics server with body metadata and move events.
+	</brief_description>
+	<description>
+		This backend is provided when the Box2D module is enabled. Obtain the active server or world direct state; do not instantiate this abstract class directly.
+	</description>
 	<tutorials>
 	</tutorials>
 	<methods>

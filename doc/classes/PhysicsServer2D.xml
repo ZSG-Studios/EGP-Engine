@@ -1032,7 +1032,9 @@
 		<method name="space_get_contact_count" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="space" type="RID" />
-			<description>Returns the number of debug contact points captured in the last physics step. Enable collection with [method space_set_debug_contacts].</description>
+			<description>
+				Returns the number of debug contact points captured in the last physics step. Enable collection with [method space_set_debug_contacts].
+			</description>
 		</method>
 		<method name="space_get_contact_hit_events" qualifiers="const">
 			<return type="Array" />
@@ -1044,7 +1046,9 @@
 		<method name="space_get_contacts" qualifiers="const">
 			<return type="PackedVector2Array" />
 			<param index="0" name="space" type="RID" />
-			<description>Returns a copy of the debug contact positions in world coordinates from the last physics step. Collection is bounded by [method space_set_debug_contacts].</description>
+			<description>
+				Returns a copy of the debug contact positions in world coordinates from the last physics step. Collection is bounded by [method space_set_debug_contacts].
+			</description>
 		</method>
 		<method name="space_get_direct_state">
 			<return type="PhysicsDirectSpaceState2D" />
@@ -1087,7 +1091,9 @@
 			<return type="void" />
 			<param index="0" name="space" type="RID" />
 			<param index="1" name="max_contacts" type="int" />
-			<description>Sets the maximum number of debug contact points collected per physics step. A value of [code]0[/code] disables collection. Use [method space_get_contacts] and [method space_get_contact_count] to read the captured points.</description>
+			<description>
+				Sets the maximum number of debug contact points collected per physics step. A value of [code]0[/code] disables collection. Use [method space_get_contacts] and [method space_get_contact_count] to read the captured points.
+			</description>
 		</method>
 		<method name="space_set_param">
 			<return type="void" />
@@ -1129,6 +1135,30 @@
 		</constant>
 		<constant name="SHAPE_CONCAVE_POLYGON" value="7" enum="ShapeType">
 			This is the constant for creating concave polygon shapes. A polygon is defined by a list of points. It can be used for intersections checks, but not for inside/outside checks.
+		</constant>
+		<constant name="SPACE_PARAM_CONTACT_HERTZ" value="0" enum="SpaceParameter">
+			Contact stiffness in cycles per second.
+		</constant>
+		<constant name="SPACE_PARAM_CONTACT_DAMPING_RATIO" value="1" enum="SpaceParameter">
+			Contact damping ratio; 1 is critical damping.
+		</constant>
+		<constant name="SPACE_PARAM_CONTACT_MAX_PUSH_SPEED" value="2" enum="SpaceParameter">
+			Maximum contact penetration correction speed in world units per second.
+		</constant>
+		<constant name="SPACE_PARAM_RESTITUTION_THRESHOLD" value="3" enum="SpaceParameter">
+			Minimum collision speed for restitution in world units per second.
+		</constant>
+		<constant name="SPACE_PARAM_MAXIMUM_LINEAR_SPEED" value="4" enum="SpaceParameter">
+			Maximum body linear speed in world units per second.
+		</constant>
+		<constant name="SPACE_PARAM_SLEEP_ENABLED" value="5" enum="SpaceParameter">
+			Whether native body sleeping is enabled (0 or 1).
+		</constant>
+		<constant name="SPACE_PARAM_CONTINUOUS_ENABLED" value="6" enum="SpaceParameter">
+			Whether native continuous collision detection is enabled (0 or 1).
+		</constant>
+		<constant name="SPACE_PARAM_WARM_STARTING_ENABLED" value="7" enum="SpaceParameter">
+			Whether cached constraint impulses are reused (0 or 1).
 		</constant>
 		<constant name="AREA_PARAM_GRAVITY_OVERRIDE_MODE" value="0" enum="AreaParameter">
 			Constant to set/get gravity override mode in an area. See [enum AreaSpaceOverrideMode] for possible values. The default value of this parameter is [constant AREA_SPACE_OVERRIDE_DISABLED].
@@ -1253,6 +1283,12 @@
 		<constant name="BODY_STATE_CAN_SLEEP" value="4" enum="BodyState">
 			Constant to set/get whether the body can sleep.
 		</constant>
+		<constant name="JOINT_PARAM_HERTZ" value="0" enum="JointParam">
+			Native joint constraint frequency in hertz.
+		</constant>
+		<constant name="JOINT_PARAM_DAMPING_RATIO" value="1" enum="JointParam">
+			Native joint constraint damping ratio.
+		</constant>
 		<constant name="JOINT_TYPE_PIN" value="0" enum="JointType">
 			Constant to create pin joints.
 		</constant>
@@ -1330,36 +1366,6 @@
 		</constant>
 		<constant name="INFO_ISLAND_COUNT" value="2" enum="ProcessInfo">
 			Constant to get the number of space regions where a collision could occur.
-		</constant>
-		<constant name="SPACE_PARAM_CONTACT_HERTZ" value="0" enum="SpaceParameter">
-			Contact stiffness in cycles per second.
-		</constant>
-		<constant name="SPACE_PARAM_CONTACT_DAMPING_RATIO" value="1" enum="SpaceParameter">
-			Contact damping ratio; 1 is critical damping.
-		</constant>
-		<constant name="SPACE_PARAM_CONTACT_MAX_PUSH_SPEED" value="2" enum="SpaceParameter">
-			Maximum contact penetration correction speed in world units per second.
-		</constant>
-		<constant name="SPACE_PARAM_RESTITUTION_THRESHOLD" value="3" enum="SpaceParameter">
-			Minimum collision speed for restitution in world units per second.
-		</constant>
-		<constant name="SPACE_PARAM_MAXIMUM_LINEAR_SPEED" value="4" enum="SpaceParameter">
-			Maximum body linear speed in world units per second.
-		</constant>
-		<constant name="SPACE_PARAM_SLEEP_ENABLED" value="5" enum="SpaceParameter">
-			Whether native body sleeping is enabled (0 or 1).
-		</constant>
-		<constant name="SPACE_PARAM_CONTINUOUS_ENABLED" value="6" enum="SpaceParameter">
-			Whether native continuous collision detection is enabled (0 or 1).
-		</constant>
-		<constant name="SPACE_PARAM_WARM_STARTING_ENABLED" value="7" enum="SpaceParameter">
-			Whether cached constraint impulses are reused (0 or 1).
-		</constant>
-		<constant name="JOINT_PARAM_HERTZ" value="0" enum="JointParam">
-			Native joint constraint frequency in hertz.
-		</constant>
-		<constant name="JOINT_PARAM_DAMPING_RATIO" value="1" enum="JointParam">
-			Native joint constraint damping ratio.
 		</constant>
 	</constants>
 </class>

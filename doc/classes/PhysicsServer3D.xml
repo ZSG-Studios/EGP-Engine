@@ -1439,7 +1439,9 @@
 		<method name="space_get_contact_count" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="space" type="RID" />
-			<description>Returns the number of debug contact points captured in the last physics step. Enable collection with [method space_set_debug_contacts].</description>
+			<description>
+				Returns the number of debug contact points captured in the last physics step. Enable collection with [method space_set_debug_contacts].
+			</description>
 		</method>
 		<method name="space_get_contact_hit_events" qualifiers="const">
 			<return type="Array" />
@@ -1451,7 +1453,9 @@
 		<method name="space_get_contacts" qualifiers="const">
 			<return type="PackedVector3Array" />
 			<param index="0" name="space" type="RID" />
-			<description>Returns a copy of the debug contact positions in world coordinates from the last physics step. Collection is bounded by [method space_set_debug_contacts].</description>
+			<description>
+				Returns a copy of the debug contact positions in world coordinates from the last physics step. Collection is bounded by [method space_set_debug_contacts].
+			</description>
 		</method>
 		<method name="space_get_direct_state">
 			<return type="PhysicsDirectSpaceState3D" />
@@ -1494,7 +1498,9 @@
 			<return type="void" />
 			<param index="0" name="space" type="RID" />
 			<param index="1" name="max_contacts" type="int" />
-			<description>Sets the maximum number of debug contact points collected per physics step. A value of [code]0[/code] disables collection. Use [method space_get_contacts] and [method space_get_contact_count] to read the captured points.</description>
+			<description>
+				Sets the maximum number of debug contact points collected per physics step. A value of [code]0[/code] disables collection. Use [method space_get_contacts] and [method space_get_contact_count] to read the captured points.
+			</description>
 		</method>
 		<method name="space_set_param">
 			<return type="void" />
@@ -1571,18 +1577,6 @@
 			The strength with which the pinned objects try to stay in velocity relation to each other. The higher, the stronger.
 			[b]Note:[/b] This compatibility parameter is not implemented by the Box3D backend.
 		</constant>
-		<constant name="HINGE_JOINT_LIMIT_UPPER" value="0" enum="HingeJointParam">
-			The maximum rotation across the Hinge.
-		</constant>
-		<constant name="HINGE_JOINT_LIMIT_LOWER" value="1" enum="HingeJointParam">
-			The minimum rotation across the Hinge.
-		</constant>
-		<constant name="HINGE_JOINT_MOTOR_TARGET_VELOCITY" value="2" enum="HingeJointParam">
-			Target speed for the motor.
-		</constant>
-		<constant name="HINGE_JOINT_MOTOR_MAX_TORQUE" value="3" enum="HingeJointParam">
-			Maximum torque applied by the native hinge motor.
-		</constant>
 		<constant name="HINGE_JOINT_SPRING_ENABLED" value="4" enum="HingeJointParam">
 			Enables the native joint spring. Pass [code]1.0[/code] to enable or [code]0.0[/code] to disable.
 		</constant>
@@ -1594,6 +1588,18 @@
 		</constant>
 		<constant name="HINGE_JOINT_SPRING_TARGET_ANGLE" value="7" enum="HingeJointParam">
 			Native hinge spring target angle in radians.
+		</constant>
+		<constant name="HINGE_JOINT_LIMIT_UPPER" value="0" enum="HingeJointParam">
+			The maximum rotation across the Hinge.
+		</constant>
+		<constant name="HINGE_JOINT_LIMIT_LOWER" value="1" enum="HingeJointParam">
+			The minimum rotation across the Hinge.
+		</constant>
+		<constant name="HINGE_JOINT_MOTOR_TARGET_VELOCITY" value="2" enum="HingeJointParam">
+			Target speed for the motor.
+		</constant>
+		<constant name="HINGE_JOINT_MOTOR_MAX_TORQUE" value="3" enum="HingeJointParam">
+			Maximum torque applied by the native hinge motor.
 		</constant>
 		<constant name="HINGE_JOINT_FLAG_USE_LIMIT" value="0" enum="HingeJointFlag">
 			If [code]true[/code], the Hinge has a maximum and a minimum rotation.
@@ -1792,6 +1798,39 @@
 		<constant name="SHAPE_SOFT_BODY" value="9" enum="ShapeType">
 			Constant used internally for a soft body shape. Any attempt to create this kind of shape results in an error.
 		</constant>
+		<constant name="SPACE_PARAM_CONTACT_RECYCLE_RADIUS" value="0" enum="SpaceParameter">
+			Distance used to recycle Box3D contact points in meters.
+		</constant>
+		<constant name="SPACE_PARAM_CONTACT_HERTZ" value="1" enum="SpaceParameter">
+			Contact stiffness in cycles per second.
+		</constant>
+		<constant name="SPACE_PARAM_CONTACT_DAMPING_RATIO" value="2" enum="SpaceParameter">
+			Contact damping ratio; 1 is critical damping.
+		</constant>
+		<constant name="SPACE_PARAM_CONTACT_MAX_PUSH_SPEED" value="3" enum="SpaceParameter">
+			Maximum contact penetration correction speed in world units per second.
+		</constant>
+		<constant name="SPACE_PARAM_RESTITUTION_THRESHOLD" value="4" enum="SpaceParameter">
+			Minimum collision speed for restitution in world units per second.
+		</constant>
+		<constant name="SPACE_PARAM_MAXIMUM_LINEAR_SPEED" value="5" enum="SpaceParameter">
+			Maximum body linear speed in world units per second.
+		</constant>
+		<constant name="SPACE_PARAM_SLEEP_ENABLED" value="6" enum="SpaceParameter">
+			Whether native body sleeping is enabled (0 or 1).
+		</constant>
+		<constant name="SPACE_PARAM_CONTINUOUS_ENABLED" value="7" enum="SpaceParameter">
+			Whether native continuous collision detection is enabled (0 or 1).
+		</constant>
+		<constant name="SPACE_PARAM_WARM_STARTING_ENABLED" value="8" enum="SpaceParameter">
+			Whether cached constraint impulses are reused (0 or 1).
+		</constant>
+		<constant name="SPACE_PARAM_RESTITUTION_ITERATIONS" value="9" enum="SpaceParameter">
+			Number of iterations in the native restitution solver (integer from 1 through 63).
+		</constant>
+		<constant name="SPACE_PARAM_RESTITUTION_PROPAGATION_ENABLED" value="10" enum="SpaceParameter">
+			Whether native restitution propagation is enabled (0 or 1).
+		</constant>
 		<constant name="AREA_PARAM_GRAVITY_OVERRIDE_MODE" value="0" enum="AreaParameter">
 			Constant to set/get gravity override mode in an area. See [enum AreaSpaceOverrideMode] for possible values.
 		</constant>
@@ -1963,39 +2002,6 @@
 		</constant>
 		<constant name="BODY_AXIS_ANGULAR_Z" value="32" enum="BodyAxis">
 			Body angular motion axis Z. Use with [method body_set_axis_lock] and [method body_is_axis_locked].
-		</constant>
-		<constant name="SPACE_PARAM_CONTACT_RECYCLE_RADIUS" value="0" enum="SpaceParameter">
-			Distance used to recycle Box3D contact points in meters.
-		</constant>
-		<constant name="SPACE_PARAM_CONTACT_HERTZ" value="1" enum="SpaceParameter">
-			Contact stiffness in cycles per second.
-		</constant>
-		<constant name="SPACE_PARAM_CONTACT_DAMPING_RATIO" value="2" enum="SpaceParameter">
-			Contact damping ratio; 1 is critical damping.
-		</constant>
-		<constant name="SPACE_PARAM_CONTACT_MAX_PUSH_SPEED" value="3" enum="SpaceParameter">
-			Maximum contact penetration correction speed in world units per second.
-		</constant>
-		<constant name="SPACE_PARAM_RESTITUTION_THRESHOLD" value="4" enum="SpaceParameter">
-			Minimum collision speed for restitution in world units per second.
-		</constant>
-		<constant name="SPACE_PARAM_MAXIMUM_LINEAR_SPEED" value="5" enum="SpaceParameter">
-			Maximum body linear speed in world units per second.
-		</constant>
-		<constant name="SPACE_PARAM_SLEEP_ENABLED" value="6" enum="SpaceParameter">
-			Whether native body sleeping is enabled (0 or 1).
-		</constant>
-		<constant name="SPACE_PARAM_CONTINUOUS_ENABLED" value="7" enum="SpaceParameter">
-			Whether native continuous collision detection is enabled (0 or 1).
-		</constant>
-		<constant name="SPACE_PARAM_WARM_STARTING_ENABLED" value="8" enum="SpaceParameter">
-			Whether cached constraint impulses are reused (0 or 1).
-		</constant>
-		<constant name="SPACE_PARAM_RESTITUTION_ITERATIONS" value="9" enum="SpaceParameter">
-			Number of iterations in the native restitution solver (integer from 1 through 63).
-		</constant>
-		<constant name="SPACE_PARAM_RESTITUTION_PROPAGATION_ENABLED" value="10" enum="SpaceParameter">
-			Whether native restitution propagation is enabled (0 or 1).
 		</constant>
 	</constants>
 </class>
