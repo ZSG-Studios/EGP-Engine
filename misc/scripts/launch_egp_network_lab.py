@@ -58,7 +58,10 @@ def bounded_float(low, high):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--engine", type=Path, required=True, help="EGP editor containing EGPNetSession")
+    parser.add_argument("--engine", type=Path, required=True, help="EGP editor or template containing EGPNetSession")
+    parser.add_argument(
+        "--editor", type=Path, help="Matching Windows editor to export the lab when --engine is a template"
+    )
     parser.add_argument("--clients", type=int, choices=range(1, 65), metavar="1..64", default=2)
     parser.add_argument("--mode", choices=("dedicated", "host"), default="dedicated")
     parser.add_argument("--visible", action="store_true", help="Show client windows and the listen-host window")
@@ -75,6 +78,9 @@ def main():
     engine = args.engine.resolve()
     if not engine.is_file():
         parser.error("--engine must point to an existing executable")
+    editor = args.editor.resolve() if args.editor else engine
+    if not editor.is_file():
+        parser.error("--editor must point to an existing executable")
     if not 0 <= args.port <= 65535:
         parser.error("--port must be 0..65535")
     if args.reconnect_at and not 1 <= args.reconnect_at <= args.duration - 3:
@@ -115,7 +121,9 @@ def main():
     }
     engine_main = engine.with_name(engine.name.replace(".console.exe", ".exe"))
     receipt["engine_artifacts"] = {
-        str(path): hashlib.sha256(path.read_bytes()).hexdigest() for path in {engine, engine_main} if path.is_file()
+        str(path): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in {engine, engine_main, editor}
+        if path.is_file()
     }
     children = []
     logs = []
@@ -126,7 +134,7 @@ def main():
     try:
         with (output / "import.log").open("w", encoding="utf-8") as log:
             imported = subprocess.run(
-                [str(engine), "--headless", "--editor", "--import", "--path", str(project), "--max-fps", "30"],
+                [str(editor), "--headless", "--editor", "--import", "--path", str(project), "--max-fps", "30"],
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 timeout=90,
@@ -134,6 +142,45 @@ def main():
         import_text = (output / "import.log").read_text(encoding="utf-8", errors="replace")
         if imported.returncode or "ERROR:" in import_text:
             raise RuntimeError("Lab import failed; see import.log")
+        project_arguments = ["--path", str(project)]
+        if args.editor:
+            runtime = output / "runtime/EGP.NetworkLab.exe"
+            runtime.parent.mkdir()
+            pack = runtime.with_suffix(".pck")
+            (project / "export_presets.cfg").write_text(
+                '[preset.0]\nname="Network Lab"\nplatform="Windows Desktop"\nrunnable=true\n'
+                'export_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n'
+                "[preset.0.options]\n"
+                f'custom_template/debug="{engine.as_posix()}"\ncustom_template/release="{engine.as_posix()}"\n'
+                "binary_format/embed_pck=false\n",
+                encoding="utf-8",
+            )
+            with (output / "export.log").open("w", encoding="utf-8") as log:
+                exported = subprocess.run(
+                    [
+                        str(editor),
+                        "--headless",
+                        "--path",
+                        str(project),
+                        "--export-release",
+                        "Network Lab",
+                        str(runtime),
+                    ],
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    timeout=90,
+                )
+            export_text = (output / "export.log").read_text(encoding="utf-8", errors="replace")
+            if exported.returncode or "ERROR:" in export_text or not pack.is_file() or not runtime.is_file():
+                raise RuntimeError("Lab export failed; see export.log")
+            receipt["project_pack"] = {"path": str(pack), "sha256": hashlib.sha256(pack.read_bytes()).hexdigest()}
+            receipt["runtime_artifacts"] = {
+                path.relative_to(runtime.parent).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+                for path in sorted(runtime.parent.rglob("*"))
+                if path.is_file()
+            }
+            engine = engine_main = runtime
+            project_arguments = []
         # Tokens never enter the retained project, logs or receipt.
         with tempfile.TemporaryDirectory(prefix="egp-network-lab-admission-") as admission_directory:
             admission = Path(admission_directory)
@@ -150,7 +197,7 @@ def main():
                 # Direct GUI launch makes each observed window belong to its owned
                 # process, rather than to a console wrapper's child process.
                 executable = engine_main if visible and os.name == "nt" else engine
-                command = [str(executable), "--path", str(project), "--max-fps", "60"]
+                command = [str(executable), *project_arguments, "--max-fps", "60"]
                 if visible:
                     command += [
                         "--resolution",

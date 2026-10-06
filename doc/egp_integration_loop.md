@@ -330,3 +330,52 @@ migration/doc updates. Actual C#/C++ game reload, preserved instances/state/even
 repeat reload recovery and cleanup remain unfinished: C# gates reload on editor
 hint and native extension reload is enabled only for editor mode. Implement and
 qualify an explicit editor-binary game opt-in; packaged hot reload is a separate gate.
+
+### Final editor refresh and packaged network lab
+
+Frozen canonical engine source `bd4dfee3dc771c79b2f240607bc2aaee5327f850`
+was checked file-by-file in the combined Mono tree and built successfully with
+FASTBuild; `.build/integration-mono-editor-refresh/source.json` and `receipt.json`
+record source hashes, exact command and 267.266 seconds. Editor SHA256
+`35502944a136b6c3b21267823f9549c881337d409c40f5209214dff232aded75` passed:
+
+- `python misc/scripts/validate_box2d_scene.py --engine C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe --output .build/integration-mono-box2d-scenes`:
+  all 14 runs and exact one/four-worker trajectory equality.
+- `python misc/scripts/validate_box3d_scene.py --engine C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe --output .build/integration-mono-box3d-scenes`:
+  all 28 cases, including native joints, soft body, query ownership and teardown.
+- `python misc/scripts/validate_egp_net_migration.py --engine C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe --output .build/integration-refreshed-mono-migration`:
+  all 25 checks, including untouched rejected embedded scripts.
+- `python misc/scripts/validate_egp_cpp_ui.py --engine C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe --output .build/integration-refreshed-mono-cpp-ui`:
+  passed at `1791268071687824400/receipt.json`.
+
+Paired API capture at `.build/integration-refreshed-mono-api/1791268071688329100`
+found one newly registered class, `LightmapperRD`, relative to the preceding API.
+Physics/network members are unchanged, but the full API hash differs, so the
+matching audit correctly fails with the previous embedded SDK. Do not weaken the
+hash check. Session `1999` owns `.build/finish_refreshed_mono.py`: exact new API,
+matching SDK/editor, stable-dump confirmation, Mono glue/assemblies, editor with
+final glue and both templates. Logs/active PID/receipt are under
+`.build/integration-final-mono-matched`. Finish this pipeline before runtime tests.
+
+The network launcher now accepts `--editor` with a template in `--engine`, exports
+a real Windows application with that exact custom template, then launches the
+adjacent executable/PCK. Optimized templates disable both `--path` and
+`--main-pack`; their restrictions remain effective. Exported artifact hashes join
+the source and input-engine identities. Admission tokens stay in a temporary
+directory outside the exported application.
+
+`python misc/scripts/launch_egp_network_lab.py --engine C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.template_release.x86_64.mono.exe --editor C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe --mode dedicated --clients 3 --visible --preset wan --duration 10 --reconnect-at 4 --output .build/integration-release-network-export-windows`
+passed at `1791268266430889500/receipt.json`: three client windows simultaneously,
+dedicated server, 100 ms latency/25 ms jitter/3% loss on both endpoints, replies,
+authoritative ticks, reconnect generations and four clean process exits. Exported
+EXE SHA256 `58ae23d4377ca0c20f7444ecce2bc8cf04aa9b1f58bbd1b7fe4f3058e6bcad11`, PCK
+`e92a5c5ddc08a2fa2f6d8c1c7be479eaec45dcdf2efc740f10e28682f091c687`.
+Retain failures in `.build/integration-release-network-windows` (path override)
+and `.build/integration-release-network-pack-windows` (main-pack override).
+
+Updated inventory: `.build/integration-takeover/final-inventory-1791267845811272200.json`.
+All seven trees and local/remote refs remain accounted for. Origin's historical
+Godot release branches are not EGP feature handoffs. Remote C++ feature head
+`e4e0090fb8` and final handoff `2624581a26` are canonical ancestors. PR #1 remains
+open; remote master is still `f4389f3a76`. Publish after final matching bindings
+and combined runtime/export checks pass; then reconcile that PR.
