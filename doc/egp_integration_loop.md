@@ -3361,3 +3361,25 @@ integer index explicitly, retaining both lower and upper bounds. Baseline and
 patched full translation-unit commands, diagnostics and object hashes are
 recorded in `.build/integration-platform-warnings/receipt.json`; these focused
 Linux Clang checks do not replace Android/macOS builds or engine runtime tests.
+
+## 2026-10-06: GDScript test migration and interactive network lab preparation
+
+Run `37537447414` passes Android arm32/arm64, macOS templates, both Web profiles,
+iOS and Linux Mono templates. Three editor jobs compile but fail the same
+GDScript runtime fixture: `argument_count.gd` still uses retired `@rpc` annotations
+and Node/Callable RPC methods. The fixture now uses retained deferred-call vararg
+methods and removes the obsolete annotated-method cases, while preserving plain,
+static, lambda, bind/unbind, Variant and global argument-count coverage. Its
+expected output retains 24 assertions. An isolated SceneTree driver reproduces
+the baseline parser failure and verifies every patched output against the
+installed `7b57a3b31` editor; commands, engine/source hashes and logs are recorded
+in `.build/integration-gdscript-argument-count/receipt.json`. The full test-enabled
+new engine suite remains pending; the installed editor does not contain it.
+
+The user-requested GUI editor also exposes a practical staging problem: the source
+network lab needs installed helpers before direct editor use. The owner installs
+the existing canonical helpers into that live project, preserves its interactive
+extension/settings/UID files, documents the preparation commands and makes the
+launcher accept an already-created helpers directory. Commit `bd2ea10b83` records
+those changes; its separate check-only and bounded two-client launcher smoke pass.
+The interactive project changes remain outside the integration commit.

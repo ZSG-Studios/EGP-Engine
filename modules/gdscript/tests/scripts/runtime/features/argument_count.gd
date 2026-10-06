@@ -12,14 +12,6 @@ static func my_static_func_1(_foo, _bar):
 static func my_static_func_2(_foo, _bar, _baz):
 	pass
 
-@rpc
-func my_rpc_func_1(_foo, _bar):
-	pass
-
-@rpc
-func my_rpc_func_2(_foo, _bar, _baz):
-	pass
-
 func test():
 	# Test built-in methods.
 	var builtin_callable_1 : Callable = add_to_group
@@ -30,8 +22,8 @@ func test():
 	# Test built-in vararg methods.
 	var builtin_vararg_callable_1 : Callable = call_thread_safe
 	print(builtin_vararg_callable_1.get_argument_count()) # Should print 1.
-	var builtin_vararg_callable_2 : Callable = rpc_id
-	print(builtin_vararg_callable_2.get_argument_count()) # Should print 2.
+	var builtin_vararg_callable_2 : Callable = call_deferred
+	print(builtin_vararg_callable_2.get_argument_count()) # Should print 1.
 
 	# Test plain methods.
 	var callable_1 : Callable = my_func_1
@@ -44,12 +36,6 @@ func test():
 	print(static_callable_1.get_argument_count()) # Should print 2.
 	var static_callable_2 : Callable = my_static_func_2
 	print(static_callable_2.get_argument_count()) # Should print 3.
-
-	# Test rpc methods.
-	var rpc_callable_1 : Callable = my_rpc_func_1
-	print(rpc_callable_1.get_argument_count()) # Should print 2.
-	var rpc_callable_2 : Callable = my_rpc_func_2
-	print(rpc_callable_2.get_argument_count()) # Should print 3.
 
 	# Test lambdas.
 	var lambda_callable_1 : Callable = func(_foo, _bar): pass
@@ -86,8 +72,8 @@ func test():
 	var callable_tmp := Callable()
 	var variant_vararg_callable_1 : Callable = callable_tmp.call
 	print(variant_vararg_callable_1.get_argument_count()) # Should print 0.
-	var variant_vararg_callable_2 : Callable = callable_tmp.rpc_id
-	print(variant_vararg_callable_2.get_argument_count()) # Should print 1.
+	var variant_vararg_callable_2 : Callable = callable_tmp.call_deferred
+	print(variant_vararg_callable_2.get_argument_count()) # Should print 0.
 
 	# Test global methods.
 	var global_callable_1 = is_equal_approx
