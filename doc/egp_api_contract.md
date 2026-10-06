@@ -110,3 +110,13 @@ a parent property during failure. Reload retries must retain the original
 extension properties while refreshing editable parent properties. Recovery must
 preserve object identity, cached callables, signal connections and diagnostics.
 This does not cover arbitrary native ABI or class-inheritance changes.
+
+
+Use `capture_egp_api.py --include-docs` and pass the recorded compiled API to
+`validate_egp_api.py --compiled-docs <capture>/compiled-docs/extension_api.json`.
+The capture requires identical ABI data after removing only description fields
+and checks that the editor binary did not change between commands. The audit
+compares embedded method/signal descriptions with source XML, rejecting stale
+help even when signatures still match. CLI documentation dumps load shipped
+metadata without constructing an editor. Exposed implementation classes with
+only inherited documentation retain their ABI entries with empty descriptions.

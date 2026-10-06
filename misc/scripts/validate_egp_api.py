@@ -8,6 +8,8 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from capture_egp_api import strip_documentation
+
 LEGACY_CLASSES = {
     "MultiplayerAPI",
     "MultiplayerAPIExtension",
@@ -175,6 +177,23 @@ def audit_method_docs(row, path, kind="method"):
     return failures, len(required)
 
 
+def audit_compiled_descriptions(row, path, compiled):
+    """Reject stale embedded help even when its ABI is otherwise unchanged."""
+    if path is None:
+        return [], 0
+    failures = []
+    count = 0
+    for kind in ("method", "signal"):
+        actual = {member["name"]: member for member in compiled.get(kind + "s", [])}
+        for node in ET.parse(path).findall(kind + "s/" + kind):
+            expected = " ".join(node.findtext("description", "").split())
+            description = " ".join(actual.get(node.get("name"), {}).get("description", "").split())
+            count += 1
+            if expected != description:
+                failures.append(f"Stale compiled {kind} description: {row['name']}.{node.get('name')}")
+    return failures, count
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api", type=Path, required=True, help="Actual editor extension API dump")
@@ -183,8 +202,11 @@ def main():
     parser.add_argument("--changes", type=Path, help="Required and removed API manifest")
     parser.add_argument("--classdb", type=Path, help="Actual property/signal snapshot from dump_egp_classdb.gd")
     parser.add_argument("--docs", type=Path, help="Repository root for XML method, signal, and enum checks")
+    parser.add_argument("--compiled-docs", type=Path, help="Paired --dump-extension-api-with-docs capture")
     parser.add_argument("--output", type=Path, default=Path(".build/egp-api-validation/receipt.json"))
     args = parser.parse_args()
+    if args.compiled_docs and not args.docs:
+        parser.error("--compiled-docs requires --docs")
     receipt = {
         "passed": False,
         "checks": [],
@@ -194,12 +216,20 @@ def main():
         "enum_documentation": [],
         "method_documentation": [],
         "signal_documentation": [],
+        "compiled_documentation": [],
         "failures": [],
     }
     failures = receipt["failures"]
     try:
         api = json.loads(args.api.read_text(encoding="utf-8"))
         classes = {row["name"]: row for row in api["classes"]}
+        compiled = {}
+        if args.compiled_docs:
+            captured_docs = json.loads(args.compiled_docs.read_text(encoding="utf-8"))
+            receipt["compiled_docs_sha256"] = digest(args.compiled_docs)
+            if strip_documentation(captured_docs) != api:
+                failures.append("Compiled help API differs from the actual editor API")
+            compiled = {row["name"]: row for row in captured_docs["classes"]}
         csharp = managed_classes(args.managed)
         metadata = json.loads((args.sdk / "sdk.json").read_text(encoding="utf-8"))
         receipt["extension_api_sha256"] = digest(args.api)
@@ -268,6 +298,10 @@ def main():
                 continue
             entry = {"class": name, "methods": len(row.get("methods", []))}
             receipt["checks"].append(entry)
+            if args.compiled_docs:
+                errors, count = audit_compiled_descriptions(row, docs.get(name), compiled.get(name, {}))
+                failures.extend(errors)
+                receipt["compiled_documentation"].append({"class": name, "descriptions": count})
             if args.docs:
                 path = docs.get(name)
                 errors, count = audit_method_docs(row, path)

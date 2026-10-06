@@ -10,7 +10,7 @@ import unittest
 from pathlib import Path
 
 from capture_egp_api import strip_documentation
-from validate_egp_api import audit_enum_docs, audit_method_docs, snake
+from validate_egp_api import audit_compiled_descriptions, audit_enum_docs, audit_method_docs, snake
 
 
 class ExposureAuditTests(unittest.TestCase):
@@ -215,6 +215,15 @@ class MethodDocumentationTests(unittest.TestCase):
         compiled["methods"][0]["is_required"] = True
         compiled["methods"][0]["arguments"][1]["default_value"] = "[]"
         self.assertNotEqual(strip_documentation(compiled), self.row)
+
+    def test_stale_compiled_description_is_rejected_with_an_unchanged_signature(self):
+        self.path.write_text(self.xml)
+        compiled = copy.deepcopy(self.row)
+        compiled["methods"][0]["description"] = "Configures\n\tthe backend."
+        self.assertEqual(audit_compiled_descriptions(self.row, self.path, compiled), ([], 1))
+        compiled["methods"][0]["description"] = "Old documentation with different defaults."
+        failures, _ = audit_compiled_descriptions(self.row, self.path, compiled)
+        self.assertIn("Stale compiled method description: PhysicsServer3D._configure", failures)
 
     def test_each_signature_dimension_is_checked(self):
         for old, new, expected in (

@@ -33,8 +33,8 @@ because these chats exist.
 | Area | Required evidence | Current status |
 | --- | --- | --- |
 | Merge provenance | Every EGP tree/feature commit/dirty source accounted for; conflicts resolved; canonical commits and combined build | Seven trees preserved/accounted for; intended handoffs consolidated, combined gates pass and qualified source published to master; remaining feature acceptance continues |
-| Public API | Actual ClassDB dump matches embedded SDK, generated C# and docs; signatures, enums, properties, signals, defaults and errors consistent | Matching final SDK/C# bindings and 77-class exposure plus 371 enum docs pass; behavioral/signature/default coverage incomplete |
-| API usability | Familiar naming; typed options/results; actionable errors; examples for GDScript/C#/C++; threading and ownership documented | Audit pending |
+| Public API | Actual ClassDB dump matches embedded SDK, generated C# and docs; signatures, enums, properties, signals, defaults and errors consistent | 77 classes, 1299 method contracts, 55 signal contracts, 371 enum constants and 1358 compiled descriptions pass; broader behavioral and semantic documentation coverage remains |
+| API usability | Familiar naming; typed options/results; actionable errors; examples for GDScript/C#/C++; threading and ownership documented | Native session options/results/errors and physics event/joint contracts documented; broader facade ergonomics audit remains |
 | Library/build | Native and Mono builds; exact fork bindings; dependency/license manifests; lean server build; reproducible toolchain | Combined Mono editor, glue/assemblies, exact SDK and Debug/Release templates pass; lean server/platform/reproducibility gates remain |
 | Physics | Box2D/Box3D scene integration, joints, characters, queries, events, serialization, deterministic stepping and restore; unsupported capabilities exposed honestly | Combined native/Mono editors passed 14 Box2D runs and all 28 Box3D cases; wider parity/scale/platform gates remain |
 | Physics/network | Explicit fixed clock, fingerprint validation, authoritative state, commands, prediction/correction/replay and recovery | Existing limited fixtures; full game contract pending |
@@ -43,9 +43,9 @@ because these chats exist.
 | Network lab | Dedicated server, listen host, N clients, visible windows, latency/jitter/loss, directional simulation, reconnect, logs/watchdog/cleanup | Native host and packaged Mono Debug host/Release dedicated server pass simultaneous visible clients, WAN simulation and reconnect; broader matrix remains |
 | Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Pending |
 | C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Matching SDK/editor controls, mixed-language exports and live compatible Debug reload pass on Windows; incompatible ABI/restart recovery and other platforms remain |
-| C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Two live Debug rebuilds preserve existing IDs, property state, callables and signals; failed compile retains published code; invalid-library and incompatible-class recovery/soak remain |
-| C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Five successful live reloads including corrupted-DLL and blocked-unload recovery preserve instances, properties and events; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
-| Export/platform | Relocated Debug/Release games with C#/GDScript/C++ and Box physics/networking; platform-specific binaries and missing-binary diagnostics | Combined Windows and platform matrix pending |
+| C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Two live Debug rebuilds preserve existing IDs, property state, callables and signals; failed compile retains published code; Missing/invalid DLL recovery also preserves extension and editable parent state; incompatible class/ABI changes and soak remain |
+| C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Six combined native/managed reloads including corrupted-DLL and blocked-unload recovery preserve instances, properties and events; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
+| Export/platform | Relocated Debug/Release games with C#/GDScript/C++ and Box physics/networking; platform-specific binaries and missing-binary diagnostics | Relocated Windows Debug/Release trilingual games pass on the matching API; broader platform/export matrix remains |
 | Performance | Identical-scenes upstream comparison; p95/p99, CPU/GPU/memory/allocations, server tick, bandwidth and long sessions | No AAA readiness claim |
 
 AAA describes the intended quality target. Compilation, API exposure checks and
@@ -538,3 +538,85 @@ current engine API, exact C++ SDK and compiled generated C# source. Counts are
 editor/managed rebuild; installation and combined runtime acceptance remain
 pending until their fresh receipts are recorded. The native invalid-library and
 incompatible-ABI reload recovery paths remain unfinished acceptance items.
+
+
+## Qualified documentation and native recovery increment — 2026-10-06
+
+Canonical commits `b09ff67db4`, `e3c53af097`, `815b7d62b3` and `2d21765d41`
+contain the documentation/signature audit, native recovery fix and CLI help-dump
+repair. Final frozen engine source is `2d21765d41`; subsequent changes are audit
+tooling and receipts/documentation only. The original native recovery failure is
+preserved at `.build/integration-native-recovery-baseline/1791273209630507500`:
+two failed loads followed by repair reset the counter from 91 to 1. Reload retries
+now retain extension properties while refreshing editable native-parent state.
+The first compile rejected protected Object access; its archived failure under
+`.build/integration-native-recovery-build/previous-*` led to the public class-ID
+check. No failed command is treated as qualification.
+
+The CLI dump failure at `.build/integration-native-recovery-api/1791273592241378900`
+preserves its access-violation backtrace. API export now loads shipped help before
+reading it, and keeps ABI entries for implementation classes that only have
+inherited documentation. Final capture at
+`.build/integration-native-recovery-api/1791273909942341700/receipt.json` passes
+plain API, actual ClassDB and compiled help from the same unchanged editor:
+
+- Source: `.build/integration-compiled-docs-build/source.json` verifies the frozen
+  tracked source, including the new backend XML files. Build receipt is adjacent.
+- Actual editor SHA256:
+  `0c651f7827537f31e7514fb47a9dbc48f2ea310271945bbf31efe7f58929db5f`.
+- Console wrapper SHA256:
+  `3e98814f670c72c981d0b479d3a5be42963836f5ab93ae99f43ddffccbdfbcc2`.
+- Plain API SHA256 remains
+  `e84e140b923451849e88aab8300021fd9d32f95c31825bb6d7e25a4235953271`;
+  the exact cached C++ SDK and Debug/Release archives remain compatible.
+- Compiled documentation API SHA256:
+  `7414596a3aff5cfbdaab756d68bdacd94d71fcfda290fbae56fb8277e5c61367`.
+- `.build/integration-native-recovery-api-audit.json` passes 77 classes,
+  1299 non-accessor method contracts, 55 public signal contracts, 371 enum
+  constants and 1358 source/compiled method/signal descriptions. Explicitly
+  documented accessors are also signature-checked. Missing, stale, retired and
+  unsafe-exemption fixtures are rejected by 17 regression tests.
+- `.build/integration-native-recovery-managed-docs.json` verifies documentation
+  for all 50 new methods and seven networking events in compiled Debug and
+  Release GodotSharp XML, recording both DLL and XML hashes.
+
+```powershell
+python misc/scripts/capture_egp_api.py --engine C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.console.exe --output .build/integration-native-recovery-api --include-docs
+python misc/scripts/validate_egp_hot_reload.py --engine C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe --packages C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/GodotSharp/Tools/nupkgs --output .build/integration-native-managed-recovery-final --feature-override --assembly-recovery --unload-recovery --native-recovery
+python -m unittest discover -s misc/scripts -p test_validate_egp_api.py
+```
+
+The final live fixture receipt is
+`.build/integration-native-managed-recovery-final/1791273909976516500/receipt.json`.
+Six successful reloads preserve native/managed IDs, counter/vector/node state,
+cached callables, signal/delegate subscriptions and serialization hooks. It
+recovers invalid managed assemblies, a managed thread preventing unload, and
+missing then invalid native DLLs. The C++ counter returns as 91 and the parent's
+name edited during failure remains `RecoveredNative`. Debugger diagnostics and
+normal editor/game teardown pass; input binary/runtime hashes remain unchanged.
+The default non-collectible game also passes at
+`.build/integration-native-recovery-default/1791274130687358700/receipt.json`.
+
+Fresh final-identity Box2D and Box3D receipts are under
+`.build/integration-native-recovery-final-box2d-scenes` and
+`.build/integration-native-recovery-final-box3d-scenes` (14 and 28 cases; exact
+Box2D one/four-worker trace equality). Trilingual networking and exports pass under
+`.build/integration-native-recovery-net-languages-final`: 59 mixed assertions,
+separate clients in all three languages, cold import and relocated Debug/Release
+games using freshly built managed packages.
+The initial command used a nonexistent Debug template filename; its failed
+receipt remains under `.build/integration-native-recovery-net-languages`.
+Templates remain the prior qualified `bd4dfee3` Debug/Release binaries; current
+changes affect editor help and editor-build-only reload. Cross-platform,
+arbitrary ABI/class changes, reload soak, advanced networking/authoritative
+physics, remaining 2D capabilities, unique package identity and canonical build
+version provenance remain open. This increment does not establish AAA readiness.
+
+
+`.build/canonical-native-recovery-artifacts.json` verifies 82 installed editor and
+managed files; 16 updated files were backed up first. No build/engine process was
+active during installation. The installed canonical editor command
+`bin/godot.windows.editor.dev.x86_64.mono.console.exe --headless --path .build/integration-native-recovery-net-languages-final/project --max-fps 60`
+passes all 59 trilingual assertions (exec evidence `0bc19f`). Publication follows
+these combined-engine gates; the final receipt will record canonical/local/remote
+commit identities, exact commands, inventories, installed hashes and limitations.
