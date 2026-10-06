@@ -841,6 +841,27 @@
 				Overridable version of [method PhysicsServer2D.joint_disable_collisions_between_bodies].
 			</description>
 		</method>
+		<method name="_joint_get_configuration" qualifiers="virtual required const">
+			<return type="Dictionary" />
+			<param index="0" name="joint" type="RID" />
+			<description>
+				Overridable version of [method PhysicsServer2D.joint_get_configuration]. Required when implementing a custom physics server; preserve the public method's validation, return values, and event schema.
+			</description>
+		</method>
+		<method name="_joint_get_constraint_force" qualifiers="virtual required const">
+			<return type="Vector2" />
+			<param index="0" name="joint" type="RID" />
+			<description>
+				Overridable version of [method PhysicsServer2D.joint_get_constraint_force]. Required when implementing a custom physics server; preserve the public method's validation, return values, and event schema.
+			</description>
+		</method>
+		<method name="_joint_get_constraint_torque" qualifiers="virtual required const">
+			<return type="float" />
+			<param index="0" name="joint" type="RID" />
+			<description>
+				Overridable version of [method PhysicsServer2D.joint_get_constraint_torque]. Required when implementing a custom physics server; preserve the public method's validation, return values, and event schema.
+			</description>
+		</method>
 		<method name="_joint_get_param" qualifiers="virtual required const">
 			<return type="float" />
 			<param index="0" name="joint" type="RID" />
@@ -861,6 +882,19 @@
 			<param index="0" name="joint" type="RID" />
 			<description>
 				Overridable version of [method PhysicsServer2D.joint_is_disabled_collisions_between_bodies].
+			</description>
+		</method>
+		<method name="_joint_make_configured" qualifiers="virtual required">
+			<return type="void" />
+			<param index="0" name="joint" type="RID" />
+			<param index="1" name="type" type="int" enum="PhysicsServer2D.JointType" />
+			<param index="2" name="body_a" type="RID" />
+			<param index="3" name="frame_a" type="Transform2D" />
+			<param index="4" name="body_b" type="RID" />
+			<param index="5" name="frame_b" type="Transform2D" />
+			<param index="6" name="configuration" type="Dictionary" />
+			<description>
+				Overridable version of [method PhysicsServer2D.joint_make_configured]. Required when implementing a custom physics server; preserve the public method's validation, return values, and event schema.
 			</description>
 		</method>
 		<method name="_joint_make_damped_spring" qualifiers="virtual required">
@@ -894,6 +928,14 @@
 			<param index="3" name="body_b" type="RID" />
 			<description>
 				Overridable version of [method PhysicsServer2D.joint_make_pin].
+			</description>
+		</method>
+		<method name="_joint_set_configuration" qualifiers="virtual required">
+			<return type="void" />
+			<param index="0" name="joint" type="RID" />
+			<param index="1" name="configuration" type="Dictionary" />
+			<description>
+				Overridable version of [method PhysicsServer2D.joint_set_configuration]. Required when implementing a custom physics server; preserve the public method's validation, return values, and event schema.
 			</description>
 		</method>
 		<method name="_joint_set_param" qualifiers="virtual required">
@@ -1002,6 +1044,18 @@
 				Overridable version of [method PhysicsServer2D.shape_set_data].
 			</description>
 		</method>
+		<method name="_space_apply_explosion" qualifiers="virtual required">
+			<return type="void" />
+			<param index="0" name="space" type="RID" />
+			<param index="1" name="position" type="Vector2" />
+			<param index="2" name="radius" type="float" />
+			<param index="3" name="falloff" type="float" />
+			<param index="4" name="impulse_density" type="float" />
+			<param index="5" name="collision_mask" type="int" />
+			<description>
+				Overridable version of [method PhysicsServer2D.space_apply_explosion]. Required when implementing a custom physics server; preserve the public method's validation, return values, and event schema.
+			</description>
+		</method>
 		<method name="_space_create" qualifiers="virtual required">
 			<return type="RID" />
 			<description>
@@ -1014,6 +1068,13 @@
 			<description>
 				Should return how many contacts have occurred during the last physics step in the given [param space]. See also [method _space_get_contacts] and [method _space_set_debug_contacts].
 				Overridable version of [PhysicsServer2D]'s internal [code]space_get_contact_count[/code] method.
+			</description>
+		</method>
+		<method name="_space_get_contact_hit_events" qualifiers="virtual required const">
+			<return type="Array" />
+			<param index="0" name="space" type="RID" />
+			<description>
+				Overridable version of [method PhysicsServer2D.space_get_contact_hit_events]. Required when implementing a custom physics server; preserve the public method's validation, return values, and event schema.
 			</description>
 		</method>
 		<method name="_space_get_contacts" qualifiers="virtual required const">
@@ -1029,6 +1090,13 @@
 			<param index="0" name="space" type="RID" />
 			<description>
 				Overridable version of [method PhysicsServer2D.space_get_direct_state].
+			</description>
+		</method>
+		<method name="_space_get_joint_events" qualifiers="virtual required const">
+			<return type="Array" />
+			<param index="0" name="space" type="RID" />
+			<description>
+				Overridable version of [method PhysicsServer2D.space_get_joint_events]. Required when implementing a custom physics server; preserve the public method's validation, return values, and event schema.
 			</description>
 		</method>
 		<method name="_space_get_param" qualifiers="virtual required const">

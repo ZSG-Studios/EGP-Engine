@@ -381,6 +381,13 @@
 				Returns the [code]ObjectID[/code] of the canvas attached to the body. Use [method @GlobalScope.instance_from_id] to retrieve a [CanvasLayer] from a nonzero [code]ObjectID[/code].
 			</description>
 		</method>
+		<method name="body_get_collision_exceptions">
+			<return type="RID[]" />
+			<param index="0" name="body" type="RID" />
+			<description>
+				Returns an owned array of body RIDs excluded from collisions with [param body]. Changing this array does not change the exclusions; use [method body_add_collision_exception] or [method body_remove_collision_exception].
+			</description>
+		</method>
 		<method name="body_get_collision_layer" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="body" type="RID" />
@@ -416,6 +423,13 @@
 			<description>
 				Returns the body's total constant rotational force applied during each physics update.
 				See [method body_add_constant_torque].
+			</description>
+		</method>
+		<method name="body_get_contacts_reported_depth_threshold" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="body" type="RID" />
+			<description>
+				Returns the minimum contact penetration depth recorded for [param body]. See [method body_set_contacts_reported_depth_threshold].
 			</description>
 		</method>
 		<method name="body_get_continuous_collision_detection_mode" qualifiers="const">
@@ -577,6 +591,14 @@
 			<description>
 				Sets the body's total constant rotational force applied during each physics update.
 				See [method body_add_constant_torque].
+			</description>
+		</method>
+		<method name="body_set_contacts_reported_depth_threshold">
+			<return type="void" />
+			<param index="0" name="body" type="RID" />
+			<param index="1" name="threshold" type="float" />
+			<description>
+				Sets the minimum contact penetration depth recorded for [param body]. [param threshold] must be finite and nonnegative. This filters reported contacts; it does not disable collision response. [method body_set_max_contacts_reported] must enable contact reporting.
 			</description>
 		</method>
 		<method name="body_set_continuous_collision_detection_mode">
@@ -791,6 +813,27 @@
 				Sets whether the bodies attached to the [Joint2D] will collide with each other.
 			</description>
 		</method>
+		<method name="joint_get_configuration" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="joint" type="RID" />
+			<description>
+				Returns a copy of the complete native configuration, including default values and previous updates. Mutating the returned dictionary does not modify the joint; use [method joint_set_configuration]. Only joints created with [method joint_make_configured] are supported; invalid or unsupported joints report an error and return an empty dictionary.
+			</description>
+		</method>
+		<method name="joint_get_constraint_force" qualifiers="const">
+			<return type="Vector2" />
+			<param index="0" name="joint" type="RID" />
+			<description>
+				Returns the native solver's most recent constraint force as a [Vector2]. Read after a physics step. Returns a zero vector when the joint has no active native constraint; an invalid [param joint] reports an error and also returns zero. This value measures the constraint response, not the force applied to the entire body.
+			</description>
+		</method>
+		<method name="joint_get_constraint_torque" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="joint" type="RID" />
+			<description>
+				Returns the native solver's most recent constraint torque as a float. Read after a physics step. Returns zero when the joint has no active native constraint; an invalid [param joint] reports an error and also returns zero.
+			</description>
+		</method>
 		<method name="joint_get_param" qualifiers="const">
 			<return type="float" />
 			<param index="0" name="joint" type="RID" />
@@ -811,6 +854,21 @@
 			<param index="0" name="joint" type="RID" />
 			<description>
 				Returns whether the bodies attached to the [Joint2D] will collide with each other.
+			</description>
+		</method>
+		<method name="joint_make_configured">
+			<return type="void" />
+			<param index="0" name="joint" type="RID" />
+			<param index="1" name="type" type="int" enum="PhysicsServer2D.JointType" />
+			<param index="2" name="body_a" type="RID" />
+			<param index="3" name="frame_a" type="Transform2D" />
+			<param index="4" name="body_b" type="RID" />
+			<param index="5" name="frame_b" type="Transform2D" />
+			<param index="6" name="configuration" type="Dictionary" />
+			<description>
+				Replaces the constraint associated with a [param joint] RID allocated by [method joint_create], using the native [param type] and local attachment [param frame_a] and [param frame_b]. [param body_a] must be valid; an empty [RID] for [param body_b] attaches to the world, interpreting [param frame_b] in world coordinates. Attached bodies must share a space and at least one must be dynamic for an active constraint.
+				Supported native types range from [constant JOINT_TYPE_DISTANCE] through [constant JOINT_TYPE_WHEEL]. [param configuration] overrides native defaults. Common keys are [code]constraint_hertz[/code], [code]constraint_damping_ratio[/code], [code]force_threshold[/code], [code]torque_threshold[/code], and [code]collide_connected[/code]. Type-specific keys include [code]length[/code] for distance joints and [code]enable_motor[/code], [code]motor_speed[/code], and the relevant force or torque limit for motor-capable joints. Use [method joint_get_configuration] to inspect the complete configuration; the repository's [code]doc/egp_native_joint_configuration.json[/code] lists type-specific keys.
+				Unknown keys, incorrect value types, nonfinite values, and invalid ranges report an error and leave the previous constraint unchanged. This method returns no [enum Error]; validate your inputs and inspect diagnostics.
 			</description>
 		</method>
 		<method name="joint_make_damped_spring">
@@ -844,6 +902,14 @@
 			<param index="3" name="body_b" type="RID" default="RID()" />
 			<description>
 				Makes the joint a pin joint. If [param body_b] is an empty [RID], then [param body_a] is pinned to the point [param anchor] (given in global coordinates); otherwise, [param body_a] is pinned to [param body_b] at the point [param anchor] (given in global coordinates). To set the parameters which are specific to the pin joint, see [method pin_joint_set_param].
+			</description>
+		</method>
+		<method name="joint_set_configuration">
+			<return type="void" />
+			<param index="0" name="joint" type="RID" />
+			<param index="1" name="configuration" type="Dictionary" />
+			<description>
+				Merges [param configuration] into the current native joint configuration. Only joints created with [method joint_make_configured] are supported. Unspecified keys retain their previous values. The complete candidate is validated before changes are applied; an unknown key, incorrect type, nonfinite value, or invalid range reports an error and leaves the previous configuration unchanged. See [method joint_make_configured] and [method joint_get_configuration].
 			</description>
 		</method>
 		<method name="joint_set_param">
@@ -945,6 +1011,18 @@
 				[b]Warning:[/b] In the case of [constant SHAPE_CONVEX_POLYGON], this method does not check if the points supplied actually form a convex polygon (unlike the [member CollisionPolygon2D.polygon] property).
 			</description>
 		</method>
+		<method name="space_apply_explosion">
+			<return type="void" />
+			<param index="0" name="space" type="RID" />
+			<param index="1" name="position" type="Vector2" />
+			<param index="2" name="radius" type="float" />
+			<param index="3" name="falloff" type="float" />
+			<param index="4" name="impulse_density" type="float" />
+			<param index="5" name="collision_mask" type="int" />
+			<description>
+				Applies a radial native impulse centered at the world-space [param position] to matching dynamic shapes. [param radius] must be positive; [param falloff] is a nonnegative distance beyond the radius over which the impulse decreases to zero. [param collision_mask] filters shape collision layers. [param impulse_density] is impulse per unit length of the shape facing the center; a negative value creates an implosion. All numeric inputs must be finite. Supported shapes are circles, capsules, and polygons. Invalid inputs report an error and apply no impulse.
+			</description>
+		</method>
 		<method name="space_create">
 			<return type="RID" />
 			<description>
@@ -956,6 +1034,13 @@
 			<param index="0" name="space" type="RID" />
 			<description>Returns the number of debug contact points captured in the last physics step. Enable collection with [method space_set_debug_contacts].</description>
 		</method>
+		<method name="space_get_contact_hit_events" qualifiers="const">
+			<return type="Array" />
+			<param index="0" name="space" type="RID" />
+			<description>
+				Returns a copied [Array] of contact-hit dictionaries from the space's most recent physics step. Each dictionary contains [code]rid_a[/code] and [code]rid_b[/code] ([RID]), [code]point[/code] and [code]normal[/code] ([Vector2]), and [code]approach_speed[/code] (float). Read after a physics step; the cache is replaced at the next step. These are native hit-threshold events, not a complete contact or overlap list. An invalid [param space] reports an error and returns an empty array.
+			</description>
+		</method>
 		<method name="space_get_contacts" qualifiers="const">
 			<return type="PackedVector2Array" />
 			<param index="0" name="space" type="RID" />
@@ -966,6 +1051,13 @@
 			<param index="0" name="space" type="RID" />
 			<description>
 				Returns the state of a space, a [PhysicsDirectSpaceState2D]. This object can be used for collision/intersection queries.
+			</description>
+		</method>
+		<method name="space_get_joint_events" qualifiers="const">
+			<return type="Array" />
+			<param index="0" name="space" type="RID" />
+			<description>
+				Returns a copied [Array] of native joint-threshold events from the space's most recent physics step. Each dictionary contains [code]rid[/code] ([RID]), [code]force[/code] ([Vector2]), and [code]torque[/code] (float). Configure [code]force_threshold[/code] and [code]torque_threshold[/code] with [method joint_make_configured] or [method joint_set_configuration]. The cache is replaced at the next step; events do not automatically break joints. An invalid [param space] reports an error and returns an empty array.
 			</description>
 		</method>
 		<method name="space_get_param" qualifiers="const">
@@ -1010,28 +1102,6 @@
 			<return type="RID" />
 			<description>
 				Creates a 2D world boundary shape in the physics server, and returns the [RID] that identifies it. Use [method shape_set_data] to set the shape's normal direction and distance properties.
-			</description>
-		</method>
-		<method name="body_get_collision_exceptions">
-			<return type="RID[]" />
-			<param index="0" name="body" type="RID" />
-			<description>
-				Returns an owned array of body RIDs excluded from collisions with [param body]. Changing this array does not change the exclusions; use [method body_add_collision_exception] or [method body_remove_collision_exception].
-			</description>
-		</method>
-		<method name="body_get_contacts_reported_depth_threshold" qualifiers="const">
-			<return type="float" />
-			<param index="0" name="body" type="RID" />
-			<description>
-				Returns the minimum contact penetration depth recorded for [param body]. See [method body_set_contacts_reported_depth_threshold].
-			</description>
-		</method>
-		<method name="body_set_contacts_reported_depth_threshold">
-			<return type="void" />
-			<param index="0" name="body" type="RID" />
-			<param index="1" name="threshold" type="float" />
-			<description>
-				Sets the minimum contact penetration depth recorded for [param body]. [param threshold] must be finite and nonnegative. This filters reported contacts; it does not disable collision response. [method body_set_max_contacts_reported] must enable contact reporting.
 			</description>
 		</method>
 	</methods>

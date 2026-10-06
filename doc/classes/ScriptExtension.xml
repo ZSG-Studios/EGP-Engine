@@ -1,8 +1,10 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="ScriptExtension" inherits="Script" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../class.xsd">
 	<brief_description>
+		Virtual interface for implementing a native script resource and its language integration.
 	</brief_description>
 	<description>
+		Implement the required virtual methods to provide executable instances, source code, introspection, editor exports, and reload behavior for a custom [ScriptLanguage]. Native pointer hooks require GDExtension and are not supported by generated C# or ordinary GDScript overrides. Instance ownership, placeholder cleanup, and state preservation remain the language implementation's responsibility.
 	</description>
 	<tutorials>
 	</tutorials>
@@ -10,74 +12,88 @@
 		<method name="_can_instantiate" qualifiers="virtual required const">
 			<return type="bool" />
 			<description>
+				Overridable implementation of [method Script.can_instantiate].
 			</description>
 		</method>
 		<method name="_editor_can_reload_from_file" qualifiers="virtual required">
 			<return type="bool" />
 			<description>
+				Returns whether the editor may safely reload this script from its source file. Reject reloads that would discard unsaved source or violate the language implementation's reload requirements.
 			</description>
 		</method>
 		<method name="_get_base_script" qualifiers="virtual required const">
 			<return type="Script" />
 			<description>
+				Overridable implementation of [method Script.get_base_script].
 			</description>
 		</method>
 		<method name="_get_class_icon_path" qualifiers="virtual const">
 			<return type="String" />
 			<description>
+				Returns the resource path to the icon used for this script class in the editor, or an empty string to use the default icon.
 			</description>
 		</method>
 		<method name="_get_constants" qualifiers="virtual required const">
 			<return type="Dictionary" />
 			<description>
+				Returns a dictionary mapping script constant names to their values. Used by [method Script.get_script_constant_map].
 			</description>
 		</method>
 		<method name="_get_doc_class_name" qualifiers="virtual required const">
 			<return type="StringName" />
 			<description>
+				Returns the class identity used for this script's generated editor documentation.
 			</description>
 		</method>
 		<method name="_get_documentation" qualifiers="virtual required const">
 			<return type="Dictionary[]" />
 			<description>
+				Returns documentation dictionaries for the script classes defined by this resource. Each dictionary uses the engine's class-documentation schema, including class name, inheritance, descriptions, and member documentation. This is an internal language integration hook.
 			</description>
 		</method>
 		<method name="_get_global_name" qualifiers="virtual required const">
 			<return type="StringName" />
 			<description>
+				Overridable implementation of [method Script.get_global_name].
 			</description>
 		</method>
 		<method name="_get_instance_base_type" qualifiers="virtual required const">
 			<return type="StringName" />
 			<description>
+				Overridable implementation of [method Script.get_instance_base_type].
 			</description>
 		</method>
 		<method name="_get_language" qualifiers="virtual required const">
 			<return type="ScriptLanguage" />
 			<description>
+				Returns the [ScriptLanguage] implementation that owns this script resource.
 			</description>
 		</method>
 		<method name="_get_member_line" qualifiers="virtual required const">
 			<return type="int" />
 			<param index="0" name="member" type="StringName" />
 			<description>
+				Returns the source line for [param member], or [code]-1[/code] when no source location is available. Used by editor navigation.
 			</description>
 		</method>
 		<method name="_get_members" qualifiers="virtual required const">
 			<return type="StringName[]" />
 			<description>
+				Returns the names of the script's members for the engine's script introspection.
 			</description>
 		</method>
 		<method name="_get_method_info" qualifiers="virtual required const">
 			<return type="Dictionary" />
 			<param index="0" name="method" type="StringName" />
 			<description>
+				Returns a method-info dictionary for [param method], using the schema described by [method Object.get_method_list]. Return an empty dictionary when the method is unknown.
 			</description>
 		</method>
 		<method name="_get_property_default_value" qualifiers="virtual required const">
 			<return type="Variant" />
 			<param index="0" name="property" type="StringName" />
 			<description>
+				Overridable implementation of [method Script.get_property_default_value].
 			</description>
 		</method>
 		<method name="_get_script_method_argument_count" qualifiers="virtual const">
@@ -90,68 +106,80 @@
 		<method name="_get_script_method_list" qualifiers="virtual required const">
 			<return type="Dictionary[]" />
 			<description>
+				Overridable implementation of [method Script.get_script_method_list].
 			</description>
 		</method>
 		<method name="_get_script_property_list" qualifiers="virtual required const">
 			<return type="Dictionary[]" />
 			<description>
+				Overridable implementation of [method Script.get_script_property_list].
 			</description>
 		</method>
 		<method name="_get_script_signal_list" qualifiers="virtual required const">
 			<return type="Dictionary[]" />
 			<description>
+				Overridable implementation of [method Script.get_script_signal_list].
 			</description>
 		</method>
 		<method name="_get_source_code" qualifiers="virtual required const">
 			<return type="String" />
 			<description>
+				Overridable getter for [member Script.source_code].
 			</description>
 		</method>
 		<method name="_has_method" qualifiers="virtual required const">
 			<return type="bool" />
 			<param index="0" name="method" type="StringName" />
 			<description>
+				Returns whether the script defines [param method], including inherited methods according to the language's lookup rules. Used by [method Script.has_script_method].
 			</description>
 		</method>
 		<method name="_has_property_default_value" qualifiers="virtual required const">
 			<return type="bool" />
 			<param index="0" name="property" type="StringName" />
 			<description>
+				Returns whether a default value is available for [param property]. Distinguish a missing default from a valid [code]null[/code] default returned by [method _get_property_default_value].
 			</description>
 		</method>
 		<method name="_has_script_signal" qualifiers="virtual required const">
 			<return type="bool" />
 			<param index="0" name="signal" type="StringName" />
 			<description>
+				Overridable implementation of [method Script.has_script_signal].
 			</description>
 		</method>
 		<method name="_has_source_code" qualifiers="virtual required const">
 			<return type="bool" />
 			<description>
+				Overridable implementation of [method Script.has_source_code].
 			</description>
 		</method>
 		<method name="_has_static_method" qualifiers="virtual required const">
 			<return type="bool" />
 			<param index="0" name="method" type="StringName" />
 			<description>
+				Returns whether [param method] is available as a static method of the script.
 			</description>
 		</method>
 		<method name="_inherits_script" qualifiers="virtual required const">
 			<return type="bool" />
 			<param index="0" name="script" type="Script" />
 			<description>
+				Returns whether this script derives from [param script] through its script inheritance chain.
 			</description>
 		</method>
 		<method name="_instance_create" qualifiers="virtual required const">
 			<return type="void*" />
 			<param index="0" name="for_object" type="Object" />
 			<description>
+				Creates a native script instance attached to [param for_object] and returns its opaque native [code]ScriptInstance[/code] pointer. This pointer-based GDExtension hook is for native language implementations; it cannot be implemented through generated C# or ordinary GDScript bindings.
 			</description>
 		</method>
 		<method name="_instance_has" qualifiers="virtual const" deprecated="This method is not called by the engine.">
 			<return type="bool" />
 			<param index="0" name="object" type="Object" />
 			<description>
+				Overridable implementation of [method Script.instance_has].
 			</description>
 		</method>
 		<method name="_is_abstract" qualifiers="virtual const">
@@ -163,45 +191,53 @@
 		<method name="_is_placeholder_fallback_enabled" qualifiers="virtual required const">
 			<return type="bool" />
 			<description>
+				Returns whether placeholder instances should accept fallback property access while the executable script instance is unavailable.
 			</description>
 		</method>
 		<method name="_is_tool" qualifiers="virtual required const">
 			<return type="bool" />
 			<description>
+				Overridable implementation of [method Script.is_tool].
 			</description>
 		</method>
 		<method name="_is_valid" qualifiers="virtual required const">
 			<return type="bool" />
 			<description>
+				Returns whether the script has valid executable code and metadata for its language implementation.
 			</description>
 		</method>
 		<method name="_placeholder_erased" qualifiers="virtual">
 			<return type="void" />
 			<param index="0" name="placeholder" type="void*" />
 			<description>
+				Notifies the native language implementation that [param placeholder] has been removed. Release its bookkeeping and retained reload state without dereferencing a destroyed owner. This pointer-based hook is restricted to native GDExtension language implementations.
 			</description>
 		</method>
 		<method name="_placeholder_instance_create" qualifiers="virtual required const">
 			<return type="void*" />
 			<param index="0" name="for_object" type="Object" />
 			<description>
+				Creates the native placeholder instance for [param for_object] used when the script cannot execute, such as during editing or reload failure. Return a compatible native placeholder-instance pointer or a null pointer when unavailable. This pointer-based hook is restricted to native GDExtension language implementations.
 			</description>
 		</method>
 		<method name="_reload" qualifiers="virtual required">
 			<return type="int" enum="Error" />
 			<param index="0" name="keep_state" type="bool" />
 			<description>
+				Overridable implementation of [method Script.reload].
 			</description>
 		</method>
 		<method name="_set_source_code" qualifiers="virtual required">
 			<return type="void" />
 			<param index="0" name="code" type="String" />
 			<description>
+				Overridable setter for [member Script.source_code].
 			</description>
 		</method>
 		<method name="_update_exports" qualifiers="virtual required">
 			<return type="void" />
 			<description>
+				Refreshes exported property metadata and editor placeholder properties after source or dependency changes. Preserve compatible existing values when updating placeholders.
 			</description>
 		</method>
 	</methods>

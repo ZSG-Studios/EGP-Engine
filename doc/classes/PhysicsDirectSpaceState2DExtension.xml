@@ -22,6 +22,7 @@
 			<param index="7" name="r_closest_safe" type="float*" />
 			<param index="8" name="r_closest_unsafe" type="float*" />
 			<description>
+				Overridable implementation of [method PhysicsDirectSpaceState2D.cast_motion].
 			</description>
 		</method>
 		<method name="_collide_shape" qualifiers="virtual required">
@@ -37,6 +38,7 @@
 			<param index="8" name="max_results" type="int" />
 			<param index="9" name="r_result_count" type="int32_t*" />
 			<description>
+				Overridable implementation of [method PhysicsDirectSpaceState2D.collide_shape].
 			</description>
 		</method>
 		<method name="_intersect_point" qualifiers="virtual required">
@@ -49,6 +51,7 @@
 			<param index="5" name="r_results" type="PhysicsServer2DExtensionShapeResult*" />
 			<param index="6" name="max_results" type="int" />
 			<description>
+				Overridable implementation of [method PhysicsDirectSpaceState2D.intersect_point].
 			</description>
 		</method>
 		<method name="_intersect_ray" qualifiers="virtual required">
@@ -61,6 +64,7 @@
 			<param index="5" name="hit_from_inside" type="bool" />
 			<param index="6" name="r_result" type="PhysicsServer2DExtensionRayResult*" />
 			<description>
+				Overridable implementation of [method PhysicsDirectSpaceState2D.intersect_ray].
 			</description>
 		</method>
 		<method name="_intersect_shape" qualifiers="virtual required">
@@ -75,6 +79,7 @@
 			<param index="7" name="r_result" type="PhysicsServer2DExtensionShapeResult*" />
 			<param index="8" name="max_results" type="int" />
 			<description>
+				Overridable implementation of [method PhysicsDirectSpaceState2D.intersect_shape].
 			</description>
 		</method>
 		<method name="_rest_info" qualifiers="virtual required">
@@ -88,12 +93,14 @@
 			<param index="6" name="collide_with_areas" type="bool" />
 			<param index="7" name="r_rest_info" type="PhysicsServer2DExtensionShapeRestInfo*" />
 			<description>
+				Overridable implementation of [method PhysicsDirectSpaceState2D.get_rest_info].
 			</description>
 		</method>
 		<method name="is_body_excluded_from_query" qualifiers="const">
 			<return type="bool" />
 			<param index="0" name="body" type="RID" />
 			<description>
+				Returns [code]true[/code] if [param body] is excluded from the query currently being processed. Consult this inside native query implementations to honor the query exclusion list.
 			</description>
 		</method>
 	</methods>

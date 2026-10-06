@@ -1,5 +1,6 @@
 """Regression checks for reflection coverage and unsafe API audit exemptions."""
 
+import copy
 import hashlib
 import json
 import subprocess
@@ -8,7 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from validate_egp_api import audit_enum_docs, snake
+from validate_egp_api import audit_enum_docs, audit_method_docs, snake
 
 
 class ExposureAuditTests(unittest.TestCase):
@@ -165,6 +166,105 @@ class EnumDocumentationTests(unittest.TestCase):
             path.write_text("<class><constants /></class>")
             failures, _ = audit_enum_docs(row, path)
             self.assertIn("Undocumented enum constant: PhysicsServer2D.JOINT_TYPE_MAX", failures)
+
+
+class MethodDocumentationTests(unittest.TestCase):
+    def setUp(self):
+        self.temporary = tempfile.TemporaryDirectory()
+        self.addCleanup(self.temporary.cleanup)
+        self.path = Path(self.temporary.name) / "PhysicsServer3D.xml"
+        self.row = {
+            "name": "PhysicsServer3D",
+            "methods": [
+                {
+                    "name": "_configure",
+                    "is_virtual": True,
+                    "is_required": True,
+                    "is_const": True,
+                    "return_value": {"type": "enum::Error"},
+                    "arguments": [
+                        {"name": "options", "type": "Dictionary", "default_value": "{}"},
+                        {"name": "exclude", "type": "typedarray::RID", "default_value": "Array[RID]([])"},
+                    ],
+                }
+            ],
+        }
+        self.xml = (
+            '<class><methods><method name="_configure" qualifiers="virtual required const">'
+            '<return type="int" enum="Error" />'
+            '<param index="0" name="options" type="Dictionary" default="{}" />'
+            '<param index="1" name="exclude" type="RID[]" default="Array[RID]([])" />'
+            "<description>Configures the backend.</description></method></methods></class>"
+        )
+
+    def audit(self, xml=None, row=None, kind="method"):
+        self.path.write_text(xml or self.xml)
+        return audit_method_docs(row or self.row, self.path, kind)
+
+    def test_exact_virtual_signature_and_typed_default_pass(self):
+        self.assertEqual(self.audit(), ([], 1))
+
+    def test_each_signature_dimension_is_checked(self):
+        for old, new, expected in (
+            ('enum="Error"', 'enum="OtherError"', "return type"),
+            ('name="options"', 'name="arguments"', "argument"),
+            ('type="Dictionary"', 'type="Array"', "argument"),
+            ('index="1"', 'index="0"', "argument"),
+            ('default="Array[RID]([])"', 'default="[]"', "argument"),
+            ('default="{}"', "", "argument"),
+            ("virtual required const", "virtual const", "required"),
+            ("virtual required const", "required const", "virtual"),
+            ("virtual required const", "virtual required static", "const"),
+        ):
+            with self.subTest(replacement=new):
+                failures, _ = self.audit(self.xml.replace(old, new))
+                self.assertTrue(any(expected in failure for failure in failures), failures)
+
+    def test_missing_empty_duplicate_and_retired_methods_are_rejected(self):
+        failures, _ = audit_method_docs(self.row, None)
+        self.assertIn("Missing method documentation: PhysicsServer3D", failures)
+        for xml, expected in (
+            ("<class><methods /></class>", "Undocumented method"),
+            (self.xml.replace("Configures the backend.", ""), "Empty method documentation"),
+            (self.xml.replace('name="_configure"', 'name="retired"'), "Retired method remains documented"),
+            (
+                self.xml.replace("</methods>", self.xml.split("<methods>")[1].split("</methods>")[0] + "</methods>"),
+                "Duplicate method documentation",
+            ),
+            (
+                self.xml.replace('<param index="1" name="exclude" type="RID[]" default="Array[RID]([])" />', ""),
+                "argument count",
+            ),
+        ):
+            with self.subTest(expected=expected):
+                failures, _ = self.audit(xml)
+                self.assertTrue(any(expected in failure for failure in failures), failures)
+
+    def test_property_accessors_can_use_member_documentation(self):
+        row = copy.deepcopy(self.row)
+        row["properties"] = [{"name": "options", "setter": "_configure"}]
+        self.assertEqual(self.audit("<class><members /></class>", row), ([], 0))
+        # Explicit method documentation still must have the correct signature.
+        self.assertTrue(self.audit(self.xml.replace('enum="Error"', 'enum="Other"'), row)[0])
+
+    def test_signals_check_arguments_and_only_named_internal_signals_are_excluded(self):
+        row = {
+            "name": "PhysicsServer3D",
+            "signals": [
+                {"name": "_debug_changed"},
+                {"name": "hit", "arguments": [{"name": "force", "type": "Vector3"}]},
+            ],
+        }
+        xml = (
+            '<class><signals><signal name="hit"><param index="0" name="force" type="Vector3" />'
+            "<description>Reports a hit force.</description></signal></signals></class>"
+        )
+        self.assertEqual(self.audit(xml, row, "signal"), ([], 1))
+        failures, _ = self.audit(xml.replace('type="Vector3"', 'type="float"'), row, "signal")
+        self.assertTrue(any("Incorrect documented argument" in failure for failure in failures), failures)
+        row["signals"].append({"name": "_unexpected"})
+        failures, _ = self.audit(xml, row, "signal")
+        self.assertIn("Undocumented signal: PhysicsServer3D._unexpected", failures)
 
 
 if __name__ == "__main__":

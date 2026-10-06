@@ -111,6 +111,70 @@ def audit_enum_docs(row, path):
     return failures, len(expected)
 
 
+def documented_type(node):
+    """Use the extension API's type spelling, retaining enum and bitfield identity."""
+    if node is None:
+        return "void"
+    if node.get("enum"):
+        prefix = "bitfield::" if node.get("is_bitfield") == "true" else "enum::"
+        return prefix + node.get("enum")
+    kind = node.get("type", "void")
+    if kind.endswith("[]"):
+        return "typedarray::" + kind[:-2]
+    return kind
+
+
+def audit_method_docs(row, path, kind="method"):
+    """Check public help signatures against a dump from the actual engine."""
+    name = row["name"]
+    methods = {
+        method["name"]: method
+        for method in row.get(kind + "s", [])
+        if kind == "method" or (name, method["name"]) not in INTERNAL_SIGNALS
+    }
+    accessors = {prop.get(key) for prop in row.get("properties", []) for key in ("setter", "getter")}
+    required = methods.keys() - (accessors if kind == "method" else set())
+    if path is None:
+        return ([f"Missing {kind} documentation: {name}"] if required else []), len(required)
+    nodes = ET.parse(path).findall(kind + "s/" + kind)
+    documented = {node.get("name"): node for node in nodes}
+    failures = []
+    if len(nodes) != len(documented):
+        failures.append(f"Duplicate {kind} documentation: {name}")
+    for member in sorted(required - documented.keys()):
+        failures.append(f"Undocumented {kind}: {name}.{member}")
+    for member, node in documented.items():
+        method = methods.get(member)
+        if method is None:
+            failures.append(f"Retired {kind} remains documented: {name}.{member}")
+            continue
+        identity = f"{name}.{member}"
+        if not node.findtext("description", "").strip():
+            failures.append(f"Empty {kind} documentation: {identity}")
+        expected_return = method.get("return_value", {}).get("type", "void")
+        if documented_type(node.find("return")) != expected_return:
+            failures.append(f"Incorrect documented return type: {identity}; expected {expected_return}")
+        parameters = node.findall("param")
+        arguments = method.get("arguments", [])
+        if len(parameters) != len(arguments):
+            failures.append(f"Incorrect documented argument count: {identity}; expected {len(arguments)}")
+        for index, (param, argument) in enumerate(zip(parameters, arguments)):
+            if (
+                param.get("index") != str(index)
+                or param.get("name") != argument["name"]
+                or documented_type(param) != argument["type"]
+                or param.get("default") != argument.get("default_value")
+            ):
+                failures.append(f"Incorrect documented argument: {identity}[{index}]; expected {argument}")
+        qualifiers = set(node.get("qualifiers", "").split())
+        for qualifier in ("const", "static", "vararg", "virtual"):
+            if (qualifier in qualifiers) != method.get("is_" + qualifier, False):
+                failures.append(f"Incorrect documented qualifier: {identity}; {qualifier}")
+        if ("required" in qualifiers) != method.get("is_required", False):
+            failures.append(f"Incorrect documented qualifier: {identity}; required")
+    return failures, len(required)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api", type=Path, required=True, help="Actual editor extension API dump")
@@ -118,7 +182,7 @@ def main():
     parser.add_argument("--managed", type=Path, required=True, help="modules/mono/glue/GodotSharp directory")
     parser.add_argument("--changes", type=Path, help="Required and removed API manifest")
     parser.add_argument("--classdb", type=Path, help="Actual property/signal snapshot from dump_egp_classdb.gd")
-    parser.add_argument("--docs", type=Path, help="Repository root for XML enum documentation checks")
+    parser.add_argument("--docs", type=Path, help="Repository root for XML method, signal, and enum checks")
     parser.add_argument("--output", type=Path, default=Path(".build/egp-api-validation/receipt.json"))
     args = parser.parse_args()
     receipt = {
@@ -128,6 +192,8 @@ def main():
         "inspector_properties": [],
         "internal_signals": [],
         "enum_documentation": [],
+        "method_documentation": [],
+        "signal_documentation": [],
         "failures": [],
     }
     failures = receipt["failures"]
@@ -202,6 +268,26 @@ def main():
                 continue
             entry = {"class": name, "methods": len(row.get("methods", []))}
             receipt["checks"].append(entry)
+            if args.docs:
+                path = docs.get(name)
+                errors, count = audit_method_docs(row, path)
+                failures.extend(errors)
+                receipt["method_documentation"].append({
+                    "class": name,
+                    "methods": count,
+                    "path": str(path) if path else None,
+                    "sha256": digest(path) if path else None,
+                })
+            if args.docs and row.get("signals"):
+                path = docs.get(name)
+                errors, count = audit_method_docs(row, path, "signal")
+                failures.extend(errors)
+                receipt["signal_documentation"].append({
+                    "class": name,
+                    "signals": count,
+                    "path": str(path) if path else None,
+                    "sha256": digest(path) if path else None,
+                })
             if args.docs and row.get("enums"):
                 path = docs.get(name)
                 errors, count = audit_enum_docs(row, path)

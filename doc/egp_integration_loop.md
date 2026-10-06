@@ -388,7 +388,7 @@ Later commits change only the lab launcher and documentation. Final actual edito
 SHA256 `5b9c139caff2459b634cdf29407def5f785563008eda9345a767a0d6d7d5ce9d` has API SHA256
 `e84e140b923451849e88aab8300021fd9d32f95c31825bb6d7e25a4235953271`; both are recorded
 in `.build/integration-final-mono-matched/receipt.json`. Debug/Release template
-hashes remain `fa230aaa…fd449` and `759f39a3…28718` (full hashes above).
+hashes remain `fa230aaaÃ¢â‚¬Â¦fd449` and `759f39a3Ã¢â‚¬Â¦28718` (full hashes above).
 
 - `.build/integration-matched-final-api/1791268787938526900/receipt.json` is the
   final paired capture. Audit `.build/integration-matched-final-api-audit.json`
@@ -510,3 +510,31 @@ invalid-library recovery, wider script/state and reload-soak cases, native 2D
 capability events, missing public method/signature/default documentation, unique
 development-package identity and canonical build version provenance, and advanced
 networking/platform/performance gates.
+
+
+## Public method documentation acceptance â€” 2026-10-06
+
+The inventory at `.build/integration-takeover/runtime-reload-1791272296539957200/inventory.json`
+accounts for seven worktrees, 113 local/remote refs and zero open PRs. Canonical,
+local master and origin master started this increment at `487299e664`; original
+foreign dirty work remains preserved without overwriting the combined source.
+No concurrent engine/build owner was active.
+
+Source documentation now adds 50 missing methods and seven networking signals,
+fills 314 empty descriptions (including native ScriptExtension hooks), and fixes
+two stale typed-array defaults and retired 3D shape references. New Box2D backend
+classes are registered for compiled editor documentation. Native session options,
+command result dictionaries, thread/error semantics, payload limits and physics
+event/configuration schemas are explicit. Custom server and script-language
+virtual methods link to their public contracts or describe native-only hooks.
+
+`.build/integration-method-doc-validation/receipt.json` records exact commands,
+changed source hashes, XML schema validation, help-reference lint, Ruff and 15
+negative/regression tests. Help lint reports no warnings or errors; two existing
+unpaired language code examples remain reported. The source audit at
+`.build/integration-method-doc-source-audit.json` passes 77 classes against the
+current engine API, exact C++ SDK and compiled generated C# source. Counts are
+1299 methods, 55 signals and 371 enum constants. This source check precedes the
+editor/managed rebuild; installation and combined runtime acceptance remain
+pending until their fresh receipts are recorded. The native invalid-library and
+incompatible-ABI reload recovery paths remain unfinished acceptance items.

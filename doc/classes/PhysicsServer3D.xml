@@ -171,6 +171,7 @@
 			<param index="0" name="area" type="RID" />
 			<param index="1" name="monitorable" type="bool" />
 			<description>
+				Sets whether other areas can detect [param area] through their monitoring callbacks. Disabling monitorability does not disable this area's own monitoring of other objects.
 			</description>
 		</method>
 		<method name="area_set_param">
@@ -205,6 +206,7 @@
 			<param index="1" name="shape_idx" type="int" />
 			<param index="2" name="disabled" type="bool" />
 			<description>
+				Enables or disables the shape at [param shape_idx] on [param area]. Disabled shapes do not participate in collision detection. The index refers to the area's shape list, not a shape RID.
 			</description>
 		</method>
 		<method name="area_set_shape_transform">
@@ -356,6 +358,13 @@
 				Use [method body_add_shape] to add shapes to it, use [method body_set_state] to set its transform, and use [method body_set_space] to add the body to a space.
 			</description>
 		</method>
+		<method name="body_get_collision_exceptions">
+			<return type="RID[]" />
+			<param index="0" name="body" type="RID" />
+			<description>
+				Returns an owned array of body RIDs excluded from collisions with [param body]. Changing this array does not change the exclusions; use [method body_add_collision_exception] or [method body_remove_collision_exception].
+			</description>
+		</method>
 		<method name="body_get_collision_layer" qualifiers="const">
 			<return type="int" />
 			<param index="0" name="body" type="RID" />
@@ -384,6 +393,13 @@
 			<description>
 				Returns the body's total constant rotational forces applied during each physics update.
 				See [method body_add_constant_torque].
+			</description>
+		</method>
+		<method name="body_get_contacts_reported_depth_threshold" qualifiers="const">
+			<return type="float" />
+			<param index="0" name="body" type="RID" />
+			<description>
+				Returns the minimum contact penetration depth recorded for [param body]. See [method body_set_contacts_reported_depth_threshold].
 			</description>
 		</method>
 		<method name="body_get_direct_state">
@@ -465,6 +481,7 @@
 			<param index="0" name="body" type="RID" />
 			<param index="1" name="axis" type="int" enum="PhysicsServer3D.BodyAxis" />
 			<description>
+				Returns whether the selected [param axis] is locked on [param body]. See [method body_set_axis_lock].
 			</description>
 		</method>
 		<method name="body_is_continuous_collision_detection_enabled" qualifiers="const">
@@ -511,6 +528,7 @@
 			<param index="1" name="axis" type="int" enum="PhysicsServer3D.BodyAxis" />
 			<param index="2" name="lock" type="bool" />
 			<description>
+				Enables or disables the selected linear or angular axis lock on [param body]. Locked axes prevent motion along that degree of freedom; see [enum BodyAxis].
 			</description>
 		</method>
 		<method name="body_set_axis_velocity">
@@ -553,6 +571,14 @@
 			<description>
 				Sets the body's total constant rotational forces applied during each physics update.
 				See [method body_add_constant_torque].
+			</description>
+		</method>
+		<method name="body_set_contacts_reported_depth_threshold">
+			<return type="void" />
+			<param index="0" name="body" type="RID" />
+			<param index="1" name="threshold" type="float" />
+			<description>
+				Sets the minimum contact penetration depth recorded for [param body]. [param threshold] must be finite and nonnegative. This filters reported contacts; it does not disable collision response. [method body_set_max_contacts_reported] must enable contact reporting.
 			</description>
 		</method>
 		<method name="body_set_enable_continuous_collision_detection">
@@ -635,6 +661,7 @@
 			<param index="1" name="shape_idx" type="int" />
 			<param index="2" name="disabled" type="bool" />
 			<description>
+				Enables or disables the shape at [param shape_idx] on [param body]. Disabled shapes do not participate in collision detection. The index refers to the body's shape list, not a shape RID.
 			</description>
 		</method>
 		<method name="body_set_shape_transform">
@@ -843,11 +870,13 @@
 			<return type="void" />
 			<param index="0" name="joint" type="RID" />
 			<description>
+				Removes the constraint associated with [param joint] while retaining its RID for a subsequent joint creation method. Use [method free_rid] to release the RID itself.
 			</description>
 		</method>
 		<method name="joint_create">
 			<return type="RID" />
 			<description>
+				Allocates an empty joint RID. Configure it with a joint creation method, such as [method joint_make_pin] or [method joint_make_configured], and release it with [method free_rid] when finished.
 			</description>
 		</method>
 		<method name="joint_disable_collisions_between_bodies">
@@ -856,6 +885,27 @@
 			<param index="1" name="disable" type="bool" />
 			<description>
 				Sets whether the bodies attached to the [Joint3D] will collide with each other.
+			</description>
+		</method>
+		<method name="joint_get_configuration" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="joint" type="RID" />
+			<description>
+				Returns a copy of the complete native configuration, including default values and previous updates. Mutating the returned dictionary does not modify the joint; use [method joint_set_configuration]. Only joints created with [method joint_make_configured] are supported; invalid or unsupported joints report an error and return an empty dictionary.
+			</description>
+		</method>
+		<method name="joint_get_constraint_force" qualifiers="const">
+			<return type="Vector3" />
+			<param index="0" name="joint" type="RID" />
+			<description>
+				Returns the native solver's most recent constraint force as a [Vector3]. Read after a physics step. Returns a zero vector when the joint has no active native constraint; an invalid [param joint] reports an error and also returns zero. This value measures the constraint response, not the force applied to the entire body.
+			</description>
+		</method>
+		<method name="joint_get_constraint_torque" qualifiers="const">
+			<return type="Vector3" />
+			<param index="0" name="joint" type="RID" />
+			<description>
+				Returns the native solver's most recent constraint torque as a [Vector3]. Read after a physics step. Returns zero when the joint has no active native constraint; an invalid [param joint] reports an error and also returns zero.
 			</description>
 		</method>
 		<method name="joint_get_type" qualifiers="const">
@@ -880,6 +930,22 @@
 			<param index="3" name="body_B" type="RID" />
 			<param index="4" name="local_ref_B" type="Transform3D" />
 			<description>
+				Replaces the constraint associated with [param joint] with a cone twist joint between [param body_A] and [param body_B]. Allocate the RID with [method joint_create]. An empty body B RID attaches body A to the world; attachment coordinates for body B then refer to world space. See the corresponding joint node for the constraint's behavior.
+			</description>
+		</method>
+		<method name="joint_make_configured">
+			<return type="void" />
+			<param index="0" name="joint" type="RID" />
+			<param index="1" name="type" type="int" enum="PhysicsServer3D.JointType" />
+			<param index="2" name="body_a" type="RID" />
+			<param index="3" name="frame_a" type="Transform3D" />
+			<param index="4" name="body_b" type="RID" />
+			<param index="5" name="frame_b" type="Transform3D" />
+			<param index="6" name="configuration" type="Dictionary" />
+			<description>
+				Replaces the constraint associated with a [param joint] RID allocated by [method joint_create], using the native [param type] and local attachment [param frame_a] and [param frame_b]. [param body_a] must be valid; an empty [RID] for [param body_b] attaches to the world, interpreting [param frame_b] in world coordinates. Attached bodies must share a space and at least one must be dynamic for an active constraint.
+				Supported native types range from [constant JOINT_TYPE_DISTANCE] through [constant JOINT_TYPE_WHEEL]. [param configuration] overrides native defaults. Common keys are [code]constraint_hertz[/code], [code]constraint_damping_ratio[/code], [code]force_threshold[/code], [code]torque_threshold[/code], and [code]collide_connected[/code]. Type-specific keys include [code]length[/code] for distance joints and [code]enable_motor[/code], [code]motor_speed[/code], and the relevant force or torque limit for motor-capable joints. Use [method joint_get_configuration] to inspect the complete configuration; the repository's [code]doc/egp_native_joint_configuration.json[/code] lists type-specific keys.
+				Unknown keys, incorrect value types, nonfinite values, and invalid ranges report an error and leave the previous constraint unchanged. This method returns no [enum Error]; validate your inputs and inspect diagnostics.
 			</description>
 		</method>
 		<method name="joint_make_generic_6dof">
@@ -901,6 +967,7 @@
 			<param index="3" name="body_B" type="RID" />
 			<param index="4" name="hinge_B" type="Transform3D" />
 			<description>
+				Replaces the constraint associated with [param joint] with a hinge joint between [param body_A] and [param body_B]. Allocate the RID with [method joint_create]. An empty body B RID attaches body A to the world; attachment coordinates for body B then refer to world space. See the corresponding joint node for the constraint's behavior.
 			</description>
 		</method>
 		<method name="joint_make_pin">
@@ -911,6 +978,7 @@
 			<param index="3" name="body_B" type="RID" />
 			<param index="4" name="local_B" type="Vector3" />
 			<description>
+				Replaces the constraint associated with [param joint] with a pin joint between [param body_A] and [param body_B]. Allocate the RID with [method joint_create]. An empty body B RID attaches body A to the world; attachment coordinates for body B then refer to world space. See the corresponding joint node for the constraint's behavior.
 			</description>
 		</method>
 		<method name="joint_make_slider">
@@ -921,6 +989,15 @@
 			<param index="3" name="body_B" type="RID" />
 			<param index="4" name="local_ref_B" type="Transform3D" />
 			<description>
+				Replaces the constraint associated with [param joint] with a slider joint between [param body_A] and [param body_B]. Allocate the RID with [method joint_create]. An empty body B RID attaches body A to the world; attachment coordinates for body B then refer to world space. See the corresponding joint node for the constraint's behavior.
+			</description>
+		</method>
+		<method name="joint_set_configuration">
+			<return type="void" />
+			<param index="0" name="joint" type="RID" />
+			<param index="1" name="configuration" type="Dictionary" />
+			<description>
+				Merges [param configuration] into the current native joint configuration. Only joints created with [method joint_make_configured] are supported. Unspecified keys retain their previous values. The complete candidate is validated before changes are applied; an unknown key, incorrect type, nonfinite value, or invalid range reports an error and leaves the previous configuration unchanged. See [method joint_make_configured] and [method joint_get_configuration].
 			</description>
 		</method>
 		<method name="pin_joint_get_local_a" qualifiers="const">
@@ -998,7 +1075,6 @@
 			<description>
 				Sets the shape data that configures the shape. The [param data] to be passed depends on the shape's type (see [method shape_get_type]):
 				- [constant SHAPE_WORLD_BOUNDARY]: a [Plane],
-				- [constant SHAPE_SEPARATION_RAY]: a dictionary containing the key [code]"length"[/code] with a [float] value and the key [code]"slide_on_slope"[/code] with a [bool] value,
 				- [constant SHAPE_SPHERE]: a [float] that is the radius of the sphere,
 				- [constant SHAPE_BOX]: a [Vector3] containing the half-extents of the box,
 				- [constant SHAPE_CAPSULE]: a dictionary containing the keys [code]"height"[/code] and [code]"radius"[/code] with [float] values,
@@ -1007,7 +1083,6 @@
 				- [constant SHAPE_CONCAVE_POLYGON]: a dictionary containing the key [code]"faces"[/code] with a [PackedVector3Array] value (with a length divisible by 3, so that each 3-tuple of points forms a face) and the key [code]"backface_collision"[/code] with a [bool] value,
 				- [constant SHAPE_HEIGHTMAP]: a dictionary containing the keys [code]"width"[/code] and [code]"depth"[/code] with [int] values, and the key [code]"heights"[/code] with a value that is a packed array of [float]s of length [code]width * depth[/code] (that is a [PackedFloat32Array], or a [PackedFloat64Array] if Godot was compiled with the [code]precision=double[/code] option), and optionally the keys [code]"min_height"[/code] and [code]"max_height"[/code] with [float] values,
 				- [constant SHAPE_SOFT_BODY]: the input [param data] is ignored and this method has no effect,
-				- [constant SHAPE_CUSTOM]: the input [param data] is interpreted by a custom physics server, if it supports custom shapes.
 			</description>
 		</method>
 		<method name="slider_joint_get_param" qualifiers="const">
@@ -1082,6 +1157,13 @@
 			<param index="0" name="body" type="RID" />
 			<description>
 				Returns the bounds of the given soft body in global coordinates.
+			</description>
+		</method>
+		<method name="soft_body_get_collision_exceptions">
+			<return type="RID[]" />
+			<param index="0" name="body" type="RID" />
+			<description>
+				Returns an owned array of body RIDs excluded from collisions with the soft body. Changing this array does not change the exclusions; use [method soft_body_add_collision_exception] or [method soft_body_remove_collision_exception].
 			</description>
 		</method>
 		<method name="soft_body_get_collision_layer" qualifiers="const">
@@ -1336,6 +1418,18 @@
 				Requests that the physics server updates the rendering server with the latest positions of the given soft body's points through the [param rendering_server_handler] interface.
 			</description>
 		</method>
+		<method name="space_apply_explosion">
+			<return type="void" />
+			<param index="0" name="space" type="RID" />
+			<param index="1" name="position" type="Vector3" />
+			<param index="2" name="radius" type="float" />
+			<param index="3" name="falloff" type="float" />
+			<param index="4" name="impulse_density" type="float" />
+			<param index="5" name="collision_mask" type="int" />
+			<description>
+				Applies a radial native impulse centered at the world-space [param position] to matching dynamic shapes. [param radius] must be positive; [param falloff] is a nonnegative distance beyond the radius over which the impulse decreases to zero. [param collision_mask] filters shape collision layers. [param impulse_density] is impulse per unit area of the shape facing the center; a negative value creates an implosion. All numeric inputs must be finite. Supported shapes are spheres, capsules, and hulls. Invalid inputs report an error and apply no impulse.
+			</description>
+		</method>
 		<method name="space_create">
 			<return type="RID" />
 			<description>
@@ -1347,6 +1441,13 @@
 			<param index="0" name="space" type="RID" />
 			<description>Returns the number of debug contact points captured in the last physics step. Enable collection with [method space_set_debug_contacts].</description>
 		</method>
+		<method name="space_get_contact_hit_events" qualifiers="const">
+			<return type="Array" />
+			<param index="0" name="space" type="RID" />
+			<description>
+				Returns a copied [Array] of contact-hit dictionaries from the space's most recent physics step. Each dictionary contains [code]rid_a[/code] and [code]rid_b[/code] ([RID]), [code]point[/code] and [code]normal[/code] ([Vector3]), and [code]approach_speed[/code] (float). Read after a physics step; the cache is replaced at the next step. These are native hit-threshold events, not a complete contact or overlap list. An invalid [param space] reports an error and returns an empty array.
+			</description>
+		</method>
 		<method name="space_get_contacts" qualifiers="const">
 			<return type="PackedVector3Array" />
 			<param index="0" name="space" type="RID" />
@@ -1357,6 +1458,13 @@
 			<param index="0" name="space" type="RID" />
 			<description>
 				Returns the state of a space, a [PhysicsDirectSpaceState3D]. This object can be used to make collision/intersection queries.
+			</description>
+		</method>
+		<method name="space_get_joint_events" qualifiers="const">
+			<return type="Array" />
+			<param index="0" name="space" type="RID" />
+			<description>
+				Returns a copied [Array] of native joint-threshold events from the space's most recent physics step. Each dictionary contains [code]rid[/code] ([RID]), [code]force[/code] ([Vector3]), and [code]torque[/code] ([Vector3]). Configure [code]force_threshold[/code] and [code]torque_threshold[/code] with [method joint_make_configured] or [method joint_set_configuration]. The cache is replaced at the next step; events do not automatically break joints. An invalid [param space] reports an error and returns an empty array.
 			</description>
 		</method>
 		<method name="space_get_param" qualifiers="const">
@@ -1407,35 +1515,6 @@
 			<return type="RID" />
 			<description>
 				Creates a 3D world boundary shape in the physics server, and returns the [RID] that identifies it. Use [method shape_set_data] to set the shape's normal direction and distance properties.
-			</description>
-		</method>
-		<method name="body_get_collision_exceptions">
-			<return type="RID[]" />
-			<param index="0" name="body" type="RID" />
-			<description>
-				Returns an owned array of body RIDs excluded from collisions with [param body]. Changing this array does not change the exclusions; use [method body_add_collision_exception] or [method body_remove_collision_exception].
-			</description>
-		</method>
-		<method name="body_get_contacts_reported_depth_threshold" qualifiers="const">
-			<return type="float" />
-			<param index="0" name="body" type="RID" />
-			<description>
-				Returns the minimum contact penetration depth recorded for [param body]. See [method body_set_contacts_reported_depth_threshold].
-			</description>
-		</method>
-		<method name="body_set_contacts_reported_depth_threshold">
-			<return type="void" />
-			<param index="0" name="body" type="RID" />
-			<param index="1" name="threshold" type="float" />
-			<description>
-				Sets the minimum contact penetration depth recorded for [param body]. [param threshold] must be finite and nonnegative. This filters reported contacts; it does not disable collision response. [method body_set_max_contacts_reported] must enable contact reporting.
-			</description>
-		</method>
-		<method name="soft_body_get_collision_exceptions">
-			<return type="RID[]" />
-			<param index="0" name="body" type="RID" />
-			<description>
-				Returns an owned array of body RIDs excluded from collisions with the soft body. Changing this array does not change the exclusions; use [method soft_body_add_collision_exception] or [method soft_body_remove_collision_exception].
 			</description>
 		</method>
 	</methods>
@@ -1726,7 +1805,7 @@
 			Constant to set/get whether the gravity vector of an area is a direction, or a center point.
 		</constant>
 		<constant name="AREA_PARAM_GRAVITY_POINT_UNIT_DISTANCE" value="4" enum="AreaParameter">
-			Constant to set/get the distance at which the gravity strength is equal to the gravity controlled by [constant AREA_PARAM_GRAVITY]. For example, on a planet 100 meters in radius with a surface gravity of 4.0 m/s², set the gravity to 4.0 and the unit distance to 100.0. The gravity will have falloff according to the inverse square law, so in the example, at 200 meters from the center the gravity will be 1.0 m/s² (twice the distance, 1/4th the gravity), at 50 meters it will be 16.0 m/s² (half the distance, 4× the gravity), and so on.
+			Constant to set/get the distance at which the gravity strength is equal to the gravity controlled by [constant AREA_PARAM_GRAVITY]. For example, on a planet 100 meters in radius with a surface gravity of 4.0 m/sÃ‚Â², set the gravity to 4.0 and the unit distance to 100.0. The gravity will have falloff according to the inverse square law, so in the example, at 200 meters from the center the gravity will be 1.0 m/sÃ‚Â² (twice the distance, 1/4th the gravity), at 50 meters it will be 16.0 m/sÃ‚Â² (half the distance, 4Ãƒâ€” the gravity), and so on.
 			The above is true only when the unit distance is a positive number. When this is set to 0.0, the gravity will be constant regardless of distance.
 		</constant>
 		<constant name="AREA_PARAM_LINEAR_DAMP_OVERRIDE_MODE" value="5" enum="AreaParameter">

@@ -56,14 +56,27 @@ retired and must fail the audit if regenerated bindings still contain them.
 
 Networking options, lifecycle, thread ownership, errors and limits are documented
 in `modules/egp_net/README.md`. Native session wrappers can operate without the
-GDScript helper; higher-level C#/C++ façades use the shared GDScript codec and
+GDScript helper; higher-level C#/C++ faÃ§ades use the shared GDScript codec and
 adapters. This dependency must stay clear in SDK installation and examples.
 
-Pass `--docs <repository-root>` to check XML enum documentation against the same
-actual editor API. The audit checks names, enum membership, numeric values and
-nonempty descriptions, and rejects documented constants that have been retired.
-It records class XML hashes and the number of checked constants. This does not
-validate the semantic accuracy of every description or all method defaults.
+Pass `--docs <repository-root>` to check XML method, signal and enum documentation
+against the same actual editor API. The audit checks method and signal argument
+names, ordering, types, enum identities, typed-array defaults, return types,
+const/static/vararg/virtual/required qualifiers, and nonempty descriptions.
+Property accessors may be documented through their member entries; explicitly
+documented accessors still require correct signatures. Only the two named
+internal physics debugger signals are excluded. Enum names, membership and
+numeric values are checked too. Missing, empty, duplicate or retired callable
+entries fail the audit. Receipts record XML hashes and coverage counts. Passing
+these structural checks does not establish the semantic accuracy of every
+description or qualification of the documented behavior.
+
+The native `EGPNetSession` class reference lists every configuration option,
+its bounds and default, command return shapes, error handling, thread ownership,
+connection states and message limits. The Box2D/Box3D server references document
+native joint configuration, force/torque snapshots, hit and threshold event
+schemas, and explosions. Box2D shape sweeps and body metadata have backend class
+references compiled into editor help and generated managed documentation.
 
 Running-game C#/C++ reload is enabled before startup with
 `debug/hot_reload/enable_runtime=true` in an editor build. The editor debugger

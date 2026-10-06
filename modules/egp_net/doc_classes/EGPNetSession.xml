@@ -3,4 +3,164 @@
     <brief_description>Native Yojimbo transport and server-authoritative entity replication.</brief_description>
     <description>Configure a session, listen as a server, or join using an encrypted connect token. Direct address joins require explicitly enabled loopback development mode. Call poll regularly on the creating thread. Commands expose bounded raw messages, entity replication, peer lists and interest filtering. The EGPNet GDScript helper adds named handlers and registered scene factories. Server peer identifiers refer to a connection generation; reconnects do not inherit ownership.</description>
     <tutorials></tutorials>
+	<methods>
+		<method name="close">
+			<return type="void" />
+			<description>
+				Alias for [method stop]. Stops transport while retaining configuration; it does not dispose the [RefCounted] session or permit another [method configure] call. Release your references to dispose the session.
+			</description>
+		</method>
+		<method name="command">
+			<return type="Variant" />
+			<param index="0" name="operation" type="StringName" />
+			<param index="1" name="arguments" type="Dictionary" default="{}" />
+			<description>
+				Performs a low-level operation. All operations belong to the creating thread. Before configuration, returns [constant ERR_UNCONFIGURED]. Unknown operation names return [constant ERR_INVALID_PARAMETER].
+				[code]peers[/code]: returns an [Array] of dictionaries containing [code]peer_id[/code], [code]client_id[/code], and [code]ping_ms[/code]. Server peer IDs identify connection generations; clients use peer [code]0[/code].
+				[code]entities[/code]: returns an [Array] of dictionaries containing [code]entity[/code], [code]revision[/code], [code]tick[/code], [code]kind[/code], [code]authority_peer[/code], and [code]state[/code] ([PackedByteArray]).
+				[code]spawn[/code]: server-only; arguments [code]kind[/code] (nonnegative integer), [code]state[/code] ([PackedByteArray], at most 4096 bytes, default empty), and [code]authority_peer[/code] (default [code]-1[/code] for server ownership). Returns a dictionary with [code]error[/code] and [code]entity[/code]; use the entity handle only when the error is [constant OK]. A client owner must be a current connected peer.
+				[code]update_entity[/code]: server-only; arguments [code]entity[/code] and [code]state[/code] (at most 4096 bytes). Returns an [enum Error]; changes are replicated by subsequent polling.
+				[code]despawn[/code]: server-only; argument [code]entity[/code]. Returns an [enum Error].
+				[code]disconnect[/code]: argument [code]peer[/code]. A server disconnects that client; a client uses [code]0[/code] to stop. Returns an [enum Error].
+				[code]set_visible[/code]: server-only; arguments [code]entity[/code], [code]peer[/code], and [code]visible[/code] (Boolean, default [code]true[/code]). Returns an [enum Error]. Hiding removes that entity from the selected client's replicated view; showing restores its current state.
+				[code]send_packet[/code]: arguments [code]peer[/code], [code]payload[/code] ([PackedByteArray]), [code]channel[/code] (0 to 3, default 0), and [code]delivery[/code] (2 for reliable ordered, 4 for unreliable unordered, default 2). Payload limits are 4096 and 900 bytes respectively. Returns an [enum Error]; the receiver emits [signal packet_received].
+				Server-only operations return [constant ERR_UNAUTHORIZED] on clients. Missing entities or peers return [constant ERR_DOES_NOT_EXIST]. Use [method send_application] for the higher-level EGPNet helper's encoded messages.
+			</description>
+		</method>
+		<method name="configure">
+			<return type="int" enum="Error" />
+			<param index="0" name="options" type="Dictionary" default="{}" />
+			<description>
+				Initializes this session on its creating thread. Returns [constant OK] on success, [constant ERR_ALREADY_IN_USE] if already configured, or [constant ERR_INVALID_PARAMETER] for unknown keys, incorrect types, or out-of-range values. Configuration survives [method stop]; create another [EGPNetSession] to change it.
+				Accepted [param options] keys and defaults:
+				[code]game_protocol = "egp-game-v1"[/code] and [code]simulation_fingerprint = "script-state-v1"[/code]: nonempty strings of at most 256 UTF-8 bytes. These and [code]tick_rate[/code] must match across peers.
+				[code]tick_rate = 60[/code]: integer from 1 to 240. [code]max_players = 32[/code]: integer from 1 to 64. [code]max_entities = 1024[/code]: integer from 1 to 4096.
+				[code]messages_per_second = 1000[/code]: integer of at least 32. [code]bytes_per_second = 4194304[/code]: integer of at least 8192. These bound each connection's message traffic.
+				[code]timeout_seconds = 5[/code]: integer from 1 to 60. [code]token_lifetime_seconds = 30[/code]: integer from 1 to 120.
+				[code]allow_insecure_loopback = false[/code]: Boolean enabling development joins only on literal [code]127.0.0.1[/code] or [code]::1[/code]. In this mode the server must also bind to a literal loopback address.
+				[code]private_key[/code]: optional [PackedByteArray] of exactly 32 bytes for server token signing. If omitted, a secure server generates its own random key. Do not log or send this key to clients.
+				[code]simulated_loss = 0[/code]: percentage from 0 to 100. [code]simulated_latency_ms = 0[/code] and [code]simulated_jitter_ms = 0[/code]: milliseconds from 0 to 5000. All three accept finite integers or floats and apply to this session's outgoing network traffic.
+			</description>
+		</method>
+		<method name="connect_to_server">
+			<return type="int" enum="Error" />
+			<param index="0" name="address" type="String" />
+			<param index="1" name="port" type="int" default="10515" />
+			<description>
+				Starts an asynchronous development connection to the literal loopback [param address] at [param port]. Both peers must have [code]allow_insecure_loopback[/code] enabled; other addresses return [constant ERR_UNAUTHORIZED]. The port must be from 1 to 65535. Returns [constant OK] when the attempt starts; wait for [signal state_changed] to report [code]Connected[/code] while calling [method poll]. For remote servers, use [method connect_token].
+			</description>
+		</method>
+		<method name="connect_token">
+			<return type="int" enum="Error" />
+			<param index="0" name="client_id" type="int" />
+			<param index="1" name="token" type="PackedByteArray" />
+			<param index="2" name="bind_address" type="String" default="&quot;0.0.0.0&quot;" />
+			<description>
+				Starts an asynchronous secure connection using the 2048-byte encrypted connect [param token] issued for [param client_id]. [param bind_address] selects the local client socket; use an IPv6 address for an IPv6 server. The server endpoint and expiration are carried in the token. Returns [constant ERR_INVALID_PARAMETER] for an invalid token size or bind address. [constant OK] means the connection attempt started, not that admission succeeded; call [method poll] and watch [signal state_changed]. Deliver tokens through your application's authenticated admission service and keep them out of logs.
+			</description>
+		</method>
+		<method name="get_fingerprint" qualifiers="const">
+			<return type="String" />
+			<description>
+				Returns the protocol compatibility fingerprint incorporating the native wire version, game protocol, simulation fingerprint, and tick rate. Returns an empty string before configuration. Matching fingerprints are necessary for admission and do not establish deterministic gameplay or physics equivalence.
+			</description>
+		</method>
+		<method name="get_state" qualifiers="const">
+			<return type="String" />
+			<description>
+				Returns the current transport state: [code]Unconfigured[/code], [code]Stopped[/code], [code]Listening[/code], [code]Connecting[/code], [code]Synchronizing[/code], [code]Connected[/code], or [code]Disconnected[/code]. A configured session read from another thread returns [code]WrongThread[/code]. Listen for [signal state_changed] to observe transitions.
+			</description>
+		</method>
+		<method name="get_statistics" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Returns a snapshot [Dictionary] with integer keys [code]tick[/code], [code]server_tick[/code], [code]peers[/code], [code]local_port[/code], [code]received_messages[/code], [code]received_bytes[/code], and [code]rejected_messages[/code]. Returns an empty dictionary before configuration. Read on the creating thread; counters describe this session, not end-to-end gameplay latency.
+			</description>
+		</method>
+		<method name="issue_token">
+			<return type="Dictionary" />
+			<param index="0" name="client_id" type="int" />
+			<param index="1" name="public_address" type="String" />
+			<description>
+				Issues an encrypted, expiring admission token on a running server for [param client_id]. [param public_address] must include the reachable server IP address and nonzero port, for example [code]203.0.113.10:10515[/code] or [code][::1]:10515[/code]. Returns a [Dictionary] with an [code]error[/code] value from [enum Error] and, on success, a [code]token[/code] [PackedByteArray] of 2048 bytes. Returns [constant ERR_UNAUTHORIZED] when no server is running and [constant ERR_INVALID_PARAMETER] for invalid endpoint syntax. Keep the token private to the admitted client.
+			</description>
+		</method>
+		<method name="listen">
+			<return type="int" enum="Error" />
+			<param index="0" name="port" type="int" default="10515" />
+			<param index="1" name="bind_address" type="String" default="&quot;0.0.0.0&quot;" />
+			<description>
+				Starts a dedicated transport server at [param bind_address] and [param port]. Use port [code]0[/code] to request an ephemeral port and read it from [method get_statistics]. IPv6 requires an IPv6 bind address, such as [code]::[/code]. Returns [constant ERR_UNCONFIGURED] before [method configure], [constant ERR_BUSY] if a client/server is already active or polling is in progress, and [constant ERR_INVALID_PARAMETER] for invalid addresses or ports. An insecure development server must bind to [code]127.0.0.1[/code] or [code]::1[/code]. Call [method poll] regularly after a successful start.
+			</description>
+		</method>
+		<method name="poll">
+			<return type="int" enum="Error" />
+			<description>
+				Receives packets, advances transport time, emits connection/message signals, runs accumulated fixed simulation ticks, and sends queued packets. Call regularly on the creating thread, including while connecting. Returns [constant ERR_BUSY] for a different thread or recursive polling and [constant ERR_UNCONFIGURED] before [method configure]. Signal handlers execute synchronously on this thread. Calling [method stop] inside a handler defers teardown until polling completes.
+			</description>
+		</method>
+		<method name="send_application">
+			<return type="int" enum="Error" />
+			<param index="0" name="peer_id" type="int" />
+			<param index="1" name="payload" type="PackedByteArray" />
+			<description>
+				Queues a reliable, ordered application message of at most 4096 bytes for [param peer_id]. Clients use peer [code]0[/code] for the server; servers use a current identifier from [signal peer_connected] or [method command] with [code]peers[/code]. The receiver emits [signal application_received]. Returns [constant ERR_BUSY] when rate limits or the send queue prevent enqueueing; retry later without a tight loop. [constant ERR_OUT_OF_MEMORY] reports an oversized payload or allocation limit; [constant ERR_DOES_NOT_EXIST] reports an unavailable peer. [constant OK] means queued, not acknowledged.
+			</description>
+		</method>
+		<method name="stop">
+			<return type="void" />
+			<description>
+				Disconnects clients and stops the server or client transport, clears replicated entities, and enters [code]Stopped[/code]. Configuration and identifier generations are retained so this session can [method listen] or connect again without stale identifiers aliasing new objects. Safe to call repeatedly on the creating thread; teardown requested inside a polling callback is deferred. Calls from another thread are ignored with a diagnostic.
+			</description>
+		</method>
+	</methods>
+	<signals>
+		<signal name="application_received">
+			<param index="0" name="peer_id" type="int" />
+			<param index="1" name="payload" type="PackedByteArray" />
+			<description>
+				Emitted for a reliable ordered application [param payload] received from [param peer_id]. Payloads are bounded to 4096 bytes. Handlers run inside [method poll] on the creating thread; decode and validate application data before acting on it.
+			</description>
+		</signal>
+		<signal name="diagnostic">
+			<param index="0" name="message" type="String" />
+			<description>
+				Emitted when the native session reports a diagnostic [param message], including invalid thread access. Tokens and keys are excluded from native diagnostics.
+			</description>
+		</signal>
+		<signal name="packet_received">
+			<param index="0" name="peer_id" type="int" />
+			<param index="1" name="payload" type="PackedByteArray" />
+			<param index="2" name="channel" type="int" />
+			<param index="3" name="delivery" type="int" />
+			<description>
+				Emitted for a raw [param payload] from [param peer_id] on logical [param channel] 0 to 3. [param delivery] is 2 for reliable ordered or 4 for unreliable unordered. Payload limits are 4096 and 900 bytes respectively. Handlers run synchronously inside [method poll].
+			</description>
+		</signal>
+		<signal name="peer_connected">
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Emitted when transport admission succeeds. Servers receive a connection-generation [param peer_id]; clients receive 0 for the server. A client may still be synchronizing replicated entities; use [signal state_changed] for the Connected state.
+			</description>
+		</signal>
+		<signal name="peer_disconnected">
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Emitted when [param peer_id] disconnects. Server peer identifiers are not reused by reconnects; discard cached peer-specific ownership and references.
+			</description>
+		</signal>
+		<signal name="simulation_tick">
+			<param index="0" name="tick" type="int" />
+			<param index="1" name="server" type="bool" />
+			<description>
+				Emitted for each accumulated fixed simulation [param tick]. [param server] is true on a server session and false on a client. A tick signal alone does not provide client prediction, reconciliation, or deterministic physics; implement those in the gameplay layer.
+			</description>
+		</signal>
+		<signal name="state_changed">
+			<param index="0" name="state" type="String" />
+			<description>
+				Emitted synchronously on the creating thread when transport [param state] changes. A successful connect call first enters Connecting; Connected is emitted after replicated baseline synchronization. See [method get_state].
+			</description>
+		</signal>
+	</signals>
 </class>

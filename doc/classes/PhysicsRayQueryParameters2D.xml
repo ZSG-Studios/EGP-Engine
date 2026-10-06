@@ -14,7 +14,7 @@
 			<param index="0" name="from" type="Vector2" />
 			<param index="1" name="to" type="Vector2" />
 			<param index="2" name="collision_mask" type="int" default="4294967295" />
-			<param index="3" name="exclude" type="RID[]" default="[]" />
+			<param index="3" name="exclude" type="RID[]" default="Array[RID]([])" />
 			<description>
 				Returns a new, pre-configured [PhysicsRayQueryParameters2D] object. Use it to quickly create query parameters using the most common options.
 				[codeblock]
