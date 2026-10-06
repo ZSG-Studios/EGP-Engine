@@ -3125,3 +3125,69 @@ re-admission and new entity mapping; that combined owner-recovery scenario remai
 open. Automatic/in-flight transfer, exported/independent-process reload,
 Release-library recreation, arbitrary ABI changes, production prediction and
 broader physics/platform/scale/soak/performance acceptance also remain open.
+
+## 2026-10-06: GitHub static checks and Linux receive-budget fixture repair
+
+Networking run `37527377493` at `50b1de3090` passed Windows and macOS but failed
+Ubuntu: 9 of 10 CTest cases passed; the jitter fixture sent 128 unreliable
+messages, received zero, rejected zero and stayed connected. A frozen source
+copy reproduced the same delivery assertion failure under Ubuntu WSL/GCC Debug.
+Yojimbo's simulator has 512 packet slots and overwrites an occupied slot on ring
+reuse. Pumping every 2 ms with up to 1.6 seconds of simulated delay can overrun
+that buffer, despite configuring zero random packet loss.
+An additional baseline rebuilt from the exact committed `cd7424f5e3` fixture
+received 32 of 128 messages and failed the same assertion; the simulator's
+stochastic delay need not produce the same missing-packet count on every run.
+`.build/integration-receive-ci-baseline-audit/receipt.json` preserves that source
+and failure, then verifies the qualified final Linux executable was restored
+byte-for-byte.
+
+Only that jitter fixture now sleeps 10 ms between pumps. Its 12-second deadline,
+all 128 required deliveries, no-abuse/connection requirements and every other
+receive budget, reliable order, fragmentation and unauthorized-wire assertion
+remain unchanged. Three consecutive Linux candidate runs delivered all 128
+messages with zero rejection. The source also follows the inherited copyright,
+include and clang-format 22.1.5 checks; formatter brace additions are accounted
+for separately from the single changed cadence literal.
+
+`.build/integration-receive-ci-qualification.json` pins the controls, commands,
+logs, source and executable identities. Full native networking qualification
+passes 120 checks and all 10 CTest cases in each scope:
+
+- Windows MSVC Debug: `.build/integration-receive-ci-debug/receipt.json`.
+- Windows MSVC Release: `.build/integration-receive-ci-release/receipt.json`.
+- Ubuntu WSL/GCC Debug: `.build/integration-receive-ci-linux/receipt.json`.
+
+`.build/integration-receive-ci-final/receipt.json` also records fresh compilation
+and a passing receive-budget test of the final formatted fixture on Windows
+Debug and Linux Debug. No engine/core/vendor implementation or installed engine
+artifact changed. This qualifies native core tests on these local configurations;
+it does not qualify Linux/macOS Godot editors, exports, WAN or production scale.
+Bounded simulator capacity and overload diagnostics still need broader coverage.
+
+The early Linux runner controls are retained as failures: exit 127 used an
+incorrect `/bin` executable path; a later build used an expired WSL `/tmp`
+directory. The actual transport reproduction and three passing candidates use
+the correct executable in a persistent `/var/tmp` build. Neither runner failure
+is counted as a transport failure or successful test.
+
+Committed source provenance includes owner recovery `4038698407`, the required
+tracked solution ignore exception `2b7e76be94`, and docs-owner static repairs
+`cd7424f5e3`: the networking module has `@ZSG-Studios` ownership, the validator
+has its required executable Git mode and the spelling check is repaired.
+`.build/integration-receive-ci-static/receipt.json` records the relevant local
+style/ownership/tool checks. Native C++ CI now finishes an in-progress editor
+and template matrix before starting its successor, preserving useful builds.
+Run `37528340019` remains the separately identified engine/platform qualification;
+replacement GitHub checks and that matrix are not claimed complete here.
+
+```powershell
+$egpPython = 'C:/Users/Rose-X/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe'
+& $egpPython misc/scripts/validate_egp_net.py --configuration Debug --output .build/receive-ci-repeat-debug
+& $egpPython misc/scripts/validate_egp_net.py --configuration Release --output .build/receive-ci-repeat-release
+```
+
+The recovery publication receipt verifies the consolidated source, merge
+ancestry, unchanged 95 installed artifacts, inherited combined-engine evidence
+and all eight current worktrees. Six foreign dirty snapshots and both unrelated
+canonical files remain preserved. Full feature and release acceptance remain open.

@@ -10,7 +10,8 @@ permissions:
   contents: read
 concurrency:
   group: egp-cpp-${{ github.head_ref || github.ref_name }}
-  cancel-in-progress: true
+  # Finish the editor/template matrix already compiling before starting its successor.
+  cancel-in-progress: false
 jobs:
   native-cpp:
     timeout-minutes: 180
