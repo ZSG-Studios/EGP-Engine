@@ -27,8 +27,27 @@ def box3d_lifecycle_failure(lifecycle, reentry, baseline):
             return "Tree lifecycle changed adapter clock attachment"
         if state.get("before") != state.get("tick") or state.get("after") != state.get("tick"):
             return "Tree lifecycle skipped or duplicated authoritative steps"
-        if index < 2:
-            if any(state.get(key) != first.get(key) for key in ("tick", "hash", "position_y", "velocity_y", "mapping")):
+        if index == 0:
+            # The authority can finish further ticks between the last live snapshot
+            # and the deferred exit command. Exit itself must not interrupt a tick.
+            if (
+                state.get("tick", 0) < first.get("tick", 0)
+                or not state.get("hash")
+                or state.get("mapping") != first.get("mapping")
+            ):
+                return "Tree exit lost the last completed physics state"
+            if state.get("position_y", 10000) > first.get("position_y", 10000) or state.get(
+                "velocity_y", 0
+            ) > first.get("velocity_y", 0):
+                return "Tree exit reversed authoritative movement"
+            if state.get("tick") == first.get("tick") and any(
+                state.get(key) != first.get(key) for key in ("hash", "position_y", "velocity_y")
+            ):
+                return "Tree exit changed physics without advancing its clock"
+        elif index == 1:
+            if any(
+                state.get(key) != previous.get(key) for key in ("tick", "hash", "position_y", "velocity_y", "mapping")
+            ):
                 return "Stopped tree lifecycle changed physics state"
         else:
             if state.get("entity") != row.get("entity") or state.get("mapping") != {str(row["entity"]): 10000}:

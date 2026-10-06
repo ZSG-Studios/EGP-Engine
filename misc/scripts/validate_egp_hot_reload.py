@@ -766,6 +766,11 @@ def main():
                 'var retained := {"server": server, "client": client}',
                 'var retained := {"server": server, "client": client, "world": managed.GetBoxState().world}',
             )
+            node = node.replace(
+                'check(managed.UpdateNode(entity, baseline_sequence) == OK, "typed entity update failed")',
+                'check(managed.UpdateNode(entity, baseline_sequence) == OK, "typed entity update failed")\n'
+                '\t\tcheck(server_bridge.get_entity(entity).state.sequence == baseline_sequence, "Immediate typed update did not reach authority codec")',
+            )
             (project / "network_node.gd").write_text(node, encoding="utf-8")
             shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_box3d.gd", project / "network.gd")
         if args.network_physics:

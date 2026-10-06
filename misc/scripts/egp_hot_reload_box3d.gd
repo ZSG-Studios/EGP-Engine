@@ -21,6 +21,9 @@ func snapshot(action: String) -> Dictionary:
 	var cs: Dictionary = managed.GetPhysicsState()
 	var row: Dictionary = client_bridge.get_entity(entity)
 	var received: Dictionary = row.get("state", {})
+	var authority: Dictionary = server_bridge.get_entity(entity).get("state", {})
+	var native_rows: Array = server.command("entities")
+	var raw: Dictionary = bytes_to_var(native_rows[0].state) if native_rows.size() == 1 else {}
 	var mapped: Dictionary = adapter.get("_tracked")
 	var attached: bool = adapter.get("_net") == server_bridge and adapter.get("_world") == box_world
 	var connections := {}
@@ -41,6 +44,7 @@ func snapshot(action: String) -> Dictionary:
 		"capsule_empty": state.capsule_empty, "connections": connections, "clock_connections": clock_connections,
 		"adapter_connections": adapter_connections, "attached": attached, "mapping": mapped.duplicate(),
 		"entity": state.entity, "clock_offset": state.clock_offset, "client_tick": received.get("physics_tick", 0),
+		"server_sequence": authority.get("sequence", 0), "native_sequence": raw.get("sequence", 0),
 		"client_position_y": received.position.y if received.has("position") else 0.0,
 		"references_ok": native.network_state.get("world") == box_world and managed.NetworkState.get("world") == box_world,
 		"cpp_state_ok": cpp.get("position") == body.position and cpp.get("tick") == box_world.get_tick() and cpp.get("hash") == box_world.get_state_hash(),

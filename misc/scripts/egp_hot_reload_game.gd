@@ -43,13 +43,18 @@ func _capture_network(message: String, data: Array) -> void:
 	proof.request = data[0]
 	EngineDebugger.send_message("egp_reload:state", [proof])
 
+func _reload_native(data: Array) -> void:
+	var status := GDExtensionManager.reload_extension("res://extensions/reload/reload.gdextension")
+	EngineDebugger.send_message("egp_reload:state", [{"request": data[0], "status": status}])
+
 func _capture(message: String, data: Array) -> bool:
 	if message.begins_with("network-"):
-		_capture_network(message, data)
+		# Debugger captures can interrupt GDScript inside a native poll/tick callback.
+		# Mutations and snapshots must wait for that call stack to complete.
+		_capture_network.call_deferred(message, data)
 		return true
 	if message == "reload-native":
-		var status := GDExtensionManager.reload_extension("res://extensions/reload/reload.gdextension")
-		EngineDebugger.send_message("egp_reload:state", [{"request": data[0], "status": status}])
+		_reload_native.call_deferred(data)
 		return true
 	if message == "hold":
 		managed.HoldRoot(ProjectSettings.globalize_path("res://release-root"))
