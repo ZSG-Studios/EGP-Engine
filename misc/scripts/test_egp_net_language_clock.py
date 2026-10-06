@@ -40,7 +40,7 @@ class ClockEvidenceTests(unittest.TestCase):
                 "low_cycles": copy.deepcopy(high),
                 "diagnostics": ["Fixed simulation exceeded its catch-up budget; resynchronization required."] * 3,
                 "low_diagnostics": ["Fixed simulation exceeded its catch-up budget; resynchronization required."] * 3,
-                "client_states": ["Stopped"] + ["Connecting", "Connected", "Stopped"] * 4,
+                "client_states": ["Stopped"] + ["Connecting", "Synchronizing", "Connected", "Stopped"] * 4,
                 "client_latency_ms": 20,
                 "client_jitter_ms": 5,
             }
@@ -90,6 +90,10 @@ class ClockEvidenceTests(unittest.TestCase):
 
     def test_missing_reconnect_history(self):
         self.result["clock_recovery"]["csharp"]["client_states"].pop()
+        self.assertIsNotNone(clock_recovery_failure(self.result))
+
+    def test_connected_before_baseline_synchronization(self):
+        self.result["clock_recovery"]["cpp"]["client_states"].remove("Synchronizing")
         self.assertIsNotNone(clock_recovery_failure(self.result))
 
     def test_client_replicated_old_physics_time(self):

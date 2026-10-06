@@ -30,7 +30,7 @@ def clock_recovery_failure(result):
         if states and states[0] == "Stopped":
             states = states[1:]
         if (
-            states != ["Connecting", "Connected", "Stopped"] * 4
+            states != ["Connecting", "Synchronizing", "Connected", "Stopped"] * 4
             or proof.get("client_latency_ms") != 20
             or proof.get("client_jitter_ms") != 5
         ):
