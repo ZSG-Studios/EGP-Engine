@@ -2095,3 +2095,103 @@ Windows, with client outbound 20 ms latency/5 ms jitter/zero loss. The new nativ
 disconnect discovery and fixture rejoin checks do not prove client physics
 rollback, arbitrary game/ABI persistence, backend admission, other platforms,
 scale/soak or performance. The loop remains ACTIVE.
+
+### Connected low-level C#/C++ peers across clock faults — 2026-10-06
+
+Source `9702ab673e9ecd2dfcc24b1bd95d7221a8e9cbb3` replaces the no-peer low-level
+clock cycles with authenticated live clients. All 27 language validator stages
+pass with fresh C++ Debug/Release extensions and C# assemblies. Editor,
+relocated Debug and relocated Release each execute 197 interop assertions.
+
+| Configuration | Interop PID | Assertions | Connected low-level fault recoveries |
+| --- | --- | --- | --- |
+| editor | 3664 | 197 | 6 |
+| relocated Debug | 2152 | 197 | 6 |
+| relocated Release | 14192 | 197 | 6 |
+
+Across these three runs, low-level sessions complete 18 connected-client fault
+recoveries and 24 fresh admissions, including initial joins. C# uses account
+556 and C++ uses 667. Each client keeps polling while the low-level authority
+misses at least 550 ms; the native authority returns `FAILED` and clears its
+entities/peers. The client detects `Disconnected`, verifies empty peers/entities
+and rejects application sends (`ERR_DOES_NOT_EXIST`), explicitly stops, then
+rejoins with a fresh token using the same native session. Both authority session
+and bound port also persist through all three recoveries.
+
+Each admission has the native `Connecting -> Synchronizing -> Connected` history;
+each failed connection includes `Stopped -> Disconnected` and the fixture's
+explicit `Stopped` before rejoin. Authority peer handles advance
+`257 -> 513 -> 769 -> 1025`, while entity handles advance `1 -> 2 -> 3 -> 4`.
+After each rejoin, operations using the retired peer must fail: application send,
+disconnect and visibility return `ERR_DOES_NOT_EXIST`, and spawn with that peer
+as authority returns `ERR_INVALID_PARAMETER`. Updating the retired entity also
+returns `ERR_DOES_NOT_EXIST`. The fresh entity's authority metadata identifies
+the new authenticated peer.
+
+Opaque baseline bytes are verified exactly, including zero and 0xff:
+`0100ff2a`, `0200ff2a`, `0300ff2a`. Each cycle exchanges one application payload
+and one channel-3 ReliableOrdered packet in each direction. Callback checks
+require the exact authenticated sender, channel/delivery and bytes; cumulative
+counts must be 1/2/3 without duplicates. Hide/show removes and restores the raw
+entity baseline with identical opaque state. The resumed authority clock must
+advance at least eight ticks. These checks qualify raw-session transport and
+ownership metadata; gameplay interpretation/authorization of opaque application
+messages remains the application's responsibility.
+
+The high-level C#/C++ physics recovery checks also pass, with 18 high-level local
+recoveries. Thus the mixed fixture now has 36 connected high-/low-level recoveries
+and 48 admissions across configurations. Fresh independent high-level process
+runs retain their separate 18 server faults and 24 admissions:
+
+| Configuration / client | Authority PID | Client PID |
+| --- | --- | --- |
+| editor / C# | 24952 | 32844 |
+| editor / C++ | 14192 | 16788 |
+| Debug / C# | 24232 | 22540 |
+| Debug / C++ | 27520 | 16652 |
+| Release / C# | 29488 | 18356 |
+| Release / C++ | 32236 | 18104 |
+
+PIDs identify individual executions; Windows may reuse a PID in a later run.
+Each independent pair has distinct authority/client identities, 33/34 distinct
+client observations per server stall and a 17/18 ms maximum observed poll gap.
+Those observations are bounded fixture health checks, not performance evidence.
+The separate-process encrypted C#/GDScript/C++ checks pass as well.
+
+`.build/integration-connected-low-clock-final/{source,receipt}.json` records the
+exact command, source hashes, SDK/archive identities, fixture DLLs/assemblies,
+runtime/PCK hashes and all referenced process evidence. Reproduce with the
+preceding full language validator command and a new output directory. Fresh
+Debug extension SHA-256
+`c921ce73215998862102b357cc652b72527678fb06e750f6de9a0cbd6de5ec0d`;
+Release extension
+`fced8b85d7a1252d5becb226b06b46e030df987aec3eb12b8975e6c2046cf70f`;
+editor C# assembly
+`4b53649d1b0f8f6192373577ab063a39e4cfab7313e83f27d83f97bd86f5a34b`;
+exported PCK
+`3ef1c3e2bb9e8d11c6a8603b23efd79a50b472bf6967a7e6100557053a06e1f8`.
+Engine/core/physics/ClassDB/glue and external helper API inputs remain unchanged,
+with installed identities listed above. No duplicate engine build was needed.
+
+`.build/integration-connected-low-clock-tool-checks/receipt.json` records 36
+semantic tests (22 language, 14 independent process), help and passing Ruff/
+format/mypy with the existing Python 3.9 configuration warning. New negatives
+reject reused/accepted retired peer handles, corrupted opaque bytes, duplicate
+application delivery, missing channel delivery and absent low-level disconnects.
+The refreshed NIL/current `FAILED` DLL control is preserved in
+`.build/integration-connected-low-clock-poll-control/receipt.json`.
+
+`.build/integration-connected-low-clock-publication.json` verifies original
+handoff ancestry, canonical/local/remote master equality, 86 installed artifacts,
+seven preserved worktrees and no open PRs. Fresh 197-assertion builds supersede
+the changed 133-assertion fixture; prior native/physics/admission/lab/reload
+evidence is reused only for unchanged inputs. Four original engine chats remain
+completed; documentation/website publication retains separate ownership.
+
+Next: independent-process low-level faults, hot reload during faults, production
+admission/retry policy, crashes/hard outages, larger physics worlds and sustained
+WAN/loss qualification. New low-level recovery uses one authority/client pair
+per language in one local process on Windows, with 20 ms client latency, 5 ms
+jitter and zero loss. It does not establish physics rollback, arbitrary game/ABI
+state, backend admission, cross-platform parity, scale/soak or performance. The
+loop remains ACTIVE.
