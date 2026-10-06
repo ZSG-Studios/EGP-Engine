@@ -345,7 +345,7 @@ void GDExtensionManager::load_extensions() {
 
 void GDExtensionManager::reload_extensions() {
 #ifdef TOOLS_ENABLED
-	if (Engine::get_singleton()->is_recovery_mode_hint()) {
+	if (!Engine::get_singleton()->is_extension_reloading_enabled() || Engine::get_singleton()->is_recovery_mode_hint()) {
 		return;
 	}
 	bool reloaded = false;
@@ -355,8 +355,9 @@ void GDExtensionManager::reload_extensions() {
 		}
 
 		if (E.value->has_library_changed()) {
-			reloaded = true;
-			reload_extension(E.value->get_path());
+			if (reload_extension(E.value->get_path()) == LOAD_STATUS_OK) {
+				reloaded = true;
+			}
 		}
 	}
 

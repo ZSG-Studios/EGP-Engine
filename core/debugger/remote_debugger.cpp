@@ -36,6 +36,7 @@
 #include "core/debugger/engine_debugger.h"
 #include "core/debugger/engine_profiler.h"
 #include "core/debugger/script_debugger.h"
+#include "core/extension/gdextension_manager.h"
 #include "core/input/input.h"
 #include "core/io/resource_loader.h"
 #include "core/math/expression.h"
@@ -689,6 +690,8 @@ void RemoteDebugger::poll_events(bool p_is_idle) {
 	// Reload scripts during idle poll only.
 	if (p_is_idle) {
 		if (reload_all_scripts) {
+			// Native instances must be restored before scripts rebuild their bindings.
+			GDExtensionManager::get_singleton()->reload_extensions();
 			for (int i = 0; i < ScriptServer::get_language_count(); i++) {
 				ScriptServer::get_language(i)->reload_all_scripts();
 			}

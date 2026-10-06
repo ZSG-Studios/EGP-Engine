@@ -77,6 +77,7 @@ namespace GodotPlugins
         private static Assembly? _editorApiAssembly;
         private static PluginLoadContextWrapper? _projectLoadContext;
         private static bool _editorHint = false;
+        private static bool? _projectReloadEnabled;
 
         private static readonly AssemblyLoadContext MainLoadContext =
             AssemblyLoadContext.GetLoadContext(Assembly.GetExecutingAssembly()) ??
@@ -84,7 +85,6 @@ namespace GodotPlugins
 
         private static DllImportResolver? _dllImportResolver;
 
-        // Right now we do it this way for simplicity as hot-reload is disabled. It will need to be changed later.
         [UnmanagedCallersOnly]
         // ReSharper disable once UnusedMember.Local
         private static unsafe godot_bool InitializeFromEngine(IntPtr godotDllHandle, godot_bool editorHint,
@@ -103,10 +103,10 @@ namespace GodotPlugins
                 SharedAssemblies.Add(CoreApiAssembly.GetName());
                 NativeLibrary.SetDllImportResolver(CoreApiAssembly, _dllImportResolver);
 
-                AlcReloadCfg.Configure(alcReloadEnabled: _editorHint);
-
                 if (_editorHint)
                 {
+                    _projectReloadEnabled = true;
+                    AlcReloadCfg.Configure(alcReloadEnabled: true);
                     _editorApiAssembly = Assembly.Load("GodotSharpEditor");
                     SharedAssemblies.Add(_editorApiAssembly.GetName());
                     NativeLibrary.SetDllImportResolver(_editorApiAssembly, _dllImportResolver);
@@ -148,7 +148,12 @@ namespace GodotPlugins
 
                 string assemblyPath = new(nAssemblyPath);
 
-                (var projectAssembly, _projectLoadContext) = LoadPlugin(assemblyPath, isCollectible: _editorHint);
+                // Query native singletons only after the engine has installed its
+                // managed callbacks. Keep the startup decision fixed across reloads.
+                _projectReloadEnabled ??= global::Godot.OS.HasFeature("editor") &&
+                    global::Godot.ProjectSettings.GetSetting("debug/hot_reload/enable_runtime", false).AsBool();
+                AlcReloadCfg.Configure(alcReloadEnabled: _projectReloadEnabled.Value);
+                (var projectAssembly, _projectLoadContext) = LoadPlugin(assemblyPath, isCollectible: _projectReloadEnabled.Value);
 
                 string loadedAssemblyPath = _projectLoadContext.AssemblyLoadedPath ?? assemblyPath;
                 *outLoadedAssemblyPath = Marshaling.ConvertStringToNative(loadedAssemblyPath);

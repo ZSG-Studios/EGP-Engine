@@ -41,6 +41,7 @@
 #include "core/object/class_db.h"
 #include "core/os/os.h"
 #include "core/string/regex.h"
+#include "editor/debugger/editor_debugger_node.h"
 #include "editor/doc/editor_help.h"
 #include "editor/editor_node.h"
 #include "editor/file_system/editor_file_system.h"
@@ -326,6 +327,8 @@ Error NativeExtensionEditor::_publish_library() {
 			_append_line(TTR("Library built. Restart the editor to finish loading the extension."));
 		} else {
 			_append_line(TTR("Library built and loaded into the editor."));
+			// The debugger applies this at an idle boundary in each running game.
+			EditorDebuggerNode::get_singleton()->reload_all_scripts();
 		}
 	} else {
 		_append_line(TTR("Release library built and registered for export."));

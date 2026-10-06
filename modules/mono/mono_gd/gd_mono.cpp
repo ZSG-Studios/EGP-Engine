@@ -808,6 +808,7 @@ Error GDMono::reload_project_assemblies() {
 	finalizing_scripts_domain = true;
 
 	if (!get_plugin_callbacks().UnloadProjectPluginCallback()) {
+		finalizing_scripts_domain = false;
 		ERR_PRINT_ED(".NET: Failed to unload assemblies. Please check https://github.com/godotengine/godot/issues/78513 for more information.");
 		reload_failure();
 		return FAILED;

@@ -2201,9 +2201,10 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 #endif
 
 #ifdef TOOLS_ENABLED
+	GLOBAL_DEF_RST("debug/hot_reload/enable_runtime", false);
+	Engine::get_singleton()->set_extension_reloading_enabled(editor || bool(GLOBAL_GET("debug/hot_reload/enable_runtime")));
 	if (editor) {
 		Engine::get_singleton()->set_editor_hint(true);
-		Engine::get_singleton()->set_extension_reloading_enabled(true);
 
 		// Create initialization lock file to detect crashes during startup.
 		OS::get_singleton()->create_lock_file();

@@ -628,9 +628,9 @@ void CSharpLanguage::reload_assemblies() {
 		return;
 	}
 
-	if (!Engine::get_singleton()->is_editor_hint()) {
-		// We disable collectible assemblies in the game player, because the limitations cause
-		// issues with mocking libraries. As such, we can only reload assemblies in the editor.
+	if (!Engine::get_singleton()->is_extension_reloading_enabled()) {
+		// Running games use non-collectible assemblies unless runtime reload was
+		// explicitly enabled before startup in an editor build.
 		return;
 	}
 
