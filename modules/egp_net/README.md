@@ -66,6 +66,53 @@ C# `NetNode` closes its bridge when it exits the tree. Dispose C# low-level,
 prediction and Box3D wrappers deterministically; detach physics adapters before
 freeing their network node.
 
+For C# runtime hot reload, transfer a low-level `NetSession` in the serialization
+hooks. Save its capsule in an exported dictionary and subscribe your application
+handlers again after restoration:
+
+```csharp
+using EGP.Networking;
+using Godot;
+
+public partial class GameSession : Node, ISerializationListener
+{
+    [Export] public Godot.Collections.Dictionary SessionReload { get; set; } = new();
+    private NetSession? session;
+    public override void _Ready()
+    {
+        session = new();
+        session.ApplicationReceived += Receive;
+        // Configure and listen/connect here; check each returned Error.
+    }
+    private void Receive(long peer, byte[] payload) { /* Application message. */ }
+    public void OnBeforeSerialize()
+    {
+        if (session == null) return;
+        SessionReload = session.DetachForReload();
+        session = null;
+    }
+    public void OnAfterDeserialize()
+    {
+        if (SessionReload.Count == 0) return;
+        session = NetSession.ResumeAfterReload(SessionReload);
+        session.ApplicationReceived += Receive;
+    }
+    public override void _ExitTree() => session?.Dispose();
+}
+```
+
+Enable runtime hot reload in the project as described in the integration checklist.
+Both operations belong on the original Godot thread. Detaching disconnects managed
+event bridges, makes the old wrapper unusable and keeps the native session alive;
+disposing that old wrapper later does not close it. Restoration consumes the
+capsule. Missing, malformed, foreign or already consumed capsules throw
+`ArgumentException`; `null` throws `ArgumentNullException`. Copies cannot claim
+the same session twice. A rejected capsule remains unchanged. Capsules carry local
+native references and must remain in memory; they are not a disk or network format.
+Save application state separately in exported properties. Event subscriptions are
+explicitly rebuilt; arbitrary captured closures and high-level `Net`/physics
+adapter ownership are not automatically serialized by this API.
+
 `samples/trilingual` compiles C# sources and a C++ GDExtension, admits encrypted
 C#/GDScript/C++ peers, and exercises the shared high-level codec, opaque
 low-level replication, raw channels, prediction and explicit Box3D ticks.

@@ -92,8 +92,10 @@ internal static class Shared
 /// <remarks>Construct, poll and dispose on the same Godot thread. No GDScript dependency.</remarks>
 public sealed class NetSession : IDisposable
 {
+    private const string ReloadTokenMetadata = "_egp_csharp_session_reload_token";
     private readonly GodotObject native;
     private readonly SignalLinks links;
+    private readonly NetSessionSignals bridge;
     private bool disposed;
     public GodotObject Native => !disposed ? native : throw new ObjectDisposedException(nameof(NetSession));
     public event Action<string>? StateChanged;
@@ -103,19 +105,84 @@ public sealed class NetSession : IDisposable
     public event Action<long, byte[], int, Delivery>? PacketReceived;
     public event Action<long, bool>? SimulationTick;
     public event Action<string>? Diagnostic;
-    public NetSession()
+    public NetSession() : this(ClassDB.Instantiate("EGPNetSession").AsGodotObject()
+        ?? throw new InvalidOperationException("This EGP build does not include native networking."), true) { }
+
+    private NetSession(GodotObject value, bool created)
     {
-        native = ClassDB.Instantiate("EGPNetSession").AsGodotObject()
-            ?? throw new InvalidOperationException("This EGP build does not include native networking.");
+        native = value;
         links = new(native);
-        links.Add("state_changed", Callable.From<string>(state => StateChanged?.Invoke(state)));
-        links.Add("peer_connected", Callable.From<long>(peer => PeerConnected?.Invoke(peer)));
-        links.Add("peer_disconnected", Callable.From<long>(peer => PeerDisconnected?.Invoke(peer)));
-        links.Add("application_received", Callable.From<long, byte[]>((peer, data) => ApplicationReceived?.Invoke(peer, data)));
-        links.Add("packet_received", Callable.From<long, byte[], long, long>((peer, data, channel, delivery) => PacketReceived?.Invoke(peer, data, (int)channel, (Delivery)delivery)));
-        links.Add("simulation_tick", Callable.From<long, bool>((tick, server) => SimulationTick?.Invoke(tick, server)));
-        links.Add("diagnostic", Callable.From<string>(message => Diagnostic?.Invoke(message)));
+        bridge = new() { Owner = this };
+        try
+        {
+            links.Add("state_changed", new Callable(bridge, nameof(NetSessionSignals.OnStateChanged)));
+            links.Add("peer_connected", new Callable(bridge, nameof(NetSessionSignals.OnPeerConnected)));
+            links.Add("peer_disconnected", new Callable(bridge, nameof(NetSessionSignals.OnPeerDisconnected)));
+            links.Add("application_received", new Callable(bridge, nameof(NetSessionSignals.OnApplicationReceived)));
+            links.Add("packet_received", new Callable(bridge, nameof(NetSessionSignals.OnPacketReceived)));
+            links.Add("simulation_tick", new Callable(bridge, nameof(NetSessionSignals.OnSimulationTick)));
+            links.Add("diagnostic", new Callable(bridge, nameof(NetSessionSignals.OnDiagnostic)));
+        }
+        catch
+        {
+            links.Dispose();
+            bridge.Owner = null; bridge.Dispose();
+            if (created) native.Dispose();
+            throw;
+        }
     }
+
+    /// <summary>Disconnect managed handlers and transfer this session to a reload capsule.</summary>
+    /// <remarks>
+    /// Call from ISerializationListener.OnBeforeSerialize and save the returned dictionary
+    /// in an exported property. The native connection keeps running. This wrapper becomes
+    /// disposed; disposing it again does not close the transferred session. Use on its Godot thread.
+    /// </remarks>
+    public Dictionary DetachForReload()
+    {
+        var instance = Native;
+        string token = Guid.NewGuid().ToString("N");
+        var state = new Dictionary { ["version"] = 1, ["session"] = instance, ["token"] = token };
+        instance.SetMeta(ReloadTokenMetadata, token);
+        disposed = true;
+        links.Dispose();
+        bridge.Owner = null; bridge.Dispose();
+        StateChanged = null; PeerConnected = null; PeerDisconnected = null;
+        ApplicationReceived = null; PacketReceived = null; SimulationTick = null; Diagnostic = null;
+        return state;
+    }
+
+    /// <summary>Consume a reload capsule and reconnect the native session's managed signal bridges.</summary>
+    /// <remarks>
+    /// Call from ISerializationListener.OnAfterDeserialize on the original Godot thread,
+    /// then subscribe application event handlers again. Invalid or already consumed capsules
+    /// throw ArgumentException and remain unchanged. Copies of a consumed capsule are rejected.
+    /// This transfers local ownership only; capsules are not a network or disk format.
+    /// </remarks>
+    public static NetSession ResumeAfterReload(Dictionary state)
+    {
+        ArgumentNullException.ThrowIfNull(state);
+        if (!state.ContainsKey("version") || state["version"].VariantType != Variant.Type.Int || state["version"].AsInt64() != 1
+            || !state.ContainsKey("session") || state["session"].VariantType != Variant.Type.Object
+            || !state.ContainsKey("token") || state["token"].VariantType != Variant.Type.String)
+            throw new ArgumentException("Expected an unconsumed NetSession reload capsule.", nameof(state));
+        var instance = state["session"].AsGodotObject();
+        string token = state["token"].AsString();
+        if (!GodotObject.IsInstanceValid(instance) || !instance.IsClass("EGPNetSession") || string.IsNullOrEmpty(token)
+            || !instance.HasMeta(ReloadTokenMetadata) || instance.GetMeta(ReloadTokenMetadata).AsString() != token)
+            throw new ArgumentException("The native session is invalid or this reload capsule was already consumed.", nameof(state));
+        var result = new NetSession(instance, false);
+        instance.RemoveMeta(ReloadTokenMetadata);
+        state.Clear();
+        return result;
+    }
+    internal void ReceiveStateChanged(string state) => StateChanged?.Invoke(state);
+    internal void ReceivePeerConnected(long peer) => PeerConnected?.Invoke(peer);
+    internal void ReceivePeerDisconnected(long peer) => PeerDisconnected?.Invoke(peer);
+    internal void ReceiveApplication(long peer, byte[] data) => ApplicationReceived?.Invoke(peer, data);
+    internal void ReceivePacket(long peer, byte[] data, long channel, long delivery) => PacketReceived?.Invoke(peer, data, (int)channel, (Delivery)delivery);
+    internal void ReceiveTick(long tick, bool authority) => SimulationTick?.Invoke(tick, authority);
+    internal void ReceiveDiagnostic(string message) => Diagnostic?.Invoke(message);
     public Error Configure(NetOptions? options = null) => Configure((options ?? new()).ToDictionary());
     public Error Configure(Dictionary options) => Shared.Error(Native, "configure", options);
     public Error Listen(int port = 10515, string bindAddress = "0.0.0.0") => Shared.Error(Native, "listen", port, bindAddress);
@@ -164,6 +231,7 @@ public sealed class NetSession : IDisposable
         if (disposed) return;
         // Mark first: a state callback may re-enter Dispose.
         disposed = true;
-        links.Dispose(); native.Call("close"); native.Dispose();
+        links.Dispose(); bridge.Owner = null; bridge.Dispose();
+        native.Call("close"); native.Dispose();
     }
 }

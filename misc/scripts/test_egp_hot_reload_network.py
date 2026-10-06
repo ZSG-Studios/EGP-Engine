@@ -4,7 +4,12 @@
 import copy
 import unittest
 
-from validate_egp_hot_reload import network_live_failure, network_physics_failure, network_recovery_failure
+from validate_egp_hot_reload import (
+    facade_failure,
+    network_live_failure,
+    network_physics_failure,
+    network_recovery_failure,
+)
 
 
 def evidence():
@@ -316,6 +321,88 @@ class PhysicsReloadEvidenceTests(unittest.TestCase):
 
     def test_stopped_reload_changed_checkpoint(self):
         self.reject(2, "hash", "0000000000000015")
+
+
+def facade_evidence(live=True):
+    proofs = live_evidence() if live else evidence()
+    for index, proof in enumerate(proofs):
+        sequence = proof["sequence"] if live else proof["epoch"]
+        restores = (0 if index < 3 else 1 if index < 5 else 2) if live else (0 if index < 2 else 1)
+        proof["facade"] = {
+            "checks": 21,
+            "server_id": proof["server_id"],
+            "client_id": proof["client_id"],
+            "server_hits": sequence,
+            "client_hits": sequence if live else 0,
+            "capsules_empty": True,
+            "handoffs": restores,
+            "restores": restores,
+        }
+    return proofs
+
+
+class ManagedFacadeEvidenceTests(unittest.TestCase):
+    def test_complete_live_handoff(self):
+        self.assertIsNone(facade_failure(facade_evidence(), True))
+
+    def test_complete_stopped_handoff(self):
+        self.assertIsNone(facade_failure(facade_evidence(False), False))
+
+    def test_failed_runtime_checkpoint(self):
+        proofs = facade_evidence()
+        proofs[3]["passed"] = False
+        self.assertIsNotNone(facade_failure(proofs, True))
+
+    def reject(self, index, key, value, live=True):
+        proofs = facade_evidence(live)
+        proofs[index]["facade"][key] = value
+        self.assertIsNotNone(facade_failure(proofs, live))
+
+    def test_missing_checkpoint(self):
+        self.assertIsNotNone(facade_failure(facade_evidence()[:-1], True))
+
+    def test_missing_facade(self):
+        proofs = facade_evidence()
+        del proofs[3]["facade"]
+        self.assertIsNotNone(facade_failure(proofs, True))
+
+    def test_incomplete_self_tests(self):
+        self.reject(0, "checks", 20)
+
+    def test_replaced_session(self):
+        self.reject(3, "server_id", "other")
+
+    def test_duplicate_server_callback(self):
+        self.reject(4, "server_hits", 6)
+
+    def test_missing_client_callback(self):
+        self.reject(5, "client_hits", 5)
+
+    def test_unconsumed_capsule(self):
+        self.reject(3, "capsules_empty", False)
+
+    def test_lost_handoff(self):
+        self.reject(3, "handoffs", 2)
+
+    def test_failed_compile_transferred_ownership(self):
+        proofs = facade_evidence()
+        proofs[1]["facade"].update(handoffs=1, restores=1)
+        self.assertIsNotNone(facade_failure(proofs, True))
+
+    def test_cpp_reload_transferred_managed_ownership(self):
+        proofs = facade_evidence()
+        proofs[4]["facade"].update(handoffs=2, restores=2)
+        self.assertIsNotNone(facade_failure(proofs, True))
+
+    def test_combined_reload_skipped_handoff(self):
+        proofs = facade_evidence()
+        proofs[5]["facade"].update(handoffs=1, restores=1)
+        self.assertIsNotNone(facade_failure(proofs, True))
+
+    def test_stopped_reload_skipped_handoff(self):
+        proofs = facade_evidence(False)
+        proofs[2]["facade"].update(handoffs=0, restores=0)
+        self.assertIsNotNone(facade_failure(proofs, False))
 
 
 if __name__ == "__main__":

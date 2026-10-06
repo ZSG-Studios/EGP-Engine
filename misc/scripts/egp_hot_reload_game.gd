@@ -34,15 +34,18 @@ func _ready() -> void:
 	var temporary = load("res://ReloadProbe.cs").new()
 	temporary.free()
 
+func _capture_network(message: String, data: Array) -> void:
+	if network == null:
+		network = load("res://network.gd").new()
+		add_child(network)
+		network.setup(native, managed)
+	var proof: Dictionary = await network.run_action(message)
+	proof.request = data[0]
+	EngineDebugger.send_message("egp_reload:state", [proof])
+
 func _capture(message: String, data: Array) -> bool:
 	if message.begins_with("network-"):
-		if network == null:
-			network = load("res://network.gd").new()
-			add_child(network)
-			network.setup(native, managed)
-		var proof: Dictionary = await network.run_action(message)
-		proof.request = data[0]
-		EngineDebugger.send_message("egp_reload:state", [proof])
+		_capture_network(message, data)
 		return true
 	if message == "reload-native":
 		var status := GDExtensionManager.reload_extension("res://extensions/reload/reload.gdextension")

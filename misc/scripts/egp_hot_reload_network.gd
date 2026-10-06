@@ -148,14 +148,20 @@ func snapshot(action: String) -> Dictionary:
 		"port": port, "total_client_polls": client_polls, "sequence": baseline_sequence,
 		"client_packets": client_packets.duplicate(true), "simulation": simulation.duplicate(),
 		"baseline_hex": rows[0].state.slice(0, 4).hex_encode() if rows.size() == 1 else "",
-		"revision": rows[0].revision if rows.size() == 1 else 0, "physics": physics}
+		"revision": rows[0].revision if rows.size() == 1 else 0, "physics": physics,
+		"facade": managed.GetFacadeState() if managed.has_method("GetFacadeState") else {}}
 
 func run_action(action: String) -> Dictionary:
 	var evidence: Dictionary = {}
 	match action:
 		"network-start", "network-live-start":
-			server = ClassDB.instantiate("EGPNetSession")
-			client = ClassDB.instantiate("EGPNetSession")
+			if managed.has_method("CreateNetworkSessions"):
+				var owned: Dictionary = managed.CreateNetworkSessions()
+				server = owned.server
+				client = owned.client
+			else:
+				server = ClassDB.instantiate("EGPNetSession")
+				client = ClassDB.instantiate("EGPNetSession")
 			var config := {"game_protocol": "egp-reload-fault-v1", "max_players": 1, "timeout_seconds": 3}
 			if FileAccess.file_exists("res://physics_enabled"):
 				world = ClassDB.instantiate("EGPBox3DWorld")
@@ -251,6 +257,8 @@ func run_action(action: String) -> Dictionary:
 
 func close() -> void:
 	running = false
+	if managed != null and managed.has_method("CloseFacades"):
+		managed.CloseFacades()
 	if client != null:
 		client.close()
 	if server != null:
