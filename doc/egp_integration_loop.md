@@ -1,7 +1,7 @@
 # EGP integration and completion loop
 
 The loop owns the combined EGP result, including handoffs and unfinished work from
-other EGP chats and worktrees. Resume every 15 minutes and finish concrete acceptance
+other EGP chats and worktrees. Resume every 5 minutes and finish concrete acceptance
 items promptly. A check is complete only when its recorded evidence establishes the
 claimed behavior on the combined source and matching binaries.
 
@@ -81,7 +81,7 @@ replication and, when selected, distinct connection generations after reconnect.
   `.build/egp-network-lab/1791263652476021000/receipt.json`.
 - Launcher Ruff and mypy checks passed (the repository's mypy Python 3.9 setting
   produces a tool-version warning).
-- The loop is active as `egp-api-and-integration-loop` every 15 minutes, attached to
+- The loop is active as `egp-api-and-integration-loop` every 5 minutes, attached to
   this chat; merge/takeover responsibilities are included in its saved prompt.
 - Listen-host fixture plus 3 headless clients, 100 ms outgoing latency, 25 ms
   jitter and 3% loss on both endpoints, with a reconnect at 4 seconds: passed.
@@ -97,7 +97,74 @@ replication and, when selected, distinct connection generations after reconnect.
   `.build/networking-final-handoff.json`, `.build/fastbuild-api-handoff.md`.
   These owners have stood down with no local builds running. C++ tip is local
   `2624581a`; its PR is #1. Networking/physics/FASTBuild work is predominantly
-  uncommitted in primary. Physics handoff remains pending.
+  uncommitted in primary at handoff. Physics handoff is now received at
+  `.build/physics-consolidation-handoff.md`; all four chats have stood down.
 - Next: merge intended current source and C++ ancestry, resolve the native-only
   backend hook audit decision, build matching combined artifacts, then qualify
   API/reload/migration and Debug/Release interop gates.
+
+## Consolidation state and immediate continuation
+
+Canonical branch: `codex/egp-integration` in the primary checkout. Source integration
+commit `25aa0fdf2e` includes Box physics, Yojimbo, language helpers, FASTBuild, API
+audit and network lab. Merge `3278f8b8dc` includes C++ tip `2624581a26`. Later commits
+repair compilation and expose debug contacts, remove leftover CSG/GridMap priority
+and collision-polygon margin APIs, and give joint toggle properties boolean methods.
+Remote master remains `f4389f3a`; publication/final merge is pending combined gates.
+
+| Tree | Integration decision |
+| --- | --- |
+| Primary | Current authoritative source, committed on integration branch |
+| native-cpp-validation | Tip 2624581a merged; workflow dirty status has an empty content diff |
+| box3d-parity | Historical base plus physics snapshots; current frozen native qualification build |
+| net-trilingual-api | Old qualified source superseded by frozen canonical Mono snapshot; keep ignored caches/binaries |
+| box-physics-cutover | Earlier qualification snapshot; current primary supersedes its code |
+| cpp-combined | Older C++/Mono test snapshot; preserve evidence, do not copy over current code |
+| egp-network-qualification | Historical networking snapshot, including retired stack; retain evidence, exclude superseded sources |
+
+Current build supervision (do not start duplicates):
+
+- Native physics editor: shell session `89582`, runner `.build/build_box3d_parity.py`,
+  worktree `box3d-parity/EGP`. Log `.build/box3d-parity-editor-build.log`; receipt
+  `.build/box3d-parity-editor-build.json`. Frozen source manifest
+  `.build/box3d-parity-source-snapshot.json`. Inspect receipt timestamps; older
+  receipts may still exist while a new run is active. Original session `88174`
+  failed on collision-polygon margin and is finished.
+- Combined Mono editor, fresh exact SDK/API, glue/assemblies, Debug and Release
+  templates: shell session `7202`, runner `.build/build_combined_mono.py`, worktree
+  `net-trilingual-api/EGP`. Current PID/step/log in
+  `.build/integration-combined-mono/active.json`; frozen source `source.json`; stage
+  logs and completion `receipt.json` in that directory. Script waits for each stage
+  and uses a 7200-second build watchdog. A stopped first attempt is preserved under
+  `.build/integration-takeover/mono-bootstrap-stopped*`.
+- Native networking on combined primary source passed: 101 checks and CTest,
+  `.build/integration-native-net/receipt.json`. Box3D Release golden trajectory,
+  native joints/replay and upstream suite passed:
+  `.build/integration-box3d-native/Release/receipt.json`.
+- Network lab also passed client-only wifi impairment:
+  `.build/egp-network-lab/1791264175579256000/receipt.json`. A 100% packet-loss run
+  correctly failed and its processes exited; receipt at `1791263869496218800`.
+  The launcher now retains per-process results on failure and hashes both the
+  console wrapper and actual engine executable.
+
+When builds finish, run focused native capabilities/soft-body/damping fixtures, then
+full Box2D/Box3D scenes, migration preflight, exact API audit with **newly generated**
+managed files and extracted SDK, networking runtime and relocated Debug/Release
+trilingual exports. `.build/integration-api-prerebuild.json` correctly rejects old
+Script RPC getters; `.build/integration-api-historical-baseline.json` demonstrates
+that primary generated glue is stale. Neither is current parity evidence.
+`doc/egp_api_contract.md` labels 19 pointer virtual callbacks native-only; the audit
+verifies their signatures remain virtual/pointer interfaces and still checks C++.
+
+The expanded physics build's first failure (obsolete MT wrapper/CSG calls and
+soft-body C++ declaration) and second failure (collision-polygon margin) are retained
+under `.build/integration-takeover/physics-expanded-first-*` and
+`physics-margin-failure.*`. Keep them while proving fixes. Do not copy source into
+a worktree while its build is running.
+
+After combined gates pass, complete the authorized final merge/push to master,
+verify remote SHA and reconcile PR #1. Preserve both accidental root artifacts
+(`Temp Plan.md`, `tagged_query_test.b3rec`) outside commits. Finish C++ editor smoke
+teardown by replacing the test plugin's recursive close propagation with a deferred
+EditorNode close notification; qualify it, then proceed to actual C#/C++ running-game
+reload, state/instances/events and repeat-load cleanup. Those remain incomplete.
