@@ -117,8 +117,11 @@ Session also preserves its handle generations, so retired peer/entity handles
 cannot alias the new authority. Clients observe disconnect, clear their replicated
 caches and obtain the new baseline. Each sends a retired-entity input, which must
 be discarded, and one new owner input, which must be acknowledged exactly once.
-An isolated peer in the server process also tries the retired token; it must finish
-disconnected without reaching synchronization or receiving entities.
+An isolated peer in the server process tries a retired token for an unused account
+before the recovered listener publishes readiness. It must finish disconnected
+without reaching synchronization or receiving entities. Listener slots remain free
+during this probe, so capacity and duplicate-account rejection cannot mask an old
+key that still admits tokens.
 
 The receipt verifies the same server/client PIDs and port, both connection epochs,
 fresh ownership, rejected retired admission, exact checkpoint restoration and the

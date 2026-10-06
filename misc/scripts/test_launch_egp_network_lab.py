@@ -268,6 +268,9 @@ class ServerStallEvidenceTests(unittest.TestCase):
                             "old_owners": {"0": 2, "1": 3},
                             "old_peers": {"0": {"257": True}, "1": {"514": True}},
                             "retired_admission": {
+                                "client_id": 900000,
+                                "server_peers": 0,
+                                "admitted_clients": 0,
                                 "states": ["Connecting", "Stopped", "Disconnected"],
                                 "entities": 0,
                                 "peers": 0,
@@ -345,6 +348,14 @@ class ServerStallEvidenceTests(unittest.TestCase):
 
     def test_retired_token_must_finish_rejection(self):
         self.proof["retired_admission"]["states"].pop()
+        self.assertIsNotNone(server_stall_failure(self.receipt))
+
+    def test_duplicate_account_cannot_mask_retired_key(self):
+        self.proof["retired_admission"]["client_id"] = 10000
+        self.assertIsNotNone(server_stall_failure(self.receipt))
+
+    def test_capacity_cannot_mask_retired_key(self):
+        self.proof["retired_admission"]["server_peers"] = 2
         self.assertIsNotNone(server_stall_failure(self.receipt))
 
     def test_replacement_server_pid_is_not_same_process_recovery(self):

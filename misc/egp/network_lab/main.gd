@@ -56,6 +56,7 @@ var epoch_owners: Dictionary = {}
 var retired_probe: Node
 var retired_probe_states: Array[String] = []
 var retired_probe_started := 0
+var server_retired_token := PackedByteArray()
 
 func checks_ownership() -> bool:
 	return restart_enabled or stall_enabled
@@ -342,7 +343,6 @@ func recover_server_stall(error: Error) -> bool:
 	server_stall_proof.update_after_failure = net.update_entity(entity, {})
 	if net.get_state() != "Stopped" or not net.get_entities().is_empty() or not net.get_peers().is_empty() or server_stall_proof.tick_after_failure != 0 or server_stall_proof.spawn_after_failure != 0 or server_stall_proof.update_after_failure != ERR_UNAUTHORIZED:
 		return false
-	var retired_token := FileAccess.get_file_as_bytes(directory.path_join("client-0-epoch-1.bin"))
 	# Poll has returned. Keep the configured Session so retired handles stay retired.
 	# listen() creates a new secure key/socket and starts a fresh fixed clock.
 	net.stop()
@@ -362,27 +362,31 @@ func recover_server_stall(error: Error) -> bool:
 	for client in range(clients):
 		if not publish_token(client, "-epoch-2"):
 			return false
-	if not publish_json("ready-2.json", {"port": net.get_statistics().local_port, "clients": clients, "generation": epoch, "pid": OS.get_process_id()}):
-		return false
-	# Exercise the retired token against the new secure listener in an isolated peer.
+	# Test an unused account before publishing readiness, while listener slots are free.
+	# Duplicate account/full-server rejection must not mask a surviving retired key.
 	retired_probe = Net.new()
 	retired_probe.auto_poll = false
 	add_child(retired_probe)
 	retired_probe.state_changed.connect(func(state: String): retired_probe_states.append(state))
 	retired_probe_started = Time.get_ticks_msec()
-	return retired_probe.configure({"game_protocol": "egp-network-lab-v1", "timeout_seconds": 3}) == OK and retired_probe.join_token(10000, retired_token) == OK
+	var admitted: bool = retired_probe.configure({"game_protocol": "egp-network-lab-v1", "timeout_seconds": 3}) == OK and retired_probe.join_token(900000, server_retired_token) == OK
+	server_retired_token.clear()
+	return admitted
 
 func poll_retired_admission() -> bool:
 	if retired_probe == null:
 		return true
-	if retired_probe.poll() != OK or retired_probe.get_state() == "Connected" or not retired_probe.get_entities().is_empty():
+	if retired_probe.poll() != OK or retired_probe.get_state() in ["Connected", "Synchronizing"] or not retired_probe.get_entities().is_empty():
 		finish(false, "retired admission reached recovered authority")
 		return false
 	if retired_probe.get_state() == "Disconnected":
-		server_stall_proof.retired_admission = {"states": retired_probe_states.duplicate(), "entities": retired_probe.get_entities().size(), "peers": retired_probe.get_peers().size()}
+		server_stall_proof.retired_admission = {"client_id": 900000, "states": retired_probe_states.duplicate(), "entities": retired_probe.get_entities().size(), "peers": retired_probe.get_peers().size(), "server_peers": net.get_peers().size(), "admitted_clients": admissions.size()}
 		retired_probe.close()
 		retired_probe.queue_free()
 		retired_probe = null
+		if not publish_json("ready-2.json", {"port": net.get_statistics().local_port, "clients": clients, "generation": epoch, "pid": OS.get_process_id()}):
+			finish(false, "recovered readiness publication failed")
+			return false
 	elif Time.get_ticks_msec() - retired_probe_started > 5000:
 		finish(false, "retired admission rejection watchdog")
 		return false
@@ -422,6 +426,11 @@ func _process(_delta: float) -> void:
 		OS.delay_msec(int(options.get("client-stall-ms", 750)))
 		stall_proof.elapsed_ms = Time.get_ticks_msec() - before
 	if server_stall_enabled and role != "client" and not server_stall_injected and elapsed >= float(options.get("server-stall-at", 0)) and admissions.size() == clients and input_clients.size() == clients and clients_acknowledged():
+		var issued: Dictionary = net.issue_token(900000, "127.0.0.1:%d" % net.get_statistics().local_port)
+		if issued.error != OK or issued.token.size() != 2048:
+			finish(false, "retired probe admission issuance failed")
+			return
+		server_retired_token = issued.token
 		server_stall_injected = true
 		server_stall_proof = {"checkpoint": health(), "port": net.get_statistics().local_port, "old_root": entity, "old_owners": owned_entities.duplicate(), "old_peers": generations.duplicate(true), "injected_at_ms": Time.get_ticks_msec() - started}
 		var before := Time.get_ticks_msec()

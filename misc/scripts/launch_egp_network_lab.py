@@ -305,6 +305,9 @@ def server_stall_failure(receipt):
         or any(state in states for state in ("Connected", "Synchronizing"))
         or retired.get("entities") != 0
         or retired.get("peers") != 0
+        or retired.get("client_id") != 900000
+        or retired.get("server_peers") != 0
+        or retired.get("admitted_clients") != 0
     ):
         return "Retired admission was not rejected by the recovered secure listener"
     old_entities = {proof["old_root"]}
