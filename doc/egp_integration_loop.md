@@ -41,7 +41,7 @@ because these chats exist.
 | Networking | Encrypted admission, account/peer/entity identities, authority, ownership, interest, lifecycle, reconnect and backpressure | Native/language fixtures, matching-budget 64-entity fairness, bounded receive bursts and eight encrypted WAN clients with changing 4096-byte states pass; baseline, interest, revocation and reconnect are covered; larger worlds, peak load and soak remain |
 | Advanced networking | Field deltas, bounded bandwidth/queues, input acknowledgments, lag compensation, scale/soak, malicious input rejection | Implementation/qualification gaps remain |
 | Network lab | Dedicated server, listen host, N clients, visible windows, latency/jitter/loss, directional simulation, reconnect, logs/watchdog/cleanup | Native host and packaged Mono Debug host/Release dedicated server pass simultaneous visible clients, WAN simulation and reconnect; broader matrix remains |
-| Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Packaged Debug graceful and Release abrupt dedicated-server replacement pass with three persistent visible clients under WAN impairment; eight-second headless outage passes; single and repeated selected-client catch-up rejection/fresh admission/ownership recovery passes in editor and packaged Debug host/Release dedicated WAN runs; broader controls/scale/soak remain |
+| Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Packaged Debug graceful and Release abrupt dedicated-server replacement pass with three persistent visible clients under WAN impairment; eight-second headless outage passes; single and repeated selected-client recovery and same-process server clock rejection/checkpoint/fresh admission/ownership recovery pass in editor and packaged Debug host/Release dedicated WAN runs; retired-token and retired-entity input rejection are covered; broader controls/scale/soak remain |
 | C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Matching SDK/editor controls, mixed-language exports, dynamic signature changes and rejected hierarchy/class repair pass on Windows; six cached instance/static call paths and nine return kinds now pass on Windows Debug SDK; arbitrary ABI changes and other platforms remain |
 | C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Two live Debug rebuilds preserve existing IDs, property state, callables and signals; failed compile retains published code; Missing/invalid DLL recovery and rejected base/extension-parent/ancestor/class-removal repair preserve extension and editable parent state; cached binding failure/default-return and compatible repair checks now pass; arbitrary ABI changes and soak remain |
 | C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Six combined native/managed reloads including corrupted-DLL and blocked-unload recovery preserve instances, properties and events; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
@@ -1509,3 +1509,101 @@ memory, platform/physics parity, arbitrary ABI/concurrent reload, broader C# sta
 lean server/default package identity, production authentication/persistence/gameplay
 and performance remain open. The loop stays ACTIVE; full feature completion and
 AAA readiness are not claimed.
+
+
+## Same-process authoritative server clock recovery — 2026-10-06
+
+Committed lab/tool source: `643aff51f6f75cfb779cd0f035c874d4f5f7bcbf` (initial change
+`843d7053d2`, retired-admission proof refinement `643aff51f6`). Native engine source
+remains `4d64b38c554ab3dc491285f4ffa5119c001da56f`. Editor SHA-256:
+`20be5396d78b4c9873d4a355132f62366be58fcf9b1519bb595006fb07e74342`.
+Debug template: `b8a7f178491ba56e02a8950a7ec337f33c6197a16a27b3cf295b85448cd91c82`;
+Release template: `9e0c7883787974351153cc5bc30c92d4425b81184c264f4a4f9b74f995a68910`.
+The API signature fingerprint remains
+`e84e140b923451849e88aab8300021fd9d32f95c31825bb6d7e25a4235953271`.
+
+The new `--server-stall-at`/`--server-stall-ms` controls delay an admitted dedicated
+server or listen host after all initial owner inputs are acknowledged. Poll must
+return `FAILED`, emit the catch-up diagnostic, stop and clear peers/entities/ticks,
+and reject entity creation/updates. After poll returns the fixture keeps the
+configured Session, rebinds the original port, explicitly restores its application
+counter, creates fresh root/owned entities and issues fresh tokens. Retaining the
+Session keeps its peer/entity handle generations; old handles stay retired.
+The listener generates a fresh secure key with the default key configuration.
+
+An isolated unused-account probe tries its retired token before readiness is
+published, with the listener slots empty. It must finish disconnected, without
+synchronization/entities/peers. This excludes duplicate-account and full-server
+rejection as false proof of key rotation. The original clients then disconnect,
+clear caches and reconnect to the new baseline. Each deliberately sends a retired
+entity input and a fresh owner input; exact counter/acknowledgment checks require
+only the fresh command to apply once. Every server and client PID remains the same.
+The clock budget, three-second transport timeout and original watchdogs are unchanged.
+
+Preserved failure and negative-control evidence:
+
+- `.build/integration-server-stall-baseline/evidence/1791292566339348300/receipt.json`:
+  the preceding lab exits on an injected 750 ms server gap; native `FAILED`, stopped
+  state, zero entities/ticks and the catch-up diagnostic were captured before edits.
+- `.build/integration-server-stall-retired-key-control/receipt.json` verifies the
+  deliberately retained test key is rejected by the new recovery gate. Its isolated
+  launcher exits 1 with `retired admission reached recovered authority`; the retired
+  unused-account token can authenticate when key rotation is disabled.
+- `.build/integration-server-stall-proof-development/1791293256953549400/receipt.json`
+  retains a GDScript inference parse error; explicit `bool` fixes it before the final
+  source freeze. The preceding five-case development matrix remains separate in
+  `.build/integration-server-stall-qualification/receipt.json`; it stops at the
+  source-hash guard when the stronger retired-admission probe changes the fixture.
+
+Fresh final qualification, all nine cases pass:
+
+| Case | Original server/client PIDs | Server gap | Visible windows together | Final counter |
+| --- | --- | --- | --- | --- |
+| editor | 33256 / 30760 / 14152 | 750 ms | 0 | 106 |
+| host | 16188 / 23200 / 14900 / 11608 | 750 ms | 4 | 112 |
+| dedicated | 5244 / 18812 / 31400 / 22340 | 1000 ms | 3 | 112 |
+| long | 31296 / 24500 / 15932 / 31436 | 5000 ms | 0 | 112 |
+| minimum | 21640 / 27124 | 550 ms | 0 | 102 |
+| client-control | 29612 / 34028 / 24592 | control | 0 | - |
+| manual-control | 1656 / 28264 / 33320 / 12124 | control | 4 | - |
+| restart-control | 4352 / 18572 / 26820 / 26252 / 2008 | control | 3 | - |
+| default-control | 30116 / 10140 / 13524 | control | 0 | - |
+
+The editor WAN test covers 750 ms with two clients; packaged Debug host and Release
+dedicated tests cover three visible clients and 750/1000 ms gaps. The headless WAN
+case covers a 5000 ms server gap and three clients. The minimum case uses one
+client, a 550 ms gap and outgoing server-only WAN impairment. Controls recheck
+two sequential client gaps, packaged host manual reconnect, packaged Release abrupt
+server replacement and the default local lab with the modified scene/tool.
+
+Exact commands, frozen fixture/helper/launcher hashes, matching template/editor and
+exported runtime/PCK hashes, PID/window observations and all semantic proofs are in
+`.build/integration-server-stall-final-qualification/{source,commands,receipt}.json`
+and each referenced receipt. `.build/integration-server-stall-tool-checks/receipt.json`
+records 43 semantic tests, 17 rejected argument combinations, help, Ruff checks/
+formatting and mypy (exit zero; the existing Python 3.9 config emits a compatibility
+warning). No tests or timing limits were relaxed.
+
+All 86 installed artifacts still match `.build/canonical-repeat-artifacts.json`.
+The engine-source delta contains only docs, the lab fixture and Python tooling;
+compiled C++/C#/GDScript helpers, APIs and physics sources are unchanged. The prior
+combined API/SDK/managed/physics/trilingual/reload qualification remains applicable
+to these identical engine inputs/binaries; no duplicate engine build was started.
+Old lab receipts are retained as historical fixture results, while these nine cases
+qualify the current scene and launcher. Native Debug/Release retain all ten CTest
+cases and 120 assertions each; installed root-bin trilingual qualification remains 59.
+
+Merge ownership and publication are verified in
+`.build/integration-server-stall-publication.json`: canonical/local/remote sole master,
+original handoff ancestry, seven preserved trees and current refs/PR inventory.
+The four original handoff chats remain inactive with completed turns; snapshots are
+in `.build/integration-server-stall-handoffs.json`. Documentation/website forks were
+published by their owner; their existing API reference is unchanged by this fixture
+increment, and that chat owns synchronization of the updated lab guide.
+
+Next: authoritative physics checkpoint/rollback and broader C#/C++ clock/lifecycle
+recovery, repeated server faults and longer outages. Arbitrary application-state
+restoration, larger worlds/load/soak, peak memory, platform/physics parity, arbitrary
+ABI/concurrent reload, broader managed state, lean server/default package identity,
+production authentication/persistence/gameplay and performance remain open.
+The loop stays ACTIVE; full feature completion and AAA readiness are not claimed.
