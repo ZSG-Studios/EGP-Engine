@@ -1998,3 +1998,100 @@ application/ABI persistence, platform parity, scale/soak or performance. The
 four original engine chats remain completed; documentation/website publication
 has separate ownership and receives the committed source handoff. The loop stays
 ACTIVE; full feature completion and AAA readiness remain unclaimed.
+
+### Independent authority stalls and client recovery — 2026-10-06
+
+Source `3fbbf5ec8e` adds an isolated GDScript authority and C#/C++ process clients.
+`bc87f819d9d56a196b19fc5dacbed4a326ec7120` corrects millisecond evidence handling:
+two polls may share a timestamp, but each stall requires at least ten distinct
+client observations. Fresh language qualification passes all 27 steps, including
+133 interop assertions in each editor/relocated Debug/relocated Release run and
+the preceding encrypted separate-process checks.
+
+| Configuration / client | Authority PID | Client PID | Distinct polls during the three stalls |
+| --- | --- | --- | --- |
+| editor / C# | 15060 | 30300 | 33 / 33 / 33 |
+| editor / C++ | 19864 | 28324 | 33 / 33 / 33 |
+| Debug / C# | 21828 | 26608 | 33 / 33 / 33 |
+| Debug / C++ | 7312 | 18356 | 33 / 33 / 34 |
+| Release / C# | 29384 | 25884 | 33 / 33 / 33 |
+| Release / C++ | 21812 | 32968 | 33 / 33 / 34 |
+
+Six process pairs complete 18 independent server faults, 18 native client
+disconnects and 24 authenticated admissions. Each authority deliberately stops
+polling for at least 550 ms; the separate client continues polling. The native
+authority returns `FAILED` and clears peers/entities, restores a trusted local
+Box3D checkpoint and rebinds its original port/session with the clock attached.
+The client discovers the native `Disconnected` state through polling, verifies
+an empty baseline and rejected input, explicitly stops, then obtains the next
+fresh fixture token and rejoins using the same native session.
+
+Four admissions per client require `Connecting -> Synchronizing -> Connected`;
+the three failures include native `Stopped -> Disconnected`, followed by the
+fixture's explicit `Stopped` before rejoining. Each new owned entity has a fresh
+handle and a physics tick after the restored checkpoint. The authenticated
+9876 account sends exactly one owner input per epoch and completes a ready/reply/
+ack exchange before the next fault. Entity ownership uses the new authenticated
+peer handle, not a retained transport handle. Physics body 10000 persists through
+all three trusted checkpoint restores. Token files live only in a temporary,
+test-only trusted handoff directory; receipts/logs contain no token bytes or
+physics snapshots. This policy demonstrates fixture recovery, not production
+account admission, token refresh or retry/backoff policy.
+
+The public runner supports `--engine`, `--project`, `--client-language` and
+`--output`; clients are `csharp` or `cpp`. Example using the already built isolated
+project (choose a new output directory):
+
+```powershell
+python misc/scripts/validate_egp_net_clock_process.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --project .build/integration-independent-clock-qualified/project --client-language cpp --output .build/independent-clock-new
+```
+
+For packaged games omit `--project` and point `--engine` to the relocated Mono
+executable. The full build/export command is recorded exactly in
+`.build/integration-independent-clock-qualified/source.json`; it is the previous
+language validator command with a fresh output directory. Its receipt references
+all six independent process receipts. Each captures command/PID/exit status,
+source and engine hashes, native state histories, UTC poll observations and
+checkpoint evidence. The reader cross-checks public UTC gaps against the monotonic
+550 ms delay, requires ten distinct observations per stall, bounds observed client
+poll gaps at 250 ms and rejects shared process identities. Observed maximum poll
+gaps were 17/18 ms in these runs; this is fixture health evidence, not an engine
+or networking performance benchmark.
+
+Fresh interop PIDs: editor 18720, Debug 34124, Release 11696. Debug extension
+SHA-256 `8df9eb61874b7a3575f0982a06998671bbe1a27c09b054379982febeaf46d7ec`;
+Release extension `77b62c7446acd982f8e0114936f307862fc7538451d793533de72c7a11275cae`;
+editor C# fixture assembly
+`79ca16e8b02ba3e7da192eda8cef8b1b60b2bf55e8f4022eb93c7c4c8bcd4d8e`;
+exported PCK `6359a7fde8afa72c640dec43bc709b33fdc49a0b19058f1081158ee435ab50f7`.
+Installed editor/templates, engine source, SDK archives, fingerprint and ClassDB
+signature remain the preceding verified identities. Engine/core/physics/glue and
+external helper APIs are unchanged; the sample adds fixture-specific bindings.
+
+`.build/integration-independent-clock-tool-checks/receipt.json` records 30 semantic
+tests (16 language, 14 process), help and passing Ruff/format/mypy with the existing
+Python 3.9 configuration warning. Negative cases reject paused clients, shared
+PIDs, timestamp jumps/duplicate sample inflation, stale entities/physics time,
+missing native disconnects, uncleared baselines, absent owner inputs and reused
+admission. The first run's runtime passed but the evidence reader rejected a
+coincident millisecond timestamp; its receipt remains preserved. A subsequent
+command accidentally supplied the Release SDK archive to Debug compilation;
+the linker correctly rejected its runtime/iterator ABI mismatch. That failed
+build is retained separately. The final fresh matrix uses matching archives.
+No native clock budget, ABI requirement or watchdog was relaxed.
+
+`.build/integration-independent-clock-poll-control/receipt.json` retains the
+preceding NIL/current `FAILED` control against the fresh Debug DLL.
+`.build/integration-independent-clock-publication.json` verifies canonical/local/
+remote master equality, original handoff ancestry, 86 installed artifacts,
+seven preserved worktrees and no open PRs. Changed sample/validator inputs have
+fresh builds; prior native/physics/admission/lab/reload evidence is reused only
+for unchanged inputs. No duplicate engine build was necessary.
+
+Next: production recovery policy, connected low-level faults, hot reload during
+faults, process crashes/hard network outages, larger worlds and longer WAN/loss
+qualification. These are one authority plus one client per isolated pair on
+Windows, with client outbound 20 ms latency/5 ms jitter/zero loss. The new native
+disconnect discovery and fixture rejoin checks do not prove client physics
+rollback, arbitrary game/ABI persistence, backend admission, other platforms,
+scale/soak or performance. The loop remains ACTIVE.
