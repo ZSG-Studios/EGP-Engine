@@ -35,3 +35,16 @@ add_executable(egp_net_fairness_check fairness_check.cpp)
 target_link_libraries(egp_net_fairness_check PRIVATE egp_net_core)
 add_test(NAME egp_net_fairness COMMAND egp_net_fairness_check)
 set_tests_properties(egp_net_fairness PROPERTIES TIMEOUT 45)
+
+add_executable(egp_net_receive_budget_check receive_budget_check.cpp)
+target_link_libraries(egp_net_receive_budget_check PRIVATE egp_net_core)
+add_test(NAME egp_net_receive_budget COMMAND egp_net_receive_budget_check)
+set_tests_properties(egp_net_receive_budget PROPERTIES TIMEOUT 40)
+
+add_test(NAME egp_net_symmetric_fairness COMMAND egp_net_fairness_check --symmetric)
+set_tests_properties(egp_net_symmetric_fairness PROPERTIES TIMEOUT 45)
+
+add_executable(egp_net_replication_load_check replication_load_check.cpp)
+target_link_libraries(egp_net_replication_load_check PRIVATE egp_net_core)
+add_test(NAME egp_net_replication_load COMMAND egp_net_replication_load_check)
+set_tests_properties(egp_net_replication_load PROPERTIES TIMEOUT 150)

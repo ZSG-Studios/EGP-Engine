@@ -8,6 +8,7 @@
 #include <cmath>
 #include <cstring>
 #include <mutex>
+#include <optional>
 #include <set>
 #include <sstream>
 #include <thread>
@@ -85,14 +86,26 @@ struct Session::Impl : yojimbo::Adapter {
     double last_time = 0, accumulator = 0, connected_since = 0;
     uint64_t peer_generation = 0, entity_generation = 0;
     std::map<uint64_t, Entity> entity_map;
+    struct Incoming {
+        int type = -1, action = -1, user_channel = 0, delivery = 2, application = 0;
+        uint64_t handle = 0, tick = 0;
+        Entity entity;
+        std::vector<uint8_t> payload;
+        size_t charge() const { return payload.size() + (type == StateType ? 64 : 32); }
+    };
     struct Link {
         int64_t handle = 0;
-        bool begun = false, complete = false;
+        bool begun = false, complete = false, rejected = false;
         uint64_t last_entity_sent = 0;
         std::map<uint64_t, uint64_t> revisions;
         std::map<uint64_t, std::weak_ptr<uint8_t>> in_flight_states;
         std::set<uint64_t> hidden;
-        double window = 0;
+        // Decoded traffic may arrive in bursts across sender budget windows.
+        // Keep one copied envelope per channel while the receive budget drains;
+        // remaining messages stay in Yojimbo's bounded queues.
+        std::array<std::optional<Incoming>, 10> pending;
+        int next_channel = 0;
+        double window = 0, incoming_window = 0;
         int incoming_count = 0, outgoing_count = 0;
         uint64_t incoming_bytes = 0, outgoing_bytes = 0;
     };
@@ -178,8 +191,8 @@ struct Session::Impl : yojimbo::Adapter {
     void window(Link &link) {
         const double time = now();
         if (time - link.window >= 1) {
-            link.window = time; link.incoming_count = link.outgoing_count = 0;
-            link.incoming_bytes = link.outgoing_bytes = 0;
+            link.window = time; link.outgoing_count = 0;
+            link.outgoing_bytes = 0;
         }
     }
     bool room(int slot, int channel, size_t bytes) {
@@ -215,6 +228,7 @@ struct Session::Impl : yojimbo::Adapter {
         for (auto &pair : links) {
             const int slot = pair.first;
             Link &link = pair.second;
+            if (link.rejected) continue;
             if (!link.begun) { if (!meta(slot, BeginBaseline)) continue; link.begun = true; }
             for (auto it = link.revisions.begin(); it != link.revisions.end();) {
                 if (!entity_map.count(it->first) || link.hidden.count(it->first)) {
@@ -263,17 +277,27 @@ struct Session::Impl : yojimbo::Adapter {
     }
     void reject(int slot) {
         ++stats.rejected_messages;
-        if (server) { auto it = links.find(slot); if (it != links.end()) disconnect_pending.push_back(it->second.handle); }
+        if (server) {
+            auto it = links.find(slot);
+            if (it != links.end()) {
+                it->second.rejected = true;
+                disconnect_pending.push_back(it->second.handle);
+            }
+        }
         else stop_pending = true;
     }
-    void receive(int slot, int channel, yojimbo::Message *message) {
-        Link &link = server ? links.at(slot) : client_link;
-        const int64_t peer = server ? link.handle : 0;
-        const int type = message->GetType();
-        Entity entity;
-        int action = -1, user_channel = 0, delivery = 2, application = 0;
-        uint64_t handle = 0, tick = 0;
-        std::vector<uint8_t> payload;
+    std::optional<Incoming> decode(int slot, int channel, yojimbo::Message *message) {
+        Incoming incoming;
+        auto &type = incoming.type;
+        auto &entity = incoming.entity;
+        auto &action = incoming.action;
+        auto &handle = incoming.handle;
+        auto &tick = incoming.tick;
+        auto &user_channel = incoming.user_channel;
+        auto &delivery = incoming.delivery;
+        auto &application = incoming.application;
+        auto &payload = incoming.payload;
+        type = message->GetType();
         bool good = true;
         if (type == MetaType) {
             const auto *m = static_cast<Meta *>(message);
@@ -298,18 +322,56 @@ struct Session::Impl : yojimbo::Adapter {
         }
         // Release factory ownership before calling any game code.
         release(slot, message);
-        window(link); ++link.incoming_count; link.incoming_bytes += payload.size() + 32;
-        ++stats.received_messages; stats.received_bytes += payload.size();
-        if (!good || link.incoming_count > options.messages_per_second || link.incoming_bytes > uint64_t(options.bytes_per_second)) {
-            reject(slot); return;
+        if (!good) {
+            ++stats.received_messages;
+            stats.received_bytes += payload.size();
+            reject(slot);
+            return std::nullopt;
         }
+        return incoming;
+    }
+    bool receive_one(int slot, int channel) {
+        Link &link = server ? links.at(slot) : client_link;
+        if (stop_pending || link.rejected) return false;
+        const double time = now();
+        if (time - link.incoming_window >= 1) {
+            link.incoming_window = time;
+            link.incoming_count = 0;
+            link.incoming_bytes = 0;
+        }
+        if (link.incoming_count >= options.messages_per_second ||
+                link.incoming_bytes + 32 > uint64_t(options.bytes_per_second)) return false;
+        auto &pending = link.pending[channel];
+        if (!pending) {
+            auto *message = server ? server->ReceiveMessage(slot, channel) : client->ReceiveMessage(channel);
+            if (!message) return false;
+            pending = decode(slot, channel, message);
+            if (!pending) return false;
+        }
+        if (link.incoming_bytes + pending->charge() > uint64_t(options.bytes_per_second)) return false;
+        Incoming incoming = std::move(*pending);
+        pending.reset();
+        ++link.incoming_count;
+        link.incoming_bytes += incoming.charge();
+        ++stats.received_messages;
+        stats.received_bytes += incoming.payload.size();
+        const int64_t peer = server ? link.handle : 0;
+        const auto type = incoming.type;
+        auto &entity = incoming.entity;
+        const auto action = incoming.action;
+        const auto handle = incoming.handle;
+        const auto tick = incoming.tick;
+        const auto user_channel = incoming.user_channel;
+        const auto delivery = incoming.delivery;
+        const auto application = incoming.application;
+        auto &payload = incoming.payload;
         if (type == MetaType) {
             stats.server_tick = std::max(stats.server_tick, tick);
             if (action == BeginBaseline) { entity_map.clear(); change("Synchronizing"); }
             else if (action == EndBaseline) change("Connected");
             else entity_map.erase(handle);
         } else if (type == StateType) {
-            if (!entity_map.count(entity.handle) && entity_map.size() >= size_t(options.max_entities)) { reject(slot); return; }
+            if (!entity_map.count(entity.handle) && entity_map.size() >= size_t(options.max_entities)) { reject(slot); return false; }
             stats.server_tick = std::max(stats.server_tick, entity.tick);
             entity.state = std::move(payload);
             auto old = entity_map.find(entity.handle);
@@ -317,6 +379,7 @@ struct Session::Impl : yojimbo::Adapter {
         } else if (application) {
             if (facade.application_received) facade.application_received(peer, payload);
         } else if (facade.packet_received) facade.packet_received(peer, payload, user_channel, delivery);
+        return true;
     }
 };
 
@@ -419,12 +482,15 @@ Result Session::pump() {
     }
     for (int slot = 0; slot < (p.server ? p.options.max_players : (p.client && p.client->IsConnected() ? 1 : 0)); ++slot) {
         if (p.server && !p.links.count(slot)) continue;
-        for (int channel = 0; channel < p.config.numChannels; ++channel) {
-            while (!p.stop_pending) {
-                auto *message = p.server ? p.server->ReceiveMessage(slot, channel) : p.client->ReceiveMessage(channel);
-                if (!message) break;
-                p.receive(slot, channel, message);
-            }
+        auto &link = p.server ? p.links.at(slot) : p.client_link;
+        // Give each channel one delivery per round. A busy replication channel
+        // cannot consume every receive window ahead of application/raw traffic.
+        int empty = 0;
+        while (!p.stop_pending && !link.rejected && empty < p.config.numChannels) {
+            const int channel = link.next_channel;
+            link.next_channel = (channel + 1) % p.config.numChannels;
+            if (p.receive_one(slot, channel)) empty = 0;
+            else ++empty;
         }
     }
     if (p.server || p.client_connected) {

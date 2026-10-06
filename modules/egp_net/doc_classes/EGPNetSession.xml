@@ -35,7 +35,7 @@
 				Accepted [param options] keys and defaults:
 				[code]game_protocol = "egp-game-v1"[/code] and [code]simulation_fingerprint = "script-state-v1"[/code]: nonempty strings of at most 256 UTF-8 bytes. These and [code]tick_rate[/code] must match across peers.
 				[code]tick_rate = 60[/code]: integer from 1 to 240. [code]max_players = 32[/code]: integer from 1 to 64. [code]max_entities = 1024[/code]: integer from 1 to 4096.
-				[code]messages_per_second = 1000[/code]: integer of at least 32. [code]bytes_per_second = 4194304[/code]: integer of at least 8192. These bound each connection's message traffic.
+				[code]messages_per_second = 1000[/code]: integer of at least 32. [code]bytes_per_second = 4194304[/code]: integer of at least 8192. These bound each peer's outgoing admission and incoming delivery in separate one-second windows. Outgoing quota exhaustion returns [constant ERR_BUSY]; valid incoming bursts wait in bounded queues and channels advance in rounds. Byte charges estimate payload plus 64 bytes for entity states or 32 bytes for other messages, excluding UDP headers, fragmentation and retransmissions. Incoming delivery quotas do not cap all transport decoding work or replace gameplay abuse policies. Malformed or unauthorized envelopes still cause rejection; sustained valid excess traffic can exhaust transport queues.
 				[code]timeout_seconds = 5[/code]: integer from 1 to 60. [code]token_lifetime_seconds = 30[/code]: integer from 1 to 120.
 				[code]allow_insecure_loopback = false[/code]: Boolean enabling development joins only on literal [code]127.0.0.1[/code] or [code]::1[/code]. In this mode the server must also bind to a literal loopback address.
 				[code]private_key[/code]: optional [PackedByteArray] of exactly 32 bytes for server token signing. If omitted, a secure server generates its own random key. Do not log or send this key to clients.
@@ -74,7 +74,7 @@
 		<method name="get_statistics" qualifiers="const">
 			<return type="Dictionary" />
 			<description>
-				Returns a snapshot [Dictionary] with integer keys [code]tick[/code], [code]server_tick[/code], [code]peers[/code], [code]local_port[/code], [code]received_messages[/code], [code]received_bytes[/code], and [code]rejected_messages[/code]. Returns an empty dictionary before configuration. Read on the creating thread; counters describe this session, not end-to-end gameplay latency.
+				Returns a snapshot [Dictionary] with integer values under keys [code]tick[/code], [code]server_tick[/code], [code]peers[/code], [code]local_port[/code], [code]received_messages[/code], [code]received_bytes[/code], and [code]rejected_messages[/code]. Returns an empty dictionary before configuration. Read on the creating thread; counters describe this session, not end-to-end gameplay latency. Receive counters include delivered messages and examined malformed envelopes; valid messages waiting for receive budget are excluded. Byte counters measure payload bytes, not transport bandwidth.
 			</description>
 		</method>
 		<method name="issue_token">

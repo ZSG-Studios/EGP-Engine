@@ -12,6 +12,8 @@ namespace egp::net {
 enum class Result { Ok, Invalid, Busy, Unconfigured, Unauthorized, Full, NotFound, BadData, Failed };
 struct Options {
     int tick_rate = 60, max_players = 32, max_entities = 1024;
+    // Per-peer admission/delivery quotas in independent one-second windows.
+    // Bytes are estimated envelope charges, not UDP/retransmission bandwidth.
     int messages_per_second = 1000, bytes_per_second = 4 * 1024 * 1024;
     int timeout_seconds = 5, token_lifetime_seconds = 30;
     std::string game_protocol = "egp-game-v1", simulation_fingerprint = "script-state-v1";

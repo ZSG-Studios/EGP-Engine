@@ -137,6 +137,28 @@ qualification. Configure endpoint rate budgets for each role; server outgoing
 budgets and client incoming budgets need not be identical.
 The client's `server_tick` statistic includes accepted replicated entity ticks.
 
+`messages_per_second` and `bytes_per_second` apply per peer in separate outgoing
+and incoming one-second budget windows. Outgoing admission returns busy when its
+quota fills. Incoming delivery drains valid messages at the configured quota;
+it does not classify arrival bursts from latency, jitter or reliable backlog as
+abuse. Channels advance in rounds so application/raw traffic can progress beside
+replication. Each channel retains at most one decoded envelope while waiting for
+byte budget, and remaining traffic stays in Yojimbo's bounded transport queues.
+Ordered channels retain their per-channel order. Unreliable delivery still permits
+loss, including under transport queue pressure. Stop/disconnect clears pending
+copies; connection generations never reuse them.
+
+Byte charges estimate payload plus 64 bytes for entity state or 32 bytes for
+metadata/application/raw messages. They do not measure or cap UDP headers,
+handshake traffic, fragmentation or retransmissions. Receiver quotas limit game
+callback/application delivery work, not all transport packet decoding CPU or wire
+bandwidth. Malformed envelopes and unauthorized replication remain rejection
+conditions; sustained valid excess traffic is flow controlled and can exhaust
+transport queues. Games still need input validation and application-specific
+abuse/disconnect policies. `received_messages`/`received_bytes` count delivered
+messages/payload bytes (and malformed messages examined for rejection), excluding
+valid envelopes still waiting for budget.
+
 `EGPNetPrediction` adds bounded local input/state history, authoritative correction and deterministic replay through game-provided capture/restore/simulate callbacks. Its default caps are 128 pending ticks, 64 KiB per local snapshot and 8 MiB of history. History pressure refuses new predictions; callback/state failures require an explicit baseline reset. Server input acknowledgments and complete predicted state are game contracts. Replay callbacks must suppress duplicate presentation effects. State sent over the network still obeys the 4096-byte wire limit.
 
 For dedicated servers, listen hosts, visible local clients, impairment and bounded

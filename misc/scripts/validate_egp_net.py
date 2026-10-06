@@ -3,10 +3,10 @@
 import argparse
 import hashlib
 import json
-from pathlib import Path
 import re
 import subprocess
 import sys
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -42,9 +42,9 @@ try:
     receipt["vendor_verified"] = True
     run("configure", ["cmake", "-S", ROOT / "modules/egp_net/tests", "-B", build, "-DCMAKE_BUILD_TYPE=" + args.configuration])
     run("build", ["cmake", "--build", build, "--config", args.configuration, "--parallel", "6", "--target",
-                  "egp_net_checks", "egp_net_process_check", "egp_net_interest_memory_check", "egp_net_state_pressure_check", "egp_net_fairness_check",
+                  "egp_net_checks", "egp_net_process_check", "egp_net_interest_memory_check", "egp_net_state_pressure_check", "egp_net_fairness_check", "egp_net_receive_budget_check", "egp_net_replication_load_check",
                   "yojimbo_test", "yojimbo_custom_packet_io_test"], timeout=300)
-    run("ctest", ["ctest", "--test-dir", build, "-C", args.configuration, "--output-on-failure"], timeout=90)
+    run("ctest", ["ctest", "--test-dir", build, "-C", args.configuration, "--output-on-failure"], timeout=300)
     executable = build / args.configuration / "egp_net_checks.exe" if sys.platform == "win32" else build / "egp_net_checks"
     # Upstream sets runtime directories before the consumer executable is declared.
     if not executable.is_file():

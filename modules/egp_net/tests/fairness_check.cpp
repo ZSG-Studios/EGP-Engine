@@ -12,14 +12,14 @@ void check(bool good, const char *name) {
         std::exit(1);
     }
 }
-int main() {
+int main(int argc, char **argv) {
     Options options;
     options.max_players = 2;
     options.max_entities = 64;
     options.messages_per_second = 32;
     options.bytes_per_second = 8192;
     Options receiver = options;
-    receiver.messages_per_second = 1000;
+    receiver.messages_per_second = argc > 1 && std::string(argv[1]) == "--symmetric" ? 32 : 1000;
     Session server(options), first(receiver), second(receiver);
     std::array<Session *, 2> clients{&first, &second};
     std::array<int64_t, 2> owners{};
