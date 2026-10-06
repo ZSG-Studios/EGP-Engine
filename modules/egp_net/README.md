@@ -225,8 +225,11 @@ Do not reconfigure from synchronous poll callbacks. The server must revoke old
 connection ownership and grant a new entity/authority to the new peer; account
 identity alone does not restore ownership. A server that stops must restore its
 game state explicitly. The [network lab guide](../../doc/egp_network_lab.md)
-provides `--client-stall-at`, `--client-stall-ms` and `--client-stall-index` to
-exercise this recovery without increasing the engine budget. `server_tick` reports the latest
+provides `--client-stall-at`, `--client-stall-ms`, `--client-stall-index`,
+`--client-stall-count` and `--client-stall-interval` to exercise single or repeated
+recovery without increasing the engine budget. Each recovery uses a fresh token,
+peer and owned entity; the next gap waits for verified authoritative progress.
+`server_tick` reports the latest
 replicated server tick, not a continuously synchronized idle clock.
 
 For named messages, register the same message contract at each receiving

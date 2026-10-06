@@ -125,61 +125,104 @@ def restart_failure(receipt):
 
 
 def stall_failure(receipt):
-    """Verify a real rejected clock gap and fresh authority in the same processes."""
+    """Verify every rejected gap and fresh authority in the original processes."""
     fault = receipt["client_stall"]
+    count = fault["count"]
     records = receipt["processes"]
     servers = [r for r in records if r["role"] in ("server", "host")]
     peers = [r for r in records if r["role"] == "client"]
-    if len(servers) != 1 or len(peers) != receipt["clients"]:
+    if (
+        len(servers) != 1
+        or len(peers) != receipt["clients"]
+        or {r["result"].get("index") for r in peers} != set(range(receipt["clients"]))
+    ):
         return "Stall test lost its persistent server/client processes"
     server = servers[0]
-    target = next((r for r in peers if r["result"].get("index") == fault["index"]), None)
-    if target is None:
-        return "Missing stalled-client evidence"
+    if server["exit_code"] != 0 or not server["result"].get("passed"):
+        return "Authoritative server failed during client recovery"
+    target = next(r for r in peers if r["result"]["index"] == fault["index"])
     result = target["result"]
-    proof = result.get("stall_proof", {})
+    proofs = result.get("stall_proofs", [])
+    states = result.get("connection_states", [])
     if (
         not result.get("passed")
         or target["exit_code"] != 0
-        or proof.get("elapsed_ms", 0) < fault["milliseconds"]
-        or proof.get("elapsed_ms", 0) <= 500
-        or proof.get("poll_error") != 1
-        or proof.get("state_after_failure") != "Stopped"
-        or proof.get("entities_after_failure") != 0
-        or proof.get("tick_after_failure") != 0
-        or proof.get("input_after_failure") != 3
-        or proof.get("stale_input_enqueued") is not True
-        or not proof.get("old_peer")
-        or proof.get("old_peer") == proof.get("new_peer")
-        or not proof.get("old_entity")
-        or proof.get("old_entity") == proof.get("new_entity")
-        or result.get("diagnostics") != ["Fixed simulation exceeded its catch-up budget; resynchronization required."]
-        or result.get("epoch_inputs", {}).get("1") is not True
-        or result.get("epoch_inputs", {}).get("2") is not True
-        or result.get("epoch_ticks", {}).get("2", 0) <= proof.get("before_tick", 0)
-        or any(result.get("epoch_server_pids", {}).get(str(i)) != server["pid"] for i in (1, 2))
+        or len(proofs) != count
+        or result.get("stall_proof") != proofs[-1]
+        or result.get("generation") != count + 1
+        or result.get("replies") != count + 1
+        or result.get("diagnostics")
+        != ["Fixed simulation exceeded its catch-up budget; resynchronization required."] * count
+        or states.count("Connected") != count + 1
+        or states[-1:] != ["Stopped"]
+        or states[:-1].count("Stopped") != count
+        or "Disconnected" in states
     ):
-        return "Stall test lacks rejected poll, cleared state, fresh peer/owner or authoritative recovery evidence"
-    states = result.get("connection_states", [])
-    if "Stopped" not in states:
-        return "Stalled transport never stopped"
-    split = states.index("Stopped")
-    if "Connected" not in states[:split] or "Connected" not in states[split + 1 :]:
-        return "Stalled client did not reconnect after the rejected poll"
+        return "Stalled client lacks the requested number of rejected gaps and recovered connections"
+    for i, proof in enumerate(proofs):
+        old, new = i + 1, i + 2
+        if (
+            proof.get("elapsed_ms", 0) < fault["milliseconds"]
+            or proof.get("elapsed_ms", 0) <= 500
+            or proof.get("injected_at_ms", 0) < (fault["at_seconds"] + i * fault["interval_seconds"]) * 1000
+            or proof.get("old_generation") != old
+            or proof.get("new_generation") != new
+            or proof.get("poll_error") != 1
+            or proof.get("state_after_failure") != "Stopped"
+            or proof.get("entities_after_failure") != 0
+            or proof.get("tick_after_failure") != 0
+            or proof.get("input_after_failure") != 3
+            or proof.get("stale_input_enqueued") is not True
+            or proof.get("input_acknowledged") is not True
+            or not proof.get("old_peer")
+            or proof.get("old_peer") == proof.get("new_peer")
+            or not proof.get("old_entity")
+            or proof.get("old_entity") == proof.get("new_entity")
+            or result.get("epoch_inputs", {}).get(str(old)) is not True
+            or result.get("epoch_inputs", {}).get(str(new)) is not True
+            or result.get("epoch_ticks", {}).get(str(new), 0) <= proof.get("before_tick", 0)
+            or proof.get("recovered_tick", 0) <= proof.get("before_tick", 0)
+            or proof.get("recovered_value", 0) <= proof.get("before_value", 0)
+            or any(result.get("epoch_server_pids", {}).get(str(epoch)) != server["pid"] for epoch in (old, new))
+        ):
+            return (
+                f"Stall {old} lacks rejected poll, cleared state, fresh peer/owner or authoritative recovery evidence"
+            )
+        if i and (
+            proof["old_peer"] != proofs[i - 1]["new_peer"]
+            or proof["old_entity"] != proofs[i - 1]["new_entity"]
+            or proof["before_tick"] < proofs[i - 1]["recovered_tick"]
+            or proof["before_value"] < proofs[i - 1]["recovered_value"]
+        ):
+            return "Consecutive recovery identities or authoritative progress do not form one continuous client history"
+    if (
+        len({proof["old_peer"] for proof in proofs} | {proofs[-1]["new_peer"]}) != count + 1
+        or len({proof["old_entity"] for proof in proofs} | {proofs[-1]["new_entity"]}) != count + 1
+    ):
+        return "Repeated recovery reused a retired peer or entity identity"
+    if [state for state in states[:-1] if state in ("Connected", "Stopped")] != ["Connected", "Stopped"] * count + [
+        "Connected"
+    ]:
+        return "Stalled client connection/stop history does not match the requested recovery sequence"
     authoritative = server["result"]
-    expected = 100 + receipt["clients"] * (receipt["clients"] + 1) // 2 + fault["index"] + 1
+    history_peers = {str(proof["old_peer"]) for proof in proofs} | {str(proofs[-1]["new_peer"])}
+    if set(authoritative.get("peer_generations", {}).get(str(fault["index"]), {})) != history_peers:
+        return "Client recovery peer history does not match authoritative server admissions"
+    expected = 100 + receipt["clients"] * (receipt["clients"] + 1) // 2 + count * (fault["index"] + 1)
     if authoritative.get("persistent_value") != expected or result.get("persistent_value") != expected:
         return "Server/client counter includes missing or extra owner-authorized input"
     for peer in peers:
         data = peer["result"]
         index = data.get("index")
-        expected_generations = 2 if index == fault["index"] else 1
+        expected_generations = count + 1 if index == fault["index"] else 1
         if (
             not data.get("passed")
             or peer["exit_code"] != 0
-            or data.get("highest_tick", 0) <= proof.get("before_tick", 0)
+            or data.get("highest_tick", 0) <= proofs[-1]["before_tick"]
+            or data.get("persistent_value") != expected
             or len(authoritative.get("peer_generations", {}).get(str(index), {})) != expected_generations
-            or len(authoritative.get("input_generations", {}).get(str(index), {})) != expected_generations
+            or set(authoritative.get("input_generations", {}).get(str(index), {}))
+            != {str(i) for i in range(1, expected_generations + 1)}
             or (
                 index != fault["index"]
                 and (
@@ -220,6 +263,20 @@ def main():
         "--client-stall-index", type=int, default=0, help="Client to stall; the other clients remain connected"
     )
     parser.add_argument(
+        "--client-stall-count",
+        type=int,
+        choices=range(1, 9),
+        metavar="1..8",
+        default=1,
+        help="Number of sequential gaps in the selected client",
+    )
+    parser.add_argument(
+        "--client-stall-interval",
+        type=bounded_float(1, 90),
+        default=8.0,
+        help="Seconds between scheduled client stalls; each waits for verified prior recovery",
+    )
+    parser.add_argument(
         "--server-restart-at",
         type=bounded_float(0, 90),
         default=0.0,
@@ -252,10 +309,18 @@ def main():
     if args.client_stall_at:
         if args.reconnect_at or args.server_restart_at:
             parser.error("--client-stall-at cannot overlap --reconnect-at or --server-restart-at")
-        if not 3 <= args.client_stall_at <= args.duration - args.client_stall_ms / 1000 - 7:
-            parser.error("--client-stall-at must allow 3 seconds before the stall and 7 seconds after it")
-    elif args.client_stall_ms != 750 or args.client_stall_index != 0:
-        parser.error("--client-stall-ms and --client-stall-index require --client-stall-at")
+        if args.client_stall_count > 1 and args.client_stall_interval < args.client_stall_ms / 1000 + 6:
+            parser.error("--client-stall-interval must leave at least 6 seconds after each gap for recovery")
+        last_stall = args.client_stall_at + (args.client_stall_count - 1) * args.client_stall_interval
+        if args.client_stall_at < 3 or last_stall > args.duration - args.client_stall_ms / 1000 - 7:
+            parser.error("Client stalls must allow 3 seconds before the first gap and 7 seconds after the last")
+    elif (
+        args.client_stall_ms != 750
+        or args.client_stall_index != 0
+        or args.client_stall_count != 1
+        or args.client_stall_interval != 8
+    ):
+        parser.error("Client stall options require --client-stall-at")
     if args.server_restart_at:
         if args.mode != "dedicated" or args.reconnect_at:
             parser.error("--server-restart-at requires dedicated mode without --reconnect-at")
@@ -296,6 +361,8 @@ def main():
             "at_seconds": args.client_stall_at,
             "milliseconds": args.client_stall_ms,
             "index": args.client_stall_index,
+            "count": args.client_stall_count,
+            "interval_seconds": args.client_stall_interval,
         },
         "server_restart": {
             "requested": bool(args.server_restart_at),
@@ -422,6 +489,8 @@ def main():
                     f"--client-stall-at={args.client_stall_at}",
                     f"--client-stall-ms={args.client_stall_ms}",
                     f"--client-stall-index={args.client_stall_index}",
+                    f"--client-stall-count={args.client_stall_count}",
+                    f"--client-stall-interval={args.client_stall_interval}",
                     f"--port={args.port if port is None else port}",
                     f"--restart-enabled={int(bool(args.server_restart_at))}",
                     f"--generation={generation}",
