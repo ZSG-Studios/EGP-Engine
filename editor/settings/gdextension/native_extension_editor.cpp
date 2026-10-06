@@ -41,6 +41,7 @@
 #include "core/object/class_db.h"
 #include "core/os/os.h"
 #include "core/string/regex.h"
+#include "editor/doc/editor_help.h"
 #include "editor/editor_node.h"
 #include "editor/file_system/editor_file_system.h"
 #include "editor/file_system/editor_paths.h"
@@ -492,9 +493,11 @@ void NativeExtensionEditor::_run_cli() {
 }
 
 void NativeExtensionEditor::_next_cli() {
+	if (!EditorNode::get_singleton()->is_editor_ready()) {
+		return;
+	}
 	if (last_build_result != 0) {
-		SceneTree::get_singleton()->quit(1);
-		set_process(false);
+		_quit_cli(1);
 		return;
 	}
 	if (EditorFileSystem::get_singleton()->is_scanning()) {
@@ -534,8 +537,16 @@ void NativeExtensionEditor::_next_cli() {
 		}
 	}
 	print_line("EGP_CPP_CLI_PASSED");
-	SceneTree::get_singleton()->quit(0);
+	_quit_cli(0);
+}
+
+void NativeExtensionEditor::_quit_cli(int p_exit_code) {
 	set_process(false);
+	// Join the documentation worker before queuing shutdown so its deferred
+	// callbacks run while EditorNode and the documentation database still exist.
+	EditorHelp::get_doc_data();
+	callable_mp(EditorNode::get_singleton(), &EditorNode::trigger_menu_option).call_deferred(EditorNode::SCENE_QUIT, true);
+	callable_mp(SceneTree::get_singleton(), &SceneTree::quit).call_deferred(p_exit_code);
 }
 
 void NativeExtensionEditor::_diagnostic_clicked(const Variant &p_meta) {

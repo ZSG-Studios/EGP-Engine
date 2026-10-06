@@ -8518,6 +8518,12 @@ EditorNode::EditorNode() {
 
 	// Detecting headless mode, that means the editor is running in command line.
 	cmdline_mode = (DisplayServer::get_singleton()->get_name() == "headless");
+	for (const String &argument : OS::get_singleton()->get_cmdline_user_args()) {
+		if (argument.begins_with("--cpp-")) {
+			cmdline_mode = true;
+			break;
+		}
+	}
 
 	Resource::_get_local_scene_func = _resource_get_edited_scene;
 

@@ -88,6 +88,7 @@ class NativeExtensionEditor : public VBoxContainer {
 	void _run_cli();
 	void _next_cli();
 	void _complete_operation();
+	void _quit_cli(int p_exit_code);
 
 protected:
 	static void _bind_methods();
