@@ -1,0 +1,103 @@
+    [Export] public Godot.Collections.Dictionary BoxCapsule { get; set; } = new();
+    [Export] public int BoxBefore { get; set; }
+    [Export] public int BoxAfter { get; set; }
+    [Export] public int BoxFailures { get; set; }
+    [Export] public int BoxHandoffs { get; set; }
+    [Export] public int BoxRestores { get; set; }
+    [Export] public int BoxChecks { get; set; }
+    [Export] public long BoxEntity { get; set; }
+    [Export] public long BoxClockBase { get; set; }
+    private EGP.Networking.NetBox3D? box;
+    private void RequireBox(bool condition) {
+        if (!condition) throw new System.InvalidOperationException("NetBox3D ownership self-test failed");
+        BoxChecks++;
+    }
+    private void RejectBox(Godot.Collections.Dictionary capsule) {
+        var saved = capsule?.Duplicate();
+        try { EGP.Networking.NetBox3D.ResumeAfterReload(capsule!); }
+        catch (System.ArgumentException) {
+            if (capsule != null && !capsule.RecursiveEqual(saved!))
+                throw new System.InvalidOperationException("Rejected adapter capsule changed");
+            BoxChecks++; return;
+        }
+        throw new System.InvalidOperationException("Invalid adapter capsule accepted");
+    }
+    private void CheckBoxInputs() {
+        RejectBox(null!); RejectBox(new());
+        using var scratch = new EGP.Networking.NetBox3D();
+        var reference = scratch.Native;
+        int oldHits = 0, newHits = 0;
+        scratch.BeforeStep += tick => oldHits++;
+        reference.EmitSignal("before_step", 1L);
+        RequireBox(oldHits == 1);
+        var capsule = scratch.DetachForReload();
+        var duplicate = capsule.Duplicate();
+        RequireBox(reference.GetSignalConnectionList("before_step").Count == 0);
+        reference.EmitSignal("before_step", 2L);
+        RequireBox(oldHits == 1);
+        try { scratch.Detach(); throw new System.InvalidOperationException("Detached adapter remained usable"); }
+        catch (System.ObjectDisposedException) { BoxChecks++; }
+        try { scratch.DetachForReload(); throw new System.InvalidOperationException("Second transfer accepted"); }
+        catch (System.ObjectDisposedException) { BoxChecks++; }
+        foreach (var key in new[] { "version", "adapter", "token" }) {
+            var missing = capsule.Duplicate(); missing.Remove(key); RejectBox(missing);
+            var wrong = capsule.Duplicate(); wrong[key] = key == "adapter" ? (Variant)1 : (Variant)false;
+            RejectBox(wrong);
+        }
+        var future = capsule.Duplicate(); future["version"] = 4294967297L; RejectBox(future);
+        var forged = capsule.Duplicate(); forged["token"] = "invalid"; RejectBox(forged);
+        using var foreign = new RefCounted();
+        var wrongClass = capsule.Duplicate(); wrongClass["adapter"] = foreign; RejectBox(wrongClass);
+        RequireBox(capsule.Count == 3);
+        using var restored = EGP.Networking.NetBox3D.ResumeAfterReload(capsule);
+        restored.BeforeStep += tick => newHits++;
+        RequireBox(reference.GetSignalConnectionList("before_step").Count == 1);
+        scratch.Dispose();
+        RequireBox(capsule.Count == 0 && GodotObject.IsInstanceValid(reference) && restored.Native == reference);
+        RejectBox(capsule); RejectBox(duplicate);
+        reference.EmitSignal("before_step", 3L);
+        RequireBox(oldHits == 1 && newHits == 1);
+    }
+    private void PrepareBox(Godot.Collections.Dictionary config) {
+        CheckBoxInputs();
+        var world = ClassDB.Instantiate("EGPBox3DWorld").AsGodotObject();
+        NetworkState["world"] = world;
+        if ((Error)world.Call("configure", 60, 4, 1, new Vector3(0, -9.8f, 0)).AsInt32() != Error.Ok
+            || (Error)world.Call("queue_create_box", 10000L, 1, new Vector3(0, 10000, 0), new Vector3(0.5f, 0.5f, 0.5f)).AsInt32() != Error.Ok
+            || (Error)world.Call("apply_queued_commands").AsInt32() != Error.Ok)
+            throw new System.InvalidOperationException("Adapter world setup failed");
+        config["simulation_fingerprint"] = world.Call("get_simulation_fingerprint");
+        box = new(); SubscribeBox();
+    }
+    private void SubscribeBox() {
+        box!.BeforeStep += tick => BoxBefore++;
+        box.AfterStep += tick => BoxAfter++;
+        box.Failed += error => BoxFailures++;
+    }
+    private void AttachBox() {
+        if (box!.Attach(ServerNode!, NetworkState["world"].AsGodotObject()) != Error.Ok)
+            throw new System.InvalidOperationException("Adapter attach failed");
+    }
+    private void StartBoxClock() => BoxClockBase = NetworkState["world"].AsGodotObject().Call("get_tick").AsInt64();
+    private void TrackBox(long entity) {
+        if (BoxEntity != 0) box!.Untrack(BoxEntity);
+        if (box!.Track(entity, 10000) != Error.Ok) throw new System.InvalidOperationException("Adapter track failed");
+        BoxEntity = entity;
+    }
+    private void TransferBox() {
+        if (box == null) return;
+        BoxCapsule = box.DetachForReload();
+        box.Dispose(); box = null; BoxHandoffs++;
+    }
+    private void RestoreBox() {
+        if (BoxCapsule.Count == 0) return;
+        box = EGP.Networking.NetBox3D.ResumeAfterReload(BoxCapsule);
+        SubscribeBox(); BoxRestores++;
+    }
+    public Godot.Collections.Dictionary GetBoxState() => new() {
+        ["adapter"] = box!.Native, ["world"] = NetworkState["world"], ["before"] = BoxBefore,
+        ["after"] = BoxAfter, ["failures"] = BoxFailures, ["handoffs"] = BoxHandoffs,
+        ["restores"] = BoxRestores, ["checks"] = BoxChecks, ["capsule_empty"] = BoxCapsule.Count == 0,
+        ["entity"] = BoxEntity, ["clock_offset"] = BoxClockBase
+    };
+    public void CloseBox() { box?.Dispose(); box = null; }

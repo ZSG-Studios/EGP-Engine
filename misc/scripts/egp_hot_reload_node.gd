@@ -26,7 +26,7 @@ func exchange() -> bool:
 	check(managed.ExchangeNodeMessages(peer, entity, baseline_sequence) == OK, "typed messages/input/packet send failed")
 	await wait_until(func():
 		var state: Dictionary = managed.GetNodeState()
-		return state.server_history.size() == baseline_sequence and state.client_history.size() == baseline_sequence and state.inputs == baseline_sequence and state.server_packets == baseline_sequence and state.client_packets == baseline_sequence)
+		return state.server_history.size() == baseline_sequence and state.client_history.size() == baseline_sequence and state.inputs == baseline_sequence and state.server_packets == baseline_sequence and state.client_packets == baseline_sequence and native.network_hits == 3 * baseline_sequence and managed.NetworkHits == 3 * baseline_sequence)
 	var tick: int = server.get_statistics().tick
 	await wait_until(func(): return server.get_statistics().tick >= tick + 8)
 	var state: Dictionary = managed.GetNodeState()

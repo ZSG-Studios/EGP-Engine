@@ -13,6 +13,7 @@ import time
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+from egp_hot_reload_box3d_evidence import box3d_failure
 from egp_hot_reload_node_evidence import node_failure, node_lifecycle_failure, node_reentry_failure
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -422,6 +423,11 @@ def main():
         help="Exercise high-level NetNode codec, typed events, ownership and tree lifecycle across reload",
     )
     parser.add_argument(
+        "--network-csharp-box3d",
+        action="store_true",
+        help="Transfer public NetBox3D adapter/world/body ownership during high-level node reload",
+    )
+    parser.add_argument(
         "--network-csharp-facade",
         action="store_true",
         help="Transfer public NetSession ownership and reconnect managed events across assembly reload",
@@ -504,6 +510,8 @@ def main():
         parser.error("--network-csharp-node requires --network-live-reload or --network-recovery")
     if args.network_csharp_node and (args.network_csharp_facade or args.network_physics):
         parser.error("--network-csharp-node requires a separate fixture from low-level facade/physics reload")
+    if args.network_csharp_box3d and not args.network_csharp_node:
+        parser.error("--network-csharp-box3d requires --network-csharp-node")
     probe_source = PROBE
     if args.network_csharp_node:
         members = (ROOT / "misc/scripts/egp_hot_reload_node.cs.txt").read_text(encoding="utf-8")
@@ -517,6 +525,27 @@ def main():
         ).replace(
             "AfterCount++;",
             "AfterCount++; if (ServerNode != null && ClientNode != null) { SubscribeNodes(); NodeRestores++; }",
+        )
+    if args.network_csharp_box3d:
+        members = (ROOT / "misc/scripts/egp_hot_reload_box3d.cs.txt").read_text(encoding="utf-8")
+        probe_source = probe_source.replace("    [Signal]", members + "    [Signal]")
+        probe_source = probe_source.replace(
+            "        CheckNodeLifecycle();", "        PrepareBox(config); CheckNodeLifecycle();"
+        )
+        probe_source = probe_source.replace(
+            '        return new() { ["server"] = ServerNode.NativeSession!',
+            '        AttachBox(); return new() { ["server"] = ServerNode.NativeSession!',
+            1,
+        )
+        probe_source = probe_source.replace("BeforeCount++;", "BeforeCount++; TransferBox();")
+        probe_source = probe_source.replace("AfterCount++;", "AfterCount++; RestoreBox();")
+        probe_source = probe_source.replace(
+            'public Error HostNode(int port) => ServerNode!.Host(port, "127.0.0.1");',
+            'public Error HostNode(int port) { StartBoxClock(); return ServerNode!.Host(port, "127.0.0.1"); }',
+        )
+        probe_source = probe_source.replace(
+            'public long SpawnNode(long peer, int sequence) => ServerNode!.Spawn(17, new() { ["sequence"] = sequence, ["blob"] = new byte[] { 0, 255, 42 } }, peer);',
+            'public long SpawnNode(long peer, int sequence) { var entity = ServerNode!.Spawn(17, new() { ["sequence"] = sequence, ["blob"] = new byte[] { 0, 255, 42 } }, peer); TrackBox(entity); return entity; }',
         )
     if args.network_csharp_facade:
         probe_source = probe_source.replace("    [Signal]", FACADE_MEMBERS + "    [Signal]")
@@ -567,6 +596,12 @@ def main():
         paths += list((ROOT / "modules/egp_net/csharp").glob("*.cs")) + list(
             (ROOT / "modules/egp_net/gdscript").glob("*.gd")
         )
+        receipt["fixture_sha256"].update({str(p.relative_to(ROOT)): digest(p) for p in paths})
+    if args.network_csharp_box3d:
+        paths = [
+            ROOT / "misc/scripts" / name
+            for name in ("egp_hot_reload_box3d.cs.txt", "egp_hot_reload_box3d.gd", "egp_hot_reload_box3d_evidence.py")
+        ]
         receipt["fixture_sha256"].update({str(p.relative_to(ROOT)): digest(p) for p in paths})
     if args.network_csharp_facade:
         for name in ("NetApi.cs", "NetSessionSignals.cs"):
@@ -725,6 +760,14 @@ def main():
                 destination.mkdir(parents=True, exist_ok=True)
                 for path in (ROOT / "modules/egp_net" / folder).glob(pattern):
                     shutil.copyfile(path, destination / path.name)
+        if args.network_csharp_box3d:
+            node = (ROOT / "misc/scripts/egp_hot_reload_node.gd").read_text(encoding="utf-8")
+            node = node.replace(
+                'var retained := {"server": server, "client": client}',
+                'var retained := {"server": server, "client": client, "world": managed.GetBoxState().world}',
+            )
+            (project / "network_node.gd").write_text(node, encoding="utf-8")
+            shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_box3d.gd", project / "network.gd")
         if args.network_physics:
             (project / "physics_enabled").write_text("enabled", encoding="utf-8")
         if args.network_csharp_facade:
@@ -1163,6 +1206,9 @@ def main():
                     node_failure(proofs, False, {}) if args.network_csharp_node else network_recovery_failure(proofs)
                 )
                 require(failure is None, failure or "Network reload proof failed")
+                if args.network_csharp_box3d:
+                    failure = box3d_failure(proofs, live=args.network_live_reload)
+                    require(failure is None, failure or "Public physics adapter reload proof failed")
                 if args.network_physics:
                     failure = network_physics_failure(proofs, live=False)
                     require(failure is None, failure or "Physics checkpoint reload proof failed")
@@ -1177,6 +1223,7 @@ def main():
                     "physics": args.network_physics,
                     "csharp_facade": args.network_csharp_facade,
                     "csharp_node": args.network_csharp_node,
+                    "csharp_box3d": args.network_csharp_box3d,
                     "scope": "Windows Debug editor/game, one authenticated local client; native session references in serialized dictionaries and dynamic signal callbacks. Explicit admission after a stopped-authority fault; no physics checkpoint, concurrent reload or exported-runtime claim.",
                 }
             if args.network_live_reload:
@@ -1232,6 +1279,9 @@ def main():
                 if args.network_csharp_facade:
                     failure = facade_failure(proofs, live=True)
                     require(failure is None, failure or "Managed facade live reload proof failed")
+                if args.network_csharp_box3d:
+                    failure = box3d_failure(proofs, live=args.network_live_reload)
+                    require(failure is None, failure or "Public physics adapter reload proof failed")
                 if args.network_physics:
                     failure = network_physics_failure(proofs, live=True)
                     require(failure is None, failure or "Live physics reload proof failed")
@@ -1240,6 +1290,7 @@ def main():
                     "physics": args.network_physics,
                     "csharp_facade": args.network_csharp_facade,
                     "csharp_node": args.network_csharp_node,
+                    "csharp_box3d": args.network_csharp_box3d,
                     "proofs": proofs,
                     "phases": [
                         "initial",
@@ -1323,6 +1374,7 @@ def main():
                     "physics_checkpoint.bin",
                 )
                 or (p.suffix == ".cs" and "addons" in p.relative_to(project).parts)
+                or (p.suffix == ".gd" and args.network_csharp_box3d)
                 or (p.suffix == ".dll" and "extensions" in p.relative_to(project).parts)
             )
         }

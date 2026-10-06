@@ -360,3 +360,40 @@ own format. Native replication accepts opaque bytes; the Dictionary codec and
 scene factories belong to the GDScript helper. Native C++ integrations use
 `egp::net::Session` from `net_core.h` and must keep the Session alive throughout
 a call and its callbacks.
+
+
+C# `NetBox3D` can transfer ownership across a managed assembly reload using
+`DetachForReload()` and `ResumeAfterReload()`, like `NetSession`. Keep the capsule
+in an exported Dictionary on your `ISerializationListener` owner:
+
+```csharp
+[Export] public Godot.Collections.Dictionary PhysicsReload { get; set; } = new();
+private NetBox3D? physics;
+
+public void OnBeforeSerialize()
+{
+    if (physics == null) return;
+    PhysicsReload = physics.DetachForReload();
+    physics.Dispose(); // The transferred adapter stays attached.
+    physics = null;
+}
+
+public void OnAfterDeserialize()
+{
+    if (PhysicsReload.Count == 0) return;
+    physics = NetBox3D.ResumeAfterReload(PhysicsReload);
+    physics.Failed += ReportPhysicsFailure; // Resubscribe your application events.
+}
+```
+
+The capsule retains the same GDScript adapter, its attached codec/world and its
+entity-to-body mappings. Preserve the `NetNode` owner through its own serialization
+hooks too. A capsule is single-use, contains local object references and does not
+serialize to disk or over the network. Invalid or consumed capsules are rejected
+without mutation. A detached wrapper's methods throw `ObjectDisposedException`;
+its later disposal does not detach the resumed owner. Disposing the resumed owner
+normally detaches the adapter; the caller still owns the world and network node.
+After closing a native session, explicitly reconfigure/admit and map each new
+entity to its stable body ID. Numeric entities belong to their issuing session.
+This ownership transfer does not implement automatic client physics rollback or
+restore arbitrary application event closures.
