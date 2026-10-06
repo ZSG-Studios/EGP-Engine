@@ -1,5 +1,11 @@
 # EGP integration and completion loop
 
+Automation stopped on 2026-10-06 at the user's request to cancel and remove all
+GitHub Actions. Repository Actions are disabled, workflow and local action
+definitions are removed, and the recurring integration automation is deleted.
+The acceptance criteria and historical receipts below remain as work records;
+this cancellation does not establish integration completion.
+
 The loop owns the combined EGP result, including handoffs and unfinished work from
 other EGP chats and worktrees. Resume every 5 minutes and finish concrete acceptance
 items promptly. A check is complete only when its recorded evidence establishes the
