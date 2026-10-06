@@ -60,14 +60,28 @@ func run_command(command: Dictionary) -> void:
 			result.build_result = panel.get_last_build_result()
 		"play":
 			EditorInterface.play_main_scene()
-		"reload", "sample":
+		"diagnostics":
+			var messages: Array[String] = []
+			for tree in get_tree().root.find_children("*", "Tree", true, false):
+				var items: Array = []
+				if tree.get_root():
+					items.append(tree.get_root())
+				while not items.is_empty():
+					var item = items.pop_back()
+					for column in tree.columns:
+						var text: String = item.get_text(column)
+						if text.contains(".NET:"):
+							messages.append(text)
+					items.append_array(item.get_children())
+			result.diagnostics = messages
+		"reload", "sample", "drop", "hold":
 			var sessions := debugger.get_sessions()
 			result.passed = not sessions.is_empty() and sessions[0].is_active()
 			if result.passed:
 				if command.action == "reload":
 					sessions[0].send_message("reload_all_scripts", [])
 				else:
-					sessions[0].send_message("egp_reload:sample", [command.id])
+					sessions[0].send_message("egp_reload:" + command.action, [command.id])
 		"close":
 			for session in debugger.get_sessions():
 				if session.is_active():

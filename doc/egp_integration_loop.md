@@ -42,9 +42,9 @@ because these chats exist.
 | Advanced networking | Field deltas, bounded bandwidth/queues, input acknowledgments, lag compensation, scale/soak, malicious input rejection | Implementation/qualification gaps remain |
 | Network lab | Dedicated server, listen host, N clients, visible windows, latency/jitter/loss, directional simulation, reconnect, logs/watchdog/cleanup | Native host and packaged Mono Debug host/Release dedicated server pass simultaneous visible clients, WAN simulation and reconnect; broader matrix remains |
 | Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Pending |
-| C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Handoff/tip consolidated; final matching SDK/cache/editor controls and mixed-language Debug/Release exports pass; running-game reload remains |
-| C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Partial editor smoke exists; full acceptance pending |
-| C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Hooks exist; current runtime qualification pending |
+| C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Matching SDK/editor controls, mixed-language exports and live compatible Debug reload pass on Windows; incompatible ABI/restart recovery and other platforms remain |
+| C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Two live Debug rebuilds preserve existing IDs, property state, callables and signals; failed compile retains published code; invalid-library and incompatible-class recovery/soak remain |
+| C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Five successful live reloads including corrupted-DLL and blocked-unload recovery preserve instances, properties and events; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
 | Export/platform | Relocated Debug/Release games with C#/GDScript/C++ and Box physics/networking; platform-specific binaries and missing-binary diagnostics | Combined Windows and platform matrix pending |
 | Performance | Identical-scenes upstream comparison; p95/p99, CPU/GPU/memory/allocations, server tick, bandwidth and long sessions | No AAA readiness claim |
 
@@ -429,3 +429,79 @@ undocumented EGPNetSession methods and eight new server methods in each dimensio
 (see `.build/integration-missing-method-docs.json`, excluding normal property
 accessors), native 2D capability/event fixtures, signature/default audits, fresh
 development-package cache identity and advanced network/scale/platform gates.
+
+### Live C++/C# game reload and recovery qualification
+
+Engine source is frozen at `981a8ab945` in
+`.build/integration-runtime-reload-build/source.json`. Commits `34407e1fac`,
+`82b87b73cb` and `981a8ab945` add the runtime opt-in, Debug builds during gameplay,
+debugger notifications and idle native reload, feature-override consistency,
+unload-failure lifecycle reset and retained managed events across failed loads.
+Later fixture/documentation changes do not change engine code.
+
+Actual editor SHA256 is
+`da7b45aadf7c25890bcdf59f1ab3e1c187fe8618c1ee26046b186e19012dd1c5`.
+The console wrapper SHA256 is
+`c68c175161d3aae3056e487bf7eeb2929dacd75f7f17f781d305c9f142761190`.
+API SHA256 remains `e84e140b923451849e88aab8300021fd9d32f95c31825bb6d7e25a4235953271`;
+existing SDK/cache `4bc13481314e7023` remains an exact match.
+
+```powershell
+$engine = "C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe"
+$packages = "C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/GodotSharp/Tools/nupkgs"
+python misc/scripts/validate_egp_hot_reload.py --engine $engine --packages $packages --output .build/integration-runtime-reload-unload-recovery --feature-override --assembly-recovery --unload-recovery
+python misc/scripts/validate_egp_hot_reload.py --engine $engine --packages $packages --output .build/integration-runtime-reload-default --disable-runtime
+python misc/scripts/validate_box2d_scene.py --engine $engine --output .build/integration-runtime-reload-box2d-scenes
+python misc/scripts/validate_box3d_scene.py --engine $engine --output .build/integration-runtime-reload-box3d-scenes
+```
+
+- `.build/integration-runtime-reload-unload-recovery/1791271539030868900/receipt.json`
+  passes five successful managed reloads and two live native Debug rebuilds in a
+  separate game through the actual editor debugger. Existing IDs, scalar/vector
+  properties, typed node references, parents, cached callables, native signals and
+  managed events survive. Ready runs once; serialization hooks run on reload.
+  Invalid C++/C# builds retain working code; a no-change command does not reload.
+  Corrupted-DLL and a thread blocking assembly unload retain placeholder state
+  and recover after repair/release. Deleting a placeholder during failure is
+  covered. Unload/load/recovery diagnostics are verified in the debugger panel.
+  Managed runtime DLL hashes are checked before and after the fixture.
+- Default non-collectible game behavior passes at
+  `.build/integration-runtime-reload-default/1791271113974963800/receipt.json`.
+  Feature overrides plus failed-load recovery also pass at
+  `.build/integration-runtime-reload-feature-override/1791271198987931200/receipt.json`.
+- Final paired capture is
+  `.build/integration-runtime-reload-recovery-api/1791271103739780900/receipt.json`.
+  The previous API audit command with this capture and
+  `--output .build/integration-runtime-reload-recovery-api-audit.json` passes
+  77 classes and 371 documented enum constants against exact SDK/compiled C#.
+- `.build/integration-runtime-reload-net-languages/receipt.json` passes the full
+  preceding trilingual command with that output directory: 59 assertions,
+  separate clients in all three languages, cold imports and relocated Debug and
+  optimized Release exports. Templates retain their prior qualified `bd4dfee3`
+  engine identities; current managed export artifacts are requalified with both.
+  Runtime reload remains an editor-build capability.
+- Box2D passes all 14 runs and exact one/four-worker traces. Box3D passes all 28
+  scene cases on this exact editor. Receipts are under the two directories above.
+- `.build/canonical-runtime-reload-artifacts.json` verifies 82 editor/managed
+  files in primary `bin/`; 12 changed files were backed up before replacement.
+  `bin/godot.windows.editor.dev.x86_64.mono.console.exe --headless --path .build/integration-runtime-reload-net-languages/project --max-fps 60`
+  passes 59 assertions after installation (exec evidence chunk `8c1e84`).
+
+Preserved failure receipts include the pre-fix non-collectible opt-in baseline
+at `.build/integration-runtime-reload-baseline/1791270128778519300`, the live C++
+build refusal at `.build/integration-runtime-reload-positive/1791270483624737200`,
+lost managed subscription after DLL repair at
+`.build/integration-runtime-reload-assembly-recovery/1791270884321767900`, and
+the unload fixture's transient Windows command-file sharing failure and initial
+stdout-only diagnostic assertion under `.build/integration-runtime-reload-unload-recovery`.
+Command publication now retries that sharing violation for at most two seconds;
+all build, game and reload watchdogs remain bounded.
+
+Seven-tree/113-ref inventory and current tracked patches/untracked file hashes:
+`.build/integration-takeover/runtime-reload-1791270788583469900/inventory.json`.
+No open EGP PR was found; foreign handoffs remain preserved. Finish publication
+and record its verified remote SHA before marking this increment published.
+All-feature acceptance remains open: incompatible native ABI/class changes and
+invalid-library recovery, wider script/state and reload-soak cases, native 2D
+capability events, missing public method/signature/default documentation, unique
+development-package identity, and advanced networking/platform/performance gates.

@@ -26,6 +26,15 @@ public partial class ReloadProbe : Node, ISerializationListener {
     public int Version() => VERSION;
     public bool Collectible() => AssemblyLoadContext.GetLoadContext(GetType().Assembly)!.IsCollectible;
     public void Fire() => EmitSignal(SignalName.Pulse, 1);
+    public void HoldRoot(string path) {
+        var thread = new System.Threading.Thread(() => {
+            System.IO.File.WriteAllText(path + ".started", "started");
+            while (!System.IO.File.Exists(path)) System.Threading.Thread.Sleep(10);
+            System.IO.File.WriteAllText(path + ".finished", "finished");
+        });
+        thread.IsBackground = true;
+        thread.Start();
+    }
     public void OnBeforeSerialize() { BeforeCount++; }
     public void OnAfterDeserialize() { AfterCount++; }
 }
@@ -51,9 +60,19 @@ def main():
     parser.add_argument("--expect-disabled", action="store_true", help="Record the pre-fix opt-in rejection")
     parser.add_argument("--disable-runtime", action="store_true", help="Verify the default non-collectible player")
     parser.add_argument(
+        "--feature-override", action="store_true", help="Enable runtime reload through the editor feature override"
+    )
+    parser.add_argument(
         "--assembly-recovery", action="store_true", help="Also reject and recover a corrupted managed assembly"
     )
+    parser.add_argument(
+        "--unload-recovery",
+        action="store_true",
+        help="Also recover after a live application thread prevents assembly unload",
+    )
     args = parser.parse_args()
+    if args.disable_runtime and args.feature_override:
+        parser.error("--disable-runtime and --feature-override are mutually exclusive")
     output = args.output.resolve() / str(time.time_ns())
     project = output / "project"
     addon = project / "addons/reload_fixture"
@@ -63,6 +82,8 @@ def main():
     env["NUGET_PACKAGES"] = str(output / "nuget-packages")
     options = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
     receipt = {"passed": False, "engine": str(engine), "engine_sha256": digest(engine), "steps": [], "samples": []}
+    runtime_files = [engine.parent / "GodotSharp/Api/Debug" / name for name in ("GodotSharp.dll", "GodotPlugins.dll")]
+    receipt["managed_runtime_sha256"] = {str(path): digest(path) for path in runtime_files}
     receipt["scope"] = (
         "Headless editor and separate running game; live objects, properties, callables, signals, compile recovery. No exported-template or arbitrary-ABI-change claim."
     )
@@ -126,7 +147,16 @@ def main():
         # Replace atomically so the editor never parses a partial JSON document.
         temporary = project / "command.tmp"
         temporary.write_text(json.dumps({"id": request_id, "action": action}), encoding="utf-8")
-        temporary.replace(project / "command.json")
+        deadline = time.monotonic() + 2
+        while True:
+            try:
+                temporary.replace(project / "command.json")
+                break
+            except PermissionError:
+                # Windows readers may briefly hold a file without delete sharing.
+                if time.monotonic() >= deadline:
+                    raise
+                time.sleep(0.05)
         response = wait_json(project / "response.json", lambda x: x["id"] == request_id, timeout)
         require(response["passed"], action + " command failed")
         return response
@@ -172,7 +202,13 @@ def main():
     try:
         (project / "project.godot").write_text(
             'config_version=5\n[application]\nconfig/name="ReloadFixture"\nrun/main_scene="res://main.tscn"\n[dotnet]\nproject/assembly_name="ReloadFixture"\n[debug]\nhot_reload/enable_runtime='
-            + ("false" if args.disable_runtime else "true")
+            + (
+                "false\nhot_reload/enable_runtime.editor=true"
+                if args.feature_override
+                else "false"
+                if args.disable_runtime
+                else "true"
+            )
             + '\n[editor]\nrun/main_run_args="--headless --max-fps 60 --ignore-error-breaks"\n[editor_plugins]\nenabled=PackedStringArray("res://addons/reload_fixture/plugin.cfg")\n',
             encoding="utf-8",
         )
@@ -287,6 +323,11 @@ def main():
                     and fallback["cs_counter"] == 87,
                     "Failed load lost placeholder identity or state",
                 )
+                command("drop")
+                fallback = sample()
+                require(
+                    fallback.get("placeholder") and not fallback["extra_alive"], "Deleted placeholder remained alive"
+                )
                 time.sleep(1.1)
                 assembly.write_bytes(backup)
                 command("reload")
@@ -294,14 +335,51 @@ def main():
                 state = sample()
                 verify(state, 3, previous, cs_version=4)
                 receipt["assembly_recovery"] = True
-            receipt["reloads"] = 3
+                previous = state
+            if args.unload_recovery:
+                command("hold")
+                deadline = time.monotonic() + 10
+                while not (project / "release-root.started").exists() and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                require((project / "release-root.started").exists(), "Managed application thread did not start")
+                (project / "ReloadProbe.cs").write_text(PROBE.replace("VERSION", "5"), encoding="utf-8")
+                run("managed-version-5", ["dotnet", "build", "--nologo", "-v", "minimal"])
+                command("reload")
+                time.sleep(2)
+                fallback = sample()
+                require(
+                    fallback.get("placeholder") and fallback["cs_counter"] == 87,
+                    "Unload failure lost placeholder state",
+                )
+                (project / "release-root").write_text("release", encoding="utf-8")
+                deadline = time.monotonic() + 10
+                while not (project / "release-root.finished").exists() and time.monotonic() < deadline:
+                    time.sleep(0.05)
+                require((project / "release-root.finished").exists(), "Managed application thread did not stop")
+                command("reload")
+                time.sleep(2)
+                state = sample()
+                verify(state, 3, previous, cs_version=5)
+                diagnostics = command("diagnostics")["diagnostics"]
+                receipt["debugger_diagnostics"] = diagnostics
+                require(
+                    any(".NET: Failed to unload assemblies." in text for text in diagnostics),
+                    "Unload failure debugger diagnostic missing",
+                )
+                receipt["unload_recovery"] = True
+            receipt["reloads"] = 3 + int(args.assembly_recovery) + int(args.unload_recovery)
         command("close")
         require(process.wait(timeout=60) == 0, "Editor/game teardown failed")
         require(digest(engine) == receipt["engine_sha256"], "Input engine changed during validation")
+        require(
+            all(digest(Path(path)) == expected for path, expected in receipt["managed_runtime_sha256"].items()),
+            "Managed runtime changed during validation",
+        )
         receipt["passed"] = True
     except (OSError, RuntimeError, KeyError, subprocess.TimeoutExpired) as error:
         receipt["error"] = str(error)
     finally:
+        (project / "release-root").write_text("release", encoding="utf-8")
         if process is not None:
             terminate(process)
         if stream is not None:

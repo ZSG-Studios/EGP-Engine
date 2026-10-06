@@ -3,6 +3,7 @@ extends Node
 var native: Node
 var managed: Node
 var receiver: Node
+var extra_managed: Node
 var cpp_callable: Callable
 var cs_callable: Callable
 var cpp_hits := 0
@@ -24,12 +25,22 @@ func _ready() -> void:
 	managed.Reference = receiver
 	managed.Pulse.connect(func(_value): cs_hits += 1)
 	receiver.Listen(managed)
+	extra_managed = load("res://ReloadProbe.cs").new()
+	add_child(extra_managed)
+	receiver.Listen(extra_managed)
 	cs_callable = Callable(managed, "Version")
 	# An instance freed before reload must not be reconstructed.
 	var temporary = load("res://ReloadProbe.cs").new()
 	temporary.free()
 
 func _capture(message: String, data: Array) -> bool:
+	if message == "hold":
+		managed.HoldRoot(ProjectSettings.globalize_path("res://release-root"))
+		return true
+	if message == "drop":
+		extra_managed.free()
+		extra_managed = null
+		return true
 	if message == "finish":
 		get_tree().quit.call_deferred(0)
 		return true
@@ -39,6 +50,7 @@ func _capture(message: String, data: Array) -> bool:
 		EngineDebugger.send_message("egp_reload:state", [{
 			"request": data[0], "placeholder": true,
 			"cs_id": str(managed.get_instance_id()), "cs_counter": managed.get("Counter"),
+			"extra_alive": is_instance_valid(extra_managed),
 		}])
 		return true
 	native.emit_signal("pulse", 1)

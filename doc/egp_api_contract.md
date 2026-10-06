@@ -79,3 +79,12 @@ changes, native object identities, scalar/vector/node-reference state, cached
 callables, native and managed event subscriptions, serialization callbacks and
 failed-compile recovery. This scope does not guarantee recovery from arbitrary
 class-layout changes, active application threads or static state.
+
+Use `--assembly-recovery --unload-recovery` to exercise a corrupted project DLL
+and a managed thread that prevents assembly unload. After a failed load, native
+placeholders retain properties and serialized event subscriptions until a valid
+assembly can be loaded. Deleting a placeholder releases its pending event state.
+The fixture releases its own thread and checks recovery diagnostics in the editor
+debugger panel. Application threads still require application-controlled shutdown.
+Use `--disable-runtime` for the default non-collectible player and
+`--feature-override` to check the editor feature override of the runtime setting.
