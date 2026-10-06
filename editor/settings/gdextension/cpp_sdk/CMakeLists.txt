@@ -16,10 +16,13 @@ else()
     set(EGP_CPP_SCOPE PUBLIC)
     set_target_properties(egp_godot_cpp PROPERTIES POSITION_INDEPENDENT_CODE ON CXX_VISIBILITY_PRESET hidden)
     if(EGP_CPP_CACHE)
-        set_target_properties(egp_godot_cpp PROPERTIES
-            ARCHIVE_OUTPUT_DIRECTORY "${EGP_CPP_CACHE_ROOT}/${CMAKE_BUILD_TYPE}"
-            ARCHIVE_OUTPUT_DIRECTORY_DEBUG "${EGP_CPP_CACHE_ROOT}/Debug"
-            ARCHIVE_OUTPUT_DIRECTORY_RELEASE "${EGP_CPP_CACHE_ROOT}/Release")
+        # Compile/link in this project's build directory. Concurrent cold builds
+        # must never link directly into the same shared archive.
+        add_custom_command(TARGET egp_godot_cpp POST_BUILD
+            COMMAND "${CMAKE_COMMAND}" "-DSOURCE_FILE=$<TARGET_FILE:egp_godot_cpp>"
+                "-DDESTINATION=${EGP_CPP_CACHE_ROOT}/$<CONFIG>/$<TARGET_FILE_NAME:egp_godot_cpp>"
+                -P "${CMAKE_CURRENT_SOURCE_DIR}/tools/publish_cache.cmake"
+            VERBATIM)
     endif()
 endif()
 target_include_directories(egp_godot_cpp ${EGP_CPP_SCOPE} "${CMAKE_CURRENT_SOURCE_DIR}/include" "${CMAKE_CURRENT_SOURCE_DIR}/gen/include")

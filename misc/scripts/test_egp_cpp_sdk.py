@@ -1,8 +1,11 @@
 """Regression check for SDK packaging inside Godot's shared Python build environment."""
 
 import importlib.util
+import shutil
 import struct
+import subprocess
 import sys
+import tempfile
 import types
 import unittest
 from pathlib import Path
@@ -17,6 +20,32 @@ SPEC.loader.exec_module(SDK)
 
 
 class BundledSDKTest(unittest.TestCase):
+    def test_concurrent_cache_publication(self):
+        cmake = shutil.which("cmake")
+        if not cmake:
+            self.skipTest("CMake is required for the publication concurrency check")
+        publisher = ROOT / "editor/settings/gdextension/cpp_sdk/tools/publish_cache.cmake"
+        with tempfile.TemporaryDirectory() as directory:
+            folder = Path(directory)
+            destination = folder / "shared/library.lib"
+            payloads = [b"a" * (4 * 1024 * 1024), b"b" * (4 * 1024 * 1024)]
+            processes = []
+            for index, payload in enumerate(payloads):
+                source = folder / f"source-{index}.lib"
+                source.write_bytes(payload)
+                processes.append(
+                    subprocess.Popen(
+                        [cmake, f"-DSOURCE_FILE={source}", f"-DDESTINATION={destination}", "-P", str(publisher)],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                    )
+                )
+            for process in processes:
+                output, _ = process.communicate(timeout=30)
+                self.assertEqual(process.returncode, 0, output.decode(errors="replace"))
+            self.assertIn(destination.read_bytes(), payloads)
+            self.assertFalse(destination.with_suffix(".lib.tmp").exists())
+
     def test_packaging_with_conflicting_engine_generator(self):
         old_module = sys.modules.get("make_interface_header")
         engine_generator = types.ModuleType("make_interface_header")

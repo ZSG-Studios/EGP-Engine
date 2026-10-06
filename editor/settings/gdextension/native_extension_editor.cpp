@@ -222,6 +222,7 @@ Error NativeExtensionEditor::build_extension(const String &p_name, bool p_releas
 bool NativeExtensionEditor::_start_process(const List<String> &p_arguments) {
 	Dictionary process = OS::get_singleton()->execute_with_pipe(process_executable, p_arguments, false);
 	if (!process.has("pid")) {
+		_append_line(vformat(TTR("Could not start %s. Install the toolchain or set a valid CMake executable path."), process_executable));
 		last_build_result = -2;
 		_set_busy(false);
 		return false;
@@ -412,6 +413,9 @@ String NativeExtensionEditor::_find_cmake() const {
 	}
 	if (FileAccess::exists("/opt/homebrew/bin/cmake")) {
 		return "/opt/homebrew/bin/cmake";
+	}
+	if (FileAccess::exists("/usr/local/bin/cmake")) {
+		return "/usr/local/bin/cmake";
 	}
 #endif
 	return "cmake";

@@ -13,9 +13,12 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--editor", required=True)
     parser.add_argument("--debug-template", required=True)
-    parser.add_argument("--release-template", required=True)
+    parser.add_argument("--release-template")
+    parser.add_argument("--debug-only", action="store_true")
     parser.add_argument("--output", default=".build/cpp-qualification")
     args = parser.parse_args()
+    if not args.debug_only and not args.release_template:
+        parser.error("--release-template is required unless --debug-only is selected")
     root = Path(__file__).resolve().parents[2]
     output = Path(args.output).resolve()
     output.mkdir(parents=True, exist_ok=True)
@@ -88,7 +91,7 @@ func _ready():
         marker="EGP_CPP_GAME_PASSED",
     )
 
-    templates = [Path(args.debug_template).resolve(), Path(args.release_template).resolve()]
+    templates = [Path(args.debug_template).resolve(), Path(args.release_template or args.debug_template).resolve()]
     if host == "Darwin":
         archive = output / "macos-templates.zip"
         with zipfile.ZipFile(archive, "w", zipfile.ZIP_DEFLATED) as package:
@@ -105,7 +108,7 @@ func _ready():
         f'[preset.0]\nname="Host"\nplatform="{export_platform}"\nrunnable=true\nexport_filter="all_resources"\n[preset.0.options]\n{options}',
         encoding="utf-8",
     )
-    for config in ("debug", "release"):
+    for config in ("debug",) if args.debug_only else ("debug", "release"):
         folder = output / config
         folder.mkdir(exist_ok=True)
         game = folder / ("CppSmoke.exe" if host == "Windows" else "CppSmoke.app" if host == "Darwin" else "CppSmoke")

@@ -7,7 +7,11 @@ if [ "$(uname -s)" = Darwin ]; then
         exit 1
     fi
     if ! command -v cmake >/dev/null 2>&1 && [ ! -x /Applications/CMake.app/Contents/bin/cmake ]; then
-        if command -v brew >/dev/null 2>&1; then
+        if [ -x /opt/homebrew/bin/brew ]; then
+            /opt/homebrew/bin/brew install cmake
+        elif [ -x /usr/local/bin/brew ]; then
+            /usr/local/bin/brew install cmake
+        elif command -v brew >/dev/null 2>&1; then
             brew install cmake
         else
             open https://cmake.org/download/
