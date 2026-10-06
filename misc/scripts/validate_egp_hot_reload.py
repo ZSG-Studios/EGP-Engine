@@ -457,6 +457,9 @@ def main():
                 source_path.write_text(changed_base, encoding="utf-8")
                 require(command("build", 900)["build_result"] == 0, "Changed-base build failed")
                 time.sleep(2)
+                # The editor withholds automatic game notification on NEEDS_RESTART.
+                # Force this unsafe change in the fixture to exercise game recovery.
+                require(sample("reload-native")["status"] == 4, "Changed-base reload did not report NEEDS_RESTART")
                 fallback = sample()
                 require(
                     fallback.get("native_unavailable")
@@ -489,6 +492,7 @@ def main():
                 source_path.write_text(removed_class, encoding="utf-8")
                 require(command("build", 900)["build_result"] == 0, "Removed-class build failed")
                 time.sleep(2)
+                require(sample("reload-native")["status"] == 4, "Removed-class reload did not report NEEDS_RESTART")
                 fallback = sample()
                 require(
                     fallback.get("native_unavailable")
