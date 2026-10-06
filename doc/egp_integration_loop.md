@@ -41,7 +41,7 @@ because these chats exist.
 | Networking | Encrypted admission, account/peer/entity identities, authority, ownership, interest, lifecycle, reconnect and backpressure | Native/language fixtures, matching-budget 64-entity fairness, bounded receive bursts and eight encrypted WAN clients with changing 4096-byte states pass; baseline, interest, revocation and reconnect are covered; larger worlds, peak load and soak remain |
 | Advanced networking | Field deltas, bounded bandwidth/queues, input acknowledgments, lag compensation, scale/soak, malicious input rejection | Implementation/qualification gaps remain |
 | Network lab | Dedicated server, listen host, N clients, visible windows, latency/jitter/loss, directional simulation, reconnect, logs/watchdog/cleanup | Native host and packaged Mono Debug host/Release dedicated server pass simultaneous visible clients, WAN simulation and reconnect; broader matrix remains |
-| Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Packaged Debug graceful and Release abrupt dedicated-server replacement pass with three persistent visible clients under WAN impairment; eight-second headless outage passes; selected-client catch-up rejection/fresh admission/ownership recovery passes in editor and packaged Debug host/Release dedicated WAN runs; broader controls/scale/soak remain |
+| Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Packaged Debug graceful and Release abrupt dedicated-server replacement pass with three persistent visible clients under WAN impairment; eight-second headless outage passes; single and repeated selected-client catch-up rejection/fresh admission/ownership recovery passes in editor and packaged Debug host/Release dedicated WAN runs; broader controls/scale/soak remain |
 | C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Matching SDK/editor controls, mixed-language exports, dynamic signature changes and rejected hierarchy/class repair pass on Windows; six cached instance/static call paths and nine return kinds now pass on Windows Debug SDK; arbitrary ABI changes and other platforms remain |
 | C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Two live Debug rebuilds preserve existing IDs, property state, callables and signals; failed compile retains published code; Missing/invalid DLL recovery and rejected base/extension-parent/ancestor/class-removal repair preserve extension and editable parent state; cached binding failure/default-return and compatible repair checks now pass; arbitrary ABI changes and soak remain |
 | C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Six combined native/managed reloads including corrupted-DLL and blocked-unload recovery preserve instances, properties and events; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
@@ -1407,6 +1407,105 @@ Next clock/recovery gates: repeated client stalls, authoritative server clock
 rejection and explicit recovery, longer outages and physics rollback/state restore.
 Editor controls, wider mixed-language scenarios, larger worlds, peak memory/load,
 soak, platform/physics parity, arbitrary ABI/concurrent reload, broader C# state,
+lean server/default package identity, production authentication/persistence/gameplay
+and performance remain open. The loop stays ACTIVE; full feature completion and
+AAA readiness are not claimed.
+
+## Repeated recovery and baseline clock receipt (2026-10-06)
+
+`0bf7296d7e` adds `--client-stall-count 1..8` and `--client-stall-interval`
+(default 8 seconds). Every gap waits for verified prior recovery, uses immutable
+per-generation admission files and produces a chronological proof record. The
+launcher checks identity continuity against authoritative server admissions,
+revoked-entity input rejection, exact owner-input counts and healthy-client progress.
+`57866fe77a` adds semantic evidence checks. Twenty-two restart/recovery unit tests,
+eight rejected CLI combinations, help, Ruff/format and typing checks pass in
+`.build/integration-repeat-tool-checks/receipt.json`.
+
+`4d64b38c55` fixes a second startup boundary: client simulation waits for its
+complete authoritative baseline and `Connected` state. Transport polling continues
+while connecting/synchronizing; neither phase accumulates gameplay ticks. Server
+clock startup and the eight-tick/0.5-second active simulation budgets are unchanged.
+Native and generated C# help document this boundary. All compiled inputs freeze at
+`4d64b38c554ab3dc491285f4ffa5119c001da56f`.
+
+Preserved failures:
+
+- `.build/integration-repeat-baseline/evidence/1791290081700199300/receipt.json`:
+  original one-gap policy fails on a second 750 ms gap after successful recovery
+  and owner-input acknowledgment; both catch-up diagnostics are retained.
+- `.build/integration-repeat-development/1791290315028727300/receipt.json`:
+  development indentation error sends repeated initial hello messages; corrected
+  before freezing or final qualification.
+- `.build/integration-repeat-dedicated/1791290773296070300/receipt.json`:
+  the preceding Release template rejects a scheduling gap while still synchronizing,
+  before any requested injection or gameplay tick.
+- `.build/integration-repeat-sync-baseline/receipt.json`: old native core plus a
+  64-entity rate-limited encrypted baseline reproduces that synchronization failure.
+  Exact old source, executable/library hashes and failing command/log are retained.
+
+Fresh Debug and Release native suites each pass ten CTest cases and 120 assertions.
+The new regression verifies a delayed incomplete baseline never ticks, completing
+it starts a fresh clock, and a later 750 ms active-clock gap still rejects and
+clears all 64 replicated entities. Commands:
+
+```powershell
+python misc/scripts/validate_egp_net.py --configuration Debug --output .build/integration-repeat-native-debug
+python misc/scripts/validate_egp_net.py --configuration Release --output .build/integration-repeat-native-release
+```
+
+The final matrix uses WAN impairment (100 ms latency, 25 ms jitter, 3% loss on both
+endpoints) except the default local control. Exact commands and source/binary/PID
+evidence are in `.build/integration-repeat-final-qualification/{commands,receipt}.json`:
+
+| Case | Requested fault/control | Visible windows | Receipt |
+| --- | --- | --- | --- |
+| Mono editor / two clients | 1 gaps of 750 ms; client 0; 8.0 s interval | 0 | `.build/integration-repeat-final-single/1791291624505120400/receipt.json` |
+| Packaged Debug host / three clients | 3 gaps of 750 ms; client 1; 8.0 s interval | 4 | `.build/integration-repeat-final-host/1791291653860886000/receipt.json` |
+| Packaged Release dedicated / three clients | 3 gaps of 1000 ms; client 2; 8.0 s interval | 3 | `.build/integration-repeat-final-dedicated/1791291704450830100/receipt.json` |
+| Mono editor / two clients | 2 gaps of 5000 ms; client 0; 12.0 s interval | 0 | `.build/integration-repeat-final-long/1791291754313143300/receipt.json` |
+| Mono editor / two clients | 8 gaps of 550 ms; client 0; 7.0 s interval | 0 | `.build/integration-repeat-final-limit/1791291795667609200/receipt.json` |
+| Packaged Debug host / three clients | Manual reconnect | 4 | `.build/integration-repeat-final-manual/1791291868852195200/receipt.json` |
+| Packaged Release dedicated / three clients | Abrupt server replacement | 3 | `.build/integration-repeat-final-restart/1791291895194634100/receipt.json` |
+| Mono editor / two clients | No fault / local default | 0 | `.build/integration-repeat-final-default/1791291931086405800/receipt.json` |
+
+Repeated gaps retain all original processes and the same server PID; each recovery
+has a distinct peer/owned-entity identity and an acknowledged new-owner input.
+Healthy clients retain one connection and observe the exact final counter. The
+eight-gap case is a bounded short run, not soak, scale or peak-memory qualification.
+
+`.build/integration-repeat-native-qualification/receipt.json` freshly passes the
+combined API/ClassDB/exact SDK and compiled native/C# help checks, 19 Box2D runs,
+28 Box3D cases, twelve relocated Box2D export checks, 59 trilingual checks and
+separate language/relocated exports, C++/C# reload/recovery, default runtime, 250
+cached-binding assertions and packaged WAN/manual-reconnect controls.
+`.build/integration-repeat-native-session/receipt.json` passes 24 GDScript/eight
+raw-channel checks, Box3D clock, token quarantine, 29 prediction checks, lifecycle
+and separate processes. It reuses only this run’s fresh Debug native suite after
+verifying every native input hash. Build/source commands are retained at
+`.build/integration-repeat-native-build/{source,receipt}.json`.
+
+Editor SHA256: `20be5396d78b4c9873d4a355132f62366be58fcf9b1519bb595006fb07e74342`.
+Debug template SHA256: `b8a7f178491ba56e02a8950a7ec337f33c6197a16a27b3cf295b85448cd91c82`.
+Release template SHA256: `9e0c7883787974351153cc5bc30c92d4425b81184c264f4a4f9b74f995a68910`.
+
+`.build/canonical-repeat-artifacts.json` verifies 86 installed engine/managed files
+against 28 passed receipts; 20 files changed with backups retained.
+`.build/integration-repeat-canonical-runtime/receipt.json` passes all 59 trilingual
+checks again on installed root-bin binaries. `.build/integration-repeat-publication.json`
+verifies canonical/local/remote master, ancestry, seven preserved engine trees,
+current refs/PR inventory and all installed identities.
+
+The user’s branch-cleanup chat moved the canonical checkout to sole `master` and
+published README simplification `42d7358f49`; inherited release tips remain in local
+`refs/archive/github-branch-cleanup-2026-10-06`. Documentation chat commit
+`75d197f2ec` adds separate site-fork/synchronization tooling and guides. Those
+independent changes are preserved; only documentation/tooling follows the compiled
+engine freeze. The active documentation chat owns its remaining site validation.
+
+Next: authoritative server clock rejection and explicit state/admission recovery,
+longer outages and physics rollback/state restore. Larger worlds/load/soak, peak
+memory, platform/physics parity, arbitrary ABI/concurrent reload, broader C# state,
 lean server/default package identity, production authentication/persistence/gameplay
 and performance remain open. The loop stays ACTIVE; full feature completion and
 AAA readiness are not claimed.
