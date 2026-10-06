@@ -3297,3 +3297,15 @@ scopes. The repaired source requires a replacement hosted matrix and combined
 runtime qualification before its integration is marked validated. Foreign dirty
 snapshots and unrelated canonical files remain preserved; full acceptance stays
 open.
+
+The first replacement push `72ed3ae33f` fails before platform compilation:
+mandatory copyright/header-guard hooks require the standard repository headers
+on changed adapter files. The follow-up preserves their SPDX/Andrew Song notices
+and places each existing `#pragma once` where the inherited guard check expects
+it. The complete `prek run --files` hook set now passes over the full delta from
+`8ecf5efa30`; `.build/integration-physics-ci-static/receipt.json` records it.
+An exact-source compiler rerun also catches a local shadow warning introduced
+when codespell corrects an existing misspelling to `inertia`; the local is
+explicitly named `body_inertia`. That failed candidate remains recorded. Final
+GCC/Clang source checks include this correction and the required headers; static
+success alone does not establish a passing engine matrix.
