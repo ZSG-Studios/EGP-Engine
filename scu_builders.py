@@ -368,7 +368,6 @@ def generate_scu_files(max_includes_per_scu):
     process_folder(["modules/openxr/extensions/spatial_entities"])
     process_folder(["modules/openxr/scene"])
     process_folder(["modules/tilemap"])
-    process_folder(["modules/webrtc"])
     process_folder(["modules/websocket"])
     process_folder(["modules/webxr"])
 
