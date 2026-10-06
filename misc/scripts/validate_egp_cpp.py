@@ -52,7 +52,7 @@ def main():
 
     (project / "project.godot").write_text(
         'config_version=5\n[application]\nconfig/name="CppSmoke"\nrun/main_scene="res://main.tscn"\n'
-        '[rendering]\ntextures/vram_compression/import_etc2_astc=true\n',
+        "[rendering]\ntextures/vram_compression/import_etc2_astc=true\n",
         encoding="utf-8",
     )
     (project / "main.gd").write_text(
