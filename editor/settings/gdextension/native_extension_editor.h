@@ -66,6 +66,7 @@ class NativeExtensionEditor : public VBoxContainer {
 		CHECK,
 		INSTALL } operation = BUILD;
 	bool cli = false;
+	bool awaiting_filesystem = false;
 	Vector<String> cli_commands;
 	int cli_index = 0;
 	String process_executable;
@@ -89,6 +90,8 @@ class NativeExtensionEditor : public VBoxContainer {
 	void _next_cli();
 	void _complete_operation();
 	void _quit_cli(int p_exit_code);
+	void _scan_filesystem();
+	void _filesystem_changed();
 
 protected:
 	static void _bind_methods();

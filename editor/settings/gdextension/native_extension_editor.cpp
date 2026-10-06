@@ -142,7 +142,7 @@ Error NativeExtensionEditor::create_extension(const String &p_name) {
 			break;
 		}
 	}
-	EditorFileSystem::get_singleton()->scan();
+	_scan_filesystem();
 	_append_line(vformat(TTR("Created %s. Build Debug to make its node available in the editor."), path));
 	return OK;
 }
@@ -317,7 +317,7 @@ Error NativeExtensionEditor::_publish_library() {
 	config->set_value("libraries", _platform() + "." + build_config.to_lower() + "." + Engine::get_singleton()->get_architecture_name(), published);
 	error = config->save(descriptor);
 	ERR_FAIL_COND_V(error != OK, error);
-	EditorFileSystem::get_singleton()->scan();
+	_scan_filesystem();
 	if (build_config == "Debug") {
 		GDExtensionManager *manager = GDExtensionManager::get_singleton();
 		GDExtensionManager::LoadStatus status = manager->is_extension_loaded(descriptor) ? manager->reload_extension(descriptor) : manager->load_extension(descriptor);
@@ -500,7 +500,7 @@ void NativeExtensionEditor::_next_cli() {
 		_quit_cli(1);
 		return;
 	}
-	if (EditorFileSystem::get_singleton()->is_scanning()) {
+	if (awaiting_filesystem || EditorFileSystem::get_singleton()->is_scanning()) {
 		return;
 	}
 	while (cli_index < cli_commands.size()) {
@@ -532,12 +532,27 @@ void NativeExtensionEditor::_next_cli() {
 			_complete_operation();
 			return;
 		}
-		if (process_id != 0 || EditorFileSystem::get_singleton()->is_scanning()) {
+		if (process_id != 0 || awaiting_filesystem || EditorFileSystem::get_singleton()->is_scanning()) {
 			return;
 		}
 	}
 	print_line("EGP_CPP_CLI_PASSED");
 	_quit_cli(0);
+}
+
+void NativeExtensionEditor::_scan_filesystem() {
+	// The worker clears is_scanning() before the main thread applies its results.
+	// Wait for that completion signal before CLI commands advance or shut down.
+	EditorFileSystem *filesystem = EditorFileSystem::get_singleton();
+	if (!awaiting_filesystem) {
+		awaiting_filesystem = true;
+		filesystem->connect("filesystem_changed", callable_mp(this, &NativeExtensionEditor::_filesystem_changed), CONNECT_ONE_SHOT);
+	}
+	filesystem->scan();
+}
+
+void NativeExtensionEditor::_filesystem_changed() {
+	awaiting_filesystem = false;
 }
 
 void NativeExtensionEditor::_quit_cli(int p_exit_code) {
