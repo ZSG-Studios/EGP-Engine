@@ -56,6 +56,7 @@ jobs:
               scu_build=yes
               debug_symbols=no
               precision=double
+              tests=yes
               disable_physics_2d=yes
               disable_physics_3d=yes
               use_asan=yes
