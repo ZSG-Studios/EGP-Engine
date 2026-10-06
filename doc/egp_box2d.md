@@ -40,9 +40,11 @@ The pinned upstream MSVC Debug and Release suites passed locally, including
 determinism, worker scheduling, recording and snapshot tests. The initial Debug
 timeout is preserved; a retry used the same 120-second watchdog and passed.
 The native port compiled all 25 C++ translation units against the engine APIs.
-The rebuilt native Windows editor passed all twelve scene runs, including exact
+The initial cutover's native Windows editor passed twelve scene runs, including exact
 300-tick one/four-worker trajectories and old-backend migration. Repeat those
-checks for each newly qualified executable:
+checks for each newly qualified executable. Current combined-engine source,
+binary identities, expanded scene results and Debug/Release export receipts are
+recorded in [the integration checklist](egp_integration_loop.md):
 
 ```powershell
 python misc/scripts/validate_box2d_scene.py --engine <editor.exe> --output .build/box2d-scene-cutover
@@ -64,15 +66,17 @@ five runtime fixtures and separate authenticated server/client processes.
 ## Remaining parity gates
 
 The inherited adapter does not implement infinite world boundaries or separation
-rays. Space solver parameters, ray CCD, one-way rigid-body penetration margins
-and moving-platform behavior need replacements or further qualification.
+rays. Native contact tuning, speed bounds, sleep, continuous collision and warm
+starting are exposed as space parameters; broader tuning behavior still requires
+qualification. Ray CCD was removed; shape CCD remains supported. One-way rigid-body
+penetration margins and moving-platform behavior need further qualification.
 Convex solver polygons support at most eight vertices. Joint-space transfers,
 full geometry/scaling semantics, network lifecycle ordering and scene rollback
 also require work. Upstream solver serialization does not itself restore Godot
 scene nodes or application state. Cross-platform and performance qualification
-remain separate release gates. Packaged networking evidence covers the Windows
-debug template and tested fixtures; it does not establish scene rollback or
-release-template/platform coverage.
+remain separate release gates. Current Windows Debug/Release packaged networking
+and physics evidence covers the fixtures recorded in the integration checklist;
+it does not establish scene rollback or other-platform coverage.
 
 ## Convex polygon input
 

@@ -36,7 +36,7 @@ because these chats exist.
 | Public API | Actual ClassDB dump matches embedded SDK, generated C# and docs; signatures, enums, properties, signals, defaults and errors consistent | 77 classes, 1299 method contracts, 55 signal contracts, 371 enum constants and 1358 compiled descriptions pass; broader behavioral and semantic documentation coverage remains |
 | API usability | Familiar naming; typed options/results; actionable errors; examples for GDScript/C#/C++; threading and ownership documented | Native session options/results/errors and physics event/joint contracts documented; broader facade ergonomics audit remains |
 | Library/build | Native and Mono builds; exact fork bindings; dependency/license manifests; lean server build; reproducible toolchain | Combined Mono editor, glue/assemblies, exact SDK and Debug/Release templates pass; lean server/platform/reproducibility gates remain |
-| Physics | Box2D/Box3D scene integration, joints, characters, queries, events, serialization, deterministic stepping and restore; unsupported capabilities exposed honestly | Combined Mono editor passes 17 Box2D runs and 28 Box3D cases; eight relocated Debug/Release Box2D checks qualify configured joints, event copies, explosions, canvas filters, casts and invalid-input recovery; picking, wider parity/scale/platform gates remain |
+| Physics | Box2D/Box3D scene integration, joints, characters, queries, events, serialization, deterministic stepping and restore; unsupported capabilities exposed honestly | Combined Mono editor passes 19 Box2D runs and 28 Box3D cases; twelve relocated Debug/Release Box2D checks cover configured joints, events, explosions, canvas/casts, packed/vector polygons and invalid-input recovery; picking, broader shape/scaling/parity/platform gates remain |
 | Physics/network | Explicit fixed clock, fingerprint validation, authoritative state, commands, prediction/correction/replay and recovery | Existing limited fixtures; full game contract pending |
 | Networking | Encrypted admission, account/peer/entity identities, authority, ownership, interest, lifecycle, reconnect and backpressure | Native and language fixtures exist |
 | Advanced networking | Field deltas, bounded bandwidth/queues, input acknowledgments, lag compensation, scale/soak, malicious input rejection | Implementation/qualification gaps remain |
@@ -726,4 +726,102 @@ index handling), wider state/collection/reload-soak cases, server restart and
 adversarial networking, ownership/interest scaling, authoritative physics gameplay,
 platform/performance qualification, unique managed package identity and reliable
 build-version provenance. This increment does not establish full parity or AAA
+readiness.
+
+## Packed convex polygon conversion and validation (2026-10-06)
+
+Frozen engine source `72220b5923` repairs Box2D's documented packed polygon format.
+The previous converter rejected arrays whose length was divisible by four,
+skipped vertex slots, and could return after allocating point storage without
+freeing it. The reproduced failure uses the published `4165334987` editor and a
+preserved four-point fixture at `.build/integration-convex-input-baseline`:
+`receipt.json` records engine/fixture hashes, exact command and exit code 1.
+The original failure is retained; no geometry-parity claim comes from that run.
+
+Packed input now consumes each complete `(x, y, normal_x, normal_y)` tuple at the
+correct stride. Count is validated before writing a fixed eight-point native
+buffer, avoiding partial initialization and temporary heap-array leaks. Both
+vector and packed formats validate transformed native coordinates; packed normals
+must be finite. Hull validity is checked before constructing a native polygon.
+Malformed tuples, invalid counts/types, nonfinite values, coordinates beyond
+native bounds, collinear/tiny geometry and singular transforms report errors and
+produce empty query results. Supplied data stays stored; conversion occurs when
+attached or queried. Box2D recomputes normals and can remove duplicate/interior
+points. Public XML and compiled C# help explain the contract and native limits.
+This does not establish broad allocation/memory or arbitrary-scale qualification.
+
+The new positive fixture compares transformed ray hits, normals and cast travel
+for three-, four- and eight-point vector and packed inputs. The negative fixture
+requires exactly twelve diagnostics, empty results and a successful cast after
+repair. Diagnostic allowances belong only to that named fixture; extra/missing
+errors, assertions, crashes, script failures and RID leaks still fail the gate.
+Eight runner regression tests and seventeen API regression tests pass. The
+packaged MainLoop contains these unchanged fixture bodies and requires a specific
+completion message for every selected case.
+
+Qualified source/binary identities:
+
+- Build/source receipts: `.build/integration-convex-input-build` (editor, shipped
+  help, regenerated managed glue and rebuilt Debug/Release assemblies/packages)
+  and `.build/integration-convex-input-templates` (both runtime configurations).
+- Editor SHA256 `1f02f4a50b90eb5bbcae44b13d448f1126655e7709755dc719a6a9bae9f541f1`.
+- Debug template SHA256 `b7c90e63ff29e94146845fd4e672f9e93e2181cc68e850f661c73d6bd94b7155`.
+- Release template SHA256 `c6f1f5c0114f7d834e4e846f8cbbbf005abd0c7e6d445907034d3449b549773e`.
+- Paired API/ClassDB/shipped-help capture:
+  `.build/integration-convex-input-api/1791276680330441500/receipt.json`.
+  Plain API SHA remains `e84e140b923451849e88aab8300021fd9d32f95c31825bb6d7e25a4235953271`,
+  retaining exact C++ SDK compatibility. Updated compiled documentation API SHA:
+  `0f53af746a134aca00786612f4959649fe0ea4ee8f1eead9bafd42d4754b77c3`.
+- `.build/integration-convex-input-api-audit.json` passes 77 classes, 1299 method
+  contracts, 55 signals, 371 enums and 1358 source/compiled descriptions.
+- `.build/integration-convex-input-managed-docs.json` records the existing 57
+  documented members plus the revised ShapeSetData contract in compiled Debug and
+  Release XML, DLL/description hashes and the revised source identity.
+- `.build/integration-convex-input-doc-lint.json`: XML schema validation and full
+  reference-link/RST lint pass. Two pre-existing unpaired language examples remain.
+  `.build/integration-convex-input-unit-gates.json` records 8 + 17 passing tests.
+- `.build/integration-convex-input-scenes/receipt.json`: all 19 Box2D runs pass,
+  including exact one/four-worker trajectory equality, the six prior invalid-query
+  diagnostics and twelve convex-input diagnostics. All 28 Box3D cases pass in
+  `.build/integration-convex-input-box3d/receipt.json`.
+- `.build/integration-convex-input-exports/receipt.json`: six focused cases pass
+  in each relocated Debug/Release game (12 total), with EXE/PCK and fixture hashes.
+- `.build/integration-convex-input-net-languages/receipt.json`: 59 trilingual
+  assertions, separate GDScript/C#/C++ clients, fresh import, matched Debug/Release
+  extensions and relocated exports pass with rebuilt managed packages.
+- Six successful combined reloads and all recovery paths pass at
+  `.build/integration-convex-input-hot-reload/1791276730404842700/receipt.json`.
+  Native/managed state, identity, events, cached calls and edited native-parent
+  state survive failed loads and recovery; debugger diagnostics and teardown pass.
+  Default non-collectible behavior passes separately at
+  `.build/integration-convex-input-default/1791276730405345800/receipt.json`.
+- Release dedicated server plus three visible clients passes at
+  `.build/integration-convex-input-dedicated/1791276887607064300/receipt.json`;
+  Debug listen host plus three visible clients passes at
+  `.build/integration-convex-input-host/1791276887606060400/receipt.json`.
+  Both apply latency 100 ms, jitter 25 ms and loss 3% on both endpoints, reconnect
+  at four seconds during a ten-second run, observe all windows simultaneously
+  (three/four respectively), and terminate all owned processes normally.
+
+```powershell
+python misc/scripts/validate_box2d_scene.py --engine C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe --output .build/integration-convex-input-scenes
+python misc/scripts/validate_box2d_exports.py --editor C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe --debug-template C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.template_debug.x86_64.mono.exe --release-template C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.template_release.x86_64.mono.exe --output .build/integration-convex-input-exports
+python -m unittest discover -s misc/scripts -p test_validate_box2d_scene.py
+```
+
+All four handoff chats were checked idle/completed; no useful build was duplicated.
+The fresh seven-tree inventory and merge ancestors are recorded by
+`.build/integration-convex-input-publication.json`. Installation/backups and all
+combined-engine gates are recorded by `.build/canonical-convex-input-artifacts.json`.
+Publication follows validation; canonical/local/remote source identities and the
+installed-file hashes are verified. Older worktree patches, source snapshots and
+unrelated user files remain preserved. Changes after the frozen engine source are
+documentation only. The loop remains ACTIVE.
+
+Next concrete item: incompatible native method/class/base changes and restart or
+repair recovery in the live C++ reload fixture. Native picking, broader shape/
+scaling and double-precision behavior, wider C# state/collection/reload-soak cases,
+server restart/adversarial networking, ownership/interest scaling, authoritative
+physics gameplay, platform/performance and package/build-version identity remain
+open. Limited Windows fixtures do not establish full integration, parity or AAA
 readiness.
