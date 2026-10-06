@@ -48,8 +48,8 @@ Entries from independent worlds and managed destruction are serialized around
 Box3D's process-global world slots and replay length scale. Each step can still
 use multiple solver workers; concurrent independent world stepping is not enabled.
 
-The networking chat now owns the native Yojimbo session and GDScript
-`EGPNetBox3D` helper. Its server simulation-tick callback steps the explicit
+The native Yojimbo session and GDScript `EGPNetBox3D` helper share an explicit
+server simulation clock. The helper's simulation-tick callback steps the explicit
 world before publishing body states. Network and physics rates must match;
 the helper checks the immutable profile fingerprint and rate on attachment.
 Network entity lifecycle and command sequence assignment must still be

@@ -26,11 +26,15 @@ distributed builds. For other platforms, see Godot's
 
 ## Documentation
 
+- [EGP documentation source and website](doc/egp_documentation.md)
+- [Documentation fork](https://github.com/ZSG-Studios/EGP-docs) · [Website fork](https://github.com/ZSG-Studios/EGP-website)
 - [C++ extensions](doc/egp_cpp_extensions.md)
 - [Networking](modules/egp_net/README.md)
 - [Network lab](doc/egp_network_lab.md)
 - [Box2D physics](doc/egp_box2d.md)
 - [Box3D physics](doc/egp_box3d.md)
+- [API and runtime reload contracts](doc/egp_api_contract.md)
+- [FASTBuild](doc/egp_fastbuild.md)
 - [Godot documentation](https://docs.godotengine.org)
 
 ## Contributing
