@@ -931,11 +931,27 @@ void GDExtension::prepare_reload() {
 
 			// Store instance state so it can be restored after reload.
 			List<Pair<String, Variant>> state;
+			// A failed library load leaves the object as its native parent. Retain
+			// extension properties from the previous attempt, while refreshing any
+			// parent properties that remain editable while the library is missing.
+			const Extension::InstanceState *saved_state = obj->_get_extension() ? nullptr : E.value.instance_state.getptr(obj_id);
+			if (saved_state) {
+				state = saved_state->properties;
+			}
+			const bool is_placeholder = saved_state ? saved_state->is_placeholder : obj->is_extension_placeholder();
 			List<PropertyInfo> prop_list;
 			obj->get_property_list(&prop_list);
 			for (const PropertyInfo &P : prop_list) {
 				if (!(P.usage & PROPERTY_USAGE_STORAGE)) {
 					continue;
+				}
+				if (saved_state) {
+					for (List<Pair<String, Variant>>::Element *property = state.front(); property; property = property->next()) {
+						if (property->get().first == P.name) {
+							state.erase(property);
+							break;
+						}
+					}
 				}
 
 				Variant value = obj->get(P.name);
@@ -953,7 +969,7 @@ void GDExtension::prepare_reload() {
 			}
 			E.value.instance_state[obj_id] = {
 				std::move(state), // List<Pair<String, Variant>> properties;
-				obj->is_extension_placeholder(), // bool is_placeholder;
+				is_placeholder, // bool is_placeholder;
 			};
 		}
 	}

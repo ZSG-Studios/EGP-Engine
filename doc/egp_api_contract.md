@@ -56,7 +56,7 @@ retired and must fail the audit if regenerated bindings still contain them.
 
 Networking options, lifecycle, thread ownership, errors and limits are documented
 in `modules/egp_net/README.md`. Native session wrappers can operate without the
-GDScript helper; higher-level C#/C++ faÃ§ades use the shared GDScript codec and
+GDScript helper; higher-level C#/C++ faÃƒÂ§ades use the shared GDScript codec and
 adapters. This dependency must stay clear in SDK installation and examples.
 
 Pass `--docs <repository-root>` to check XML method, signal and enum documentation
@@ -101,3 +101,12 @@ The fixture releases its own thread and checks recovery diagnostics in the edito
 debugger panel. Application threads still require application-controlled shutdown.
 Use `--disable-runtime` for the default non-collectible player and
 `--feature-override` to check the editor feature override of the runtime setting.
+
+
+Use `--native-recovery` to exercise a missing DLL followed by an invalid DLL
+before restoring the original extension. The fixture avoids extension method
+calls while the library is unavailable, keeps the native parent alive, and edits
+a parent property during failure. Reload retries must retain the original
+extension properties while refreshing editable parent properties. Recovery must
+preserve object identity, cached callables, signal connections and diagnostics.
+This does not cover arbitrary native ABI or class-inheritance changes.

@@ -41,11 +41,24 @@ func _capture(message: String, data: Array) -> bool:
 		extra_managed.free()
 		extra_managed = null
 		return true
+	if message == "rename-native":
+		native.name = "RecoveredNative"
+		return true
 	if message == "finish":
 		get_tree().quit.call_deferred(0)
 		return true
 	if message != "sample":
 		return false
+	var extension := GDExtensionManager.get_extension("res://extensions/reload/reload.gdextension")
+	if not extension.is_library_open():
+		# Failed native loads retain the parent object, with no extension methods.
+		# Do not call cached native methods until a valid library is restored.
+		EngineDebugger.send_message("egp_reload:state", [{
+			"request": data[0], "native_unavailable": true,
+			"cpp_id": str(native.get_instance_id()), "base_class": native.get_class(),
+			"parent_ok": native.get_parent() == self, "cpp_name": str(native.name),
+		}])
+		return true
 	if not managed.has_method("Version"):
 		EngineDebugger.send_message("egp_reload:state", [{
 			"request": data[0], "placeholder": true,
@@ -60,6 +73,7 @@ func _capture(message: String, data: Array) -> bool:
 		"pid": OS.get_process_id(),
 		"cpp_id": str(native.get_instance_id()), "cs_id": str(managed.get_instance_id()),
 		"receiver_id": str(receiver.get_instance_id()), "cpp_counter": native.counter,
+		"cpp_name": str(native.name),
 		"cs_counter": managed.Counter, "vector_ok": managed.PositionValue == Vector3(3, 4, 5),
 		"reference_ok": managed.Reference == receiver,
 		"parents_ok": native.get_parent() == self and managed.get_parent() == self,

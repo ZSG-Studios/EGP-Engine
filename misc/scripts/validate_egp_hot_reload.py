@@ -5,6 +5,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 import subprocess
 import time
@@ -69,6 +70,9 @@ def main():
         "--unload-recovery",
         action="store_true",
         help="Also recover after a live application thread prevents assembly unload",
+    )
+    parser.add_argument(
+        "--native-recovery", action="store_true", help="Also recover a missing and invalid native library"
     )
     args = parser.parse_args()
     if args.disable_runtime and args.feature_override:
@@ -367,7 +371,47 @@ def main():
                     "Unload failure debugger diagnostic missing",
                 )
                 receipt["unload_recovery"] = True
-            receipt["reloads"] = 3 + int(args.assembly_recovery) + int(args.unload_recovery)
+                previous = state
+            if args.native_recovery:
+                descriptor_text = descriptor.read_text(encoding="utf-8")
+                bad_library = project / "extensions/reload/bin/invalid-native.dll"
+                invalid_descriptor = re.sub(
+                    r'(windows\.debug\.x86_64\s*=\s*)"[^"]+"',
+                    r'\1"res://extensions/reload/bin/invalid-native.dll"',
+                    descriptor_text,
+                )
+                require(invalid_descriptor != descriptor_text, "Missing Windows Debug library mapping")
+                for fault in ("missing", "invalid"):
+                    if fault == "invalid":
+                        bad_library.write_bytes(b"EGP deliberately invalid native library")
+                    time.sleep(1.1)
+                    descriptor.write_text(invalid_descriptor, encoding="utf-8")
+                    command("reload")
+                    time.sleep(2)
+                    fallback = sample()
+                    require(
+                        fallback.get("native_unavailable")
+                        and fallback["cpp_id"] == previous["cpp_id"]
+                        and fallback["parent_ok"],
+                        "Failed native load lost parent object identity",
+                    )
+                    if fault == "missing":
+                        command("rename-native")
+                time.sleep(1.1)
+                descriptor.write_text(descriptor_text, encoding="utf-8")
+                command("reload")
+                time.sleep(2)
+                state = sample()
+                verify(state, 3, previous, cs_version=5 if args.unload_recovery else 4)
+                require(state["cpp_name"] == "RecoveredNative", "Parent property edit during failure was lost")
+                diagnostics = command("diagnostics")["diagnostics"]
+                receipt["native_recovery_diagnostics"] = diagnostics
+                require(
+                    any("GDExtension" in text or "dynamic library" in text for text in diagnostics),
+                    "Native failed-load diagnostic missing from debugger",
+                )
+                receipt["native_recovery"] = True
+            receipt["reloads"] = 3 + int(args.assembly_recovery) + int(args.unload_recovery) + int(args.native_recovery)
         command("close")
         require(process.wait(timeout=60) == 0, "Editor/game teardown failed")
         require(digest(engine) == receipt["engine_sha256"], "Input engine changed during validation")
