@@ -724,6 +724,7 @@ def main():
                 previous = state
                 state = sample()
                 verify(state, 3, previous, cs_version=5 if args.unload_recovery else 4)
+                previous = state
                 receipt["native_abi_recovery"] = {
                     "passed": True,
                     "native_builds": 11,
