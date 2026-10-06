@@ -1,3 +1,31 @@
+# EGP — Godot Engine Fork
+
+EGP is a fork of [Godot Engine](https://github.com/godotengine/godot) built around faster engine systems and regular integration of upstream `master`.
+
+## Goals
+
+- Keep the fork up to date with Godot `master`, validating upstream updates before promoting them to the working engine.
+- Make [Box3D](https://github.com/erincatto/box3d) the sole 3D physics backend, with engine integration and compatibility checks before removing existing backends. The 2D physics direction remains undecided.
+- Use [LiteNetLib](https://github.com/RevenantX/LiteNetLib) and [LiteEntitySystem](https://github.com/RevenantX/LiteEntitySystem) for multiplayer transport and entity replication.
+- Investigate scene processing, C# interop, threading, resource streaming, rendering, navigation, and dedicated-server performance. Select further replacements using measured results.
+- Keep fork changes modular and reviewable so upstream updates remain manageable.
+
+## Current status
+
+The fork is being established. Box3D and the LiteNet stack are planned integrations; they are not implemented in this repository yet. No performance improvements or EGP build qualification are claimed at this stage.
+
+The first milestone is a working stock Godot baseline: build the C# editor and Windows export template, run a minimal C# scene, and verify its exported executable. Engine replacements follow that baseline.
+
+## Validation approach
+
+Compare stock Godot and EGP with identical scenes and settings. Track CPU/GPU time, p95/p99 frame times, memory, allocations, and server tick time. Validate physics behaviour and multiplayer operation under latency, packet loss, disconnects, and reconnects.
+
+## Upstream and licensing
+
+EGP is maintained by ZSG-Studios. Godot is developed by the Godot community; this fork is not an official Godot release. Original license and attribution files are retained. Official Godot downloads below provide upstream builds, not EGP builds.
+
+---
+
 # Godot Engine
 
 <p align="center">
