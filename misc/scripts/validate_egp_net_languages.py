@@ -20,12 +20,21 @@ def digest(path):
 
 
 def clock_recovery_failure(result):
-    """Reject missing repeated failures, reused handles and lost physics time."""
+    """Reject incomplete server recovery and explicit live-client resynchronization."""
     diagnostic = "Fixed simulation exceeded its catch-up budget; resynchronization required."
     for language, body in (("csharp", 10000), ("cpp", 20000)):
         proof = result.get("clock_recovery", {}).get(language, {})
         if proof.get("passed") is not True or proof.get("same_session") is not True or proof.get("body_id") != body:
             return f"Missing {language} retained-session recovery"
+        states = proof.get("client_states", [])
+        if states and states[0] == "Stopped":
+            states = states[1:]
+        if (
+            states != ["Connecting", "Connected", "Stopped"] * 4
+            or proof.get("client_latency_ms") != 20
+            or proof.get("client_jitter_ms") != 5
+        ):
+            return f"Missing {language} repeated client admission/reset history"
         for kind in ("cycles", "low_cycles"):
             records = proof.get(kind, [])
             diagnostics = proof.get("diagnostics" if kind == "cycles" else "low_diagnostics")
@@ -59,6 +68,24 @@ def clock_recovery_failure(result):
                         or any(c not in "0123456789abcdef" for c in state_hash)
                     ):
                         return f"Invalid {language} restored physics clock/hash"
+                    if (
+                        record.get("client_id") != (777 if language == "csharp" else 888)
+                        or record.get("client_live_polls", 0) <= 0
+                        or any(
+                            record.get(flag) is not True
+                            for flag in (
+                                "client_same_session",
+                                "fresh_token",
+                                "client_reset_cleared",
+                                "client_retired_absent",
+                                "interest_roundtrip",
+                            )
+                        )
+                        or not tick < record.get("client_physics_tick", 0) <= record.get("final_physics_tick", 0)
+                        or record.get("owner_input_count") != number
+                        or record.get("invalid_input_count") != 0
+                    ):
+                        return f"Invalid {language} restored client baseline/ownership/interest"
     return None
 
 
@@ -117,6 +144,7 @@ def main():
             "modules/egp_net/samples/trilingual/InteropFixture.cs",
             "modules/egp_net/samples/trilingual/extension/probe.cpp",
             "misc/scripts/validate_egp_net_languages.py",
+            "misc/scripts/test_egp_net_language_clock.py",
         )
     })
 

@@ -103,6 +103,8 @@ public partial class InteropFixture : Node
         }
     }
     private static void CheckPoll(Error? error) { if (error.HasValue && error != Error.Ok) throw new InvalidOperationException("Pump: " + error); }
+    private static long PhysicsTick(Dictionary record) => record.TryGetValue("state", out var state)
+        && state.AsGodotDictionary().TryGetValue("physics_tick", out var tick) ? tick.AsInt64() : 0;
     private async Task Run()
     {
         using (var unconfigured = new NetSession()) {
@@ -224,30 +226,83 @@ public partial class InteropFixture : Node
         var native = server!.NativeSession!.GetInstanceId();
         int port = server.Statistics["local_port"].AsInt32();
         var diagnostics = new List<string>(); server.Diagnostic += diagnostics.Add;
+        csPeer = new NetNode { AutoPoll = false }; AddChild(csPeer);
+        var clientStates = new List<string>(); csPeer.StateChanged += clientStates.Add;
+        Check(csPeer.Configure(new NetOptions { SimulationFingerprint = physicsProfile, SimulatedLatencyMs = 20, SimulatedJitterMs = 5 }) == Error.Ok, "C# recovery client profile");
+        ulong clientNative = csPeer.NativeSession!.GetInstanceId();
+        byte[] previousToken = System.Array.Empty<byte>();
+        async Task JoinRecoveryClient()
+        {
+            var token = server.IssueToken(777, $"127.0.0.1:{port}");
+            Check(token.Error == Error.Ok && token.Token.Length == 2048 && !token.Token.AsSpan().SequenceEqual(previousToken)
+                && csPeer.JoinToken(777, token.Token) == Error.Ok, "C# fresh recovery admission");
+            previousToken = token.Token;
+            ulong deadline = Time.GetTicksMsec() + 2000;
+            while (Time.GetTicksMsec() < deadline && (csPeer.State != "Connected" || server.GetPeers().Count != 1)) await Frames(1);
+            Check(csPeer.State == "Connected" && server.GetPeers().Count == 1 && server.GetPeers()[0].AsGodotDictionary()["client_id"].AsInt64() == 777
+                && csPeer.NativeSession!.GetInstanceId() == clientNative, "C# retained client reconnect identity");
+        }
+        await JoinRecoveryClient();
+        ulong baselineDeadline = Time.GetTicksMsec() + 2000;
+        while (Time.GetTicksMsec() < baselineDeadline && csPeer.GetEntity(entity).Count == 0) await Frames(1);
+        Check(csPeer.GetEntity(entity).Count > 0, "C# initial recovery baseline");
+        long expectedEntity = 0, expectedPeer = 0; int expectedCycle = 0, inputs = 0, invalidInputs = 0;
+        server.InputReceived += (peer, handle, input) => { if (peer == expectedPeer && handle == expectedEntity && input["cycle"].AsInt32() == expectedCycle) inputs++; else invalidInputs++; };
         var cycles = new Array();
         for (int cycle = 1; cycle <= 3; cycle++) {
             long savedTick = world.Call("get_tick").AsInt64(); string hash = world.Call("get_state_hash").AsString();
             var snapshot = world.Call("capture_snapshot").AsByteArray(); Check(snapshot.Length > 0, "C# clock checkpoint " + cycle);
-            ulong before = Time.GetTicksMsec(); OS.DelayMsec(550); var error = server.Poll();
+            float checkpointY = world.Call("get_body_state", 10000).AsGodotDictionary()["position"].AsVector3().Y;
+            ulong before = Time.GetTicksMsec(); int livePolls = 0;
+            while (Time.GetTicksMsec() - before < 550) { CheckPoll(csPeer.Poll()); livePolls++; await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame); }
+            Check(csPeer.State == "Connected" && livePolls > 0, "C# client stays live during server gap " + cycle);
+            var error = server.Poll();
             ulong gap = Time.GetTicksMsec() - before;
             Check(error == Error.Failed && diagnostics.Count == cycle && diagnostics[^1] == "Fixed simulation exceeded its catch-up budget; resynchronization required.", "C# clock rejects scheduling debt " + cycle);
             Check(server.State == "Stopped" && server.GetEntities().Count == 0 && server.GetPeers().Count == 0 && server.Statistics["tick"].AsInt64() == 0
                 && server.Spawn(1) == 0 && server.UpdateEntity(entity, new()) == Error.Unauthorized, "C# stopped authority " + cycle);
+            csPeer.Stop();
+            Check(csPeer.State == "Stopped" && csPeer.GetEntities().Count == 0 && csPeer.SendInput(entity, new()) == Error.Unconfigured, "C# explicit client resync clears stale baseline " + cycle);
             physics!.Detach();
             Check(CallError(world, "step_tick", savedTick + 1) == Error.Ok && CallError(world, "restore_snapshot", snapshot) == Error.Ok
                 && world.Call("get_tick").AsInt64() == savedTick && world.Call("get_state_hash").AsString() == hash, "C# trusted checkpoint restore " + cycle);
             Check(server.Host(port) == Error.Ok && server.NativeSession!.GetInstanceId() == native && server.GetEntity(entity).Count == 0
                 && server.UpdateEntity(entity, new()) == Error.DoesNotExist, "C# retained session/rebind/retired entity " + cycle);
-            long next = server.Spawn(1); Check(next != 0 && next != entity && physics.Attach(server, world) == Error.Ok && physics.Track(next, 10000) == Error.Ok, "C# fresh handle stable body " + cycle);
+            Check(physics.Attach(server, world) == Error.Ok, "C# recovery world clock attached before admission " + cycle);
+            await JoinRecoveryClient();
+            expectedPeer = server.GetPeers()[0].AsGodotDictionary()["peer_id"].AsInt64(); expectedCycle = cycle;
+            long next = server.Spawn(1, authorityPeer: expectedPeer); expectedEntity = next;
+            Check(next != 0 && next != entity && physics.Track(next, 10000) == Error.Ok, "C# fresh handle stable body " + cycle);
             ulong deadline = Time.GetTicksMsec() + 2000;
-            while (Time.GetTicksMsec() < deadline && server.Statistics["tick"].AsInt64() < 8) await Frames(1);
+            while (Time.GetTicksMsec() < deadline && (server.Statistics["tick"].AsInt64() < 8 || csPeer.GetEntity(next).Count == 0
+                || PhysicsTick(csPeer.GetEntity(next)) <= savedTick)) await Frames(1);
             Check(server.Statistics["tick"].AsInt64() >= 8 && world.Call("get_tick").AsInt64() == savedTick + server.Statistics["tick"].AsInt64()
                 && server.GetEntity(next)["state"].AsGodotDictionary()["physics_tick"].AsInt64() > savedTick, "C# restored world/transport clock offset " + cycle);
+            var clientRecord = csPeer.GetEntity(next); var clientState = clientRecord["state"].AsGodotDictionary();
+            Check(csPeer.GetEntities().Count == 1 && csPeer.GetEntity(entity).Count == 0 && clientRecord["authority_peer"].AsInt64() == expectedPeer
+                && clientState["physics_tick"].AsInt64() > savedTick
+                && clientState["position"].AsVector3().Y < checkpointY, "C# recovered owned physics baseline " + cycle);
+            long clientTick = clientState["physics_tick"].AsInt64();
+            Check(csPeer.SendInput(entity, new() { ["cycle"] = cycle }) == Error.Ok && csPeer.SendInput(next, new() { ["cycle"] = cycle }) == Error.Ok, "C# retired and recovered owner input probes " + cycle);
+            deadline = Time.GetTicksMsec() + 2000;
+            while (Time.GetTicksMsec() < deadline && inputs < cycle) await Frames(1);
+            Check(inputs == cycle && invalidInputs == 0, "C# recovered input delivered once and retired input rejected " + cycle);
+            Check(server.SetEntityVisible(next, expectedPeer, false) == Error.Ok, "C# recovered interest hide " + cycle);
+            deadline = Time.GetTicksMsec() + 2000;
+            while (Time.GetTicksMsec() < deadline && csPeer.GetEntity(next).Count != 0) await Frames(1);
+            Check(csPeer.GetEntity(next).Count == 0, "C# recovered interest removes baseline " + cycle);
+            Check(server.SetEntityVisible(next, expectedPeer, true) == Error.Ok, "C# recovered interest show " + cycle);
+            deadline = Time.GetTicksMsec() + 2000;
+            while (Time.GetTicksMsec() < deadline && csPeer.GetEntity(next).Count == 0) await Frames(1);
+            Check(csPeer.GetEntity(next).Count > 0, "C# recovered interest restores baseline " + cycle);
             cycles.Add(new Dictionary { ["cycle"] = cycle, ["old_entity"] = entity, ["new_entity"] = next, ["checkpoint_tick"] = savedTick, ["checkpoint_hash"] = hash,
-                ["final_physics_tick"] = world.Call("get_tick"), ["final_network_tick"] = server.Statistics["tick"], ["gap_ms"] = gap, ["poll_error"] = (int)error });
+                ["final_physics_tick"] = world.Call("get_tick"), ["final_network_tick"] = server.Statistics["tick"], ["gap_ms"] = gap, ["poll_error"] = (int)error,
+                ["client_live_polls"] = livePolls, ["client_id"] = 777, ["client_same_session"] = true, ["fresh_token"] = true,
+                ["client_reset_cleared"] = true, ["client_retired_absent"] = true, ["client_physics_tick"] = clientTick, ["owner_input_count"] = inputs,
+                ["invalid_input_count"] = invalidInputs, ["interest_roundtrip"] = true });
             entity = next;
         }
-        server.Stop(); physics!.Detach();
+        server.Stop(); physics!.Detach(); csPeer.Stop();
         using var low = new NetSession(); Check(low.Configure() == Error.Ok && low.Listen(0) == Error.Ok, "C# low clock host");
         var lowDiagnostics = new List<string>(); low.Diagnostic += lowDiagnostics.Add;
         ulong lowId = low.Native.GetInstanceId(); int lowPort = low.Statistics["local_port"].AsInt32(); long old = low.Spawn(1, new byte[] { 1 }).Entity;
@@ -262,6 +317,8 @@ public partial class InteropFixture : Node
             lowCycles.Add(new Dictionary { ["cycle"] = cycle, ["old_entity"] = old, ["new_entity"] = next.Entity, ["poll_error"] = (int)Error.Failed, ["gap_ms"] = Time.GetTicksMsec() - before }); old = next.Entity;
         }
         Check(lowDiagnostics.Count == 3 && lowDiagnostics.TrueForAll(s => s == "Fixed simulation exceeded its catch-up budget; resynchronization required."), "C# low clock diagnostics");
-        clockRecovery["csharp"] = new Dictionary { ["passed"] = true, ["same_session"] = true, ["body_id"] = 10000, ["cycles"] = cycles, ["low_cycles"] = lowCycles, ["diagnostics"] = new Array(diagnostics.ConvertAll(s => (Variant)s).ToArray()), ["low_diagnostics"] = new Array(lowDiagnostics.ConvertAll(s => (Variant)s).ToArray()) };
+        clockRecovery["csharp"] = new Dictionary { ["passed"] = true, ["same_session"] = true, ["body_id"] = 10000, ["cycles"] = cycles, ["low_cycles"] = lowCycles,
+            ["client_states"] = new Array(clientStates.ConvertAll(s => (Variant)s).ToArray()), ["client_latency_ms"] = 20, ["client_jitter_ms"] = 5,
+            ["diagnostics"] = new Array(diagnostics.ConvertAll(s => (Variant)s).ToArray()), ["low_diagnostics"] = new Array(lowDiagnostics.ConvertAll(s => (Variant)s).ToArray()) };
     }
 }

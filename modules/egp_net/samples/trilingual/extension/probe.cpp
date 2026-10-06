@@ -28,7 +28,15 @@ class EGPNetCppProbe : public Node {
     bool process_mode = false, process_sent = false, process_replied = false;
     int messages = 0, packets = 0, applications = 0, predicted = 0;
     Array clock_diagnostics;
+    Array recovery_client_states;
+    int64_t recovery_peer = 0, recovery_entity = 0;
+    int recovery_cycle = 0, recovery_inputs = 0, recovery_invalid_inputs = 0;
     void clock_diagnostic(const String &message) { clock_diagnostics.push_back(message); }
+    void recovery_state(const String &state) { recovery_client_states.push_back(state); }
+    void recovery_input(int64_t peer, int64_t entity, const Dictionary &input) {
+        if (peer == recovery_peer && entity == recovery_entity && int64_t(input.get("cycle", 0)) == recovery_cycle) ++recovery_inputs;
+        else ++recovery_invalid_inputs;
+    }
     void message(int64_t peer, const Array &args) {
         if (args.size() == 2 && int64_t(args[0]) == 77 && Vector3(args[1]) == Vector3(1, 2, 3)) {
             ++messages; Array reply; reply.push_back("cpp"); reply.push_back(88);
@@ -133,39 +141,82 @@ public:
         if (high->connect("diagnostic", callable_mp(this, &EGPNetCppProbe::clock_diagnostic)) != OK) return proof;
         const auto session = high->native_session();
         const int port = int64_t(high->statistics()["local_port"]);
-        auto pump_ticks = [&](int minimum) {
+        net::Net client(*this); client.set_auto_poll(false);
+        recovery_client_states.clear(); recovery_inputs = recovery_invalid_inputs = 0;
+        net::Options client_options; client_options.simulation_fingerprint = high->simulation_fingerprint();
+        client_options.simulated_latency_ms = 20; client_options.simulated_jitter_ms = 5;
+        if (client.connect("state_changed", callable_mp(this, &EGPNetCppProbe::recovery_state)) != OK || client.configure(client_options) != OK
+            || high->connect("input_received", callable_mp(this, &EGPNetCppProbe::recovery_input)) != OK) return proof;
+        const auto client_session = client.native_session();
+        PackedByteArray previous_token;
+        auto pump_until = [&](auto ready) {
             const uint64_t deadline = Time::get_singleton()->get_ticks_msec() + 2000;
-            while (int64_t(high->statistics()["tick"]) < minimum && Time::get_singleton()->get_ticks_msec() < deadline) {
-                if (poll() != OK) return false;
+            while (!ready() && Time::get_singleton()->get_ticks_msec() < deadline) {
+                if (poll() != OK || client.poll() != OK) return false;
                 OS::get_singleton()->delay_usec(2000);
             }
-            return int64_t(high->statistics()["tick"]) >= minimum;
+            return ready();
         };
-        if (!pump_ticks(8)) return proof;
+        auto join_client = [&]() {
+            auto token = high->issue_token(888, String("127.0.0.1:") + String::num_int64(port));
+            if (token.error != OK || token.token.size() != 2048 || token.token == previous_token || client.join_token(888, token.token) != OK) return false;
+            previous_token = token.token;
+            if (!pump_until([&]() { return client.state() == "Connected" && high->peers().size() == 1; })) return false;
+            Dictionary peer = high->peers()[0];
+            return int64_t(peer["client_id"]) == 888 && client.native_session() == client_session;
+        };
+        auto pump_ticks = [&](int minimum) {
+            return pump_until([&]() { return int64_t(high->statistics()["tick"]) >= minimum; });
+        };
+        if (!join_client() || !pump_ticks(8) || !pump_until([&]() { return !client.entity(body).is_empty(); })) return proof;
         for (int cycle = 1; cycle <= 3; ++cycle) {
             const int64_t retired = body;
             PackedByteArray snapshot = world->call("capture_snapshot");
             const int64_t checkpoint_tick = world->call("get_tick");
             const String checkpoint_hash = world->call("get_state_hash");
+            Dictionary checkpoint_body = world->call("get_body_state", 20000);
+            const double checkpoint_y = Vector3(checkpoint_body["position"]).y;
             if (snapshot.is_empty()) return proof;
             const uint64_t before = Time::get_singleton()->get_ticks_msec();
-            OS::get_singleton()->delay_usec(550000);
+            int live_polls = 0;
+            while (Time::get_singleton()->get_ticks_msec() - before < 550) {
+                if (client.poll() != OK) return proof;
+                ++live_polls; OS::get_singleton()->delay_usec(2000);
+            }
+            if (client.state() != "Connected" || live_polls == 0) return proof;
             const int error = poll();
             const uint64_t gap_ms = Time::get_singleton()->get_ticks_msec() - before;
             if (error != FAILED || high->state() != "Stopped" || !high->entities().is_empty() || !high->peers().is_empty() || int64_t(high->statistics()["tick"]) != 0 || high->spawn(1) != 0 || high->update_entity(retired, Dictionary()) != ERR_UNAUTHORIZED) return proof;
+            client.stop();
+            if (client.state() != "Stopped" || !client.entities().is_empty() || client.send_input(retired, Dictionary()) != ERR_UNCONFIGURED) return proof;
             physics->detach();
             if (int64_t(world->call("step_tick", checkpoint_tick + 1)) != OK || int64_t(world->call("restore_snapshot", snapshot)) != OK || String(world->call("get_state_hash")) != checkpoint_hash || int64_t(world->call("get_tick")) != checkpoint_tick) return proof;
             if (high->host(port) != OK || high->native_session() != session || !high->entity(retired).is_empty() || high->update_entity(retired, Dictionary()) != ERR_DOES_NOT_EXIST) return proof;
-            body = high->spawn(1, Dictionary());
-            if (!body || body == retired || physics->attach(*high, world) != OK || physics->track(body, 20000) != OK || !pump_ticks(8)) return proof;
+            if (physics->attach(*high, world) != OK || !join_client()) return proof;
+            Dictionary peer = high->peers()[0]; recovery_peer = peer["peer_id"]; recovery_cycle = cycle;
+            body = high->spawn(1, Dictionary(), recovery_peer); recovery_entity = body;
+            if (!body || body == retired || physics->track(body, 20000) != OK || !pump_ticks(8)
+                || !pump_until([&]() { Dictionary r = client.entity(body); Dictionary s = r.get("state", Dictionary()); return int64_t(s.get("physics_tick", 0)) > checkpoint_tick; })) return proof;
             Dictionary state = high->entity(body)["state"];
             if (int64_t(state.get("physics_tick", 0)) <= checkpoint_tick || int64_t(world->call("get_tick")) != checkpoint_tick + int64_t(high->statistics()["tick"])) return proof;
+            Dictionary client_record = client.entity(body); Dictionary client_state = client_record["state"];
+            const int64_t client_tick = client_state["physics_tick"];
+            if (client.entities().size() != 1 || !client.entity(retired).is_empty() || int64_t(client_record["authority_peer"]) != recovery_peer
+                || client_tick <= checkpoint_tick || Vector3(client_state["position"]).y >= checkpoint_y) return proof;
+            Dictionary input; input["cycle"] = cycle;
+            if (client.send_input(retired, input) != OK || client.send_input(body, input) != OK
+                || !pump_until([&]() { return recovery_inputs >= cycle; }) || recovery_inputs != cycle || recovery_invalid_inputs != 0) return proof;
+            if (high->set_entity_visible(body, recovery_peer, false) != OK || !pump_until([&]() { return client.entity(body).is_empty(); })
+                || high->set_entity_visible(body, recovery_peer, true) != OK || !pump_until([&]() { return !client.entity(body).is_empty(); })) return proof;
             Dictionary record; record["cycle"] = cycle; record["old_entity"] = retired; record["new_entity"] = body; record["checkpoint_tick"] = checkpoint_tick; record["checkpoint_hash"] = checkpoint_hash; record["final_physics_tick"] = world->call("get_tick"); record["final_network_tick"] = high->statistics()["tick"]; record["gap_ms"] = int64_t(gap_ms); record["poll_error"] = error;
+            record["client_live_polls"] = live_polls; record["client_id"] = 888; record["client_same_session"] = true; record["fresh_token"] = true;
+            record["client_reset_cleared"] = true; record["client_retired_absent"] = true; record["client_physics_tick"] = client_tick;
+            record["owner_input_count"] = recovery_inputs; record["invalid_input_count"] = recovery_invalid_inputs; record["interest_roundtrip"] = true;
             cycles.push_back(record);
         }
         if (clock_diagnostics.size() != 3) return proof;
         for (int i = 0; i < 3; ++i) if (String(clock_diagnostics[i]) != "Fixed simulation exceeded its catch-up budget; resynchronization required.") return proof;
-        physics->detach(); high->stop();
+        physics->detach(); high->stop(); client.stop();
         Array high_diagnostics = clock_diagnostics.duplicate(); clock_diagnostics.clear();
         low = std::make_unique<net::Session>();
         if (low->configure() != OK || low->connect("diagnostic", callable_mp(this, &EGPNetCppProbe::clock_diagnostic)) != OK || low->listen(0) != OK) return proof;
@@ -184,6 +235,7 @@ public:
         if (clock_diagnostics.size() != 3) return proof;
         for (int i = 0; i < 3; ++i) if (String(clock_diagnostics[i]) != "Fixed simulation exceeded its catch-up budget; resynchronization required.") return proof;
         proof["passed"] = true; proof["cycles"] = cycles; proof["low_cycles"] = low_cycles; proof["diagnostics"] = high_diagnostics; proof["low_diagnostics"] = clock_diagnostics; proof["same_session"] = true; proof["body_id"] = 20000;
+        proof["client_states"] = recovery_client_states; proof["client_latency_ms"] = 20; proof["client_jitter_ms"] = 5;
         stop(); return proof;
     }
     void stop() { physics.reset(); world.unref(); high.reset(); low.reset(); }
