@@ -4,7 +4,7 @@
 import copy
 import unittest
 
-from validate_egp_hot_reload import network_recovery_failure
+from validate_egp_hot_reload import network_live_failure, network_recovery_failure
 
 
 def evidence():
@@ -120,6 +120,99 @@ class NetworkReloadEvidenceTests(unittest.TestCase):
 
     def test_missing_checkpoint(self):
         self.assertIsNotNone(network_recovery_failure(evidence()[:3]))
+
+
+SIMULATION = {"simulated_latency_ms": 30, "simulated_jitter_ms": 5, "simulated_loss": 5}
+
+
+def live_evidence():
+    proofs = []
+    for sequence in range(1, 7):
+        proofs.append({
+            "action": "network-live-start" if sequence == 1 else "network-live-check",
+            "passed": True,
+            "references_ok": True,
+            "pid": 1234,
+            "server_id": "-45",
+            "client_id": "-46",
+            "port": 47100,
+            "peer": 257,
+            "entity": 1,
+            "epoch": 1,
+            "peers": 1,
+            "entities": 1,
+            "sequence": sequence,
+            "cpp_hits": sequence,
+            "cs_hits": sequence,
+            "server_state": "Listening",
+            "client_state": "Connected",
+            "diagnostics": [],
+            "states": ["Connecting", "Synchronizing", "Connected"],
+            "simulation": dict(SIMULATION),
+            "baseline_hex": bytes([sequence, 0, 255, 42]).hex(),
+            "revision": sequence,
+            "server_tick": sequence * 30,
+            "total_client_polls": sequence * 60,
+            "packets": [{"peer": 257, "payload": bytes([n, 0, 255, 42]).hex()} for n in range(1, sequence + 1)],
+            "client_packets": [
+                {"peer": 0, "payload": bytes([128 + n, 0, 255, 42]).hex()} for n in range(1, sequence + 1)
+            ],
+        })
+    return proofs
+
+
+class LiveReloadEvidenceTests(unittest.TestCase):
+    def test_complete_uninterrupted_admission(self):
+        self.assertIsNone(network_live_failure(live_evidence(), SIMULATION))
+
+    def reject(self, key, value):
+        proofs = live_evidence()
+        proofs[3][key] = value
+        self.assertIsNotNone(network_live_failure(proofs, SIMULATION))
+
+    def test_client_rejoin(self):
+        self.reject("peer", 513)
+
+    def test_entity_replacement(self):
+        self.reject("entity", 2)
+
+    def test_connection_interruption(self):
+        self.reject("states", ["Connecting", "Synchronizing", "Connected", "Stopped", "Connected"])
+
+    def test_authority_fault(self):
+        self.reject("diagnostics", ["Fixed simulation exceeded its catch-up budget; resynchronization required."])
+
+    def test_replaced_native_wrapper(self):
+        self.reject("client_id", "-99")
+
+    def test_ignored_loss_configuration(self):
+        self.reject("simulation", dict(SIMULATION, simulated_loss=0))
+
+    def test_lost_server_reply(self):
+        self.reject("client_packets", [])
+
+    def test_corrupt_server_reply(self):
+        proof = live_evidence()[3]
+        proof["client_packets"][3]["payload"] = "0400ff2a"
+        self.reject("client_packets", proof["client_packets"])
+
+    def test_duplicate_managed_callbacks(self):
+        self.reject("cs_hits", 5)
+
+    def test_stale_baseline(self):
+        self.reject("baseline_hex", "0100ff2a")
+
+    def test_stalled_revision(self):
+        self.reject("revision", 3)
+
+    def test_stalled_clock(self):
+        self.reject("server_tick", 90)
+
+    def test_stalled_language_pumps(self):
+        self.reject("total_client_polls", 180)
+
+    def test_missing_live_checkpoint(self):
+        self.assertIsNotNone(network_live_failure(live_evidence()[:5], SIMULATION))
 
 
 if __name__ == "__main__":

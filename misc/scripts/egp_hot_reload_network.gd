@@ -17,6 +17,9 @@ var diagnostics: Array[String] = []
 var states: Array[String] = []
 var packets: Array[Dictionary] = []
 var client_polls := 0
+var baseline_sequence := 0
+var client_packets: Array[Dictionary] = []
+var simulation: Dictionary = {}
 
 func setup(cpp: Node, cs: Node) -> void:
 	native = cpp
@@ -49,10 +52,11 @@ func references_ok() -> bool:
 
 func baseline_ok() -> bool:
 	var rows: Array = client.command("entities")
-	return rows.size() == 1 and rows[0].entity == entity and rows[0].authority_peer == peer and rows[0].state == PackedByteArray([epoch, 0, 255, 42])
+	return rows.size() == 1 and rows[0].entity == entity and rows[0].authority_peer == peer and rows[0].state == PackedByteArray([baseline_sequence, 0, 255, 42])
 
 func admit() -> bool:
 	epoch += 1
+	baseline_sequence = epoch
 	if not check(server.listen(port, "127.0.0.1") == OK, "authority rebind failed"):
 		return false
 	port = server.get_statistics().local_port
@@ -85,31 +89,53 @@ func admit() -> bool:
 	return error_message.is_empty()
 
 func snapshot(action: String) -> Dictionary:
+	var rows: Array = client.command("entities")
 	return {"action": action, "passed": error_message.is_empty(), "error": error_message,
 		"pid": OS.get_process_id(), "epoch": epoch, "server_id": str(server.get_instance_id()), "client_id": str(client.get_instance_id()),
 		"server_state": server.get_state(), "client_state": client.get_state(), "references_ok": references_ok(),
 		"server_tick": server.get_statistics().tick, "peers": server.command("peers").size(), "entities": client.command("entities").size(),
 		"peer": peer, "entity": entity, "old_peer": old_peer, "old_entity": old_entity,
 		"cpp_hits": native.network_hits, "cs_hits": managed.NetworkHits, "packets": packets.duplicate(true),
-		"diagnostics": diagnostics.duplicate(), "states": states.duplicate()}
+		"diagnostics": diagnostics.duplicate(), "states": states.duplicate(),
+		"port": port, "total_client_polls": client_polls, "sequence": baseline_sequence,
+		"client_packets": client_packets.duplicate(true), "simulation": simulation.duplicate(),
+		"baseline_hex": rows[0].state.hex_encode() if rows.size() == 1 else "",
+		"revision": rows[0].revision if rows.size() == 1 else 0}
 
 func run_action(action: String) -> Dictionary:
 	var evidence: Dictionary = {}
 	match action:
-		"network-start":
+		"network-start", "network-live-start":
 			server = ClassDB.instantiate("EGPNetSession")
 			client = ClassDB.instantiate("EGPNetSession")
 			var config := {"game_protocol": "egp-reload-fault-v1", "max_players": 1, "timeout_seconds": 3}
+			if action == "network-live-start":
+				simulation = JSON.parse_string(FileAccess.get_file_as_string("res://network_options.json"))
+				config.merge(simulation)
 			check(server.configure(config) == OK and client.configure(config) == OK, "configuration failed")
 			server.diagnostic.connect(func(message: String): diagnostics.append(message))
 			client.state_changed.connect(func(state: String): states.append(state))
 			server.application_received.connect(func(sender: int, payload: PackedByteArray): packets.append({"peer": sender, "payload": payload.hex_encode()}))
 			server.application_received.connect(Callable(native, "receive_network"))
 			server.application_received.connect(Callable(managed, "ReceiveNetwork"))
+			client.application_received.connect(func(sender: int, payload: PackedByteArray): client_packets.append({"peer": sender, "payload": payload.hex_encode()}))
 			var retained := {"server": server, "client": client}
 			native.network_state = retained
 			managed.NetworkState = retained
 			await admit()
+			if action == "network-live-start":
+				check(server.send_application(peer, PackedByteArray([128 + baseline_sequence, 0, 255, 42])) == OK, "initial server application send failed")
+				await wait_until(func(): return client_packets.size() == baseline_sequence)
+		"network-live-check":
+			check(references_ok() and client.get_state() == "Connected" and server.get_state() == "Listening", "active reload interrupted native session")
+			baseline_sequence += 1
+			check(server.command("update_entity", {"entity": entity, "state": PackedByteArray([baseline_sequence, 0, 255, 42])}) == OK, "live entity update failed")
+			await wait_until(baseline_ok)
+			check(client.send_application(0, PackedByteArray([baseline_sequence, 0, 255, 42])) == OK and server.send_application(peer, PackedByteArray([128 + baseline_sequence, 0, 255, 42])) == OK, "live application exchange failed")
+			await wait_until(func(): return packets.size() == baseline_sequence and client_packets.size() == baseline_sequence)
+			var tick: int = server.get_statistics().tick
+			await wait_until(func(): return server.get_statistics().tick >= tick + 8)
+			check(packets.size() == baseline_sequence and client_packets.size() == baseline_sequence and native.network_hits == baseline_sequence and managed.NetworkHits == baseline_sequence, "active reload lost or duplicated callbacks")
 		"network-fault":
 			old_peer = peer
 			old_entity = entity

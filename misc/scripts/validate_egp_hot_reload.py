@@ -4,6 +4,7 @@
 import argparse
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -143,6 +144,51 @@ def network_recovery_failure(proofs):
     return None
 
 
+def network_live_failure(proofs, simulation):
+    """Require one uninterrupted admission across compiler failures and reloads."""
+    if len(proofs) != 6 or [p.get("action") for p in proofs] != ["network-live-start"] + ["network-live-check"] * 5:
+        return "Missing live reload checkpoints"
+    initial = proofs[0]
+    if int(initial.get("pid", 0)) <= 0 or not 0 < initial.get("port", 0) <= 65535:
+        return "Invalid process or listener identity"
+    if initial.get("server_id") == initial.get("client_id") or any(
+        int(initial.get(k, 0)) == 0 for k in ("server_id", "client_id", "peer", "entity")
+    ):
+        return "Invalid session, peer or entity identity"
+    for index, proof in enumerate(proofs):
+        sequence = index + 1
+        if not proof.get("passed") or not proof.get("references_ok"):
+            return "Live runtime or serialized references failed"
+        if any(proof.get(k) != initial.get(k) for k in ("pid", "server_id", "client_id", "port", "peer", "entity")):
+            return "Active reload replaced a process, session, admission or entity"
+        if proof.get("simulation") != simulation:
+            return "Network impairment configuration missing or changed"
+        expected = {
+            "server_state": "Listening",
+            "client_state": "Connected",
+            "epoch": 1,
+            "peers": 1,
+            "entities": 1,
+            "sequence": sequence,
+            "cpp_hits": sequence,
+            "cs_hits": sequence,
+            "diagnostics": [],
+            "states": ["Connecting", "Synchronizing", "Connected"],
+            "baseline_hex": bytes([sequence, 0, 255, 42]).hex(),
+        }
+        if any(proof.get(k) != value for k, value in expected.items()):
+            return "Active reload interrupted lifecycle, callbacks or replication"
+        packets = [{"peer": initial["peer"], "payload": bytes([n, 0, 255, 42]).hex()} for n in range(1, sequence + 1)]
+        replies = [{"peer": 0, "payload": bytes([128 + n, 0, 255, 42]).hex()} for n in range(1, sequence + 1)]
+        if proof.get("packets") != packets or proof.get("client_packets") != replies:
+            return "Bidirectional application data lost, duplicated or corrupt"
+        if any(proof.get(k, 0) <= 0 for k in ("server_tick", "revision", "total_client_polls")):
+            return "Live simulation, entity revision or language polling evidence missing"
+        if index and any(proof[k] <= proofs[index - 1][k] for k in ("server_tick", "revision", "total_client_polls")):
+            return "Live simulation, replication or language pumps did not advance"
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, required=True)
@@ -150,6 +196,29 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--expect-disabled", action="store_true", help="Record the pre-fix opt-in rejection")
     parser.add_argument("--disable-runtime", action="store_true", help="Verify the default non-collectible player")
+    parser.add_argument(
+        "--network-live-reload",
+        action="store_true",
+        help="Keep one authenticated client connected across failed builds and live C#/C++ reloads",
+    )
+    parser.add_argument(
+        "--network-latency-ms",
+        type=float,
+        default=30,
+        help="Live fixture outbound latency in each direction (default: 30 ms)",
+    )
+    parser.add_argument(
+        "--network-jitter-ms",
+        type=float,
+        default=5,
+        help="Live fixture outbound jitter in each direction (default: 5 ms)",
+    )
+    parser.add_argument(
+        "--network-loss-percent",
+        type=float,
+        default=5,
+        help="Live fixture configured packet loss in each direction (default: 5 percent)",
+    )
     parser.add_argument(
         "--network-recovery",
         action="store_true",
@@ -181,6 +250,16 @@ def main():
         parser.error("--native-abi-recovery requires runtime reload")
     if args.network_recovery and (args.disable_runtime or args.expect_disabled):
         parser.error("--network-recovery requires runtime reload")
+    if args.network_live_reload and (args.disable_runtime or args.expect_disabled):
+        parser.error("--network-live-reload requires runtime reload")
+    if args.network_live_reload and args.network_recovery:
+        parser.error("--network-live-reload and --network-recovery require separate isolated fixtures")
+    values = (args.network_latency_ms, args.network_jitter_ms, args.network_loss_percent)
+    if not all(math.isfinite(value) and 0 <= value <= maximum for value, maximum in zip(values, (5000, 5000, 100))):
+        parser.error("network simulation requires finite latency/jitter in [0, 5000] ms and loss in [0, 100] percent")
+    if not args.network_live_reload and values != (30, 5, 5):
+        parser.error("network simulation options require --network-live-reload")
+    network_enabled = args.network_recovery or args.network_live_reload
     output = args.output.resolve() / str(time.time_ns())
     project = output / "project"
     addon = project / "addons/reload_fixture"
@@ -340,8 +419,12 @@ def main():
         )
         shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_game.gd", project / "main.gd")
         shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_editor.gd", addon / "plugin.gd")
-        if args.network_recovery:
+        if network_enabled:
             shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_network.gd", project / "network.gd")
+        simulation = {"simulated_latency_ms": values[0], "simulated_jitter_ms": values[1], "simulated_loss": values[2]}
+        if args.network_live_reload:
+            (project / "network_options.json").write_text(json.dumps(simulation), encoding="utf-8")
+            receipt["network_simulation"] = simulation
         (addon / "plugin.cfg").write_text(
             '[plugin]\nname="ReloadFixture"\ndescription="Isolated reload fixture"\nauthor="EGP"\nversion="1"\nscript="plugin.gd"\n',
             encoding="utf-8",
@@ -375,7 +458,7 @@ def main():
         )
         require("Hello from reload!" in source, "Unexpected scaffold template")
         source = source.replace("Hello from reload!", "VERSION")
-        if args.network_recovery:
+        if network_enabled:
             source = "#include <godot_cpp/classes/egp_net_session.hpp>\n" + source
             source = source.replace(
                 'ClassDB::bind_method(D_METHOD("get_message"), &EGP_reload_Node::get_message);',
@@ -762,6 +845,65 @@ def main():
                     "cpp_version": 4,
                     "cs_version": 6,
                     "scope": "Windows Debug editor/game, one authenticated local client; native session references in serialized dictionaries and dynamic signal callbacks. Explicit admission after a stopped-authority fault; no physics checkpoint, concurrent reload or exported-runtime claim.",
+                }
+            if args.network_live_reload:
+                proofs = [sample("network-live-start")]
+                require(proofs[0]["passed"], "Live network setup failed")
+                cs_version = 5 if args.unload_recovery else 4
+                before_descriptor = digest(descriptor)
+                (project / "ReloadProbe.cs").write_text(PROBE.replace("VERSION", "invalid!"), encoding="utf-8")
+                run("managed-live-invalid", ["dotnet", "build", "--nologo", "-v", "minimal"], expected_success=False)
+                state = sample()
+                verify(state, 3, previous, cs_version=cs_version)
+                previous = state
+                proofs.append(sample("network-live-check"))
+                source_path.write_text(
+                    source.replace("VERSION", "3") + "\n#error EGP deliberate live network diagnostic\n",
+                    encoding="utf-8",
+                )
+                require(command("build", 900)["build_result"] != 0, "Invalid live C++ unexpectedly compiled")
+                require(digest(descriptor) == before_descriptor, "Failed live build published a descriptor")
+                state = sample()
+                verify(state, 3, previous, cs_version=cs_version)
+                previous = state
+                proofs.append(sample("network-live-check"))
+                for phase, cpp_version, managed_version in (("csharp", 3, 6), ("cpp", 4, 6), ("combined", 5, 7)):
+                    before_after_count = previous["after_count"]
+                    if phase != "cpp":
+                        (project / "ReloadProbe.cs").write_text(
+                            PROBE.replace("VERSION", str(managed_version)), encoding="utf-8"
+                        )
+                        run("managed-live-" + phase, ["dotnet", "build", "--nologo", "-v", "minimal"])
+                    if phase == "csharp":
+                        command("reload")
+                    else:
+                        source_path.write_text(source.replace("VERSION", str(cpp_version)), encoding="utf-8")
+                        require(command("build", 900)["build_result"] == 0, "Live native reload build failed")
+                    time.sleep(2)
+                    state = sample()
+                    verify(state, cpp_version, previous, cs_version=managed_version)
+                    require(
+                        state["after_count"] == before_after_count
+                        if phase == "cpp"
+                        else state["after_count"] > before_after_count,
+                        "Unexpected managed reload lifecycle during " + phase,
+                    )
+                    previous = state
+                    proofs.append(sample("network-live-check"))
+                failure = network_live_failure(proofs, simulation)
+                require(failure is None, failure or "Live network reload proof failed")
+                receipt["network_live_reload"] = {
+                    "passed": True,
+                    "proofs": proofs,
+                    "phases": [
+                        "initial",
+                        "managed-compile-failure",
+                        "native-compile-failure",
+                        "csharp-reload",
+                        "cpp-reload",
+                        "combined-reload",
+                    ],
+                    "scope": "Windows Debug editor and separate game; one authenticated authority/client pair shares game process. Both outbound simulators configured; no reconnect, checkpoints/handles/native identities retained. Configured loss does not quantify actual dropped packets or real WAN performance.",
                 }
         command("close")
         require(process.wait(timeout=60) == 0, "Editor/game teardown failed")
