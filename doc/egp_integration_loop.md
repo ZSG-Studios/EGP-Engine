@@ -2399,3 +2399,121 @@ authority/client pair sharing the game process. Configured loss does not measure
 actual dropped packets or real WAN behavior; poll/tick counts are fixture health
 evidence, not performance. Arbitrary application/ABI state, physics rollback,
 exported runtime reload and platform parity remain open. The loop stays ACTIVE.
+
+
+### Box3D references and checkpoint state across network reload — 2026-10-06
+
+Source `c026d7bec396fbbb386965f5049645d6350408c2` adds opt-in `--network-physics` to live-reload
+and stopped-authority recovery fixtures. It is committed on canonical master
+above `4d43a101cf6a55e41c753720b089f348f72e58d2`. Core/native physics/networking,
+ClassDB, SDK/glue/public helper APIs and installed binaries remain unchanged;
+this increment adds combined qualification and fixture options.
+
+The explicit native Box3D world uses 60 Hz, four substeps, one worker and gravity
+(0, -9.8, 0), with one dynamic box at stable body ID 10000. The authority and
+client use that world's simulation fingerprint. A fixture GDScript callback
+steps the world once per native authority simulation tick and publishes body
+position/velocity and physics tick in its own bounded opaque baseline codec.
+The network entity maps to body 10000 independently of its replaceable handle.
+Snapshots are trusted local bytes; peer payloads never become solver snapshots.
+
+Both live C++ and C# objects retain the world alongside native session references
+in serialized dictionaries. C++ generated EGPBox3DWorld bindings and C# native
+GodotObject calls return the current position/rotation/linear/angular velocity,
+tick and state hash. The fixture requires both language views to match the same
+world exactly after reconstruction, including native world ObjectID and body
+mapping/count. This does not qualify arbitrary managed facade or closure state.
+
+The full live-physics run passes at `.build/integration-physics-live-reload-qualified/1791303106337802600/receipt.json`.
+Headless editor PID 31480 launches game PID 29672.
+Full managed corruption/unload and native missing/invalid DLL/signature/base/
+ancestor/class recovery freshly pass first. The live pair then retains its
+connection through failed C#/C++ builds and separate C#, C++ and combined reload,
+with both outbound simulators configured for 30 ms latency, 5 ms jitter and
+5 percent loss. Each checkpoint checks the same native world/body, exact
+language body state, advancing client baseline, uninterrupted admission,
+callback counts and bidirectional application bytes.
+
+| Checkpoint | Network tick | Physics tick | Client physics tick | Authority body Y |
+| --- | --- | --- | --- | --- |
+| initial | 33 | 33 | 27 | 9998.5068359375 |
+| managed-compile-failure | 133 | 133 | 126 | 9975.8779296875 |
+| native-compile-failure | 225 | 225 | 222 | 9931.0185546875 |
+| csharp-reload | 428 | 428 | 420 | 9750.525390625 |
+| cpp-reload | 669 | 669 | 666 | 9390.603515625 |
+| combined-reload | 995 | 995 | 991 | 8652.15234375 |
+
+Live physics tick equals the authority network tick; one clock event produces
+one world step. The dynamic body's Y falls at every stage and the received
+baseline tick stays at or behind the authority. These are bounded fixture
+health/correctness observations, not timing or performance qualification.
+
+Fresh stopped-authority checkpoint recovery passes at
+`.build/integration-physics-reload-stopped-qualified/1791303281913433300/receipt.json`. Editor PID 29060
+launches game PID 8968. Immediately before the 550 ms authority stall,
+the fixture captures local checkpoint tick 22, solver
+state hash `21a31bd979e10a65` and Y 9999.333984375.
+Both native sessions stop and the client clears its obsolete physics baseline.
+C++/C# reload while stopped preserves the identical world ObjectID, body 10000,
+tick, hash and position; it does not restart the authority or advance the world.
+
+Before explicit fresh admission, the fixture advances the world one step as a
+rollback control, then corrupts a copy of the checkpoint. Restore must return
+`ERR_FILE_CORRUPT` (16) and leave the changed
+world's hash/tick unchanged. Restoring the original trusted bytes must recover
+exact tick 22, hash `21a31bd979e10a65` and Y
+9999.333984375. The saved snapshot file SHA-256 is
+`1dc88dccd116d5852cd9703f722f07c63b9fe54e8b842b74dddbf80c8836fa11`.
+
+After fresh admission, the new entity maps to the same body 10000, while retired
+peer/entity handles remain rejected. Physics resumes at world tick
+39 and client baseline tick 38; the offset
+invariant is `world_tick = checkpoint_tick + restarted_network_tick`.
+The fresh received physics baseline must advance beyond the checkpoint, and
+the body's Y must be below its checkpoint position. This is explicit trusted
+authority restoration; it is not automatic client prediction or rollback.
+
+Reproduce each physics mode in separate fresh output directories:
+
+```powershell
+python misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --assembly-recovery --unload-recovery --native-recovery --native-abi-recovery --network-live-reload --network-physics --output .build/integration-physics-live-reload-qualified
+python misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --network-recovery --network-physics --output .build/integration-physics-reload-stopped-qualified
+```
+
+The live receipt records frozen source/fixture hashes, executable/runtime/SDK
+identities, all generated extension/managed binaries, samples, commands,
+process identities and diagnostics. Final live C++ DLL SHA-256 is `7cc967c9f8b316b579824e0c7a3e24e20cffb7cdd5c00852616501802807630f`;
+C# assembly is `15b791de94196387e5f0eb7ece487cc73aa0d0bd4cdcfe9f2511ee8d53eb1ece`. Editor remains
+`20be5396d78b4c9873d4a355132f62366be58fcf9b1519bb595006fb07e74342`, compiled from
+`4d64b38c554ab3dc491285f4ffa5119c001da56f`. No duplicate engine build was needed.
+
+Physics-off live reload freshly passes at `.build/integration-physics-reload-option-off/1791303319361621900/receipt.json`;
+the current runtime-disabled baseline passes at
+`.build/integration-physics-reload-default/1791303366800580300/receipt.json`. The focused successful precursor
+is `.build/integration-physics-reload-initial/1791302979650546800/receipt.json`.
+`.build/integration-physics-reload-tool-checks/receipt.json` passes 47 semantic
+tests (29 networking/reload and 18 physics), eleven invalid CLI checks, help,
+Ruff/format and mypy with the existing Python 3.9 configuration warning.
+Physics negatives reject missing/replaced worlds/bodies, incorrect language
+views, lost clock offsets/profiles, nonfinite state, stale/future client ticks,
+stalled live physics, accepted corruption, changed state on failed restore and
+inexact restored hash/tick/position. The physics flag requires a networking mode.
+
+`.build/integration-physics-reload-publication.json` gates normal publication:
+original handoff ancestry, exact canonical/remote master equality, 86 unchanged
+installed artifacts, all seven actual worktrees, preserved foreign patches and
+untracked bytes, no open PRs and completed original engine chat handoffs.
+Unchanged 197-assertion language runs, 36 networking semantic tests, native
+120-check/ten-case suites, seven physics lab cases and 72 admission cases keep
+their bounded source/binary evidence. Changed reload fixtures use the four
+fresh current runs above; documentation/website publication stays separately
+owned. Other worktree leftovers remain preserved, not declared clean or merged.
+
+Next: independent-process low-level fault/reload, in-flight callbacks/concurrent
+reload, managed facade/event-closure persistence, automatic client prediction/
+rollback, production checkpoint/admission/retry, hard outages/crashes, larger
+worlds and sustained WAN/scale/soak. This gate uses one local Windows Debug
+authority/client pair sharing a game process and one explicit native body,
+with a fixture stepper/codec. Configured loss does not quantify actual drops
+or real WAN behavior. Exported-runtime reload, arbitrary game/ABI state,
+platform parity and performance remain open; the loop stays ACTIVE.
