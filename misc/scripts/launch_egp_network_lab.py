@@ -16,6 +16,36 @@ ROOT = Path(__file__).resolve().parents[2]
 PRESETS = {"local": (0, 0, 0), "wifi": (40, 10, 1), "wan": (100, 25, 3), "poor": (200, 60, 10)}
 
 
+def visible_windows(process_ids):
+    """Read visible top-level windows for owned Windows processes without focus/input."""
+    import ctypes
+    from ctypes import wintypes
+
+    user32 = ctypes.WinDLL("user32", use_last_error=True)
+    callback_type = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+    user32.EnumWindows.argtypes = [callback_type, wintypes.LPARAM]
+    user32.EnumWindows.restype = wintypes.BOOL
+    user32.IsWindowVisible.argtypes = [wintypes.HWND]
+    user32.IsWindowVisible.restype = wintypes.BOOL
+    user32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
+    user32.GetWindowTextW.argtypes = [wintypes.HWND, wintypes.LPWSTR, ctypes.c_int]
+    found = {}
+
+    @callback_type
+    def visit(window, _):
+        pid = wintypes.DWORD()
+        user32.GetWindowThreadProcessId(window, ctypes.byref(pid))
+        if pid.value in process_ids and user32.IsWindowVisible(window):
+            title = ctypes.create_unicode_buffer(512)
+            user32.GetWindowTextW(window, title, len(title))
+            found[pid.value] = {"pid": pid.value, "handle": int(window), "title": title.value}
+        return True
+
+    if not user32.EnumWindows(visit, 0):
+        raise ctypes.WinError(ctypes.get_last_error())
+    return found
+
+
 def bounded_float(low, high):
     def parse(value):
         number = float(value)
@@ -79,6 +109,8 @@ def main():
         "simulation": simulation,
         "simulate_on": args.simulate_on,
         "processes": [],
+        "window_observation_supported": os.name == "nt",
+        "visible_window_observations": [],
         "scope": "Local encrypted admission, account identity, replies, tick replication and optional reconnect. Host mode includes a server-owned test entity. No gameplay, physics rollback, remote auth or performance qualification.",
     }
     engine_main = engine.with_name(engine.name.replace(".console.exe", ".exe"))
@@ -87,6 +119,8 @@ def main():
     }
     children = []
     logs = []
+    visible_process_ids = set()
+    windows_observed = {}
     started = time.monotonic()
     try:
         with (output / "import.log").open("w", encoding="utf-8") as log:
@@ -112,7 +146,10 @@ def main():
                         time.sleep(0.05)
                     receipt["listener"] = json.loads((admission / "ready.json").read_text(encoding="utf-8"))
                 visible = args.visible and role != "server"
-                command = [str(engine), "--path", str(project), "--max-fps", "60"]
+                # Direct GUI launch makes each observed window belong to its owned
+                # process, rather than to a console wrapper's child process.
+                executable = engine_main if visible and os.name == "nt" else engine
+                command = [str(executable), "--path", str(project), "--max-fps", "60"]
                 if visible:
                     command += [
                         "--resolution",
@@ -142,14 +179,20 @@ def main():
                     launch_options["creationflags"] = subprocess.CREATE_NO_WINDOW
                 child = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, **launch_options)
                 children.append(child)
+                if visible:
+                    visible_process_ids.add(child.pid)
                 print(f"Started {name} (PID {child.pid}, {'window' if visible else 'headless'})", flush=True)
             deadline = time.monotonic() + args.duration + 15
             while any(child.poll() is None for child in children):
+                if args.visible and os.name == "nt":
+                    windows_observed.update(visible_windows(visible_process_ids))
                 if any(child.poll() not in (None, 0) for child in children):
                     raise RuntimeError("A lab process failed; see individual logs")
                 if time.monotonic() > deadline:
                     raise RuntimeError("Lab watchdog expired")
                 time.sleep(0.05)
+            if args.visible and os.name == "nt" and set(windows_observed) != visible_process_ids:
+                raise RuntimeError("A requested client/host window was never observed as visible")
         receipt["passed"] = True
     except (OSError, RuntimeError, ValueError, subprocess.TimeoutExpired) as error:
         receipt["error"] = str(error)
@@ -173,11 +216,17 @@ def main():
                 result = json.loads(match.group(1)) if match else {"passed": False, "message": "missing result marker"}
             except ValueError:
                 result = {"passed": False, "message": "invalid result marker"}
-            receipt["processes"].append({"name": name, "exit_code": child.returncode, "result": result})
+            receipt["processes"].append({
+                "name": name,
+                "pid": child.pid,
+                "exit_code": child.returncode,
+                "result": result,
+            })
             if child.returncode or not result.get("passed") or "ERROR:" in text:
                 receipt["passed"] = False
                 receipt.setdefault("error", f"{name} did not pass cleanly; see its log")
         receipt["elapsed_seconds"] = round(time.monotonic() - started, 3)
+        receipt["visible_window_observations"] = list(windows_observed.values())
         (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     print(f"{'PASS' if receipt['passed'] else 'FAIL'}: {output / 'receipt.json'}", flush=True)
     return 0 if receipt["passed"] else 1

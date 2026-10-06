@@ -242,8 +242,11 @@
       ]
     },
     "RigidBody2D": {
-      "methods": [],
+      "methods": ["_integrate_forces"],
       "constants": []
+    },
+    "RigidBody3D": {
+      "methods": ["_integrate_forces"]
     }
   },
   "removed": {
@@ -417,9 +420,6 @@
       ]
     },
     "RigidBody2D": {
-      "methods": [
-        "_integrate_forces"
-      ],
       "constants": [
         "CCD_MODE_CAST_RAY"
       ]

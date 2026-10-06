@@ -35,8 +35,20 @@ def main():
         reflection = output / "classdb.json"
         commands = [
             ("extension-api", [str(engine), "--headless", "--path", str(output), "--dump-extension-api"]),
-            ("classdb", [str(engine), "--headless", "--path", str(output), "--script",
-                         str(ROOT / "misc/scripts/dump_egp_classdb.gd"), "--", "--api=" + str(api), "--output=" + str(reflection)]),
+            (
+                "classdb",
+                [
+                    str(engine),
+                    "--headless",
+                    "--path",
+                    str(output),
+                    "--script",
+                    str(ROOT / "misc/scripts/dump_egp_classdb.gd"),
+                    "--",
+                    "--api=" + str(api),
+                    "--output=" + str(reflection),
+                ],
+            ),
         ]
         for name, command in commands:
             result = subprocess.run(command, cwd=output, capture_output=True, text=True, timeout=120)
@@ -55,9 +67,15 @@ def main():
             raise RuntimeError("Actual editor binary changed during capture")
         if digest(api) != actual["extension_api_sha256"]:
             raise RuntimeError("Extension API changed during capture")
-        receipt.update(passed=True, extension_api=str(api), classdb=str(reflection),
-                       extension_api_sha256=digest(api), classdb_sha256=digest(reflection),
-                       actual_engine=str(actual_engine), actual_engine_sha256=actual["engine_sha256"])
+        receipt.update(
+            passed=True,
+            extension_api=str(api),
+            classdb=str(reflection),
+            extension_api_sha256=digest(api),
+            classdb_sha256=digest(reflection),
+            actual_engine=str(actual_engine),
+            actual_engine_sha256=actual["engine_sha256"],
+        )
     except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
         receipt["error"] = str(error)
     (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")

@@ -18,8 +18,10 @@ class ExposureAuditTests(unittest.TestCase):
         self.root = Path(self.temporary.name)
         self.api = {"header": {"precision": "single"}, "classes": []}
         self.reflection = {"classes": {}}
-        self.changes = {"required": {"PhysicsServer3D": {"properties": ["spring/enabled"]}},
-                        "property_types": {"PhysicsServer3D": {"spring/enabled": 1}}}
+        self.changes = {
+            "required": {"PhysicsServer3D": {"properties": ["spring/enabled"]}},
+            "property_types": {"PhysicsServer3D": {"spring/enabled": 1}},
+        }
         generated = self.root / "managed/Core/Generated"
         generated.mkdir(parents=True)
         self.headers = self.root / "sdk/gen/include/godot_cpp/classes"
@@ -46,10 +48,20 @@ class ExposureAuditTests(unittest.TestCase):
         (self.root / "sdk/sdk.json").write_text(json.dumps({"api_sha256": fingerprint, "precision": "single"}))
         (self.root / "classdb.json").write_text(json.dumps(self.reflection))
         (self.root / "changes.json").write_text(json.dumps(self.changes))
-        command = [sys.executable, str(Path(__file__).with_name("validate_egp_api.py")),
-                   "--api", str(api_path), "--sdk", str(self.root / "sdk"),
-                   "--managed", str(self.root / "managed"), "--changes", str(self.root / "changes.json"),
-                   "--output", str(self.root / "receipt.json")]
+        command = [
+            sys.executable,
+            str(Path(__file__).with_name("validate_egp_api.py")),
+            "--api",
+            str(api_path),
+            "--sdk",
+            str(self.root / "sdk"),
+            "--managed",
+            str(self.root / "managed"),
+            "--changes",
+            str(self.root / "changes.json"),
+            "--output",
+            str(self.root / "receipt.json"),
+        ]
         if reflection:
             command += ["--classdb", str(self.root / "classdb.json")]
         result = subprocess.run(command, capture_output=True, text=True, timeout=20)
@@ -58,7 +70,9 @@ class ExposureAuditTests(unittest.TestCase):
     def test_inspector_path_is_recorded_with_actual_type(self):
         code, receipt = self.run_audit()
         self.assertEqual(code, 0, receipt["failures"])
-        self.assertEqual(receipt["inspector_properties"], [{"class": "PhysicsServer3D", "property": "spring/enabled", "type": 1}])
+        self.assertEqual(
+            receipt["inspector_properties"], [{"class": "PhysicsServer3D", "property": "spring/enabled", "type": 1}]
+        )
 
     def test_missing_snapshot_cannot_satisfy_properties(self):
         code, receipt = self.run_audit(False)
@@ -90,6 +104,23 @@ class ExposureAuditTests(unittest.TestCase):
         code, receipt = self.run_audit()
         self.assertNotEqual(code, 0)
         self.assertIn("Invalid native-only pointer hook declaration: PhysicsServer3D.configure", receipt["failures"])
+
+    def test_only_named_internal_signals_are_classified(self):
+        self.reflection["classes"]["PhysicsServer3D"]["signals"] = [{"name": "_debug_changed"}, {"name": "_unexpected"}]
+        code, receipt = self.run_audit()
+        self.assertNotEqual(code, 0)
+        self.assertEqual(receipt["internal_signals"], [{"class": "PhysicsServer3D", "signal": "_debug_changed"}])
+        self.assertIn("C# omits PhysicsServer3D signal _unexpected", receipt["failures"])
+
+    def test_variant_property_cannot_be_filtered_out_as_group(self):
+        self.reflection["classes"]["PhysicsServer3D"]["properties"].extend([
+            {"name": "data", "type": 0, "usage": 1 << 17},
+            {"name": "Inspector category", "type": 0, "usage": 1 << 7},
+        ])
+        code, receipt = self.run_audit()
+        self.assertNotEqual(code, 0)
+        self.assertIn("C# omits PhysicsServer3D property data", receipt["failures"])
+        self.assertFalse(any("Inspector category" in failure for failure in receipt["failures"]))
 
 
 if __name__ == "__main__":

@@ -28,6 +28,7 @@ LEGACY_CLASSES = {
     "EGPLiteSession",
 }
 REQUIRED_CLASSES = {"PhysicsServer2D", "PhysicsServer3D", "EGPBox3DWorld", "EGPNetSession"}
+INTERNAL_SIGNALS = {("PhysicsServer2D", "_debug_changed"), ("PhysicsServer3D", "_debug_changed")}
 
 
 def digest(path):
@@ -94,7 +95,14 @@ def main():
     parser.add_argument("--classdb", type=Path, help="Actual property/signal snapshot from dump_egp_classdb.gd")
     parser.add_argument("--output", type=Path, default=Path(".build/egp-api-validation/receipt.json"))
     args = parser.parse_args()
-    receipt = {"passed": False, "checks": [], "native_only_hooks": [], "inspector_properties": [], "failures": []}
+    receipt = {
+        "passed": False,
+        "checks": [],
+        "native_only_hooks": [],
+        "inspector_properties": [],
+        "internal_signals": [],
+        "failures": [],
+    }
     failures = receipt["failures"]
     try:
         api = json.loads(args.api.read_text(encoding="utf-8"))
@@ -178,7 +186,14 @@ def main():
             if args.classdb and name not in reflected:
                 failures.append(f"ClassDB snapshot omits audited class: {name}")
             signals = {signal["name"] for signal in actual.get("signals", [])}
-            property_rows = [prop for prop in actual.get("properties", []) if prop.get("type") not in (0, "Nil")]
+            # Match the generator's category/group filtering, retaining Variant
+            # properties whose reflected type is NIL with NIL_IS_VARIANT usage.
+            property_rows = [
+                prop
+                for prop in actual.get("properties", [])
+                if not prop.get("usage", 0) & ((1 << 6) | (1 << 7) | (1 << 8))
+                and not (prop.get("type") in (0, "Nil") and prop.get("usage", 0) & (1 << 18))
+            ]
             properties = {prop["name"] for prop in property_rows}
             for method in sorted(methods):
                 if method not in cs_names and method not in native_only.get(name, []):
@@ -189,19 +204,28 @@ def main():
                 if not re.search(r"\b" + re.escape(constant) + r"\b", cpp_text):
                     failures.append(f"C++ omits {name}.{constant}")
             for signal in sorted(signals):
+                if (name, signal) in INTERNAL_SIGNALS:
+                    receipt["internal_signals"].append({"class": name, "signal": signal})
+                    continue
                 if signal not in cs_names:
                     failures.append(f"C# omits {name} signal {signal}")
             for prop in property_rows:
                 if "/" in prop["name"]:
                     # The managed generator deliberately exposes these through Get/Set,
                     # rather than generating invalid C# identifiers for inspector paths.
-                    receipt["inspector_properties"].append({"class": name, "property": prop["name"], "type": prop["type"]})
+                    receipt["inspector_properties"].append({
+                        "class": name,
+                        "property": prop["name"],
+                        "type": prop["type"],
+                    })
                 elif prop["name"] not in cs_names:
                     failures.append(f"C# omits {name} property {prop['name']}")
             for member, expected_type in changes.get("property_types", {}).get(name, {}).items():
                 prop = next((prop for prop in property_rows if prop["name"] == member), None)
                 if prop is None or prop.get("type") != expected_type:
-                    failures.append(f"Property type check failed: {name}.{member}; expected Variant type {expected_type}")
+                    failures.append(
+                        f"Property type check failed: {name}.{member}; expected Variant type {expected_type}"
+                    )
             for direction in ("required", "removed"):
                 delta = changes.get(direction, {}).get(name, {})
                 for kind, names in (

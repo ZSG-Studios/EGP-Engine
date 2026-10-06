@@ -26,6 +26,11 @@ types. Their bound accessor methods still undergo normal C#/C++ exposure checks.
 This classification does not establish runtime behavior; fixtures must test the
 typed accessor and inspector path where behavior is required.
 
+The servers' `_debug_changed` signals are internal editor debug-display
+notifications. The managed generator intentionally excludes them; receipts name
+these two signals explicitly. Ordinary public signals and the RigidBody2D/3D
+`_integrate_forces` gameplay virtuals remain subject to language exposure checks.
+
 The 16 raw-pointer virtual callbacks in `PhysicsDirectSpaceState2DExtension`,
 `PhysicsDirectSpaceState3DExtension`, `PhysicsServer2DExtension` and
 `PhysicsServer3DExtension` are native backend-authoring hooks retained for native
