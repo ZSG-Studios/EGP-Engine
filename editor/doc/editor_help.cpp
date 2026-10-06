@@ -3323,6 +3323,10 @@ void EditorHelp::save_script_doc_cache() {
 }
 
 void EditorHelp::generate_doc(bool p_use_cache, bool p_use_script_cache) {
+	// Deferred cache work can arrive after the editor has been destroyed.
+	if (!EditorNode::get_singleton()) {
+		return;
+	}
 	doc_generation_count++;
 	OS::get_singleton()->benchmark_begin_measure("EditorHelp", vformat("Generate Documentation (Run %d)", doc_generation_count));
 
@@ -3331,6 +3335,16 @@ void EditorHelp::generate_doc(bool p_use_cache, bool p_use_script_cache) {
 
 	if (!doc) {
 		doc = memnew(DocTools);
+	}
+	if (EditorNode::is_cmdline_mode()) {
+		// CLI builds and exports need the shipped help metadata, not runtime
+		// default-property probing or asynchronous documentation/cache workers.
+		doc->load_compressed(_doc_data_compressed, _doc_data_compressed_size, _doc_data_uncompressed_size);
+		if (ext_doc) {
+			doc->merge_from(*ext_doc);
+		}
+		OS::get_singleton()->benchmark_end_measure("EditorHelp", vformat("Generate Documentation (Run %d)", doc_generation_count));
+		return;
 	}
 
 	if (doc_version_hash.is_empty()) {
