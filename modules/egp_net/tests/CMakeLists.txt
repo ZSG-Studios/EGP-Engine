@@ -4,6 +4,10 @@ enable_testing()
 set(YOJIMBO_BUILD_TESTS ON CACHE BOOL "" FORCE)
 set(YOJIMBO_INSTALL OFF CACHE BOOL "" FORCE)
 add_subdirectory(../../../thirdparty/yojimbo yojimbo)
+# Keep the last upstream check visible when an assertion or crash interrupts
+# redirected CI output. Preserve the vendored source and its original main.
+target_compile_definitions(yojimbo_test PRIVATE main=egp_yojimbo_test_main)
+target_sources(yojimbo_test PRIVATE yojimbo_test_main.cpp)
 add_library(egp_net_core ../net_core.cpp)
 find_package(Threads REQUIRED)
 target_compile_features(egp_net_core PUBLIC cxx_std_17)

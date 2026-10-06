@@ -3409,3 +3409,21 @@ editor API. This does not establish linked-extension or current engine runtime
 success. The Linux workflow now uploads its built editor/Mono assemblies before
 the still-required C++ fixture step, permitting bounded artifact replay when a
 later fixture fails. No compatibility or unit test gate is disabled.
+
+### 2026-10-06 restored current-source networking qualification
+
+On source `0783e116211ee76dd117fa11dbc6000e6081d5d2`, hosted networking
+run `37545326677` passed Linux/macOS and nine of ten Windows Debug CTest
+profiles. The Windows upstream `yojimbo_test` exited after 0.89 seconds with
+only random seed `1791328557` retained; all eight EGP profiles and upstream
+custom packet IO passed. The failure remains unresolved. Replaying that seed
+locally with `test.exe 1791328557` passed in Windows Debug and Release.
+
+The consumer test runner now disables stdout/stderr buffering before calling
+unchanged upstream main, retaining the last diagnostic on abrupt exit. Pinned
+vendor bytes, randomization, test checks and exit status are preserved. A GCC
+fixture printing `LAST_UPSTREAM_CHECK` then calling `_Exit(7)` retained the
+marker and exit 7 through redirected output. Applicable pre-commit checks passed.
+Hosted baseline artifacts and local logs are preserved under
+`.build/integration-restored-0783/`; a fresh hosted run is required. This improves
+diagnostics and does not establish that the hosted failure has been repaired.
