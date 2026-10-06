@@ -1,6 +1,7 @@
     [Export] public EGP.Networking.NetNode? ServerNode { get; set; }
     [Export] public EGP.Networking.NetNode? ClientNode { get; set; }
     [Export] public int NodeRestores { get; set; }
+    [Export] public int NodeChecks { get; set; }
     [Export] public int ServerMessages { get; set; }
     [Export] public int ClientMessages { get; set; }
     [Export] public int OwnerInputs { get; set; }
@@ -23,7 +24,37 @@
         ServerNode.EntitySpawned += (entity, kind, state) => ServerSpawns++;
         ClientNode.EntitySpawned += (entity, kind, state) => ClientSpawns++;
     }
+    private void CheckNodeLifecycle() {
+        var scratch = new EGP.Networking.NetNode { AutoPoll = false };
+        AddChild(scratch);
+        void Require(bool value) {
+            if (!value) throw new System.InvalidOperationException("NetNode codec replacement self-test failed");
+            NodeChecks++;
+        }
+        int hits = 0;
+        scratch.PacketReceived += (peer, bytes, channel, delivery) => {
+            if (peer != 1 || bytes.Length != 2 || bytes[0] != 0 || bytes[1] != 255 || channel != 3 || delivery != EGP.Networking.Delivery.ReliableOrdered)
+                throw new System.InvalidOperationException("NetNode packet forwarding changed");
+            hits++;
+        };
+        try {
+            var old = scratch.Bridge;
+            var oldId = old.GetInstanceId();
+            Require(scratch.GetChildCount() == 1);
+            old.EmitSignal("packet_received", 1L, new byte[] { 0, 255 }, 3L, 2L);
+            Require(hits == 1);
+            old.Free();
+            Require(!GodotObject.IsInstanceValid(old) && scratch.GetChildCount() == 0);
+            var fresh = scratch.Bridge;
+            Require(fresh.GetInstanceId() != oldId && scratch.GetChildCount() == 1);
+            fresh.EmitSignal("packet_received", 1L, new byte[] { 0, 255 }, 3L, 2L);
+            Require(hits == 2);
+            Require(!fresh.Get("auto_poll").AsBool());
+        }
+        finally { scratch.Free(); }
+    }
     public Godot.Collections.Dictionary CreateNodeSessions(Godot.Collections.Dictionary config) {
+        CheckNodeLifecycle();
         ServerNode = new() { Name = "Authority", AutoPoll = false };
         ClientNode = new() { Name = "Client", AutoPoll = false };
         AddChild(ServerNode); AddChild(ClientNode); SubscribeNodes();
@@ -68,7 +99,7 @@
         ["server_auto_poll"] = ServerNode.AutoPoll, ["client_auto_poll"] = ClientNode.AutoPoll,
         ["server_messages"] = ServerMessages, ["client_messages"] = ClientMessages, ["inputs"] = OwnerInputs,
         ["server_packets"] = ServerPackets, ["client_packets"] = ClientPackets,
-        ["server_spawns"] = ServerSpawns, ["client_spawns"] = ClientSpawns, ["restores"] = NodeRestores,
+        ["server_spawns"] = ServerSpawns, ["client_spawns"] = ClientSpawns, ["restores"] = NodeRestores, ["checks"] = NodeChecks,
         ["server_history"] = ServerHistory.Duplicate(true), ["client_history"] = ClientHistory.Duplicate(true), ["input_history"] = InputHistory.Duplicate(true)
     };
     public void RemoveNodeSessions() { RemoveChild(ClientNode!); RemoveChild(ServerNode!); }

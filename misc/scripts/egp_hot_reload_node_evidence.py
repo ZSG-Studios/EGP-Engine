@@ -34,6 +34,8 @@ def node_failure(proofs, live, simulation):
         return "Invalid high-level node identities"
     for index, proof in enumerate(proofs):
         state = proof.get("node_state", {})
+        if state.get("checks") != 6:
+            return "Codec replacement/packet forwarding self-checks missing"
         sequence = index + 1 if live else (2 if index == 3 else 1)
         if not proof.get("passed") or not proof.get("references_ok") or not state.get("references_ok"):
             return "High-level runtime or native/bridge reference checks failed"

@@ -30,6 +30,7 @@ public partial class NetNode : Node, ISerializationListener
         get
         {
             if (GodotObject.IsInstanceValid(bridge)) return bridge!;
+            DisconnectBridgeSignals();
             bridge = (Node)Shared.New("res://addons/egp_net/egp_net.gd");
             bridge.Name = "EGPNetBridge"; bridge.Set("auto_poll", autoPoll);
             AddChild(bridge);
