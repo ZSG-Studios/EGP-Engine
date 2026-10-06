@@ -32,6 +32,12 @@ func _ready() -> void:
 func _capture(message: String, data: Array) -> bool:
 	if message != "sample":
 		return false
+	if not managed.has_method("Version"):
+		EngineDebugger.send_message("egp_reload:state", [{
+			"request": data[0], "placeholder": true,
+			"cs_id": str(managed.get_instance_id()), "cs_counter": managed.get("Counter"),
+		}])
+		return true
 	native.emit_signal("pulse", 1)
 	managed.Fire()
 	var state := {

@@ -50,6 +50,9 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--expect-disabled", action="store_true", help="Record the pre-fix opt-in rejection")
     parser.add_argument("--disable-runtime", action="store_true", help="Verify the default non-collectible player")
+    parser.add_argument(
+        "--assembly-recovery", action="store_true", help="Also reject and recover a corrupted managed assembly"
+    )
     args = parser.parse_args()
     output = args.output.resolve() / str(time.time_ns())
     project = output / "project"
@@ -135,7 +138,8 @@ def main():
         save()
         return state
 
-    def verify(state, version, previous):
+    def verify(state, version, previous, cs_version=None):
+        cs_version = version if cs_version is None else cs_version
         require(not state["editor_hint"], "Fixture is an editor tool rather than a running game")
         require(state["collectible"], "Running-game project assembly is not collectible")
         for key in ("cpp_counter", "cs_counter", "ready_count"):
@@ -146,7 +150,7 @@ def main():
             "C++ method/cached callable retained old code",
         )
         require(
-            state["cs_version"] == version and state["cs_callable"] == version,
+            state["cs_version"] == cs_version and state["cs_callable"] == cs_version,
             "C# method/cached callable retained old code",
         )
         require(
@@ -168,7 +172,7 @@ def main():
         (project / "project.godot").write_text(
             'config_version=5\n[application]\nconfig/name="ReloadFixture"\nrun/main_scene="res://main.tscn"\n[dotnet]\nproject/assembly_name="ReloadFixture"\n[debug]\nhot_reload/enable_runtime='
             + ("false" if args.disable_runtime else "true")
-            + '\n[editor]\nrun/main_run_args="--headless --max-fps 60"\n[editor_plugins]\nenabled=PackedStringArray("res://addons/reload_fixture/plugin.cfg")\n',
+            + '\n[editor]\nrun/main_run_args="--headless --max-fps 60 --ignore-error-breaks"\n[editor_plugins]\nenabled=PackedStringArray("res://addons/reload_fixture/plugin.cfg")\n',
             encoding="utf-8",
         )
         (project / "main.tscn").write_text(
@@ -253,6 +257,43 @@ def main():
                 )
                 previous = state
             receipt["reloads"] = 2
+            # Exercise the same debugger command after a C#-only rebuild.
+            (project / "ReloadProbe.cs").write_text(PROBE.replace("VERSION", "4"), encoding="utf-8")
+            run("managed-version-4", ["dotnet", "build", "--nologo", "-v", "minimal"])
+            command("reload")
+            time.sleep(2)
+            state = sample()
+            verify(state, 3, previous, cs_version=4)
+            require(state["after_count"] > previous["after_count"], "C#-only reload did not deserialize")
+            previous = state
+            command("reload")
+            time.sleep(1)
+            state = sample()
+            verify(state, 3, previous, cs_version=4)
+            require(state["after_count"] == previous["after_count"], "No-change command reloaded the assembly again")
+            previous = state
+            if args.assembly_recovery:
+                assembly = project / ".godot/mono/temp/bin/Debug/ReloadFixture.dll"
+                backup = assembly.read_bytes()
+                time.sleep(1.1)
+                assembly.write_bytes(b"EGP deliberately invalid managed assembly")
+                command("reload")
+                time.sleep(2)
+                fallback = sample()
+                require(
+                    fallback.get("placeholder")
+                    and fallback["cs_id"] == previous["cs_id"]
+                    and fallback["cs_counter"] == 87,
+                    "Failed load lost placeholder identity or state",
+                )
+                time.sleep(1.1)
+                assembly.write_bytes(backup)
+                command("reload")
+                time.sleep(2)
+                state = sample()
+                verify(state, 3, previous, cs_version=4)
+                receipt["assembly_recovery"] = True
+            receipt["reloads"] = 3
         command("close")
         require(process.wait(timeout=60) == 0, "Editor/game teardown failed")
         require(digest(engine) == receipt["engine_sha256"], "Input engine changed during validation")

@@ -181,12 +181,13 @@ void NativeExtensionEditor::_build_pressed(bool p_release) {
 	}
 	const Error error = build_extension(extensions->get_item_text(extensions->get_selected()), p_release);
 	if (error != OK) {
-		_append_line(vformat(TTR("Could not start build (error %d). Stop the running game and check the CMake/toolchain path."), error));
+		_append_line(vformat(TTR("Could not start build (error %d). Running games require a Debug build and debug/hot_reload/enable_runtime enabled before launch. Check the CMake/toolchain path and any active build."), error));
 	}
 }
 
 Error NativeExtensionEditor::build_extension(const String &p_name, bool p_release) {
-	ERR_FAIL_COND_V(process_id != 0 || (EditorRunBar::get_singleton() && EditorRunBar::get_singleton()->is_playing()), ERR_BUSY);
+	ERR_FAIL_COND_V(process_id != 0, ERR_BUSY);
+	ERR_FAIL_COND_V_MSG(EditorRunBar::get_singleton() && EditorRunBar::get_singleton()->is_playing() && (p_release || !bool(GLOBAL_GET("debug/hot_reload/enable_runtime"))), ERR_BUSY, "Running-game C++ builds require Debug configuration and debug/hot_reload/enable_runtime enabled before launch.");
 	ERR_FAIL_COND_V(!p_name.is_valid_identifier() || !FileAccess::exists("res://extensions/" + p_name + "/CMakeLists.txt"), ERR_INVALID_PARAMETER);
 	Error error = _prepare_sdk();
 	ERR_FAIL_COND_V(error != OK, error);

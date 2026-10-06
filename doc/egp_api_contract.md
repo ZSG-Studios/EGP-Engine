@@ -64,3 +64,18 @@ actual editor API. The audit checks names, enum membership, numeric values and
 nonempty descriptions, and rejects documented constants that have been retired.
 It records class XML hashes and the number of checked constants. This does not
 validate the semantic accuracy of every description or all method defaults.
+
+Running-game C#/C++ reload is enabled before startup with
+`debug/hot_reload/enable_runtime=true` in an editor build. The editor debugger
+reloads changed native extensions at an idle boundary before script bindings;
+successful C++ Debug publication notifies attached games automatically. C# Build
+already sends the same debugger command. Export templates keep runtime reload
+disabled. A project that opts in uses collectible managed assemblies; libraries
+requiring non-collectible assemblies must retain the default setting.
+
+`misc/scripts/validate_egp_hot_reload.py` creates a disposable project and launches
+a separate game through the actual editor debugger. It checks compatible method
+changes, native object identities, scalar/vector/node-reference state, cached
+callables, native and managed event subscriptions, serialization callbacks and
+failed-compile recovery. This scope does not guarantee recovery from arbitrary
+class-layout changes, active application threads or static state.
