@@ -64,6 +64,71 @@ class GDExtensionMethodBind : public MethodBind {
 	StringName name;
 	bool is_reloading = false;
 	bool valid = true;
+
+	bool _check_call(Object *p_object) const {
+		ERR_FAIL_COND_V_MSG(!valid, false, vformat("Cannot call invalid GDExtension method bind '%s'. It's probably cached - you may need to restart Godot.", name));
+		ERR_FAIL_COND_V_MSG(is_reloading, false, vformat("Cannot call GDExtension method bind '%s' while its library is reloading or unavailable. Restore a compatible library and reload.", name));
+		ERR_FAIL_COND_V_MSG(!is_static() && (!p_object || !p_object->_get_extension_instance() || p_object->is_extension_placeholder()), false, vformat("Cannot call GDExtension method bind '%s' on an unavailable extension instance.", name));
+		return true;
+	}
+
+	void _default_ptrcall_return(void *r_ret) const {
+		if (!r_ret || !has_return()) {
+			return;
+		}
+		// Ptrcall return storage uses the builtin ABI, including int64/double
+		// encodings. Assign defaults rather than copying/constructing over live
+		// strings, collections or references, and never leave scalars undefined.
+#define DEFAULT_EXTENSION_RETURN(m_enum, m_type) \
+	case Variant::m_enum: { \
+		PtrToArg<m_type>::encode({}, r_ret); \
+		break; \
+	}
+		switch (return_value_info.type) {
+			DEFAULT_EXTENSION_RETURN(NIL, Variant);
+			DEFAULT_EXTENSION_RETURN(BOOL, bool);
+			DEFAULT_EXTENSION_RETURN(INT, int64_t);
+			DEFAULT_EXTENSION_RETURN(FLOAT, double);
+			DEFAULT_EXTENSION_RETURN(STRING, String);
+			DEFAULT_EXTENSION_RETURN(VECTOR2, Vector2);
+			DEFAULT_EXTENSION_RETURN(VECTOR2I, Vector2i);
+			DEFAULT_EXTENSION_RETURN(RECT2, Rect2);
+			DEFAULT_EXTENSION_RETURN(RECT2I, Rect2i);
+			DEFAULT_EXTENSION_RETURN(VECTOR3, Vector3);
+			DEFAULT_EXTENSION_RETURN(VECTOR3I, Vector3i);
+			DEFAULT_EXTENSION_RETURN(TRANSFORM2D, Transform2D);
+			DEFAULT_EXTENSION_RETURN(VECTOR4, Vector4);
+			DEFAULT_EXTENSION_RETURN(VECTOR4I, Vector4i);
+			DEFAULT_EXTENSION_RETURN(PLANE, Plane);
+			DEFAULT_EXTENSION_RETURN(QUATERNION, Quaternion);
+			DEFAULT_EXTENSION_RETURN(AABB, AABB);
+			DEFAULT_EXTENSION_RETURN(BASIS, Basis);
+			DEFAULT_EXTENSION_RETURN(TRANSFORM3D, Transform3D);
+			DEFAULT_EXTENSION_RETURN(PROJECTION, Projection);
+			DEFAULT_EXTENSION_RETURN(COLOR, Color);
+			DEFAULT_EXTENSION_RETURN(STRING_NAME, StringName);
+			DEFAULT_EXTENSION_RETURN(NODE_PATH, NodePath);
+			DEFAULT_EXTENSION_RETURN(RID, RID);
+			DEFAULT_EXTENSION_RETURN(OBJECT, Object *);
+			DEFAULT_EXTENSION_RETURN(CALLABLE, Callable);
+			DEFAULT_EXTENSION_RETURN(SIGNAL, Signal);
+			DEFAULT_EXTENSION_RETURN(DICTIONARY, Dictionary);
+			DEFAULT_EXTENSION_RETURN(ARRAY, Array);
+			DEFAULT_EXTENSION_RETURN(PACKED_BYTE_ARRAY, PackedByteArray);
+			DEFAULT_EXTENSION_RETURN(PACKED_INT32_ARRAY, PackedInt32Array);
+			DEFAULT_EXTENSION_RETURN(PACKED_INT64_ARRAY, PackedInt64Array);
+			DEFAULT_EXTENSION_RETURN(PACKED_FLOAT32_ARRAY, PackedFloat32Array);
+			DEFAULT_EXTENSION_RETURN(PACKED_FLOAT64_ARRAY, PackedFloat64Array);
+			DEFAULT_EXTENSION_RETURN(PACKED_STRING_ARRAY, PackedStringArray);
+			DEFAULT_EXTENSION_RETURN(PACKED_VECTOR2_ARRAY, PackedVector2Array);
+			DEFAULT_EXTENSION_RETURN(PACKED_VECTOR3_ARRAY, PackedVector3Array);
+			DEFAULT_EXTENSION_RETURN(PACKED_COLOR_ARRAY, PackedColorArray);
+			DEFAULT_EXTENSION_RETURN(PACKED_VECTOR4_ARRAY, PackedVector4Array);
+			case Variant::VARIANT_MAX:
+				ERR_FAIL_MSG("Invalid GDExtension return type.");
+		}
+#undef DEFAULT_EXTENSION_RETURN
+	}
 #endif
 
 protected:
@@ -84,7 +149,7 @@ protected:
 
 public:
 #ifdef TOOLS_ENABLED
-	virtual bool is_valid() const override { return valid; }
+	virtual bool is_valid() const override { return valid && !is_reloading; }
 #endif
 
 #ifdef DEBUG_ENABLED
@@ -99,8 +164,10 @@ public:
 
 	virtual Variant call(Object *p_object, const Variant **p_args, int p_arg_count, Callable::CallError &r_error) const override {
 #ifdef TOOLS_ENABLED
-		ERR_FAIL_COND_V_MSG(!valid, Variant(), vformat("Cannot call invalid GDExtension method bind '%s'. It's probably cached - you may need to restart Godot.", name));
-		ERR_FAIL_COND_V_MSG(p_object && p_object->is_extension_placeholder(), Variant(), vformat("Cannot call GDExtension method bind '%s' on placeholder instance.", name));
+		if (!_check_call(p_object)) {
+			r_error.error = Callable::CallError::CALL_ERROR_INVALID_METHOD;
+			return Variant();
+		}
 #endif
 		Variant ret;
 		GDExtensionClassInstancePtr extension_instance = is_static() ? nullptr : p_object->_get_extension_instance();
@@ -113,8 +180,13 @@ public:
 	}
 	virtual void validated_call(Object *p_object, const Variant **p_args, Variant *r_ret) const override {
 #ifdef TOOLS_ENABLED
-		ERR_FAIL_COND_MSG(!valid, vformat("Cannot call invalid GDExtension method bind '%s'. It's probably cached - you may need to restart Godot.", name));
-		ERR_FAIL_COND_MSG(p_object && p_object->is_extension_placeholder(), vformat("Cannot call GDExtension method bind '%s' on placeholder instance.", name));
+		if (!_check_call(p_object)) {
+			if (r_ret) {
+				Callable::CallError error;
+				Variant::construct(return_value_info.type, *r_ret, nullptr, 0, error);
+			}
+			return;
+		}
 #endif
 		ERR_FAIL_COND_MSG(vararg, "Vararg methods don't have validated call support. This is most likely an engine bug.");
 		GDExtensionClassInstancePtr extension_instance = is_static() ? nullptr : p_object->_get_extension_instance();
@@ -145,8 +217,10 @@ public:
 
 	virtual void ptrcall(Object *p_object, const void **p_args, void *r_ret) const override {
 #ifdef TOOLS_ENABLED
-		ERR_FAIL_COND_MSG(!valid, vformat("Cannot call invalid GDExtension method bind '%s'. It's probably cached - you may need to restart Godot.", name));
-		ERR_FAIL_COND_MSG(p_object && p_object->is_extension_placeholder(), vformat("Cannot call GDExtension method bind '%s' on placeholder instance.", name));
+		if (!_check_call(p_object)) {
+			_default_ptrcall_return(r_ret);
+			return;
+		}
 #endif
 		ERR_FAIL_COND_MSG(vararg, "Vararg methods don't have ptrcall support. This is most likely an engine bug.");
 		GDExtensionClassInstancePtr extension_instance = is_static() ? nullptr : p_object->_get_extension_instance();
