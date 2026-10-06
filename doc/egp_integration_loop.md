@@ -3309,3 +3309,31 @@ when codespell corrects an existing misspelling to `inertia`; the local is
 explicitly named `body_inertia`. That failed candidate remains recorded. Final
 GCC/Clang source checks include this correction and the required headers; static
 success alone does not establish a passing engine matrix.
+
+## 2026-10-06: SCU registry and no-physics CSG mesh scheduling
+
+The `4fb5ee6190` hosted matrix passes static checks and the minimal Linux template;
+its SCU editor fails because the generator still registers retired multiplayer
+and WebRTC directories. Commits `bbc09aca91` and `7376bd8007` remove those stale
+entries. The owner checks all remaining 140 registry paths against tracked files
+and runs the actual SCU generator successfully, retaining desktop SCU coverage.
+Other useful platform builds remain independently identified by their source.
+
+An additional CSG defect affects no-physics exports: `_make_dirty()` guards both
+deferred mesh update paths behind `PHYSICS_3D_DISABLED`, although `update_shape()`
+already separates mesh generation from collision generation. Removing just those
+four guard lines restores scheduling when physics is disabled and retains the
+enabled configuration's behavior. `.build/integration-csg-schedule/receipt.json`
+records the baseline failure and six contracts executed against the extracted
+actual method with physics enabled/disabled, covering repeated invalidation,
+parent propagation, removal and an already-dirty root. Its deferred-call transport
+is mocked; this is scheduling evidence, not graphical or mesh-runtime evidence.
+The complete CSG translation unit also compiles under MSVC in both profiles;
+commands, source/object hashes and logs are retained outside the owned fixture.
+
+Downloaded native physics workflows add separate Debug/Release evidence on
+Windows, Linux and macOS: Box2D run `37535945585` at `4fb5ee6190`, and Box3D run
+`37535393515` at `72ed3ae33f`. All six profiles in each run pass their native
+upstream checks; Box3D also passes its deterministic trajectory/joint targets.
+These artifacts qualify the native solvers in their recorded profiles, not Godot
+adapter runtime, mobile physics, prediction or complete engine integration.
