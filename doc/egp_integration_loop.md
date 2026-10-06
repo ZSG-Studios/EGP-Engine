@@ -42,8 +42,8 @@ because these chats exist.
 | Advanced networking | Field deltas, bounded bandwidth/queues, input acknowledgments, lag compensation, scale/soak, malicious input rejection | Implementation/qualification gaps remain |
 | Network lab | Dedicated server, listen host, N clients, visible windows, latency/jitter/loss, directional simulation, reconnect, logs/watchdog/cleanup | Native host and packaged Mono Debug host/Release dedicated server pass simultaneous visible clients, WAN simulation and reconnect; broader matrix remains |
 | Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Packaged Debug graceful and Release abrupt dedicated-server replacement pass with three persistent visible clients under WAN impairment; eight-second headless outage passes; broader controls/scale/soak remain |
-| C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Matching SDK/editor controls, mixed-language exports, dynamic signature changes and rejected hierarchy/class repair pass on Windows; raw cached bindings, arbitrary ABI changes and other platforms remain |
-| C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Two live Debug rebuilds preserve existing IDs, property state, callables and signals; failed compile retains published code; Missing/invalid DLL recovery and rejected base/extension-parent/ancestor/class-removal repair preserve extension and editable parent state; raw cached bindings, arbitrary ABI changes and soak remain |
+| C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Matching SDK/editor controls, mixed-language exports, dynamic signature changes and rejected hierarchy/class repair pass on Windows; six cached instance/static call paths and nine return kinds now pass on Windows Debug SDK; arbitrary ABI changes and other platforms remain |
+| C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Two live Debug rebuilds preserve existing IDs, property state, callables and signals; failed compile retains published code; Missing/invalid DLL recovery and rejected base/extension-parent/ancestor/class-removal repair preserve extension and editable parent state; cached binding failure/default-return and compatible repair checks now pass; arbitrary ABI changes and soak remain |
 | C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Six combined native/managed reloads including corrupted-DLL and blocked-unload recovery preserve instances, properties and events; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
 | Export/platform | Relocated Debug/Release games with C#/GDScript/C++ and Box physics/networking; platform-specific binaries and missing-binary diagnostics | Relocated Windows Debug/Release trilingual games pass on the matching API; broader platform/export matrix remains |
 | Performance | Identical-scenes upstream comparison; p95/p99, CPU/GPU/memory/allocations, server tick, bandwidth and long sessions | No AAA readiness claim |
@@ -1201,3 +1201,108 @@ physics shape/scaling/platform parity, production persistence/authentication/
 gameplay, lean server, package/default template identity and performance remain
 open. This increment does not establish complete AAA readiness; the loop stays
 ACTIVE.
+
+
+## Cached native binding recovery, 2026-10-06
+
+The published preceding engine crashed with Windows access violation `0xC0000005`
+when an independent native observer called its cached target MethodBind after a
+missing-DLL reload. Exact PID, pre-call checkpoint, executable/fixture/DLL hashes,
+commands and failed logs remain at
+`.build/integration-cached-binding-baseline/1791285657971754300/receipt.json`.
+The observer DLL stays loaded while the victim DLL reloads, so target instance
+binding cleanup cannot invalidate or refresh the observer's raw cache.
+
+Editor-build MethodBind calls now reject unavailable/reloading libraries and
+unavailable extension instances. Regular calls return NIL with invalid-method
+error; validated calls and ptrcalls initialize declared builtin defaults, including
+clearing initialized string/collection storage. Compatible retries reuse temporary
+bindings; signature/class retirement keeps old bindings invalid until callers
+refresh their cache. State is captured before all of the library's methods are
+blocked, allowing property getters to save live extension state before teardown.
+The first guarded attempt exposed blocked state-capture getters, retained at
+`.build/integration-cached-raw-bindings/1791286662788095600/receipt.json`.
+A subsequent fixture correction distinguishes typed null Objects from untyped NIL
+in Array equality; its failed receipt is retained at
+`.build/integration-cached-raw-bindings-final/1791286837282717400/receipt.json`.
+
+The final fixture passes 250 assertions in six isolated supervised processes:
+raw call and ptrcall instance/static paths, plus typed GDScript validated
+instance/static paths. Integer returns cover all six; String, Vector3, Array,
+Object, PackedByteArray, Variant, bool and float instance returns exercise builtin
+defaults and repair, including nonempty ptrcall storage. Missing/invalid DLL retry
+preserves ObjectID, counter 91 and native-parent edits. Signature retirement is
+checked in all six cases; class removal/cache refresh is checked in the four raw
+cases. This is Windows Debug SDK evidence, not arbitrary ABI/layout, concurrent
+reload, every builtin/ref-counted return or platform/soak qualification.
+
+Exact cached-binding command:
+
+```powershell
+python misc/scripts/validate_egp_cached_bindings.py --engine C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe --sdk C:/Users/Rose-X/AppData/Local/Godot/egp_cpp/sdk/4bc13481314e7023 --sdk-library C:/Users/Rose-X/AppData/Local/Godot/egp_cpp/lib/4bc13481314e7023/MSVC-19.51.36260.0-Windows-AMD64-x64/Debug/egp_godot_cpp.lib --output .build/integration-cached-raw-bindings-qualified
+```
+
+The passed receipt is
+`.build/integration-cached-raw-bindings-qualified/1791286936639935800/receipt.json`.
+Frozen compiled engine source is `ec4d846b72224f75e78e12eb8225615719f21292`;
+`3c2cbb46f2` subsequently corrects only the GDScript typed-null assertion. No engine
+code changes after the engine freeze. Build inputs and exact commands are in
+`.build/integration-cached-native-build-final/{source,receipt}.json`.
+
+Fresh combined qualification passes at
+`.build/integration-cached-native-qualification/receipt.json`: API/ClassDB/exact SDK
+and managed contract audit, matching compiled reload help and regenerated C#
+documentation, 19 Box2D runs, 28 Box3D cases, twelve relocated Box2D export checks,
+59 trilingual checks and separate Debug/Release language processes, C++ and C#
+reload/recovery and default runtime, packaged Debug host/four visible windows and
+Release dedicated server/three visible clients with WAN manual reconnect.
+The API fingerprint remains
+`e84e140b923451849e88aab8300021fd9d32f95c31825bb6d7e25a4235953271`.
+
+`.build/qualify_cached_session.py --configuration Debug --engine
+C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe
+--output .build/integration-cached-native-session-final` reruns the matching-engine
+24 GDScript/eight raw-channel cases, Box3D clock, secure admission/quarantine,
+29 prediction checks, lifecycle and separate processes. The unchanged networking
+native Debug/Release ten-case CTest/101-check receipts are reused only after source
+hash verification; these native suites are not claimed as freshly rerun.
+
+The sequential packaged Release abrupt-server-restart repeat passes at
+`.build/integration-cached-restart-final/1791287134201767100/receipt.json`: server
+4596 becomes 2792, all three visible client PIDs persist, explicit checkpoint 106
+is restored and reaches 112, caches clear and fresh owner inputs/server identities
+are verified. Command: `python misc/scripts/launch_egp_network_lab.py --engine
+C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.template_release.x86_64.mono.exe
+--editor C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe
+--mode dedicated --clients 3 --visible --preset wan --simulate-on both --duration 20
+--server-restart-at 6 --server-restart-mode abrupt --port 47153 --output
+.build/integration-cached-restart-final`. The same settings failed during heavier
+concurrent qualification at
+`.build/integration-cached-restart/1791287000608831300/receipt.json`, including a
+client fixed-clock catch-up rejection. That failure is preserved; the successful
+repeat does not establish recovery from scheduling stalls or sustained overload.
+No catch-up budget, impairment settings or watchdog was increased.
+
+The editor SHA256 is
+`1ee3cc12ec3ee455269e9877f676c657fff29c5506a253b9977b03afdbd0823d`;
+Debug template is
+`92402882453cdf2b2e9886e02c4d6b3e762a59645ac6050b20a64b5a0a890f68`;
+Release template is
+`07bc66869f32811cb3913553eab9f60ff371500bf67fb3833fd4de89ea4a93a6`.
+`.build/canonical-cached-artifacts.json` verifies 86 installed engine/managed files
+against nineteen passed receipts; twenty files changed, with backups retained.
+`.build/integration-cached-canonical-runtime/receipt.json` passes all 59 trilingual
+checks again on installed root-bin binaries. Publication/provenance is verified
+separately by `.build/integration-cached-publication.json`: canonical/local/remote
+heads, original handoff ancestry, all seven trees/113 refs, no pending PR, preserved
+historical/unrelated work, idle handoff chats and the engine/fixture-only source
+delta. Current chat snapshots are `.build/integration-cached-handoffs.json`.
+
+Next concrete networking gate: inject a scheduling stall that actually exceeds the
+fixed-clock catch-up budget, then verify explicit disconnect/resynchronization and
+fresh admission/ownership/state recovery. Reproduce and preserve the failure before
+changing policies; do not increase budgets or weaken watchdogs to make it pass.
+Other builtin/ref-counted/ABI/concurrent reload coverage, larger worlds, peak memory,
+soak, platform/physics parity, wider C# state, lean-server/default-package identity,
+production persistence/authentication/gameplay and performance remain open.
+The loop stays ACTIVE; full feature completion and AAA readiness are not claimed.
