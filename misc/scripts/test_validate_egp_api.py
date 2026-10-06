@@ -9,6 +9,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from capture_egp_api import strip_documentation
 from validate_egp_api import audit_enum_docs, audit_method_docs, snake
 
 
@@ -203,6 +204,17 @@ class MethodDocumentationTests(unittest.TestCase):
 
     def test_exact_virtual_signature_and_typed_default_pass(self):
         self.assertEqual(self.audit(), ([], 1))
+
+    def test_compiled_help_pairing_keeps_defaults_and_required_flags(self):
+        compiled = copy.deepcopy(self.row)
+        compiled["brief_description"] = "Server."
+        compiled["methods"][0]["description"] = "Configures the backend."
+        self.assertEqual(strip_documentation(compiled), self.row)
+        compiled["methods"][0]["is_required"] = False
+        self.assertNotEqual(strip_documentation(compiled), self.row)
+        compiled["methods"][0]["is_required"] = True
+        compiled["methods"][0]["arguments"][1]["default_value"] = "[]"
+        self.assertNotEqual(strip_documentation(compiled), self.row)
 
     def test_each_signature_dimension_is_checked(self):
         for old, new, expected in (

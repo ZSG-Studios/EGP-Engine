@@ -482,7 +482,9 @@ Dictionary GDExtensionAPIDump::generate_extension_api(bool p_include_docs) {
 	}
 
 	if (p_include_docs) {
-		EditorHelp::generate_doc(false);
+		// CLI API generation runs before an EditorNode exists. Load shipped
+		// descriptions without editor default-property probing or cache workers.
+		EditorHelp::load_shipped_doc();
 	}
 
 	{
@@ -929,10 +931,15 @@ Dictionary GDExtensionAPIDump::generate_extension_api(bool p_include_docs) {
 				d["inherits"] = String(parent_class);
 			}
 
+			DocData::ClassDoc inherited_only_doc;
 			DocData::ClassDoc *class_doc = nullptr;
 			if (p_include_docs) {
 				class_doc = EditorHelp::get_doc_data()->class_list.getptr(class_name);
-				CRASH_COND_MSG(!class_doc, vformat("Could not find '%s' in DocData.", class_name));
+				// Implementation classes may have only inherited documentation.
+				// Keep their complete ABI entries even when no class XML is shipped.
+				if (!class_doc) {
+					class_doc = &inherited_only_doc;
+				}
 			}
 
 			{
