@@ -2195,3 +2195,100 @@ per language in one local process on Windows, with 20 ms client latency, 5 ms
 jitter and zero loss. It does not establish physics rollback, arbitrary game/ABI
 state, backend admission, cross-platform parity, scale/soak or performance. The
 loop remains ACTIVE.
+
+
+### Native sessions retained across C++/C# reload after a clock fault — 2026-10-06
+
+Source `9d52a21143` adds an opt-in `--network-recovery` case to the real editor
+debugger/build-panel reload fixture. Source `8a561c504bf370837e438af26e6783349c9ef6a8` advances the
+last ABI-repair callback checkpoint before the combined case. Both changes are
+committed on canonical master above `642b95db236325c8809ba9af6db084825ab0c31c`.
+The engine, installed SDK, ClassDB fingerprint and managed runtime remain
+unchanged; no duplicate engine build was required.
+
+The full combined fixture passes at `.build/integration-network-reload-fully-qualified/1791301596805219400/receipt.json`.
+Headless editor PID 34936 launches separate running-game PID
+7920. Existing checks freshly pass for compile failures, C# assembly
+corruption and blocked unload/retry, missing/invalid DLL repair, method argument/
+return changes, rejected direct/extension/ancestor base changes, class removal
+and compatible restoration. Live object IDs, counter/vector/reference/parent
+state, cached dynamic callables, signal/delegate counts and managed lifecycle
+hooks survive those repairs. This is dynamic lookup evidence; the preceding
+raw MethodBind/ptrcall qualification retains its separate unchanged input scope.
+
+The added local native-session case starts one authenticated authority/client
+pair and assigns both session references to serialized dictionaries on the live
+C++ and C# objects. C++ uses generated EGPNetSession bindings; C# uses the native
+GodotObject call API. The native session emits application callbacks through
+method-name Callables into both reloadable objects. This does not qualify
+serialization of arbitrary managed facade instances or event closures.
+
+The authority misses 550 ms while the client executes
+64 language-driven native polls. The authority returns
+`FAILED`, emits the exact fixed-clock diagnostic and clears its peers/entities.
+The client discovers native `Stopped -> Disconnected`, clears replicated state
+and is explicitly stopped. While both sessions are stopped, the fixture rebuilds
+C# to version 6 and C++ to version 4 and uses the editor's real reload notification.
+Session references and ObjectIDs remain identical, generated/dynamic poll calls
+work after reconstruction, tick/peer/entity state stays empty and reload does
+not implicitly restart the authority.
+
+Only explicit rebind and fresh-token admission restarts networking, on the same
+port and native sessions. Peer handles advance `257 -> 513`;
+entity handles advance `1 -> 2`. Old peer sends
+and old entity updates return `ERR_DOES_NOT_EXIST`. Fresh owner metadata and the
+client baseline match exactly, including zero/0xff bytes (`0100ff2a`, `0200ff2a`).
+Each admission sends one application payload; C++ and C# callback counts are
+exactly 1 then 2, with the authenticated sender and byte payload checked. The
+new authority advances at least eight ticks after delivery. Raw transport and
+ownership metadata do not authorize opaque gameplay messages.
+
+Reproduce the combined gate with a new output directory:
+
+```powershell
+python misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --assembly-recovery --unload-recovery --native-recovery --native-abi-recovery --network-recovery --output .build/integration-network-reload-fully-qualified
+```
+
+The receipt records frozen source/fixture SHA-256, executable/runtime identities,
+separate editor/game PIDs, generated extension/assembly/descriptor hashes,
+samples and debugger diagnostics. Final C++ DLL SHA-256 is `2246fa358c6c1b96eefee4a3150a478cb6ba1bd703e76e51c555f4a1dbe8751f`;
+C# assembly is `86f7fe0aefee5982f52578172b5f94c232c40473742a0363caa89da7ded9bbf6`. Native editor SHA-256 remains
+`20be5396d78b4c9873d4a355132f62366be58fcf9b1519bb595006fb07e74342`, compiled from
+`4d64b38c554ab3dc491285f4ffa5119c001da56f` with the matching installed Debug SDK.
+
+`.build/integration-network-reload-final-tool-checks/receipt.json` passes fourteen
+semantic evidence tests, two incompatible-option CLI checks, help, Ruff/format
+and mypy (the existing Python 3.9 configuration warning remains). Negatives reject
+replaced native sessions/game process, lost serialized references, implicit
+restart, missing diagnostics/client polls, lost/duplicated callbacks, corrupt
+payloads, reused/usable retired handles and missing admission/checkpoints.
+
+Failed fixture iterations remain preserved: initial C# type lookup at
+`.build/integration-network-reload-initial/1791301246924050300/receipt.json`, the
+incorrect client server-peer argument at
+`.build/integration-network-reload-checked/1791301286375451000/receipt.json`, and
+the stale post-ABI callback checkpoint at
+`.build/integration-network-reload-qualified/1791301424603653900/receipt.json`.
+The focused successful precursor is
+`.build/integration-network-reload-repaired/1791301352097921700/receipt.json`.
+These are fixture failures and their repairs; no catch-up budget, impairment or
+watchdog was weakened and no engine behavior fix is claimed in this increment.
+
+`.build/integration-network-reload-publication.json` gates normal publication:
+original handoff ancestry, exact canonical/remote master equality, 86 unchanged
+installed artifacts, seven preserved foreign/canonical worktrees, original
+untracked bytes and no open PRs. The preceding 197-assertion editor/Debug/Release
+trilingual runs, 36 semantic networking tests, native 120-check/ten-case suites,
+seven physics lab cases and 72 admission cases are retained only after verifying
+their unchanged source/binary inputs. Changed reload fixtures use the fresh
+combined repair/fault run above. Other worktree leftovers stay preserved rather
+than being declared clean or newly merged. Documentation/website publication
+keeps separate chat ownership.
+
+Next: active-connection reload under latency/jitter/loss, independent-process
+low-level fault/reload, physics checkpoint recovery during reload, production
+admission/retry, crashes/hard outages, larger worlds and sustained WAN/scale/soak.
+This newly qualified case is Windows Debug, one local pair sharing the game
+process, with reload performed after the authority has stopped. It does not
+establish arbitrary application/ABI state, automatic physics rollback, exported
+runtime reload, platform parity or performance. The loop remains ACTIVE.
