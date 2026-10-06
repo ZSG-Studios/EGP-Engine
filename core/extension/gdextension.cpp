@@ -934,7 +934,7 @@ void GDExtension::prepare_reload() {
 			// A failed library load leaves the object as its native parent. Retain
 			// extension properties from the previous attempt, while refreshing any
 			// parent properties that remain editable while the library is missing.
-			const Extension::InstanceState *saved_state = obj->_get_extension() ? nullptr : E.value.instance_state.getptr(obj_id);
+			const Extension::InstanceState *saved_state = obj->get_class_name() == E.key ? nullptr : E.value.instance_state.getptr(obj_id);
 			if (saved_state) {
 				state = saved_state->properties;
 			}
