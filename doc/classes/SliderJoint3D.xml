@@ -76,7 +76,31 @@
 		<constant name="PARAM_LINEAR_LIMIT_LOWER" value="1" enum="Param">
 			Constant for accessing [member linear_limit/lower_distance]. The minimum difference between the pivot points on their X axis before damping happens.
 		</constant>
-		<constant name="PARAM_MAX" value="22" enum="Param">
+		<constant name="PARAM_LIMIT_ENABLED" value="2" enum="Param">
+			Enables the native slider translation limits. Pass [code]1.0[/code] to enable or [code]0.0[/code] to disable.
+		</constant>
+		<constant name="PARAM_MOTOR_ENABLED" value="3" enum="Param">
+			Enables the native slider motor. Pass [code]1.0[/code] to enable or [code]0.0[/code] to disable.
+		</constant>
+		<constant name="PARAM_MOTOR_TARGET_VELOCITY" value="4" enum="Param">
+			Target linear velocity of the native slider motor along the joint axis.
+		</constant>
+		<constant name="PARAM_MOTOR_MAX_FORCE" value="5" enum="Param">
+			Maximum force applied by the native slider motor.
+		</constant>
+		<constant name="PARAM_SPRING_ENABLED" value="6" enum="Param">
+			Enables the native joint spring. Pass [code]1.0[/code] to enable or [code]0.0[/code] to disable.
+		</constant>
+		<constant name="PARAM_SPRING_HERTZ" value="7" enum="Param">
+			Native joint spring frequency in hertz.
+		</constant>
+		<constant name="PARAM_SPRING_DAMPING_RATIO" value="8" enum="Param">
+			Native joint spring damping ratio.
+		</constant>
+		<constant name="PARAM_SPRING_TARGET_TRANSLATION" value="9" enum="Param">
+			Native slider spring target translation along the joint axis.
+		</constant>
+		<constant name="PARAM_MAX" value="10" enum="Param">
 			Represents the size of the [enum Param] enum.
 		</constant>
 	</constants>

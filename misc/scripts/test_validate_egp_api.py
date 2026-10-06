@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from validate_egp_api import snake
+from validate_egp_api import audit_enum_docs, snake
 
 
 class ExposureAuditTests(unittest.TestCase):
@@ -121,6 +121,50 @@ class ExposureAuditTests(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertIn("C# omits PhysicsServer3D property data", receipt["failures"])
         self.assertFalse(any("Inspector category" in failure for failure in receipt["failures"]))
+
+
+class EnumDocumentationTests(unittest.TestCase):
+    def test_enum_values_identity_and_removals_are_checked(self):
+        row = {
+            "name": "PhysicsServer3D",
+            "enums": [{"name": "JointType", "values": [{"name": "JOINT_TYPE_MAX", "value": 14}]}],
+        }
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "PhysicsServer3D.xml"
+            for attributes, expected in (
+                ('name="JOINT_TYPE_MAX" value="5" enum="JointType"', "Incorrect documented enum"),
+                ('name="JOINT_TYPE_MAX" value="14" enum="OtherType"', "Incorrect documented enum"),
+                ('name="RETIRED" value="14" enum="JointType"', "Retired enum constant"),
+                ('name="JOINT_TYPE_MAX" value="14" enum="JointType"', None),
+            ):
+                with self.subTest(attributes=attributes):
+                    path.write_text(
+                        f"<class><constants><constant {attributes}>Enum sentinel.</constant></constants></class>"
+                    )
+                    failures, count = audit_enum_docs(row, path)
+                    self.assertEqual(count, 1)
+                    if expected:
+                        self.assertTrue(any(expected in failure for failure in failures), failures)
+                    else:
+                        self.assertEqual(failures, [])
+
+    def test_missing_and_empty_enum_documentation_are_rejected(self):
+        row = {
+            "name": "PhysicsServer2D",
+            "enums": [{"name": "JointType", "values": [{"name": "JOINT_TYPE_MAX", "value": 10}]}],
+        }
+        failures, _ = audit_enum_docs(row, None)
+        self.assertIn("Missing enum documentation: PhysicsServer2D", failures)
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "PhysicsServer2D.xml"
+            path.write_text(
+                '<class><constants><constant name="JOINT_TYPE_MAX" value="10" enum="JointType" /></constants></class>'
+            )
+            failures, _ = audit_enum_docs(row, path)
+            self.assertIn("Empty enum documentation: PhysicsServer2D.JOINT_TYPE_MAX", failures)
+            path.write_text("<class><constants /></class>")
+            failures, _ = audit_enum_docs(row, path)
+            self.assertIn("Undocumented enum constant: PhysicsServer2D.JOINT_TYPE_MAX", failures)
 
 
 if __name__ == "__main__":

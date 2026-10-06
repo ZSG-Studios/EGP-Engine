@@ -86,6 +86,31 @@ def in_scope(name):
     }
 
 
+def audit_enum_docs(row, path):
+    """Compare documented enum identities and values with the actual ClassDB API."""
+    expected = {
+        value["name"]: (enum["name"], value["value"]) for enum in row.get("enums", []) for value in enum["values"]
+    }
+    if not expected:
+        return [], 0
+    name = row["name"]
+    if path is None:
+        return [f"Missing enum documentation: {name}"], 0
+    documented = {node.get("name"): node for node in ET.parse(path).findall("constants/constant") if node.get("enum")}
+    failures = []
+    for member, (enum, value) in expected.items():
+        node = documented.get(member)
+        if node is None:
+            failures.append(f"Undocumented enum constant: {name}.{member}")
+        elif node.get("enum") != enum or int(node.get("value"), 0) != value:
+            failures.append(f"Incorrect documented enum identity/value: {name}.{member}; expected {enum}={value}")
+        elif not (node.text or "").strip():
+            failures.append(f"Empty enum documentation: {name}.{member}")
+    for member in documented.keys() - expected.keys():
+        failures.append(f"Retired enum constant remains documented: {name}.{member}")
+    return failures, len(expected)
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--api", type=Path, required=True, help="Actual editor extension API dump")
@@ -93,6 +118,7 @@ def main():
     parser.add_argument("--managed", type=Path, required=True, help="modules/mono/glue/GodotSharp directory")
     parser.add_argument("--changes", type=Path, help="Required and removed API manifest")
     parser.add_argument("--classdb", type=Path, help="Actual property/signal snapshot from dump_egp_classdb.gd")
+    parser.add_argument("--docs", type=Path, help="Repository root for XML enum documentation checks")
     parser.add_argument("--output", type=Path, default=Path(".build/egp-api-validation/receipt.json"))
     args = parser.parse_args()
     receipt = {
@@ -101,6 +127,7 @@ def main():
         "native_only_hooks": [],
         "inspector_properties": [],
         "internal_signals": [],
+        "enum_documentation": [],
         "failures": [],
     }
     failures = receipt["failures"]
@@ -116,6 +143,14 @@ def main():
         if metadata.get("precision") != api["header"]["precision"]:
             failures.append("C++ SDK precision differs from the actual editor API")
         changes = json.loads(args.changes.read_text(encoding="utf-8")) if args.changes else {}
+        docs = {}
+        if args.docs:
+            for path in sorted(args.docs.glob("doc/classes/*.xml")) + sorted(
+                args.docs.glob("modules/*/doc_classes/*.xml")
+            ):
+                if path.stem in docs:
+                    failures.append(f"Duplicate class documentation: {path.stem}")
+                docs[path.stem] = path
         reflected = {}
         if args.classdb:
             reflection = json.loads(args.classdb.read_text(encoding="utf-8"))
@@ -167,6 +202,16 @@ def main():
                 continue
             entry = {"class": name, "methods": len(row.get("methods", []))}
             receipt["checks"].append(entry)
+            if args.docs and row.get("enums"):
+                path = docs.get(name)
+                errors, count = audit_enum_docs(row, path)
+                failures.extend(errors)
+                receipt["enum_documentation"].append({
+                    "class": name,
+                    "constants": count,
+                    "path": str(path) if path else None,
+                    "sha256": digest(path) if path else None,
+                })
             if name not in csharp:
                 failures.append(f"Missing generated C# class: {name}")
                 continue

@@ -1455,7 +1455,34 @@
 		<constant name="JOINT_TYPE_6DOF" value="4" enum="JointType">
 			The [Joint3D] is a [Generic6DOFJoint3D].
 		</constant>
-		<constant name="JOINT_TYPE_MAX" value="5" enum="JointType">
+		<constant name="JOINT_TYPE_DISTANCE" value="5" enum="JointType">
+			Native distance joint type. Create it with [method joint_make_configured] and its type-specific configuration dictionary.
+		</constant>
+		<constant name="JOINT_TYPE_FILTER" value="6" enum="JointType">
+			Native filter joint type. Create it with [method joint_make_configured] and its type-specific configuration dictionary.
+		</constant>
+		<constant name="JOINT_TYPE_MOTOR" value="7" enum="JointType">
+			Native motor joint type. Create it with [method joint_make_configured] and its type-specific configuration dictionary.
+		</constant>
+		<constant name="JOINT_TYPE_PARALLEL" value="8" enum="JointType">
+			Native parallel joint type. Create it with [method joint_make_configured] and its type-specific configuration dictionary.
+		</constant>
+		<constant name="JOINT_TYPE_PRISMATIC" value="9" enum="JointType">
+			Native prismatic joint type. Create it with [method joint_make_configured] and its type-specific configuration dictionary.
+		</constant>
+		<constant name="JOINT_TYPE_REVOLUTE" value="10" enum="JointType">
+			Native revolute joint type. Create it with [method joint_make_configured] and its type-specific configuration dictionary.
+		</constant>
+		<constant name="JOINT_TYPE_SPHERICAL" value="11" enum="JointType">
+			Native spherical joint type. Create it with [method joint_make_configured] and its type-specific configuration dictionary.
+		</constant>
+		<constant name="JOINT_TYPE_WELD" value="12" enum="JointType">
+			Native weld joint type. Create it with [method joint_make_configured] and its type-specific configuration dictionary.
+		</constant>
+		<constant name="JOINT_TYPE_WHEEL" value="13" enum="JointType">
+			Native wheel joint type. Create it with [method joint_make_configured] and its type-specific configuration dictionary.
+		</constant>
+		<constant name="JOINT_TYPE_MAX" value="14" enum="JointType">
 			Represents the size of the [enum JointType] enum.
 		</constant>
 		<constant name="PIN_JOINT_SPRING_HERTZ" value="0" enum="PinJointParam">
@@ -1465,17 +1492,29 @@
 			The strength with which the pinned objects try to stay in velocity relation to each other. The higher, the stronger.
 			[b]Note:[/b] This compatibility parameter is not implemented by the Box3D backend.
 		</constant>
-		<constant name="HINGE_JOINT_LIMIT_UPPER" value="1" enum="HingeJointParam">
+		<constant name="HINGE_JOINT_LIMIT_UPPER" value="0" enum="HingeJointParam">
 			The maximum rotation across the Hinge.
 		</constant>
-		<constant name="HINGE_JOINT_LIMIT_LOWER" value="2" enum="HingeJointParam">
+		<constant name="HINGE_JOINT_LIMIT_LOWER" value="1" enum="HingeJointParam">
 			The minimum rotation across the Hinge.
 		</constant>
-		<constant name="HINGE_JOINT_MOTOR_TARGET_VELOCITY" value="6" enum="HingeJointParam">
+		<constant name="HINGE_JOINT_MOTOR_TARGET_VELOCITY" value="2" enum="HingeJointParam">
 			Target speed for the motor.
 		</constant>
-		<constant name="HINGE_JOINT_MOTOR_MAX_TORQUE" value="7" enum="HingeJointParam">
+		<constant name="HINGE_JOINT_MOTOR_MAX_TORQUE" value="3" enum="HingeJointParam">
 			Maximum torque applied by the native hinge motor.
+		</constant>
+		<constant name="HINGE_JOINT_SPRING_ENABLED" value="4" enum="HingeJointParam">
+			Enables the native joint spring. Pass [code]1.0[/code] to enable or [code]0.0[/code] to disable.
+		</constant>
+		<constant name="HINGE_JOINT_SPRING_HERTZ" value="5" enum="HingeJointParam">
+			Native joint spring frequency in hertz.
+		</constant>
+		<constant name="HINGE_JOINT_SPRING_DAMPING_RATIO" value="6" enum="HingeJointParam">
+			Native joint spring damping ratio.
+		</constant>
+		<constant name="HINGE_JOINT_SPRING_TARGET_ANGLE" value="7" enum="HingeJointParam">
+			Native hinge spring target angle in radians.
 		</constant>
 		<constant name="HINGE_JOINT_FLAG_USE_LIMIT" value="0" enum="HingeJointFlag">
 			If [code]true[/code], the Hinge has a maximum and a minimum rotation.
@@ -1489,7 +1528,31 @@
 		<constant name="SLIDER_JOINT_LINEAR_LIMIT_LOWER" value="1" enum="SliderJointParam">
 			The minimum difference between the pivot points on their X axis before damping happens.
 		</constant>
-		<constant name="SLIDER_JOINT_MAX" value="22" enum="SliderJointParam">
+		<constant name="SLIDER_JOINT_LIMIT_ENABLED" value="2" enum="SliderJointParam">
+			Enables the native slider translation limits. Pass [code]1.0[/code] to enable or [code]0.0[/code] to disable.
+		</constant>
+		<constant name="SLIDER_JOINT_MOTOR_ENABLED" value="3" enum="SliderJointParam">
+			Enables the native slider motor. Pass [code]1.0[/code] to enable or [code]0.0[/code] to disable.
+		</constant>
+		<constant name="SLIDER_JOINT_MOTOR_TARGET_VELOCITY" value="4" enum="SliderJointParam">
+			Target linear velocity of the native slider motor along the joint axis.
+		</constant>
+		<constant name="SLIDER_JOINT_MOTOR_MAX_FORCE" value="5" enum="SliderJointParam">
+			Maximum force applied by the native slider motor.
+		</constant>
+		<constant name="SLIDER_JOINT_SPRING_ENABLED" value="6" enum="SliderJointParam">
+			Enables the native joint spring. Pass [code]1.0[/code] to enable or [code]0.0[/code] to disable.
+		</constant>
+		<constant name="SLIDER_JOINT_SPRING_HERTZ" value="7" enum="SliderJointParam">
+			Native joint spring frequency in hertz.
+		</constant>
+		<constant name="SLIDER_JOINT_SPRING_DAMPING_RATIO" value="8" enum="SliderJointParam">
+			Native joint spring damping ratio.
+		</constant>
+		<constant name="SLIDER_JOINT_SPRING_TARGET_TRANSLATION" value="9" enum="SliderJointParam">
+			Native slider spring target translation along the joint axis.
+		</constant>
+		<constant name="SLIDER_JOINT_MAX" value="10" enum="SliderJointParam">
 			Represents the size of the [enum SliderJointParam] enum.
 		</constant>
 		<constant name="CONE_TWIST_JOINT_SWING_SPAN" value="0" enum="ConeTwistJointParam">
@@ -1537,10 +1600,13 @@
 			The maximum force that the linear motor can apply while trying to reach the target velocity.
 		</constant>
 		<constant name="G6DOF_JOINT_LINEAR_SPRING_STIFFNESS" value="7" enum="G6DOFJointAxisParam">
+			Stiffness of the linear spring on the selected joint axis.
 		</constant>
 		<constant name="G6DOF_JOINT_LINEAR_SPRING_DAMPING" value="8" enum="G6DOFJointAxisParam">
+			Damping coefficient of the linear spring on the selected joint axis.
 		</constant>
 		<constant name="G6DOF_JOINT_LINEAR_SPRING_EQUILIBRIUM_POINT" value="9" enum="G6DOFJointAxisParam">
+			Equilibrium position of the linear spring on the selected joint axis, in distance units.
 		</constant>
 		<constant name="G6DOF_JOINT_ANGULAR_LOWER_LIMIT" value="10" enum="G6DOFJointAxisParam">
 			The minimum rotation in negative direction to break loose and rotate around the axes.
@@ -1575,10 +1641,13 @@
 			Maximum acceleration for the motor at the axes.
 		</constant>
 		<constant name="G6DOF_JOINT_ANGULAR_SPRING_STIFFNESS" value="19" enum="G6DOFJointAxisParam">
+			Stiffness of the angular spring on the selected joint axis.
 		</constant>
 		<constant name="G6DOF_JOINT_ANGULAR_SPRING_DAMPING" value="20" enum="G6DOFJointAxisParam">
+			Damping coefficient of the angular spring on the selected joint axis.
 		</constant>
 		<constant name="G6DOF_JOINT_ANGULAR_SPRING_EQUILIBRIUM_POINT" value="21" enum="G6DOFJointAxisParam">
+			Equilibrium position of the angular spring on the selected joint axis, in radians.
 		</constant>
 		<constant name="G6DOF_JOINT_LINEAR_DRIVE_FORCE_LIMIT" value="22" enum="G6DOFJointAxisParam">
 			The maximum force the joint can apply along this linear axis.
@@ -1600,8 +1669,10 @@
 			If set, rotational motion is possible.
 		</constant>
 		<constant name="G6DOF_JOINT_FLAG_ENABLE_ANGULAR_SPRING" value="2" enum="G6DOFJointAxisFlag">
+			Enables the angular spring on the selected joint axis.
 		</constant>
 		<constant name="G6DOF_JOINT_FLAG_ENABLE_LINEAR_SPRING" value="3" enum="G6DOFJointAxisFlag">
+			Enables the linear spring on the selected joint axis.
 		</constant>
 		<constant name="G6DOF_JOINT_FLAG_ENABLE_ANGULAR_MOTOR" value="4" enum="G6DOFJointAxisFlag">
 			If set, there is a rotational or angular motor across these axes.
@@ -1742,7 +1813,22 @@
 		<constant name="BODY_PARAM_ANGULAR_DAMP" value="9" enum="BodyParameter">
 			Constant to set/get a body's angular damping factor.
 		</constant>
-		<constant name="BODY_PARAM_MAX" value="10" enum="BodyParameter">
+		<constant name="BODY_PARAM_SLEEP_THRESHOLD" value="10" enum="BodyParameter">
+			Native body sleep threshold. Accepts a finite, nonnegative number.
+		</constant>
+		<constant name="BODY_PARAM_HIT_EVENTS_ENABLED" value="11" enum="BodyParameter">
+			Boolean that enables native body hit events.
+		</constant>
+		<constant name="BODY_PARAM_CONTACT_REPORT_SPECULATIVE" value="12" enum="BodyParameter">
+			Boolean that includes speculative contact points with positive separation in contact reports.
+		</constant>
+		<constant name="BODY_PARAM_CCD_SAFETY_FACTOR" value="13" enum="BodyParameter">
+			Native continuous collision detection safety factor. Accepts a finite number greater than zero and at most one.
+		</constant>
+		<constant name="BODY_PARAM_CONTACT_RECYCLING_ENABLED" value="14" enum="BodyParameter">
+			Boolean that enables native contact recycling for the body.
+		</constant>
+		<constant name="BODY_PARAM_MAX" value="15" enum="BodyParameter">
 			Represents the size of the [enum BodyParameter] enum.
 		</constant>
 		<constant name="BODY_DAMP_MODE_COMBINE" value="0" enum="BodyDampMode">
@@ -1782,16 +1868,22 @@
 			Constant to get the number of space regions where a collision could occur.
 		</constant>
 		<constant name="BODY_AXIS_LINEAR_X" value="1" enum="BodyAxis">
+			Body linear motion axis X. Use with [method body_set_axis_lock] and [method body_is_axis_locked].
 		</constant>
 		<constant name="BODY_AXIS_LINEAR_Y" value="2" enum="BodyAxis">
+			Body linear motion axis Y. Use with [method body_set_axis_lock] and [method body_is_axis_locked].
 		</constant>
 		<constant name="BODY_AXIS_LINEAR_Z" value="4" enum="BodyAxis">
+			Body linear motion axis Z. Use with [method body_set_axis_lock] and [method body_is_axis_locked].
 		</constant>
 		<constant name="BODY_AXIS_ANGULAR_X" value="8" enum="BodyAxis">
+			Body angular motion axis X. Use with [method body_set_axis_lock] and [method body_is_axis_locked].
 		</constant>
 		<constant name="BODY_AXIS_ANGULAR_Y" value="16" enum="BodyAxis">
+			Body angular motion axis Y. Use with [method body_set_axis_lock] and [method body_is_axis_locked].
 		</constant>
 		<constant name="BODY_AXIS_ANGULAR_Z" value="32" enum="BodyAxis">
+			Body angular motion axis Z. Use with [method body_set_axis_lock] and [method body_is_axis_locked].
 		</constant>
 		<constant name="SPACE_PARAM_CONTACT_RECYCLE_RADIUS" value="0" enum="SpaceParameter">
 			Distance used to recycle Box3D contact points in meters.

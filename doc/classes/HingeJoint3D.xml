@@ -73,17 +73,29 @@
 		</member>
 	</members>
 	<constants>
-		<constant name="PARAM_LIMIT_UPPER" value="1" enum="Param">
+		<constant name="PARAM_LIMIT_UPPER" value="0" enum="Param">
 			The maximum rotation. Only active if [member angular_limit/enable] is [code]true[/code].
 		</constant>
-		<constant name="PARAM_LIMIT_LOWER" value="2" enum="Param">
+		<constant name="PARAM_LIMIT_LOWER" value="1" enum="Param">
 			The minimum rotation. Only active if [member angular_limit/enable] is [code]true[/code].
 		</constant>
-		<constant name="PARAM_MOTOR_TARGET_VELOCITY" value="6" enum="Param">
+		<constant name="PARAM_MOTOR_TARGET_VELOCITY" value="2" enum="Param">
 			Target speed for the motor.
 		</constant>
-		<constant name="PARAM_MOTOR_MAX_TORQUE" value="7" enum="Param">
+		<constant name="PARAM_MOTOR_MAX_TORQUE" value="3" enum="Param">
 			Maximum torque applied by the native hinge motor.
+		</constant>
+		<constant name="PARAM_SPRING_ENABLED" value="4" enum="Param">
+			Enables the native joint spring. Pass [code]1.0[/code] to enable or [code]0.0[/code] to disable.
+		</constant>
+		<constant name="PARAM_SPRING_HERTZ" value="5" enum="Param">
+			Native joint spring frequency in hertz.
+		</constant>
+		<constant name="PARAM_SPRING_DAMPING_RATIO" value="6" enum="Param">
+			Native joint spring damping ratio.
+		</constant>
+		<constant name="PARAM_SPRING_TARGET_ANGLE" value="7" enum="Param">
+			Native hinge spring target angle in radians.
 		</constant>
 		<constant name="PARAM_MAX" value="8" enum="Param">
 			Represents the size of the [enum Param] enum.

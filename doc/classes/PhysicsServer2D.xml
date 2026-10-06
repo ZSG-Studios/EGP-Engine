@@ -1150,7 +1150,16 @@
 		<constant name="BODY_PARAM_ANGULAR_DAMP" value="9" enum="BodyParameter">
 			Constant to set/get a body's angular damping factor. The default value of this parameter is [code]0.0[/code].
 		</constant>
-		<constant name="BODY_PARAM_MAX" value="10" enum="BodyParameter">
+		<constant name="BODY_PARAM_SLEEP_THRESHOLD" value="10" enum="BodyParameter">
+			Native body sleep threshold. Accepts a finite, nonnegative number.
+		</constant>
+		<constant name="BODY_PARAM_HIT_EVENTS_ENABLED" value="11" enum="BodyParameter">
+			Boolean that enables native body hit events.
+		</constant>
+		<constant name="BODY_PARAM_CONTACT_REPORT_SPECULATIVE" value="12" enum="BodyParameter">
+			Boolean that includes speculative contact points with positive separation in contact reports.
+		</constant>
+		<constant name="BODY_PARAM_MAX" value="13" enum="BodyParameter">
 			Represents the size of the [enum BodyParameter] enum.
 		</constant>
 		<constant name="BODY_DAMP_MODE_COMBINE" value="0" enum="BodyDampMode">
@@ -1183,7 +1192,28 @@
 		<constant name="JOINT_TYPE_DAMPED_SPRING" value="2" enum="JointType">
 			Constant to create damped spring joints.
 		</constant>
-		<constant name="JOINT_TYPE_MAX" value="3" enum="JointType">
+		<constant name="JOINT_TYPE_DISTANCE" value="3" enum="JointType">
+			Native distance joint type. Create it with [method joint_make_configured] and its type-specific configuration dictionary.
+		</constant>
+		<constant name="JOINT_TYPE_FILTER" value="4" enum="JointType">
+			Native filter joint type. Create it with [method joint_make_configured] and its type-specific configuration dictionary.
+		</constant>
+		<constant name="JOINT_TYPE_MOTOR" value="5" enum="JointType">
+			Native motor joint type. Create it with [method joint_make_configured] and its type-specific configuration dictionary.
+		</constant>
+		<constant name="JOINT_TYPE_PRISMATIC" value="6" enum="JointType">
+			Native prismatic joint type. Create it with [method joint_make_configured] and its type-specific configuration dictionary.
+		</constant>
+		<constant name="JOINT_TYPE_REVOLUTE" value="7" enum="JointType">
+			Native revolute joint type. Create it with [method joint_make_configured] and its type-specific configuration dictionary.
+		</constant>
+		<constant name="JOINT_TYPE_WELD" value="8" enum="JointType">
+			Native weld joint type. Create it with [method joint_make_configured] and its type-specific configuration dictionary.
+		</constant>
+		<constant name="JOINT_TYPE_WHEEL" value="9" enum="JointType">
+			Native wheel joint type. Create it with [method joint_make_configured] and its type-specific configuration dictionary.
+		</constant>
+		<constant name="JOINT_TYPE_MAX" value="10" enum="JointType">
 			Represents the size of the [enum JointType] enum.
 		</constant>
 		<constant name="PIN_JOINT_LIMIT_UPPER" value="1" enum="PinJointParam">
@@ -1254,6 +1284,12 @@
 		</constant>
 		<constant name="SPACE_PARAM_WARM_STARTING_ENABLED" value="7" enum="SpaceParameter">
 			Whether cached constraint impulses are reused (0 or 1).
+		</constant>
+		<constant name="JOINT_PARAM_HERTZ" value="0" enum="JointParam">
+			Native joint constraint frequency in hertz.
+		</constant>
+		<constant name="JOINT_PARAM_DAMPING_RATIO" value="1" enum="JointParam">
+			Native joint constraint damping ratio.
 		</constant>
 	</constants>
 </class>

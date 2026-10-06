@@ -276,3 +276,57 @@ templates. Re-run paired capture, exact API audit, C++ editor controls, trilingu
 exports and network/physics fixtures on those final artifacts. The canonical source
 includes the current fixes; remote master publication and running-game hot reload
 acceptance remain pending. Preserve both unrelated root artifacts untracked.
+
+### Combined Mono/export and migration continuation (2026-10-06)
+
+The owned combined pipeline finished at `.build/integration-combined-mono/receipt.json`,
+frozen engine source `557887f4b252e8aeaa76e6a7d03517d7eda74d35`. Editor, matching SDK,
+glue, managed assemblies and both templates passed. Editor SHA256
+`a0a29b9d84ea49dfa8fd01e2bc006d98c5dc861e53e50e4b9ec7b95f5ca0177b`, Debug template
+`fa230aaaefd061f6425d7a34965d3ea2e66689381183eb40a24d2f3f423fd449`, optimized Release
+`759f39a346cc9741ba45c4ece3b53f60feff72bc283372b2091efe3363d28718`.
+Session `94709` initially failed managed file publication because an API-capture
+process held a managed DLL. The capture ended; session `82775` resumed completed
+stages. The initial failure receipt/logs remain in `resume-checkpoint-*`. All
+build sessions are finished; do not duplicate those template builds.
+
+- Paired capture `.build/integration-final-mono-api/1791266292794423800/receipt.json`
+  passed. Actual API SHA256
+  `0e8ae8b8c3f78acbd21c8e93dd9e86dd8ab8baaa1b64de1bc948b64e12fd60e1` matches SDK
+  `%LOCALAPPDATA%/Godot/egp_cpp/sdk/98eaaf3b208b7881`.
+  `python misc/scripts/validate_egp_api.py --api .build/integration-final-mono-api/1791266292794423800/extension_api.json --classdb .build/integration-final-mono-api/1791266292794423800/classdb.json --sdk C:/Users/Rose-X/AppData/Local/Godot/egp_cpp/sdk/98eaaf3b208b7881 --managed C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/modules/mono/glue/GodotSharp --changes misc/egp/api_contract.json --docs . --output .build/integration-enum-api-audit-fixed.json`
+  passes 77 class exposure checks and 371 documented enum constants in 17 classes.
+  This is structural exposure; broad signatures/defaults/runtime behavior remain.
+- The XML enum audit repaired 14 numeric values, 50 missing constants and 22 empty
+  descriptions. It checks enum identity/value, retired names and nonempty text.
+  `python misc/scripts/test_validate_egp_api.py` passes ten regressions, including
+  deliberately stale, missing, empty and wrongly categorized docs. Six changed
+  XML schemas, Ruff and mypy pass (existing Python 3.9 mypy warning remains).
+  ConeTwist/6DOF docs no longer claim those implemented native joints are absent.
+- `python misc/scripts/validate_egp_cpp_ui.py --engine C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe --output .build/integration-mono-cpp-ui`
+  passed at `1791266434797119900/receipt.json`: editor controls, diagnostics,
+  shared SDK cache, failure recovery, changed implementation reload, Release
+  mappings and clean shutdown. Existing running-game instances/state are untested.
+- `python misc/scripts/validate_egp_net_languages.py --engine C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe --sdk C:/Users/Rose-X/AppData/Local/Godot/egp_cpp/sdk/98eaaf3b208b7881 --sdk-library C:/Users/Rose-X/AppData/Local/Godot/egp_cpp/lib/98eaaf3b208b7881/MSVC-19.51.36260.0-Windows-AMD64-x64/Debug/egp_godot_cpp.lib --release-sdk-library C:/Users/Rose-X/AppData/Local/Godot/egp_cpp/lib/98eaaf3b208b7881/MSVC-19.51.36260.0-Windows-AMD64-x64/Release/egp_godot_cpp.lib --packages C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/GodotSharp/Tools/nupkgs --template C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.template_debug.x86_64.mono.exe --release-template C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.template_release.x86_64.mono.exe --output .build/integration-final-net-languages`
+  passed all stages: isolated packages, C#/C++ Debug/Release builds, cold import,
+  mixed-language interoperability, separate GDScript/C#/C++ clients and relocated
+  Debug/optimized Release exports. Logs and artifact hashes remain in its receipt.
+- The first Mono migration gate failed on obsolete class-rename targets. Source
+  `3d58a53b70` removes retired physics/WebRTC targets and diagnoses legacy custom
+  physics backends and WebRTC native/extension classes. `b38d42016d` decodes escaped
+  embedded script text before checking it. Preserve failed receipts at
+  `.build/integration-mono-migration` and `.build/integration-native-migration-fixed`.
+  Native editor SHA256
+  `170a1ca495b1a917c6afdfe0ae8dffa6db9b72f38a5175df2028a6f11a1779ff` passes
+  `python misc/scripts/validate_egp_net_migration.py --engine C:/Users/Rose-X/.codex/worktrees/box3d-parity/EGP/bin/godot.windows.editor.dev.x86_64.exe --output .build/integration-native-migration-decoded`:
+  25 checks; rejected scripts/scenes unchanged; clean Spatial/onready conversion
+  succeeds. Native manifest records the frozen base and both incremental commits.
+
+Next copy committed converter/docs updates into the idle combined Mono tree,
+record hashes and incrementally rebuild its editor with the exact SDK API. Repeat
+paired capture, migration, combined physics/network and editor-control checks
+before authorized master publication. Templates are unaffected by these editor
+migration/doc updates. Actual C#/C++ game reload, preserved instances/state/events,
+repeat reload recovery and cleanup remain unfinished: C# gates reload on editor
+hint and native extension reload is enabled only for editor mode. Implement and
+qualify an explicit editor-binary game opt-in; packaged hot reload is a separate gate.

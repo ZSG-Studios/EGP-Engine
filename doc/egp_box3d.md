@@ -146,8 +146,10 @@ body/space lifetime, and the 300-tick independent-world comparison. Receipts
 retain the editor hash and each exercised script hash; the first joint failure
 is preserved separately from the corrected run. The inherited
 concave-sensor fixture records a known divergence rather than parity.
-Additional gaps include separation rays, ConeTwist/6DOF, soft bodies, margins,
-penetration depth, concave sensor visitors, per-shape area signals, material
+The refreshed 28-case native suite also passes ConeTwist/6DOF and soft-body
+fixtures; receipts are recorded in `doc/egp_integration_loop.md`. Remaining gaps
+include separation rays, broad soft-body collision parity, margins, penetration
+depth, concave sensor visitors, per-shape area signals, material
 combination rules and true infinite world boundaries (currently a finite plate).
 Cylinders use a hull approximation; scaling/geometry behavior needs qualification.
 
@@ -157,12 +159,12 @@ Cylinders use a hull approximation; scaling/geometry behavior needs qualificatio
 | --- | --- |
 | Fixed native world, canonical commands, full local rollback | Implemented; MSVC Debug/Release and Clang Release match the native Windows trajectory |
 | Godot explicit-world binding | Actual headless GDScript and C# runtime replay checks passed; receipts preserve the qualified source version |
-| Existing RigidBody3D/StaticBody3D/Area3D nodes | Sole default native scene adapter; 24 Windows regressions pass; full parity remains |
+| Existing RigidBody3D/StaticBody3D/Area3D nodes | Sole default native scene adapter; refreshed 28-case native Windows suite passes; full parity remains |
 | CharacterBody3D motion, floors, slopes, moving platforms | Basic motion regression passes; slopes and moving-platform compatibility still require fixtures |
 | Compounds, hulls, meshes, height fields, scaling and margins | Native conversion implemented; compound indices and basic mesh/cylinder tests pass; scaling and margin parity remain |
 | Collision filters, sensors, contact ordering, shape/ray/overlap queries | Basic filters, areas, contacts and exclusions pass; concave visitors, per-shape signals and penetration semantics remain |
-| Godot joints and unsupported constraint semantics | Pin/hinge/slider mapping implemented; ConeTwist/6DOF and remaining parameter semantics require work |
-| Soft bodies, vehicles and ragdolls | Compatibility or approved replacements required |
+| Godot joints and unsupported constraint semantics | Pin/hinge/slider/ConeTwist/6DOF implemented and covered by focused Windows fixtures; broad parameter and solver parity remain |
+| Soft bodies, vehicles and ragdolls | Focused soft-body Windows fixture passes; broad soft collisions, vehicles and ragdoll parity remain |
 | Authoritative physics under prediction and corrections | Native Yojimbo fixed-clock replication, bounded correction/input replay and packaged separate-process tests pass; scene rollback and broader adverse-network qualification remain |
 | Windows/Linux/macOS, x64/arm64 and export templates | Windows x64 editor and native debug template qualified for tested fixtures; other platforms and release templates remain |
 | Long runs, large scenes, allocation/memory/performance budgets | Measured limits and regressions required |

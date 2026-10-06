@@ -58,3 +58,9 @@ Networking options, lifecycle, thread ownership, errors and limits are documente
 in `modules/egp_net/README.md`. Native session wrappers can operate without the
 GDScript helper; higher-level C#/C++ façades use the shared GDScript codec and
 adapters. This dependency must stay clear in SDK installation and examples.
+
+Pass `--docs <repository-root>` to check XML enum documentation against the same
+actual editor API. The audit checks names, enum membership, numeric values and
+nonempty descriptions, and rejects documented constants that have been retired.
+It records class XML hashes and the number of checked constants. This does not
+validate the semantic accuracy of every description or all method defaults.

@@ -4,7 +4,7 @@
 		A physics joint that allows for complex movement and rotation between two 3D physics bodies.
 	</brief_description>
 	<description>
-		[b]Note:[/b] EGP's Box3D backend does not currently implement this joint.
+		EGP implements this joint with its native Box3D per-axis constraint solver. Numerical equivalence with other physics backends requires separate qualification.
 		The [Generic6DOFJoint3D] (6 Degrees Of Freedom) joint allows for implementing custom types of joints by locking the rotation and translation of certain axes.
 		The first 3 DOF represent the linear motion of the physics bodies and the last 3 DOF represent the angular motion of the physics bodies. Each axis can be either locked, or limited.
 	</description>
@@ -394,10 +394,13 @@
 			The maximum force the linear motor will apply while trying to reach the velocity target.
 		</constant>
 		<constant name="PARAM_LINEAR_SPRING_STIFFNESS" value="7" enum="Param">
+			Stiffness of the linear spring on the selected joint axis.
 		</constant>
 		<constant name="PARAM_LINEAR_SPRING_DAMPING" value="8" enum="Param">
+			Damping coefficient of the linear spring on the selected joint axis.
 		</constant>
 		<constant name="PARAM_LINEAR_SPRING_EQUILIBRIUM_POINT" value="9" enum="Param">
+			Equilibrium position of the linear spring on the selected joint axis, in distance units.
 		</constant>
 		<constant name="PARAM_ANGULAR_LOWER_LIMIT" value="10" enum="Param">
 			The minimum rotation in negative direction to break loose and rotate around the axes.
@@ -427,10 +430,13 @@
 			Maximum acceleration for the motor at the axes.
 		</constant>
 		<constant name="PARAM_ANGULAR_SPRING_STIFFNESS" value="19" enum="Param">
+			Stiffness of the angular spring on the selected joint axis.
 		</constant>
 		<constant name="PARAM_ANGULAR_SPRING_DAMPING" value="20" enum="Param">
+			Damping coefficient of the angular spring on the selected joint axis.
 		</constant>
 		<constant name="PARAM_ANGULAR_SPRING_EQUILIBRIUM_POINT" value="21" enum="Param">
+			Equilibrium position of the angular spring on the selected joint axis, in radians.
 		</constant>
 		<constant name="PARAM_LINEAR_DRIVE_FORCE_LIMIT" value="22" enum="Param">
 			The maximum force the joint can apply along this linear axis.
@@ -452,8 +458,10 @@
 			If enabled, rotational motion is possible within the given limits.
 		</constant>
 		<constant name="FLAG_ENABLE_LINEAR_SPRING" value="3" enum="Flag">
+			Enables the linear spring on the selected joint axis.
 		</constant>
 		<constant name="FLAG_ENABLE_ANGULAR_SPRING" value="2" enum="Flag">
+			Enables the angular spring on the selected joint axis.
 		</constant>
 		<constant name="FLAG_ENABLE_ANGULAR_MOTOR" value="4" enum="Flag">
 			If enabled, there is a rotational or angular motor across these axes.
