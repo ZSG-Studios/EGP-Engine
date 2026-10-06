@@ -391,10 +391,28 @@ bool GDExtensionManager::ensure_extensions_loaded(const HashSet<String> &p_exten
 	}
 
 	String extension_list_config_file = GDExtension::get_extension_list_config_file();
+	// The editor may load an extension directly before the filesystem discovers
+	// its new descriptor. Persist the discovered set independently of the loaded
+	// set so the next game/editor launch can find those extensions as well.
+	HashSet<String> saved_extensions;
+	if (FileAccess::exists(extension_list_config_file)) {
+		Ref<FileAccess> saved = FileAccess::open(extension_list_config_file, FileAccess::READ);
+		ERR_FAIL_COND_V(saved.is_null(), false);
+		while (!saved->eof_reached()) {
+			const String path = saved->get_line().strip_edges();
+			if (!path.is_empty()) {
+				saved_extensions.insert(path);
+			}
+		}
+	}
+	bool list_changed = saved_extensions.size() != p_extensions.size();
+	for (const String &extension : p_extensions) {
+		list_changed |= !saved_extensions.has(extension);
+	}
 	if (p_extensions.size()) {
-		if (extensions_added.size() || extensions_removed.size()) {
-			// Extensions were added or removed.
+		if (list_changed) {
 			Ref<FileAccess> f = FileAccess::open(extension_list_config_file, FileAccess::WRITE);
+			ERR_FAIL_COND_V(f.is_null(), false);
 			for (const String &E : p_extensions) {
 				f->store_line(E);
 			}

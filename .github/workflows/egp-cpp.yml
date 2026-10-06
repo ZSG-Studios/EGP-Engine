@@ -2,9 +2,9 @@ name: EGP C++ editor and exports
 on:
   push:
     branches: [master]
-    paths: ["editor/settings/gdextension/**", "misc/scripts/*egp_cpp*", ".github/workflows/egp-cpp.yml", ".gitmodules"]
+    paths: ["core/extension/**", "drivers/windows/file_access_windows_pipe.*", "editor/editor_node.*", "editor/settings/gdextension/**", "misc/scripts/*egp_cpp*", ".github/workflows/egp-cpp.yml", ".gitmodules", "thirdparty/godot-cpp"]
   pull_request:
-    paths: ["editor/settings/gdextension/**", "misc/scripts/*egp_cpp*", ".github/workflows/egp-cpp.yml", ".gitmodules"]
+    paths: ["core/extension/**", "drivers/windows/file_access_windows_pipe.*", "editor/editor_node.*", "editor/settings/gdextension/**", "misc/scripts/*egp_cpp*", ".github/workflows/egp-cpp.yml", ".gitmodules", "thirdparty/godot-cpp"]
   workflow_dispatch:
 permissions:
   contents: read

@@ -77,9 +77,16 @@ func _ready():
     cli = [editor, "--headless", "--editor", "--max-fps", "30", "--path", str(project), "--"]
     run(
         "cli-check-create-build",
-        cli + ["--cpp-check", "--cpp-create=smoke", "--cpp-build=smoke:debug", "--cpp-build=smoke:release"],
+        cli + ["--cpp-check", "--cpp-create=smoke", "--cpp-build=smoke:debug"],
         marker="EGP_CPP_CLI_PASSED",
     )
+    run(
+        "native-game-after-first-build",
+        [editor, "--headless", "--max-fps", "30", "--path", str(project)],
+        timeout=60,
+        marker="EGP_CPP_GAME_PASSED",
+    )
+    run("cli-build-release", cli + ["--cpp-build=smoke:release"], marker="EGP_CPP_CLI_PASSED")
     run("cli-invalid-option", cli + ["--cpp-unknown"], expected=1)
     run("cli-invalid-build-config", cli + ["--cpp-build=smoke:invalid"], expected=1)
     run("cli-missing-cmake", cli + ["--cpp-cmake=/egp/does/not/exist/cmake", "--cpp-check"], expected=1)
