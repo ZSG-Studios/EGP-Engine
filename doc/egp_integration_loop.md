@@ -620,3 +620,16 @@ active during installation. The installed canonical editor command
 passes all 59 trilingual assertions (exec evidence `0bc19f`). Publication follows
 these combined-engine gates; the final receipt will record canonical/local/remote
 commit identities, exact commands, inventories, installed hashes and limitations.
+
+
+Qualified increment `e8bfe8dc9e` was pushed to origin master without force and its
+remote SHA verified on 2026-10-06. `.build/integration-native-recovery-publication.json`
+records the final acknowledged canonical/local/remote identities, frozen source,
+combined qualification and installed-artifact hashes. Final seven-tree inventory
+is `.build/integration-takeover/runtime-reload-1791274456410516300/inventory.json`:
+113 refs, zero pending PRs, all foreign dirty source preserved, and only the two
+unrelated user files untracked in primary. The loop remains ACTIVE. The displayed
+engine version still comes from the frozen worktree base; verified source and
+binary hashes identify this build. Next items include incompatible ABI/class
+reload recovery, remaining 2D native event/capability fixtures, broader networking
+simulation/ownership/authoritative physics, package identity and build provenance.
