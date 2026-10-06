@@ -22,7 +22,6 @@ across GDScript, C# and C++.
 | Godot Physics 2D | Native Box2D integration | Use a pinned solver with an explicit fixed-step profile, substeps and worker settings, while keeping `PhysicsServer2D` and ordinary 2D physics nodes as the game-facing API. |
 | Godot Physics 3D and Jolt, including the Jolt vendor dependency | Native Box3D integration | Use the Box solver family for both dimensions and expose an explicit 3D world with ordered entity commands, fixed ticks and local full-world snapshots for authoritative simulation and replay. |
 | Godot's high-level multiplayer/RPC stack, ENet, WebRTC and `WebSocketMultiplayerPeer` | Native Yojimbo transport with `EGPNetSession` and shared networking helpers | Make encrypted token admission, authoritative entity ownership, interest, replication and bounded traffic part of one explicit protocol, with matching GDScript, C# and C++ APIs. |
-| The earlier EGP LiteNet networking integration | The same native Yojimbo stack | Consolidate networking in the engine and standalone native library. GDScript and C++ games can use it without Mono or a separate networking assembly; C# uses the matching Mono engine. |
 
 ### Physics: consistent integration and explicit simulation
 
