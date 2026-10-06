@@ -9,11 +9,16 @@ env_box2d.Prepend(CPPPATH=["#thirdparty/box2d/include"])
 
 # Isolate the solver and adapter from global fast math and FMA contraction flags.
 for key in ("CCFLAGS", "CFLAGS", "CXXFLAGS"):
-    env_box2d[key] = [flag for flag in env_box2d[key] if not str(flag).startswith(("/fp:", "-ffast-math", "-Ofast", "-ffp-contract=", "-funsafe-math-optimizations"))]
+    env_box2d[key] = [
+        flag
+        for flag in env_box2d[key]
+        if not str(flag).startswith(("/fp:", "-ffast-math", "-Ofast", "-ffp-contract=", "-funsafe-math-optimizations"))
+    ]
 if env.msvc:
-    env_box2d.Append(CCFLAGS=["/fp:precise"])
     if env["use_llvm"]:
-        env_box2d.Append(CCFLAGS=["/clang:-ffp-contract=off"])
+        env_box2d.Append(CCFLAGS=["/clang:-fno-fast-math", "/clang:-ffp-contract=off"])
+    else:
+        env_box2d.Append(CCFLAGS=["/fp:precise"])
 else:
     env_box2d.Append(CCFLAGS=["-fno-fast-math", "-ffp-contract=off"])
     if env["platform"] not in ("macos", "ios", "windows", "web"):

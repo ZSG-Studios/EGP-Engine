@@ -10,11 +10,16 @@ env_box3d.Append(CPPDEFINES=["BOX3D_DISABLE_AVX2"])
 
 # Isolate the solver and adapter from global fast math and FMA contraction flags.
 for key in ("CCFLAGS", "CFLAGS", "CXXFLAGS"):
-    env_box3d[key] = [flag for flag in env_box3d[key] if not str(flag).startswith(("/fp:", "-ffast-math", "-Ofast", "-ffp-contract=", "-funsafe-math-optimizations"))]
+    env_box3d[key] = [
+        flag
+        for flag in env_box3d[key]
+        if not str(flag).startswith(("/fp:", "-ffast-math", "-Ofast", "-ffp-contract=", "-funsafe-math-optimizations"))
+    ]
 if env.msvc:
-    env_box3d.Append(CCFLAGS=["/fp:precise"])
     if env["use_llvm"]:
-        env_box3d.Append(CCFLAGS=["/clang:-ffp-contract=off"])
+        env_box3d.Append(CCFLAGS=["/clang:-fno-fast-math", "/clang:-ffp-contract=off"])
+    else:
+        env_box3d.Append(CCFLAGS=["/fp:precise"])
 else:
     env_box3d.Append(CCFLAGS=["-fno-fast-math", "-ffp-contract=off"])
     if env["platform"] not in ("macos", "ios", "windows", "web"):
