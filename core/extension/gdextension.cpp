@@ -1028,8 +1028,8 @@ bool GDExtension::finish_reload() {
 	is_reloading = false;
 	bool complete = true;
 
-	// Clean up any classes or methods that didn't get re-added.
-	Vector<StringName> classes_to_remove;
+	// Invalidate methods that didn't get re-added, retaining class records
+	// until a compatible retry or restart, even without live instances.
 	for (KeyValue<StringName, Extension> &E : extension_classes) {
 		if (E.value.is_reloading) {
 			// Rejected or removed classes can still have live parent objects.
@@ -1044,13 +1044,10 @@ bool GDExtension::finish_reload() {
 				E.value.instance_state.erase(id);
 				E.value.instances.erase(id);
 			}
-			if (E.value.instance_state.is_empty()) {
-				E.value.is_reloading = false;
-				classes_to_remove.push_back(E.key);
-			} else {
-				complete = false;
-				ERR_PRINT(vformat("GDExtension class '%s' was not restored during hot reload. Live objects retain their native parent and saved state. Restore the compatible class and reload, or restart Godot.", E.key));
-			}
+			// Bindings may still unregister a rejected registration on the next
+			// unload. Keep the record even if this process has no live objects.
+			complete = false;
+			ERR_PRINT(vformat("GDExtension class '%s' was not restored during hot reload. Live objects retain their native parent and saved state. Restore the compatible class and reload, or restart Godot.", E.key));
 		}
 
 		Vector<StringName> methods_to_remove;
@@ -1066,10 +1063,6 @@ bool GDExtension::finish_reload() {
 			E.value.methods.erase(method_name);
 		}
 	}
-	for (const StringName &class_name : classes_to_remove) {
-		extension_classes.erase(class_name);
-	}
-
 	// Reset any the extension on instances made from the classes that remain.
 	for (KeyValue<StringName, Extension> &E : extension_classes) {
 		if (E.value.is_reloading) {
