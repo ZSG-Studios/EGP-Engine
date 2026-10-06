@@ -46,6 +46,20 @@ jobs:
             godot-cpp: true
             clangd-tidy: true
 
+          - name: Editor with SCU and GCC sanitizers (single precision, use_asan=yes, use_ubsan=yes, linker=mold)
+            cache-name: linux-editor-single-scu-sanitizers
+            target: editor
+            scons-flags: >-
+              dev_build=yes
+              scu_build=yes
+              debug_symbols=no
+              use_asan=yes
+              use_ubsan=yes
+              linker=mold
+            bin: ./bin/godot.linuxbsd.editor.dev.x86_64.san
+            install-mold: true
+            free-space: true
+
           - name: Template with doubles and GCC sanitizers (physics disabled, precision=double, use_asan=yes, use_ubsan=yes, linker=mold)
             cache-name: linux-template-double-sanitizers
             # Editors require physics, and EGP's backends currently use single precision.
@@ -53,7 +67,6 @@ jobs:
             # Debug symbols disabled as they're huge on this build and we hit the 14 GB limit for runners.
             scons-flags: >-
               dev_build=yes
-              scu_build=yes
               debug_symbols=no
               precision=double
               tests=yes
