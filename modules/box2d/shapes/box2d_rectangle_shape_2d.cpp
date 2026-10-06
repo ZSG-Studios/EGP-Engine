@@ -44,6 +44,7 @@ bool Box2DRectangleShape2D::make_rectangle(const Transform2D &p_transform, const
 	};
 
 	b2Hull hull = b2ComputeHull(points, 4);
+	ERR_FAIL_COND_V_MSG(!b2ValidateHull(&hull), false, "Box2D: Rectangle is degenerate or smaller than the configured physics tolerance.");
 
 	p_box = b2MakePolygon(&hull, 0.0);
 

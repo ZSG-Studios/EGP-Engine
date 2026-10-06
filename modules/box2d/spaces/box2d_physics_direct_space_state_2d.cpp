@@ -398,6 +398,7 @@ bool Box2DDirectSpaceState2D::_rest_info(
 Dictionary Box2DDirectSpaceState2D::cast_shape(const Ref<PhysicsShapeQueryParameters2D> &p_parameters) {
 	std::lock_guard<std::recursive_mutex> guard(egp::box2d::get_simulation_mutex());
 	ERR_FAIL_COND_V(!space, {});
+	ERR_FAIL_COND_V_MSG(p_parameters.is_null(), {}, "Box2D: Shape cast parameters must not be null.");
 	PhysicsShapeQueryParameters2D *params = p_parameters.ptr();
 	Box2DShape2D *shape = Box2DPhysicsServer2D::get_singleton()->get_shape(params->get_shape_rid());
 	ERR_FAIL_COND_V(!shape, {});
@@ -454,6 +455,7 @@ TypedArray<Dictionary> Box2DDirectSpaceState2D::cast_shape_all(
 		int32_t p_max_results) {
 	std::lock_guard<std::recursive_mutex> guard(egp::box2d::get_simulation_mutex());
 	ERR_FAIL_COND_V(!space, {});
+	ERR_FAIL_COND_V_MSG(p_parameters.is_null(), {}, "Box2D: Shape cast parameters must not be null.");
 	PhysicsShapeQueryParameters2D *params = p_parameters.ptr();
 	Box2DShape2D *shape = Box2DPhysicsServer2D::get_singleton()->get_shape(params->get_shape_rid());
 	ERR_FAIL_COND_V(!shape, {});
