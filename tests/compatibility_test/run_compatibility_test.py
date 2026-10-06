@@ -14,6 +14,20 @@ CLASS_METHODS_FILE = PROJECT_PATH.joinpath("class_methods.txt")
 BUILTIN_METHODS_FILE = PROJECT_PATH.joinpath("builtin_methods.txt")
 UTILITY_FUNCTIONS_FILE = PROJECT_PATH.joinpath("utility_functions.txt")
 
+FORK_DIFFERENCES = (
+    pathlib.Path(__file__).resolve().parents[2].joinpath("misc/extension_api_validation/4.7-stable/EGP-backends.txt")
+)
+RETIRED_APIS = {
+    line.removeprefix("Validate extension JSON: API was removed: ")
+    for line in FORK_DIFFERENCES.read_text(encoding="utf-8").splitlines()
+    if line.startswith("Validate extension JSON: API was removed: ")
+}
+
+
+def is_retired_api(path: str) -> bool:
+    """Exclude only explicitly documented fork removals from legacy method lookup."""
+    return any(path == retired or path.startswith(retired + "/") for retired in RETIRED_APIS)
+
 
 def download_gdextension_api(reftag: str) -> dict[str, Any]:
     with urllib.request.urlopen(
@@ -44,6 +58,7 @@ def generate_test_data_files(reftag: str):
                     for klass in gdextension_reference_json["classes"]
                     for method in klass.get("methods", [])
                     if not method.get("is_virtual")
+                    and not is_retired_api(f"classes/{klass['name']}/methods/{method['name']}")
                 ),
             )
         ])
@@ -68,6 +83,7 @@ def generate_test_data_files(reftag: str):
                     (klass, method)
                     for klass in gdextension_reference_json["builtin_classes"]
                     for method in klass.get("methods", [])
+                    if not is_retired_api(f"builtin_classes/{klass['name']}/methods/{method['name']}")
                 ),
             )
         ])

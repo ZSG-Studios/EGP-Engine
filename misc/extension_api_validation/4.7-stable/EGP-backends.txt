@@ -1,0 +1,190 @@
+# Intentional EGP fork differences from official Godot APIs.
+# Exact diagnostics remain checked; unrelated removals, signatures and hashes fail.
+# Older reference versions inherit this file through the existing version chain.
+#
+# Native Yojimbo replaces Godot RPC, multiplayer peers and ENet/WebRTC transports.
+# Use EGPNetSession and the shared GDScript/C#/C++ facades when migrating games.
+# Box2D/Box3D replace legacy solver bias, margin, priority, separation-ray and
+# joint tuning APIs. Joint enum values follow the supported Box solver contract.
+# The 3D motion extension removes the obsolete separation-ray argument; rebuild
+# extensions against EGP headers. CollisionShape3D exposes supported shape types.
+# See doc/egp_box2d.md, doc/egp_box3d.md and the EGP class reference for migration.
+# TextServerFallback is NOT an intentional removal; CI explicitly builds it.
+Validate extension JSON: API was removed: builtin_classes/Callable/methods/rpc
+Validate extension JSON: API was removed: builtin_classes/Callable/methods/rpc_id
+Validate extension JSON: API was removed: classes/CollisionObject3D/methods/get_collision_priority
+Validate extension JSON: API was removed: classes/CollisionObject3D/methods/set_collision_priority
+Validate extension JSON: API was removed: classes/CollisionObject3D/properties/collision_priority
+Validate extension JSON: API was removed: classes/CollisionPolygon3D/methods/get_margin
+Validate extension JSON: API was removed: classes/CollisionPolygon3D/methods/set_margin
+Validate extension JSON: API was removed: classes/CollisionPolygon3D/properties/margin
+Validate extension JSON: API was removed: classes/CSGShape3D/methods/get_collision_priority
+Validate extension JSON: API was removed: classes/CSGShape3D/methods/set_collision_priority
+Validate extension JSON: API was removed: classes/CSGShape3D/properties/collision_priority
+Validate extension JSON: API was removed: classes/ENetConnection
+Validate extension JSON: API was removed: classes/ENetMultiplayerPeer
+Validate extension JSON: API was removed: classes/ENetPacketPeer
+Validate extension JSON: API was removed: classes/GridMap/methods/get_collision_priority
+Validate extension JSON: API was removed: classes/GridMap/methods/set_collision_priority
+Validate extension JSON: API was removed: classes/GridMap/properties/collision_priority
+Validate extension JSON: API was removed: classes/HingeJoint3D/enums/Param/values/PARAM_BIAS
+Validate extension JSON: API was removed: classes/HingeJoint3D/enums/Param/values/PARAM_LIMIT_BIAS
+Validate extension JSON: API was removed: classes/HingeJoint3D/enums/Param/values/PARAM_LIMIT_RELAXATION
+Validate extension JSON: API was removed: classes/HingeJoint3D/enums/Param/values/PARAM_LIMIT_SOFTNESS
+Validate extension JSON: API was removed: classes/HingeJoint3D/enums/Param/values/PARAM_MOTOR_MAX_IMPULSE
+Validate extension JSON: API was removed: classes/Joint2D/methods/get_bias
+Validate extension JSON: API was removed: classes/Joint2D/methods/set_bias
+Validate extension JSON: API was removed: classes/Joint2D/properties/bias
+Validate extension JSON: API was removed: classes/Joint3D/methods/get_solver_priority
+Validate extension JSON: API was removed: classes/Joint3D/methods/set_solver_priority
+Validate extension JSON: API was removed: classes/Joint3D/properties/solver_priority
+Validate extension JSON: API was removed: classes/MultiplayerAPI
+Validate extension JSON: API was removed: classes/MultiplayerAPIExtension
+Validate extension JSON: API was removed: classes/MultiplayerPeer
+Validate extension JSON: API was removed: classes/MultiplayerPeerExtension
+Validate extension JSON: API was removed: classes/MultiplayerSpawner
+Validate extension JSON: API was removed: classes/MultiplayerSynchronizer
+Validate extension JSON: API was removed: classes/Node/methods/get_multiplayer
+Validate extension JSON: API was removed: classes/Node/methods/get_multiplayer_authority
+Validate extension JSON: API was removed: classes/Node/methods/get_node_rpc_config
+Validate extension JSON: API was removed: classes/Node/methods/is_multiplayer_authority
+Validate extension JSON: API was removed: classes/Node/methods/rpc
+Validate extension JSON: API was removed: classes/Node/methods/rpc_config
+Validate extension JSON: API was removed: classes/Node/methods/rpc_id
+Validate extension JSON: API was removed: classes/Node/methods/set_multiplayer_authority
+Validate extension JSON: API was removed: classes/Node/properties/multiplayer
+Validate extension JSON: API was removed: classes/OfflineMultiplayerPeer
+Validate extension JSON: API was removed: classes/PhysicsServer2D/enums/CCDMode/values/CCD_MODE_CAST_RAY
+Validate extension JSON: API was removed: classes/PhysicsServer2D/enums/JointParam/values/JOINT_PARAM_BIAS
+Validate extension JSON: API was removed: classes/PhysicsServer2D/enums/JointParam/values/JOINT_PARAM_MAX_BIAS
+Validate extension JSON: API was removed: classes/PhysicsServer2D/enums/JointParam/values/JOINT_PARAM_MAX_FORCE
+Validate extension JSON: API was removed: classes/PhysicsServer2D/enums/PinJointParam/values/PIN_JOINT_SOFTNESS
+Validate extension JSON: API was removed: classes/PhysicsServer2D/enums/ShapeType/values/SHAPE_CUSTOM
+Validate extension JSON: API was removed: classes/PhysicsServer2D/enums/SpaceParameter/values/SPACE_PARAM_BODY_ANGULAR_VELOCITY_SLEEP_THRESHOLD
+Validate extension JSON: API was removed: classes/PhysicsServer2D/enums/SpaceParameter/values/SPACE_PARAM_BODY_LINEAR_VELOCITY_SLEEP_THRESHOLD
+Validate extension JSON: API was removed: classes/PhysicsServer2D/enums/SpaceParameter/values/SPACE_PARAM_BODY_TIME_TO_SLEEP
+Validate extension JSON: API was removed: classes/PhysicsServer2D/enums/SpaceParameter/values/SPACE_PARAM_CONSTRAINT_DEFAULT_BIAS
+Validate extension JSON: API was removed: classes/PhysicsServer2D/enums/SpaceParameter/values/SPACE_PARAM_CONTACT_DEFAULT_BIAS
+Validate extension JSON: API was removed: classes/PhysicsServer2D/enums/SpaceParameter/values/SPACE_PARAM_CONTACT_MAX_ALLOWED_PENETRATION
+Validate extension JSON: API was removed: classes/PhysicsServer2D/enums/SpaceParameter/values/SPACE_PARAM_CONTACT_MAX_SEPARATION
+Validate extension JSON: API was removed: classes/PhysicsServer2D/enums/SpaceParameter/values/SPACE_PARAM_CONTACT_RECYCLE_RADIUS
+Validate extension JSON: API was removed: classes/PhysicsServer2D/enums/SpaceParameter/values/SPACE_PARAM_SOLVER_ITERATIONS
+Validate extension JSON: API was removed: classes/PhysicsServer2DExtension/methods/_shape_get_custom_solver_bias
+Validate extension JSON: API was removed: classes/PhysicsServer2DExtension/methods/_shape_set_custom_solver_bias
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/HingeJointParam/values/HINGE_JOINT_BIAS
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/HingeJointParam/values/HINGE_JOINT_LIMIT_BIAS
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/HingeJointParam/values/HINGE_JOINT_LIMIT_RELAXATION
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/HingeJointParam/values/HINGE_JOINT_LIMIT_SOFTNESS
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/HingeJointParam/values/HINGE_JOINT_MOTOR_MAX_IMPULSE
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/PinJointParam/values/PIN_JOINT_BIAS
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/PinJointParam/values/PIN_JOINT_IMPULSE_CLAMP
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/ShapeType/values/SHAPE_CUSTOM
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/ShapeType/values/SHAPE_SEPARATION_RAY
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_ANGULAR_LIMIT_DAMPING
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_ANGULAR_LIMIT_LOWER
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_ANGULAR_LIMIT_RESTITUTION
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_ANGULAR_LIMIT_SOFTNESS
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_ANGULAR_LIMIT_UPPER
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_ANGULAR_MOTION_DAMPING
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_ANGULAR_MOTION_RESTITUTION
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_ANGULAR_MOTION_SOFTNESS
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_ANGULAR_ORTHOGONAL_DAMPING
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_ANGULAR_ORTHOGONAL_RESTITUTION
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_ANGULAR_ORTHOGONAL_SOFTNESS
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_LINEAR_LIMIT_DAMPING
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_LINEAR_LIMIT_RESTITUTION
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_LINEAR_LIMIT_SOFTNESS
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_LINEAR_MOTION_DAMPING
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_LINEAR_MOTION_RESTITUTION
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_LINEAR_MOTION_SOFTNESS
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_LINEAR_ORTHOGONAL_DAMPING
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_LINEAR_ORTHOGONAL_RESTITUTION
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_LINEAR_ORTHOGONAL_SOFTNESS
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SpaceParameter/values/SPACE_PARAM_BODY_ANGULAR_VELOCITY_SLEEP_THRESHOLD
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SpaceParameter/values/SPACE_PARAM_BODY_LINEAR_VELOCITY_SLEEP_THRESHOLD
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SpaceParameter/values/SPACE_PARAM_BODY_TIME_TO_SLEEP
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SpaceParameter/values/SPACE_PARAM_CONTACT_DEFAULT_BIAS
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SpaceParameter/values/SPACE_PARAM_CONTACT_MAX_ALLOWED_PENETRATION
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SpaceParameter/values/SPACE_PARAM_CONTACT_MAX_SEPARATION
+Validate extension JSON: API was removed: classes/PhysicsServer3D/enums/SpaceParameter/values/SPACE_PARAM_SOLVER_ITERATIONS
+Validate extension JSON: API was removed: classes/PhysicsServer3D/methods/body_get_collision_priority
+Validate extension JSON: API was removed: classes/PhysicsServer3D/methods/body_set_collision_priority
+Validate extension JSON: API was removed: classes/PhysicsServer3D/methods/custom_shape_create
+Validate extension JSON: API was removed: classes/PhysicsServer3D/methods/joint_get_solver_priority
+Validate extension JSON: API was removed: classes/PhysicsServer3D/methods/joint_set_solver_priority
+Validate extension JSON: API was removed: classes/PhysicsServer3D/methods/separation_ray_shape_create
+Validate extension JSON: API was removed: classes/PhysicsServer3D/methods/shape_get_margin
+Validate extension JSON: API was removed: classes/PhysicsServer3D/methods/shape_set_margin
+Validate extension JSON: API was removed: classes/PhysicsServer3DExtension/methods/_body_get_collision_priority
+Validate extension JSON: API was removed: classes/PhysicsServer3DExtension/methods/_body_set_collision_priority
+Validate extension JSON: API was removed: classes/PhysicsServer3DExtension/methods/_custom_shape_create
+Validate extension JSON: API was removed: classes/PhysicsServer3DExtension/methods/_joint_get_solver_priority
+Validate extension JSON: API was removed: classes/PhysicsServer3DExtension/methods/_joint_set_solver_priority
+Validate extension JSON: API was removed: classes/PhysicsServer3DExtension/methods/_separation_ray_shape_create
+Validate extension JSON: API was removed: classes/PhysicsServer3DExtension/methods/_shape_get_custom_solver_bias
+Validate extension JSON: API was removed: classes/PhysicsServer3DExtension/methods/_shape_get_margin
+Validate extension JSON: API was removed: classes/PhysicsServer3DExtension/methods/_shape_set_custom_solver_bias
+Validate extension JSON: API was removed: classes/PhysicsServer3DExtension/methods/_shape_set_margin
+Validate extension JSON: API was removed: classes/PhysicsTestMotionParameters3D/methods/is_collide_separation_ray_enabled
+Validate extension JSON: API was removed: classes/PhysicsTestMotionParameters3D/methods/set_collide_separation_ray_enabled
+Validate extension JSON: API was removed: classes/PhysicsTestMotionParameters3D/properties/collide_separation_ray
+Validate extension JSON: API was removed: classes/PinJoint2D/methods/get_softness
+Validate extension JSON: API was removed: classes/PinJoint2D/methods/set_softness
+Validate extension JSON: API was removed: classes/PinJoint2D/properties/softness
+Validate extension JSON: API was removed: classes/PinJoint3D/enums/Param/values/PARAM_BIAS
+Validate extension JSON: API was removed: classes/PinJoint3D/enums/Param/values/PARAM_IMPULSE_CLAMP
+Validate extension JSON: API was removed: classes/RigidBody2D/enums/CCDMode/values/CCD_MODE_CAST_RAY
+Validate extension JSON: API was removed: classes/SceneMultiplayer
+Validate extension JSON: API was removed: classes/SceneReplicationConfig
+Validate extension JSON: API was removed: classes/SceneTree/methods/get_multiplayer
+Validate extension JSON: API was removed: classes/SceneTree/methods/is_multiplayer_poll_enabled
+Validate extension JSON: API was removed: classes/SceneTree/methods/set_multiplayer
+Validate extension JSON: API was removed: classes/SceneTree/methods/set_multiplayer_poll_enabled
+Validate extension JSON: API was removed: classes/SceneTree/properties/multiplayer_poll
+Validate extension JSON: API was removed: classes/Script/methods/get_rpc_config
+Validate extension JSON: API was removed: classes/ScriptExtension/methods/_get_rpc_config
+Validate extension JSON: API was removed: classes/SeparationRayShape3D
+Validate extension JSON: API was removed: classes/Shape2D/methods/get_custom_solver_bias
+Validate extension JSON: API was removed: classes/Shape2D/methods/set_custom_solver_bias
+Validate extension JSON: API was removed: classes/Shape3D/methods/get_custom_solver_bias
+Validate extension JSON: API was removed: classes/Shape3D/methods/get_margin
+Validate extension JSON: API was removed: classes/Shape3D/methods/set_custom_solver_bias
+Validate extension JSON: API was removed: classes/Shape3D/methods/set_margin
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_ANGULAR_LIMIT_DAMPING
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_ANGULAR_LIMIT_LOWER
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_ANGULAR_LIMIT_RESTITUTION
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_ANGULAR_LIMIT_SOFTNESS
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_ANGULAR_LIMIT_UPPER
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_ANGULAR_MOTION_DAMPING
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_ANGULAR_MOTION_RESTITUTION
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_ANGULAR_MOTION_SOFTNESS
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_ANGULAR_ORTHOGONAL_DAMPING
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_ANGULAR_ORTHOGONAL_RESTITUTION
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_ANGULAR_ORTHOGONAL_SOFTNESS
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_LINEAR_LIMIT_DAMPING
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_LINEAR_LIMIT_RESTITUTION
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_LINEAR_LIMIT_SOFTNESS
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_LINEAR_MOTION_DAMPING
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_LINEAR_MOTION_RESTITUTION
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_LINEAR_MOTION_SOFTNESS
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_LINEAR_ORTHOGONAL_DAMPING
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_LINEAR_ORTHOGONAL_RESTITUTION
+Validate extension JSON: API was removed: classes/SliderJoint3D/enums/Param/values/PARAM_LINEAR_ORTHOGONAL_SOFTNESS
+Validate extension JSON: API was removed: classes/WebRTCDataChannel
+Validate extension JSON: API was removed: classes/WebRTCDataChannelExtension
+Validate extension JSON: API was removed: classes/WebRTCMultiplayerPeer
+Validate extension JSON: API was removed: classes/WebRTCPeerConnection
+Validate extension JSON: API was removed: classes/WebRTCPeerConnectionExtension
+Validate extension JSON: API was removed: classes/WebSocketMultiplayerPeer
+Validate extension JSON: Error: Field 'classes/CollisionShape3D/properties/shape': type changed value in new API, from "Shape3D" to "BoxShape3D,SphereShape3D,CapsuleShape3D,CylinderShape3D,HeightMapShape3D,WorldBoundaryShape3D,ConvexPolygonShape3D,ConcavePolygonShape3D,Shape3D".
+Validate extension JSON: Error: Field 'classes/HingeJoint3D/enums/Param/values/PARAM_LIMIT_LOWER': value changed value in new API, from 2.0 to 1.
+Validate extension JSON: Error: Field 'classes/HingeJoint3D/enums/Param/values/PARAM_LIMIT_UPPER': value changed value in new API, from 1.0 to 0.
+Validate extension JSON: Error: Field 'classes/HingeJoint3D/enums/Param/values/PARAM_MOTOR_TARGET_VELOCITY': value changed value in new API, from 6.0 to 2.
+Validate extension JSON: Error: Field 'classes/PhysicsServer3D/enums/HingeJointParam/values/HINGE_JOINT_LIMIT_LOWER': value changed value in new API, from 2.0 to 1.
+Validate extension JSON: Error: Field 'classes/PhysicsServer3D/enums/HingeJointParam/values/HINGE_JOINT_LIMIT_UPPER': value changed value in new API, from 1.0 to 0.
+Validate extension JSON: Error: Field 'classes/PhysicsServer3D/enums/HingeJointParam/values/HINGE_JOINT_MOTOR_TARGET_VELOCITY': value changed value in new API, from 6.0 to 2.
+Validate extension JSON: Error: Field 'classes/PhysicsServer3D/enums/SliderJointParam/values/SLIDER_JOINT_MAX': value changed value in new API, from 22.0 to 10.
+Validate extension JSON: Error: Field 'classes/PhysicsServer3DExtension/methods/_body_test_motion/arguments': size changed value in new API, from 8 to 7.
+Validate extension JSON: Error: Field 'classes/PhysicsServer3DExtension/methods/_body_test_motion/arguments/6': type changed value in new API, from "bool" to "PhysicsServer3DExtensionMotionResult*".
+Validate extension JSON: Error: Field 'classes/SliderJoint3D/enums/Param/values/PARAM_MAX': value changed value in new API, from 22.0 to 10.
+Validate extension JSON: Error: Hash changed for 'classes/PhysicsServer3DExtension/methods/_body_test_motion', from D836B30A to D18B5C62. This means that the function has changed and no compatibility function was provided.

@@ -14,6 +14,10 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Check fork compatibility selection
+      shell: sh
+      run: python -m unittest discover -s tests/compatibility_test -p 'test_*.py'
+
     - name: Extract GDExtension interface
       shell: sh
       run: |
