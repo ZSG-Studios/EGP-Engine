@@ -470,7 +470,7 @@ Result Session::pump() {
     if (!p.on_owner() || p.pumping) return Result::Busy;
     if (!p.server && !p.client) return p.valid;
     p.pumping = true;
-    const bool clock_was_running = p.server || p.client_connected;
+    const bool clock_was_running = p.server || p.status == "Connected";
     const double time = now(), elapsed = std::max(0.0, time - p.last_time);
     p.last_time = time;
     if (p.server) { p.server->AdvanceTime(time); p.server->ReceivePackets(); }
@@ -494,9 +494,9 @@ Result Session::pump() {
             else ++empty;
         }
     }
-    if (p.server || p.client_connected) {
-        // Start the client clock at admission. A delayed handshake poll cannot
-        // charge time before this simulation existed to its catch-up budget.
+    if (p.server || (p.client_connected && p.status == "Connected")) {
+        // Start the client clock only after its authoritative baseline is ready.
+        // Authentication/synchronization time is not simulated gameplay debt.
         if (clock_was_running) p.accumulator += elapsed;
         const double step = 1.0 / p.options.tick_rate;
         if (p.accumulator > 0.5) {

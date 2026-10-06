@@ -217,7 +217,10 @@ Configuration defaults and principal limits:
 Poll automatically through the helper's Node processing, or set `auto_poll=false`
 and call `poll()` once from your main-thread loop. Connect `diagnostic` to your
 game's logging and check each returned `Error`. At most eight fixed ticks run per
-poll. If unprocessed simulation time exceeds 0.5 seconds, poll emits the catch-up
+poll. A client's simulation clock starts when its authoritative baseline completes
+and the session becomes `Connected`; transport polling during `Connecting` and
+`Synchronizing` does not advance simulation ticks. A server's clock starts after
+listening. If unprocessed simulation time exceeds 0.5 seconds, poll emits the catch-up
 diagnostic, returns `FAILED`, stops the endpoint, clears entities and resets ticks.
 Recovery is explicit: after poll returns, close/reconfigure the language facade,
 obtain a fresh admission token and reconnect for a new authoritative baseline.

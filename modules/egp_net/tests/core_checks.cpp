@@ -140,5 +140,34 @@ int main() {
     advance_startup_server();
     check(startup_client.pump()==Result::Failed && startup_diagnostics==1 && startup_client.state()=="Stopped" && startup_client.statistics().tick==0 && startup_client.entities().empty(),"connected clock gap still rejects and clears simulation");
     startup_server.stop();startup_client.stop();
+    // Authentication precedes delivery of a rate-limited authoritative baseline.
+    // Neither its waiting polls nor scheduling gaps represent simulated gameplay.
+    Options baseline_options=secure;baseline_options.max_entities=64;
+    baseline_options.messages_per_second=32;baseline_options.bytes_per_second=8192;
+    Session baseline_server(baseline_options),baseline_client(baseline_options);
+    check(baseline_server.listen(0,"127.0.0.1")==Result::Ok,"delayed baseline secure listener");
+    bool spawned=true;
+    for(int i=0;i<64;++i) {uint64_t handle=0;spawned=(baseline_server.spawn(1,std::vector<uint8_t>(8,77),-1,handle)==Result::Ok)&&spawned;}
+    check(spawned,"delayed baseline populated beyond one delivery window");
+    std::vector<uint8_t> baseline_token;
+    check(baseline_server.issue_token(5005,"127.0.0.1:"+std::to_string(baseline_server.statistics().local_port),baseline_token)==Result::Ok,"delayed baseline encrypted admission");
+    check(baseline_client.connect_token(5005,baseline_token)==Result::Ok,"delayed baseline token join");
+    int baseline_diagnostics=0,baseline_ticks=0;
+    baseline_client.diagnostic=[&](const std::string &){++baseline_diagnostics;};
+    baseline_client.simulation_tick=[&](uint64_t,bool){++baseline_ticks;};
+    check(until(baseline_server,baseline_client,[&]{return baseline_client.state()=="Synchronizing" && !baseline_client.entities().empty();}),"client observes an incomplete authoritative baseline");
+    auto advance_baseline_server=[&]{
+        auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(750);
+        while(std::chrono::steady_clock::now()<deadline) {baseline_server.pump();std::this_thread::sleep_for(std::chrono::milliseconds(5));}
+    };
+    advance_baseline_server();
+    check(baseline_client.pump()==Result::Ok,"baseline synchronization gap does not consume simulation budget");
+    check(baseline_client.state()=="Synchronizing" && baseline_client.statistics().tick==0 && baseline_ticks==0 && baseline_diagnostics==0,"incomplete baseline never advances simulation ticks");
+    check(until(baseline_server,baseline_client,[&]{return baseline_client.state()=="Connected" && baseline_client.entities().size()==64;},4000),"complete baseline received after delayed poll");
+    check(baseline_client.statistics().tick==0 && baseline_ticks==0,"baseline completion starts a fresh simulation clock");
+    check(until(baseline_server,baseline_client,[&]{return baseline_ticks>0;}),"client clock advances after complete baseline");
+    advance_baseline_server();
+    check(baseline_client.pump()==Result::Failed && baseline_diagnostics==1 && baseline_client.state()=="Stopped" && baseline_client.statistics().tick==0 && baseline_client.entities().empty(),"active simulation gap still rejects and clears populated baseline");
+    baseline_client.stop();baseline_server.stop();
     std::cout << "EGP_NATIVE_NETWORK_CHECKS=" << checks << std::endl;
 }
