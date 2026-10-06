@@ -37,7 +37,7 @@ because these chats exist.
 | API usability | Familiar naming; typed options/results; actionable errors; examples for GDScript/C#/C++; threading and ownership documented | Native session options/results/errors and physics event/joint contracts documented; broader facade ergonomics audit remains |
 | Library/build | Native and Mono builds; exact fork bindings; dependency/license manifests; lean server build; reproducible toolchain | Combined Mono editor, glue/assemblies, exact SDK and Debug/Release templates pass; lean server/platform/reproducibility gates remain |
 | Physics | Box2D/Box3D scene integration, joints, characters, queries, events, serialization, deterministic stepping and restore; unsupported capabilities exposed honestly | Combined Mono editor passes 19 Box2D runs and 28 Box3D cases; twelve relocated Debug/Release Box2D checks cover configured joints, events, explosions, canvas/casts, packed/vector polygons and invalid-input recovery; picking, broader shape/scaling/parity/platform gates remain |
-| Physics/network | Explicit fixed clock, fingerprint validation, authoritative state, commands, prediction/correction/replay and recovery | Existing limited fixtures; full game contract pending |
+| Physics/network | Explicit fixed clock, fingerprint validation, authoritative state, commands, prediction/correction/replay and recovery | Trusted local Box3D checkpoint restore/replay and stable body mapping across same-process server recovery pass in editor and packaged Debug/Release; three-language helper compatibility passes; automatic client physics rollback and full game contract remain open |
 | Networking | Encrypted admission, account/peer/entity identities, authority, ownership, interest, lifecycle, reconnect and backpressure | Native/language fixtures, matching-budget 64-entity fairness, bounded receive bursts and eight encrypted WAN clients with changing 4096-byte states pass; baseline, interest, revocation and reconnect are covered; larger worlds, peak load and soak remain |
 | Advanced networking | Field deltas, bounded bandwidth/queues, input acknowledgments, lag compensation, scale/soak, malicious input rejection | Implementation/qualification gaps remain |
 | Network lab | Dedicated server, listen host, N clients, visible windows, latency/jitter/loss, directional simulation, reconnect, logs/watchdog/cleanup | Native host and packaged Mono Debug host/Release dedicated server pass simultaneous visible clients, WAN simulation and reconnect; broader matrix remains |
@@ -1606,4 +1606,116 @@ recovery, repeated server faults and longer outages. Arbitrary application-state
 restoration, larger worlds/load/soak, peak memory, platform/physics parity, arbitrary
 ABI/concurrent reload, broader managed state, lean server/default package identity,
 production authentication/persistence/gameplay and performance remain open.
+The loop stays ACTIVE; full feature completion and AAA readiness are not claimed.
+
+## Stable Box3D bodies and trusted server checkpoint recovery — 2026-10-06
+
+Source freeze: `9576710ffffca3a0a45b3555673ac52e07adcb63`, including implementation
+`3e31f3200bf25923d15dc8479f2e1ed8b7c40b50`. The later documentation commit records
+these results. Native engine source remains `4d64b38c554ab3dc491285f4ffa5119c001da56f`;
+editor SHA-256 remains
+`20be5396d78b4c9873d4a355132f62366be58fcf9b1519bb595006fb07e74342`.
+Debug/Release template hashes remain respectively
+`b8a7f178491ba56e02a8950a7ec337f33c6197a16a27b3cf295b85448cd91c82` and
+`9e0c7883787974351153cc5bc30c92d4425b81184c264f4a4f9b74f995a68910`.
+The ClassDB signature fingerprint remains
+`e84e140b923451849e88aab8300021fd9d32f95c31825bb6d7e25a4235953271`.
+
+`track(entity, body_id = 0)` / `Track(entity, bodyId = 0)` now accepts a stable
+Box3D body ID separately from the replaceable network entity handle in GDScript,
+C# and C++. Omitted/zero preserves the existing entity-as-body convention; a
+negative body ID rejects the call without replacing a valid mapping. Installed
+sample helpers are synchronized, and installer backups are preserved under
+`.build/integration-physics-helper-backups`.
+
+`--physics --server-stall-at 4` adds a bounded authoritative-physics recovery lab.
+The server captures trusted local solver bytes at a command-free boundary, fails
+the network clock after an injected scheduling gap, mutates the local world for
+six ticks, rejects damaged bytes without changing that world, restores the valid
+checkpoint with its exact hash/tick/body IDs, and repeats the six-tick branch with
+the same diagnostic hash. It restores again before rebinding the retained Session
+and maps fresh owned entities to the existing stable bodies. Fresh owner impulses
+produce replicated finite positions/velocities in both epochs; stale entity inputs
+cannot apply. Physics continues from its saved tick while transport restarts at
+zero; the receipt checks the offset and continued stepping explicitly.
+
+All seven final runtime cases passed with unchanged watchdogs and timeouts:
+
+| Case | Original server/client PIDs | Server gap | Windows together | Final counter |
+| --- | --- | --- | --- | --- |
+| editor physics | 33876 / 33100 / 27420 | 750 ms | 0 | 106 |
+| packaged Debug host physics | 31044 / 26900 / 34164 / 31056 | 750 ms | 4 | 112 |
+| packaged Release dedicated physics | 30508 / 32132 / 9108 / 34900 | 1000 ms | 3 | 112 |
+| long physics | 19152 / 20600 / 31780 / 35620 | 5000 ms | 0 | 112 |
+| server control without physics | 12840 / 14812 / 21136 | 750 ms | 0 | 106 |
+| repeated client-gap control | 31740 / 30048 / 31640 | control | 0 | 105 |
+| default local control | 35452 / 9480 / 34232 | control | 0 | 100 |
+
+Physics cases use the WAN preset (100 ms latency, 25 ms jitter, 3% loss in both
+directions), two or three clients and 20/24-second runs. The editor checkpoint has
+three bodies, tick 239, 6849 bytes and hash `60d48e816c12146e`; the three-client
+checkpoints have four bodies and 8150 bytes. Source/helper/launcher hashes, exact
+commands, runtime/PCK identities, windows, PIDs and per-epoch body mappings are in
+`.build/integration-physics-mapping-qualification/{source,commands,receipt}.json`
+and its seven referenced receipts. The reproducible matrix command is:
+
+```powershell
+& 'C:/Users/Rose-X/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' .build/qualify_physics_mapping.py
+```
+
+`.build/integration-physics-mapping-languages/receipt.json` records fresh C++ Debug
+and Release extension and C# builds against the installed SDK/managed packages,
+60 interop assertions each in editor and relocated Debug/Release games, plus
+separate encrypted C#/GDScript/C++ process fixtures in all three configurations.
+The changed helpers and isolated copies of `InteropFixture.cs`/`probe.cpp` are
+hash checked. Debug extension SHA-256:
+`57bd391d3c81d1663861ee919f7a032501ebc65e018fe4018004a5c203fe5a58`;
+Release: `6976b1902269fb3fa0a7854db0328ac77a87796b9a99bfeea5279ff690a9f803`;
+editor fixture assembly:
+`370e6f59fa76faa13c3aa058f87f8a40870208c94052dc87e8ae9c43be363634`.
+`.build/integration-physics-mapping-default/receipt.json` separately passes the
+existing one-argument adapter scene. Tool checks record 56 semantic tests,
+18 rejected argument combinations, Ruff/format/help and mypy exit zero (existing
+Python 3.9 configuration warning) in
+`.build/integration-physics-mapping-tool-checks/receipt.json`.
+
+Preserved controls and remaining diagnostic:
+
+- `.build/integration-physics-mapping-baseline/evidence/1791294209347180400/receipt.json`
+  retains the failed stable-body fixture using the preceding one-argument adapter:
+  admission/counters recover, but clients receive no mapped physics history.
+- `.build/integration-physics-mapping-retired-key7-control/receipt.json` passes the
+  negative-control qualification: deliberately retaining a nonzero fixed test key
+  allows the retired unused-account token to admit, causing the recovery gate to
+  fail with `retired admission reached recovered authority` as required.
+- `.build/integration-physics-probe-fresh/evidence/1791295116287389300/receipt.json`
+  retains a fresh-token positive control that reaches Synchronizing in the same
+  probe slot; its deliberate recovery-gate failure confirms admission is possible.
+- The all-zero fixed test-key control unexpectedly finishes disconnected and its
+  launcher passes, unlike the nonzero retained-key control. This also reproduces
+  without physics in `.build/integration-physics-normal-key-control/evidence/1791295072271788600/receipt.json`;
+  the physics result is `.build/integration-physics-mapping-retired-key-control/evidence/1791294709939559300/receipt.json`.
+  Both are preserved as an OPEN diagnostic, not passing key-revocation evidence.
+  Default generated-key rotation passes the final matrix. Explicit private-key
+  reuse requires an application admission-revocation contract.
+
+All 86 installed engine artifacts retain their prior hashes. Native core, physics,
+ClassDB, SDK and generated managed glue are unchanged, so prior combined native
+Debug/Release 120-assertion and engine physics/reload results apply to those inputs.
+External helpers and sample fixture inputs changed and are qualified by the fresh
+60-assertion builds above; the old 59-assertion fixture is historical evidence.
+No duplicate engine build was started.
+
+`.build/integration-physics-mapping-publication.json` verifies sole canonical/local/
+remote master, original handoff ancestry, fresh seven-tree/ref/PR inventory and
+unchanged foreign patches/untracked hashes. Unrelated root files remain preserved.
+The original four chats have completed turns; the documentation/website owner is
+responsible for synchronizing this published helper/lab increment.
+
+Next: diagnose the zero-key recovery control, broader C#/C++ clock/lifecycle
+recovery, repeated server faults and larger authoritative worlds. This fixture
+uses trusted in-memory local snapshots and a small sphere/floor world. Automatic
+scene persistence, client physics rollback, untrusted solver-byte ingestion,
+arbitrary game-state recovery, cross-platform determinism, scale/soak, production
+authentication, broader reload/ABI state and performance remain open.
 The loop stays ACTIVE; full feature completion and AAA readiness are not claimed.
