@@ -1695,7 +1695,9 @@ Preserved controls and remaining diagnostic:
   launcher passes, unlike the nonzero retained-key control. This also reproduces
   without physics in `.build/integration-physics-normal-key-control/evidence/1791295072271788600/receipt.json`;
   the physics result is `.build/integration-physics-mapping-retired-key-control/evidence/1791294709939559300/receipt.json`.
-  Both are preserved as an OPEN diagnostic, not passing key-revocation evidence.
+  Both were preserved as an OPEN diagnostic, not passing key-revocation evidence.
+  The controlled admission-boundary qualification below resolves the key-value
+  discrepancy; these historical runs did not record timestamps.
   Default generated-key rotation passes the final matrix. Explicit private-key
   reuse requires an application admission-revocation contract.
 
@@ -1719,3 +1721,113 @@ scene persistence, client physics rollback, untrusted solver-byte ingestion,
 arbitrary game-state recovery, cross-platform determinism, scale/soak, production
 authentication, broader reload/ABI state and performance remain open.
 The loop stays ACTIVE; full feature completion and AAA readiness are not claimed.
+
+## Admission timestamps and retained-key recovery — 2026-10-06
+
+New fixture/tool source: `96757d1596810f1f996b80da91c4d76f6e466553`, following
+`cafb5ae21d` (validator), `19cff5aa04` (export preset/artifact checks), and
+`96757d1596` (preserve exact template identity). The later checklist commit records
+qualification. Native engine source is unchanged at
+`4d64b38c554ab3dc491285f4ffa5119c001da56f`; editor SHA-256 remains
+`20be5396d78b4c9873d4a355132f62366be58fcf9b1519bb595006fb07e74342`.
+Debug/Release templates remain
+`b8a7f178491ba56e02a8950a7ec337f33c6197a16a27b3cf295b85448cd91c82` and
+`9e0c7883787974351153cc5bc30c92d4425b81184c264f4a4f9b74f995a68910`.
+Native ClassDB APIs, SDK, generated managed glue and external language helpers
+are unchanged.
+
+The preceding zero/nonzero retained-key discrepancy is explained by a separate
+transport admission rule, rather than a demonstrated key-value distinction.
+Bundled `thirdparty/yojimbo/netcode/netcode.c` sets the listener's minimum token
+expiry to its UTC start second plus `max_connect_token_lifetime` (line 4372),
+then rejects earlier expirations before decrypting the token (line 1942).
+The issuer uses UTC seconds and `expiry = creation + lifetime` (line 5614).
+EGP configures the maximum to its issued lifetime. Crossing a second between
+issuance and rebind therefore rejects even a token authenticated by a retained
+key. Within the same second, an unused token can still admit. The old failed/
+unexpectedly passing controls remain preserved; their receipts lacked these
+timestamps, so their exact historical timing is not retrospectively asserted.
+
+The new user-facing `misc/scripts/validate_egp_net_admission.py` runs an isolated
+native/GDScript fixture. `--api`, `--key`, `--boundary` and `--fault` select cases;
+`--editor` supports packaged Windows template qualification. Defaults test both
+APIs, all three key modes and both boundaries under clock failure. The full matrix
+also includes graceful stop/rebind. Fixed test keys and tokens remain in memory;
+receipts contain only public creation/expiry/restart times, process identities,
+diagnostics, connection histories, source hashes and artifact hashes. The fixture
+waits for a UTC boundary while polling, then deliberately pauses 550/1100 ms.
+It requires the requested boundary before accepting evidence; a scheduling miss
+fails without retries or relaxed time limits. Each new listener starts with empty
+peers/entities and admits an unused account, excluding capacity/duplicate masking.
+
+Final qualification: 24 cases each in the Mono editor, packaged Debug and packaged
+Release, 72 in total. Every combination of API, key mode, boundary and clock/
+graceful fault passes:
+
+| Server key | Token creation vs new listener second | Observed admission |
+| --- | --- | --- |
+| retained zero test pattern | same | Connected, one peer |
+| retained nonzero test pattern | same | Connected, one peer |
+| retained zero/nonzero test pattern | earlier | Disconnected, no peers/baseline |
+| generated per listener | same or earlier | Disconnected, no peers/baseline |
+
+Clock cases require native `FAILED`, exactly the catch-up diagnostic, stopped/
+cleared authority and the original port rebound. Graceful controls require normal
+stop with no diagnostic. Generated-key same-second rejection now excludes the
+restart-timestamp gate as its explanation. This closes the bounded zero-key
+diagnostic and provides reproducible retained-key controls; it does not implement
+backend revocation for servers configured to retain a key.
+
+Exact commands, hashes and 72 process identities are in
+`.build/integration-admission-boundary-verified-qualification/{source,receipt}.json`
+and its three referenced receipts.
+
+Representative clock-fault process/timestamp observations:
+
+| Configuration | Retained zero, same second PID / creation / restart | Retained zero, cross second PID / creation / restart |
+| --- | --- | --- |
+| editor | 34600 / 1791296891 / 1791296891 | 2308 / 1791296895 / 1791296896 |
+| Debug | 19272 / 1791296997 / 1791296997 | 6084 / 1791296999 / 1791297000 |
+| Release | 5060 / 1791297096 / 1791297096 | 19620 / 1791297098 / 1791297099 |
+
+Packaged executable hashes equal their respective templates above. Debug PCK:
+`8680402edfc8db0e1716e8288bb70797c2fc3a39ea76849f444424d795d4890e`;
+Release PCK: `790aa60de721a70c9490c7fbcbc8cbe979d6c1f00be208d6f4477d527fd8d848`.
+Reproduce the matrix with:
+
+```powershell
+& 'C:/Users/Rose-X/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe' .build/qualify_admission_boundaries.py
+```
+
+The public single-configuration command is:
+
+```powershell
+python misc/scripts/validate_egp_net_admission.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --fault both
+```
+
+`.build/integration-admission-boundary-tool-checks/receipt.json` records 13 semantic
+evidence tests, six rejected argument combinations, help, Ruff/format and mypy
+exit zero (existing Python 3.9 configuration warning). Tests reject timestamp
+masking, ambiguous restart boundaries, short lifetimes, occupied slots, uncleared
+authority and missing clock failures. Development receipts retain a fixture API
+call error, the missing export fields and optional Windows resource rewriting
+detected by artifact verification. The final export supplies the required fields,
+disables resource rewriting and checks exact executable/template equality plus
+PCK presence. No engine fault, timeout, assertion or native admission rule was
+weakened to make these tests pass.
+
+`.build/integration-admission-boundary-publication.json` verifies combined source,
+all 86 installed artifacts, seven preserved worktrees, refs/PR inventory, original
+handoff ancestry and sole canonical/local/remote master. The prior seven physics
+lab cases and 60-assertion trilingual builds retain identical fixture/helper/native
+inputs; their evidence is reused for that unchanged scope. No duplicate engine
+build was needed. The four original engine chats remain inactive with completed
+turns. The documentation/website chat owns its pinned publication and subsequent
+sync, with root edits kept separate.
+
+Next: broader C#/C++ clock/lifecycle state, repeated authoritative server failures
+and larger physics worlds. These admission tests use two sessions in one local
+process on Windows. Remote/back-end authentication, arbitrary game/ABI state,
+automatic client physics rollback, cross-platform parity, scale/soak and
+performance remain separate gates. The loop stays ACTIVE; full feature completion
+and AAA readiness are not claimed.
