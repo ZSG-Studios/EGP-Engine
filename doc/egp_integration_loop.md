@@ -1914,3 +1914,87 @@ state recovery. These new fault cycles have no connected remote peers. Existing
 separate-process networking evidence remains a separate, bounded check. Windows
 editor/Debug/Release results do not establish other platforms, scale/soak,
 production admission or performance. The loop stays ACTIVE.
+
+### Live C#/C++ clients across authority clock faults — 2026-10-06
+
+Source `04961fdbc5` extends the trilingual recovery fixture with live high-level
+C#/C++ clients. Evidence-reader correction
+`96d2d3f2d4c5550c58fdeed15c0a763876886a3a` requires the native `Synchronizing`
+stage in every admission history. All 21 validator steps now pass with fresh
+Debug/Release C++ extensions and C# assemblies. The editor, relocated Debug and
+relocated Release each execute 133 counted interop assertions.
+
+| Configuration | Interop PID | Assertions | Live-client recoveries / total clock faults |
+| --- | --- | --- | --- |
+| editor | 29968 | 133 | 6 / 12 |
+| relocated Debug | 17292 | 133 | 6 / 12 |
+| relocated Release | 9208 | 133 | 6 / 12 |
+
+The high-level authority misses at least 550 ms of polling while its authenticated
+UDP client continues polling and stays Connected. On each native `FAILED`, the
+authority stops/clears, the fixture explicitly stops the client and verifies
+empty baselines and rejected input while stopped (`ERR_UNCONFIGURED`). It restores
+the trusted Box3D checkpoint, rebinds the original port and attaches the physics
+clock before starting admission. This order avoids advancing the transport clock
+while the restored physics world is detached.
+
+Each client retains the same native session through initial admission and three
+reconnects. Every admission uses a newly issued token, authenticated client ID
+777 (C#) or 888 (C++), and the exact state sequence
+`Connecting -> Synchronizing -> Connected -> Stopped`. Restored authority creates
+a fresh owned entity for stable physics body 10000/20000. The client must receive
+only that entity, with a physics tick after the checkpoint and continued falling
+motion. The authority rejects input for the retired handle and delivers input
+for the fresh owned handle exactly once. Hiding then showing that entity must
+remove and restore its client baseline. All cycles require zero invalid input
+callbacks. Configured client outbound simulation uses 20 ms latency, 5 ms jitter
+and zero loss; this is a bounded client simulation, not a bidirectional WAN/soak
+qualification. Token bytes and local snapshots remain outside receipts.
+
+Across three configurations: 18 live-client fault recoveries, 24 fresh admissions
+(including initial joins), and 36 total clock faults. The low-level cycles retain
+their preceding local no-peer scope. Existing separate-process encrypted
+C#/GDScript/C++ checks also pass, independently of these same-process fault
+cycles. No engine, ClassDB, generated glue or external helper API changed.
+
+`.build/integration-language-client-clock-verified/{source,receipt}.json` records
+the exact validator command, source hashes, child PIDs, SDK/archive identities
+and relocated export bundles. Reproduce with the preceding full command using
+`--output .build/integration-language-client-clock-new`. Installed engine source,
+editor/templates, SDK fingerprint and ClassDB signature remain those listed in
+the preceding section. Fresh Debug extension SHA-256:
+`64dede3830abccb3b31e8c78b6db423637017336eca4898e9647ebea5f5b82ce`;
+Release extension:
+`dbff0ab7200e199a171aac5ff6c0cc859a5b8f0d1083fd531e2361c17e3fcf68`;
+editor C# fixture assembly:
+`30f0caa197ae99dd92c3a3287161a4a1c6f49543c29e61554924f584fd2dfdc6`.
+Exported PCK SHA-256:
+`3a07f59eb1a9796ebd042cc040b961885484e1842b82e4865058f8dcca2fad04`.
+
+`.build/integration-language-client-clock-verified-tool-checks/receipt.json`
+records 16 semantic tests and passing Ruff/format/mypy (the existing Python 3.9
+configuration warning remains). New negative cases reject a paused client,
+uncleared baselines, reused admission, missing synchronization/reconnect history,
+old client physics time, accepted retired input and failed visibility restoration.
+The first editor run passed its 133 runtime assertions but the reader rejected
+the legitimate `Synchronizing` stage. Its failed receipt/logs remain in
+`.build/integration-language-client-clock-final`; the corrected reader requires
+that stage, and the fresh verified matrix supersedes that run. No runtime gate,
+clock budget or watchdog was relaxed.
+
+`.build/integration-language-client-clock-poll-control/receipt.json` repeats the
+preceding NIL/current `FAILED` DLL comparison using the fresh Debug extension.
+`.build/integration-language-client-clock-publication.json` verifies original
+handoff ancestry, canonical/local/remote master equality, 86 installed artifacts,
+seven preserved worktrees and no open PRs. Fresh 133-assertion evidence supersedes
+the changed 93-assertion fixture. Prior native/physics/admission/lab/reload evidence
+is reused only for unchanged inputs; no duplicate engine build was needed.
+
+Next: independent-process stalled servers/client reconnect, automatic recovery
+policy, low-level connected-peer failures, hot reload during faults and larger
+physics worlds. Explicit same-process client reset/rejoin is now qualified; it
+does not establish automatic fault discovery, client physics rollback, arbitrary
+application/ABI persistence, platform parity, scale/soak or performance. The
+four original engine chats remain completed; documentation/website publication
+has separate ownership and receives the committed source handoff. The loop stays
+ACTIVE; full feature completion and AAA readiness remain unclaimed.
