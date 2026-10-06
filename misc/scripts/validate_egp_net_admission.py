@@ -166,7 +166,7 @@ def main():
             runtime = output / "runtime/EGP.AdmissionLifecycle.exe"
             runtime.parent.mkdir()
             (project / "export_presets.cfg").write_text(
-                '[preset.0]\nname="Admission Lifecycle"\nplatform="Windows Desktop"\nrunnable=true\nexport_filter="all_resources"\n[preset.0.options]\n'
+                '[preset.0]\nname="Admission Lifecycle"\nplatform="Windows Desktop"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n[preset.0.options]\n'
                 + f'custom_template/debug="{engine.as_posix()}"\ncustom_template/release="{engine.as_posix()}"\nbinary_format/embed_pck=false\n',
                 encoding="utf-8",
             )
@@ -183,6 +183,10 @@ def main():
                 ],
                 90,
             )
+            if not runtime.is_file() or not runtime.with_suffix(".pck").is_file():
+                raise RuntimeError("Export is missing its executable or project pack")
+            if digest(runtime) != receipt["engine_sha256"]:
+                raise RuntimeError("Exported executable does not match the requested template")
             receipt["runtime_sha256"] = {
                 str(path.relative_to(runtime.parent)): digest(path)
                 for path in runtime.parent.rglob("*")
