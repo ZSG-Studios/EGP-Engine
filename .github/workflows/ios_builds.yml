@@ -4,10 +4,13 @@ on:
   workflow_dispatch:
 
 # Global Settings
+# EGP physics backends currently require a single-precision desktop target.
 env:
   SCONS_FLAGS: >-
     dev_mode=yes
     module_text_server_fb_enabled=yes
+    disable_physics_2d=yes
+    disable_physics_3d=yes
     debug_symbols=no
 
 jobs:
