@@ -812,8 +812,11 @@ void CSharpLanguage::reload_assemblies() {
 
 				// Use a placeholder for now to avoid losing the state when saving a scene
 
-				PlaceHolderScriptInstance *placeholder = scr->placeholder_instance_create(obj);
-				obj->set_script_instance(placeholder);
+				ScriptInstance *existing = obj->get_script_instance();
+				PlaceHolderScriptInstance *placeholder = existing && existing->is_placeholder() ? static_cast<PlaceHolderScriptInstance *>(existing) : scr->placeholder_instance_create(obj);
+				if (existing != placeholder) {
+					obj->set_script_instance(placeholder);
+				}
 
 #ifdef TOOLS_ENABLED
 				// Even though build didn't fail, this tells the placeholder to keep properties and
@@ -826,11 +829,12 @@ void CSharpLanguage::reload_assemblies() {
 					placeholder->property_set_fallback(G.first, G.second, nullptr);
 				}
 
-				scr->pending_reload_state.erase(obj_id);
+				// The placeholder owns the latest properties. Serialized event
+				// subscriptions must survive failed loads until a successful retry.
+				scr->pending_reload_state[obj_id].properties.clear();
 			}
 
 			scr->pending_reload_instances.clear();
-			scr->pending_reload_state.clear();
 		}
 
 		return;
@@ -2181,6 +2185,14 @@ CSharpInstance::~CSharpInstance() {
 #ifdef TOOLS_ENABLED
 void CSharpScript::_placeholder_erased(PlaceHolderScriptInstance *p_placeholder) {
 	placeholders.erase(p_placeholder);
+#ifdef GD_MONO_HOT_RELOAD
+	const ObjectID owner_id = p_placeholder->get_owner()->get_instance_id();
+	if (!pending_reload_instances.has(owner_id)) {
+		// Explicit deletion after a failed load must release retained event state.
+		pending_reload_state.erase(owner_id);
+		pending_replace_placeholders.erase(owner_id);
+	}
+#endif
 }
 #endif
 

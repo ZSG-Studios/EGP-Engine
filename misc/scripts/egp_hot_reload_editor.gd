@@ -69,6 +69,13 @@ func run_command(command: Dictionary) -> void:
 				else:
 					sessions[0].send_message("egp_reload:sample", [command.id])
 		"close":
+			for session in debugger.get_sessions():
+				if session.is_active():
+					session.send_message("egp_reload:finish", [])
+			var deadline := Time.get_ticks_msec() + 15000
+			while EditorInterface.is_playing_scene() and Time.get_ticks_msec() < deadline:
+				await get_tree().process_frame
+			result.passed = not EditorInterface.is_playing_scene()
 			EditorInterface.stop_playing_scene()
 			write_json("response.json", result)
 			# Do not recursively notify the root while unloading this plugin.

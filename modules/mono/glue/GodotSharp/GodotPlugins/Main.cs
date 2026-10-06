@@ -151,7 +151,7 @@ namespace GodotPlugins
                 // Query native singletons only after the engine has installed its
                 // managed callbacks. Keep the startup decision fixed across reloads.
                 _projectReloadEnabled ??= global::Godot.OS.HasFeature("editor") &&
-                    global::Godot.ProjectSettings.GetSetting("debug/hot_reload/enable_runtime", false).AsBool();
+                    global::Godot.ProjectSettings.GetSettingWithOverride("debug/hot_reload/enable_runtime").AsBool();
                 AlcReloadCfg.Configure(alcReloadEnabled: _projectReloadEnabled.Value);
                 (var projectAssembly, _projectLoadContext) = LoadPlugin(assemblyPath, isCollectible: _projectReloadEnabled.Value);
 

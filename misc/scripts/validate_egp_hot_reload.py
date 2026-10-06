@@ -141,6 +141,7 @@ def main():
     def verify(state, version, previous, cs_version=None):
         cs_version = version if cs_version is None else cs_version
         require(not state["editor_hint"], "Fixture is an editor tool rather than a running game")
+        require(int(state["pid"]) != process.pid, "Game was not launched as a separate process")
         require(state["collectible"], "Running-game project assembly is not collectible")
         for key in ("cpp_counter", "cs_counter", "ready_count"):
             require(state[key] == {"cpp_counter": 91, "cs_counter": 87, "ready_count": 1}[key], key + " changed")
@@ -298,7 +299,7 @@ def main():
         require(process.wait(timeout=60) == 0, "Editor/game teardown failed")
         require(digest(engine) == receipt["engine_sha256"], "Input engine changed during validation")
         receipt["passed"] = True
-    except (OSError, RuntimeError, subprocess.TimeoutExpired) as error:
+    except (OSError, RuntimeError, KeyError, subprocess.TimeoutExpired) as error:
         receipt["error"] = str(error)
     finally:
         if process is not None:

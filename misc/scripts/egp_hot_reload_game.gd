@@ -30,6 +30,9 @@ func _ready() -> void:
 	temporary.free()
 
 func _capture(message: String, data: Array) -> bool:
+	if message == "finish":
+		get_tree().quit.call_deferred(0)
+		return true
 	if message != "sample":
 		return false
 	if not managed.has_method("Version"):
@@ -42,6 +45,7 @@ func _capture(message: String, data: Array) -> bool:
 	managed.Fire()
 	var state := {
 		"request": data[0], "editor_hint": Engine.is_editor_hint(),
+		"pid": OS.get_process_id(),
 		"cpp_id": str(native.get_instance_id()), "cs_id": str(managed.get_instance_id()),
 		"receiver_id": str(receiver.get_instance_id()), "cpp_counter": native.counter,
 		"cs_counter": managed.Counter, "vector_ok": managed.PositionValue == Vector3(3, 4, 5),
