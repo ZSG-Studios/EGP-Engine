@@ -3337,3 +3337,27 @@ Windows, Linux and macOS: Box2D run `37535945585` at `4fb5ee6190`, and Box3D run
 upstream checks; Box3D also passes its deterministic trajectory/joint targets.
 These artifacts qualify the native solvers in their recorded profiles, not Godot
 adapter runtime, mobile physics, prediction or complete engine integration.
+
+The combined SCU/CSG repairs and runner concurrency change are published at
+`3cc06966e4285c99b3a1c359c37ac96251aee657`; replacement engine run `37536948945`
+queues behind the preserved `4fb5ee6190` matrix. The exact formatted CSG source
+passes the scheduling controls and both full MSVC translation-unit profiles.
+The final full-delta `prek run --files` log is `.build/csg-scu-prek-final.log`;
+`.build/integration-csg-scu-publication.json` records publication and its limits.
+
+Native C++ Linux job `112491596898` in run `37528340019` also passes at source
+`2b7e76be942716a21c139e00036468965731ddfd`: two SDK tests and 13 CLI/native/export
+checks, including four expected diagnostic failures and four game success logs.
+Downloaded artifacts and hashes are retained in the publication receipt and
+`.build/integration-cpp-hosted-2b7/linux-x86_64`. This is headless C++ build/export
+evidence for that older source; it does not qualify hot reload or the new engine.
+
+The preserved matrix identifies two further strict compiler failures: Android
+arm32/arm64 disable both physics servers, leaving the debugger collision toggle
+value unused; macOS Clang rejects enum bounds checks whose constant exceeds the
+enum's inferred range. The debugger now reads the value only when a physics
+server is compiled, retaining empty-message validation. PinJoint3D checks its
+integer index explicitly, retaining both lower and upper bounds. Baseline and
+patched full translation-unit commands, diagnostics and object hashes are
+recorded in `.build/integration-platform-warnings/receipt.json`; these focused
+Linux Clang checks do not replace Android/macOS builds or engine runtime tests.

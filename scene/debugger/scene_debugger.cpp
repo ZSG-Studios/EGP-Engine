@@ -341,7 +341,9 @@ Error SceneDebugger::_msg_hdr_output_toggle_requested(const Array &p_args) {
 
 Error SceneDebugger::_msg_set_debug_collisions(const Array &p_args) {
 	ERR_FAIL_COND_V(p_args.is_empty(), ERR_INVALID_DATA);
+#if !defined(PHYSICS_2D_DISABLED) || !defined(PHYSICS_3D_DISABLED)
 	bool enabled = p_args[0];
+#endif
 #ifndef PHYSICS_2D_DISABLED
 	PhysicsServer2D::get_singleton()->debug_set_enabled(enabled);
 #endif

@@ -45,7 +45,7 @@ void PinJoint3D::_bind_methods() {
 
 void PinJoint3D::set_param(Param p_param, real_t p_value) {
 	ERR_FAIL_COND(!Math::is_finite(p_value) || p_value < 0);
-	ERR_FAIL_INDEX(p_param, 2);
+	ERR_FAIL_INDEX(int(p_param), 2);
 	params[p_param] = p_value;
 	if (is_configured()) {
 		PhysicsServer3D::get_singleton()->pin_joint_set_param(get_rid(), PS3DE::PinJointParam(p_param), p_value);
@@ -53,7 +53,7 @@ void PinJoint3D::set_param(Param p_param, real_t p_value) {
 }
 
 real_t PinJoint3D::get_param(Param p_param) const {
-	ERR_FAIL_INDEX_V(p_param, 2, 0);
+	ERR_FAIL_INDEX_V(int(p_param), 2, 0);
 	return params[p_param];
 }
 
