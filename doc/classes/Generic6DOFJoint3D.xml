@@ -4,6 +4,7 @@
 		A physics joint that allows for complex movement and rotation between two 3D physics bodies.
 	</brief_description>
 	<description>
+		[b]Note:[/b] EGP's Box3D backend does not currently implement this joint.
 		The [Generic6DOFJoint3D] (6 Degrees Of Freedom) joint allows for implementing custom types of joints by locking the rotation and translation of certain axes.
 		The first 3 DOF represent the linear motion of the physics bodies and the last 3 DOF represent the angular motion of the physics bodies. Each axis can be either locked, or limited.
 	</description>
@@ -69,7 +70,7 @@
 			<param index="0" name="target_rotation" type="Quaternion" />
 			<description>
 				Sets the target angular orientation as a body-space quaternion describing the desired orientation of body B relative to body A. Replaces any previously set target and supersedes [constant PARAM_ANGULAR_SPRING_EQUILIBRIUM_POINT] until [method clear_angular_target_rotation] is called.
-				[b]Note:[/b] Only for Jolt backend. Other 3D physics backends may ignore this value.
+				[b]Note:[/b] This compatibility parameter is not implemented by the Box3D backend.
 			</description>
 		</method>
 		<method name="set_flag_x">
@@ -118,15 +119,15 @@
 	<members>
 		<member name="angular_drive_x/torque_limit" type="float" setter="set_param_x" getter="get_param_x" default="3.4028235e+38">
 			The maximum torque the joint can apply around the X angular axis. Used by both the spring drive and the angular motor; supersedes [member angular_motor_x/force_limit] when explicitly set.
-			[b]Note:[/b] Only for Jolt backend. Other 3D physics backends may ignore this value.
+			[b]Note:[/b] This compatibility parameter is not implemented by the Box3D backend.
 		</member>
 		<member name="angular_drive_y/torque_limit" type="float" setter="set_param_y" getter="get_param_y" default="3.4028235e+38">
 			The maximum torque the joint can apply around the Y angular axis. Used by both the spring drive and the angular motor; supersedes [member angular_motor_y/force_limit] when explicitly set.
-			[b]Note:[/b] Only for Jolt backend. Other 3D physics backends may ignore this value.
+			[b]Note:[/b] This compatibility parameter is not implemented by the Box3D backend.
 		</member>
 		<member name="angular_drive_z/torque_limit" type="float" setter="set_param_z" getter="get_param_z" default="3.4028235e+38">
 			The maximum torque the joint can apply around the Z angular axis. Used by both the spring drive and the angular motor; supersedes [member angular_motor_z/force_limit] when explicitly set.
-			[b]Note:[/b] Only for Jolt backend. Other 3D physics backends may ignore this value.
+			[b]Note:[/b] This compatibility parameter is not implemented by the Box3D backend.
 		</member>
 		<member name="angular_limit_x/damping" type="float" setter="set_param_x" getter="get_param_x" default="1.0">
 			The amount of rotational damping across the X axis.
@@ -254,15 +255,15 @@
 		</member>
 		<member name="linear_drive_x/force_limit" type="float" setter="set_param_x" getter="get_param_x" default="3.4028235e+38">
 			The maximum force the joint can apply along the X linear axis. Used by both the spring drive and the linear motor; supersedes [member linear_motor_x/force_limit] when explicitly set.
-			[b]Note:[/b] Only for Jolt backend. Other 3D physics backends may ignore this value.
+			[b]Note:[/b] This compatibility parameter is not implemented by the Box3D backend.
 		</member>
 		<member name="linear_drive_y/force_limit" type="float" setter="set_param_y" getter="get_param_y" default="3.4028235e+38">
 			The maximum force the joint can apply along the Y linear axis. Used by both the spring drive and the linear motor; supersedes [member linear_motor_y/force_limit] when explicitly set.
-			[b]Note:[/b] Only for Jolt backend. Other 3D physics backends may ignore this value.
+			[b]Note:[/b] This compatibility parameter is not implemented by the Box3D backend.
 		</member>
 		<member name="linear_drive_z/force_limit" type="float" setter="set_param_z" getter="get_param_z" default="3.4028235e+38">
 			The maximum force the joint can apply along the Z linear axis. Used by both the spring drive and the linear motor; supersedes [member linear_motor_z/force_limit] when explicitly set.
-			[b]Note:[/b] Only for Jolt backend. Other 3D physics backends may ignore this value.
+			[b]Note:[/b] This compatibility parameter is not implemented by the Box3D backend.
 		</member>
 		<member name="linear_limit_x/damping" type="float" setter="set_param_x" getter="get_param_x" default="1.0">
 			The amount of damping that happens at the X motion.
@@ -434,12 +435,12 @@
 		<constant name="PARAM_LINEAR_DRIVE_FORCE_LIMIT" value="22" enum="Param">
 			The maximum force the joint can apply along this linear axis.
 			Used by both the spring drive and the linear motor; supersedes [constant PARAM_LINEAR_MOTOR_FORCE_LIMIT] when set.
-			[b]Note:[/b] Only for Jolt backend. Other 3D physics backends may ignore this value.
+			[b]Note:[/b] This compatibility parameter is not implemented by the Box3D backend.
 		</constant>
 		<constant name="PARAM_ANGULAR_DRIVE_TORQUE_LIMIT" value="23" enum="Param">
 			The maximum torque the joint can apply around this angular axis.
 			Used by both the spring drive and the angular motor; supersedes [constant PARAM_ANGULAR_MOTOR_FORCE_LIMIT] when set.
-			[b]Note:[/b] Only for Jolt backend. Other 3D physics backends may ignore this value.
+			[b]Note:[/b] This compatibility parameter is not implemented by the Box3D backend.
 		</constant>
 		<constant name="PARAM_MAX" value="24" enum="Param">
 			Represents the size of the [enum Param] enum.

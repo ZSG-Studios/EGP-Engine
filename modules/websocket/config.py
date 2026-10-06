@@ -7,12 +7,12 @@ def configure(env):
 
 
 def get_doc_classes():
-    return [
+    classes = [
         "WebSocketClient",
-        "WebSocketMultiplayerPeer",
         "WebSocketPeer",
         "WebSocketServer",
     ]
+    return classes
 
 
 def get_doc_path():

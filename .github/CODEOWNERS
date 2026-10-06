@@ -120,26 +120,15 @@
 /modules/webp/                                @godotengine/asset-pipeline
 
 ## Network
-/modules/enet/                                @godotengine/network
-/modules/enet/doc_classes/                    @godotengine/network @godotengine/documentation
 /modules/mbedtls/                             @godotengine/network
 /modules/mbedtls/tests/                       @godotengine/network @godotengine/tests
-/modules/multiplayer/                         @godotengine/network
-/modules/multiplayer/doc_classes/             @godotengine/network @godotengine/documentation
-/modules/multiplayer/editor/                  @godotengine/network @godotengine/editor
-/modules/multiplayer/tests/                   @godotengine/network @godotengine/tests
 /modules/upnp/                                @godotengine/network
 /modules/upnp/doc_classes/                    @godotengine/network @godotengine/documentation
-/modules/webrtc/                              @godotengine/network
-/modules/webrtc/doc_classes/                  @godotengine/network @godotengine/documentation
 /modules/websocket/                           @godotengine/network
 /modules/websocket/doc_classes/               @godotengine/network @godotengine/documentation
 /modules/websocket/editor/                    @godotengine/network @godotengine/editor
 
 ## Physics
-/modules/godot_physics_2d/                    @godotengine/physics
-/modules/godot_physics_3d/                    @godotengine/physics
-/modules/jolt_physics/                        @godotengine/physics @godotengine/jolt-physics
 
 ## Rendering
 /modules/glslang/                             @godotengine/rendering
@@ -290,7 +279,6 @@
 # Thirdparty
 
 /thirdparty/                                  @godotengine/buildsystem
-/thirdparty/jolt_physics/                     @godotengine/buildsystem @godotengine/jolt-physics
 
 # Buildsystem (After everything to catch all)
 

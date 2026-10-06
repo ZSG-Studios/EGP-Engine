@@ -69,8 +69,6 @@ class ProjectConverter3To4 {
 	Vector<String> check_for_rename_csharp_functions(Vector<String> &lines, const RegExContainer &reg_container);
 	void process_csharp_line(String &line, const RegExContainer &reg_container);
 
-	void rename_csharp_attributes(Vector<SourceLine> &source_lines, const RegExContainer &reg_container);
-	Vector<String> check_for_rename_csharp_attributes(Vector<String> &lines, const RegExContainer &reg_container);
 
 	void rename_gdscript_keywords(Vector<SourceLine> &r_source_lines, const RegExContainer &p_reg_container, bool p_builtin);
 	Vector<String> check_for_rename_gdscript_keywords(Vector<String> &r_lines, const RegExContainer &p_reg_container, bool p_builtin);
@@ -90,6 +88,7 @@ class ProjectConverter3To4 {
 	void rename_common(const char *array[][2], LocalVector<Ref<RegEx>> &cached_regexes, Vector<SourceLine> &source_lines);
 	Vector<String> check_for_rename_common(const char *array[][2], LocalVector<Ref<RegEx>> &cached_regexes, Vector<String> &lines);
 
+	bool check_legacy_networking(const Vector<String> &p_files, const RegExContainer &p_regex);
 	Vector<String> check_for_files();
 
 	Vector<String> parse_arguments(const String &line);

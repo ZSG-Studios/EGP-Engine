@@ -942,46 +942,9 @@ namespace Godot.Bridge
                 *outMethodsDest = NativeFuncs.godotsharp_array_new_copy(
                     (godot_array)methods.NativeValue);
 
-                // RPC functions
-
-                Collections.Dictionary rpcFunctions = new();
-
-                Type? top = scriptType;
-
-                while (top != null && top != native)
-                {
-                    foreach (var method in top.GetMethods(BindingFlags.DeclaredOnly | BindingFlags.Instance |
-                                                          BindingFlags.NonPublic | BindingFlags.Public))
-                    {
-                        if (method.IsStatic)
-                            continue;
-
-                        string methodName = method.Name;
-
-                        if (rpcFunctions.ContainsKey(methodName))
-                            continue;
-
-                        var rpcAttr = method.GetCustomAttributes(inherit: false)
-                            .OfType<RpcAttribute>().FirstOrDefault();
-
-                        if (rpcAttr == null)
-                            continue;
-
-                        var rpcConfig = new Collections.Dictionary();
-
-                        rpcConfig["rpc_mode"] = (long)rpcAttr.Mode;
-                        rpcConfig["call_local"] = rpcAttr.CallLocal;
-                        rpcConfig["transfer_mode"] = (long)rpcAttr.TransferMode;
-                        rpcConfig["channel"] = rpcAttr.TransferChannel;
-
-                        rpcFunctions.Add(methodName, rpcConfig);
-                    }
-
-                    top = top.BaseType;
-                }
-
-                *outRpcFunctionsDest = NativeFuncs.godotsharp_dictionary_new_copy(
-                    (godot_dictionary)rpcFunctions.NativeValue);
+                // Reserved script-metadata ABI slot. Native EGP networking uses explicit handlers.
+                using var rpcFunctions = new Collections.Dictionary();
+                *outRpcFunctionsDest = NativeFuncs.godotsharp_dictionary_new_copy((godot_dictionary)rpcFunctions.NativeValue);
 
                 // Event signals
 

@@ -254,6 +254,12 @@ opts.Add(
 opts.Add(BoolVariable("tests", "Build the unit tests", False))
 opts.Add(BoolVariable("fast_unsafe", "Enable unsafe options for faster incremental builds", False))
 opts.Add(BoolVariable("ninja", "Use the ninja backend for faster rebuilds", False))
+opts.Add(BoolVariable("fastbuild", "Compile Windows MSVC objects using FASTBuild", False))
+opts.Add("fastbuild_exe", "Path to FASTBuild v1.20 fbuild.exe", ".build/fastbuild/tool/FBuild.exe")
+opts.Add("fastbuild_workers", "Semicolon-separated FASTBuild workers", os.getenv("FASTBUILD_WORKERS", "10.77.64.1"))
+opts.Add(BoolVariable("fastbuild_dist", "Enable FASTBuild distributed compilation", True))
+opts.Add(BoolVariable("fastbuild_distverbose", "Print FASTBuild worker diagnostics", False))
+opts.Add(BoolVariable("fastbuild_forceremote", "Require remote compilation (diagnostics only)", False))
 opts.Add(BoolVariable("ninja_auto_run", "Run ninja automatically after generating the ninja file", True))
 opts.Add("ninja_file", "Path to the generated ninja file", "build.ninja")
 opts.Add(BoolVariable("compiledb", "Generate compilation DB (`compile_commands.json`) for external tools", False))
@@ -335,7 +341,6 @@ opts.Add(BoolVariable("builtin_brotli", "Use the built-in Brotli library", True)
 opts.Add(BoolVariable("builtin_certs", "Use the built-in SSL certificates bundles", True))
 opts.Add(BoolVariable("builtin_clipper2", "Use the built-in Clipper2 library", True))
 opts.Add(BoolVariable("builtin_embree", "Use the built-in Embree library", True))
-opts.Add(BoolVariable("builtin_enet", "Use the built-in ENet library", True))
 opts.Add(BoolVariable("builtin_freetype", "Use the built-in FreeType library", True))
 opts.Add(BoolVariable("builtin_msdfgen", "Use the built-in MSDFgen library", True))
 opts.Add(BoolVariable("builtin_glslang", "Use the built-in glslang library", True))
@@ -1159,6 +1164,14 @@ for name, path in modules_detected.items():
     sys.path.remove(path)
     sys.modules.pop("config")
 
+# EGP has one solver for each physics dimension. Reject partial build profiles
+# rather than shipping an engine which silently disables physics.
+for dimension in (2, 3):
+    backend = f"box{dimension}d"
+    if not env[f"disable_physics_{dimension}d"] and backend not in modules_enabled:
+        print_error(f"EGP {dimension}D physics requires module_{backend}_enabled=yes with a supported single-precision desktop target. Set disable_physics_{dimension}d=yes explicitly to omit it.")
+        Exit(255)
+
 env.module_list = modules_enabled
 methods.sort_module_list(env)
 
@@ -1239,6 +1252,11 @@ if "c_compiler_launcher" in env:
 
 if "cpp_compiler_launcher" in env:
     env["CXX"] = " ".join([env["cpp_compiler_launcher"], env["CXX"]])
+
+if env["fastbuild"]:
+    from misc.utility.fastbuild import configure
+
+    configure(env)
 
 # Build subdirs, the build order is dependent on link order.
 Export("env")

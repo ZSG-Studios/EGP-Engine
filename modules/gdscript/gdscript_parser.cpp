@@ -37,7 +37,6 @@
 #include "core/io/resource_loader.h"
 #include "core/math/math_defs.h"
 #include "core/object/class_db.h"
-#include "scene/main/multiplayer_api.h"
 
 #ifdef DEBUG_ENABLED
 #include "core/string/string_builder.h"
@@ -183,8 +182,6 @@ GDScriptParser::GDScriptParser() {
 		register_annotation(MethodInfo("@warning_ignore_start", PropertyInfo(Variant::STRING, "warning")), AnnotationInfo::STANDALONE, &GDScriptParser::warning_ignore_region_annotations, varray(), true);
 		register_annotation(MethodInfo("@warning_ignore_restore", PropertyInfo(Variant::STRING, "warning")), AnnotationInfo::STANDALONE, &GDScriptParser::warning_ignore_region_annotations, varray(), true);
 		// Networking.
-		// Keep in sync with `rpc_annotation()` and `SceneRPCInterface::_parse_rpc_config()`.
-		register_annotation(MethodInfo("@rpc", PropertyInfo(Variant::STRING, "mode"), PropertyInfo(Variant::STRING, "sync"), PropertyInfo(Variant::STRING, "transfer_mode"), PropertyInfo(Variant::INT, "transfer_channel")), AnnotationInfo::FUNCTION, &GDScriptParser::rpc_annotation, varray("authority", "call_remote", "reliable", 0));
 	}
 
 #ifdef DEBUG_ENABLED
@@ -1205,18 +1202,8 @@ void GDScriptParser::parse_class_body(bool p_is_multiline) {
 					push_error(R"(The "tool" keyword was removed in Godot 4. Use the "@tool" annotation instead.)");
 				} else if (previous.get_identifier() == "onready") {
 					push_error(R"(The "onready" keyword was removed in Godot 4. Use the "@onready" annotation instead.)");
-				} else if (previous.get_identifier() == "remote") {
-					push_error(R"(The "remote" keyword was removed in Godot 4. Use the "@rpc" annotation with "any_peer" instead.)");
-				} else if (previous.get_identifier() == "remotesync") {
-					push_error(R"(The "remotesync" keyword was removed in Godot 4. Use the "@rpc" annotation with "any_peer" and "call_local" instead.)");
-				} else if (previous.get_identifier() == "puppet") {
-					push_error(R"(The "puppet" keyword was removed in Godot 4. Use the "@rpc" annotation with "authority" instead.)");
-				} else if (previous.get_identifier() == "puppetsync") {
-					push_error(R"(The "puppetsync" keyword was removed in Godot 4. Use the "@rpc" annotation with "authority" and "call_local" instead.)");
-				} else if (previous.get_identifier() == "master") {
-					push_error(R"(The "master" keyword was removed in Godot 4. Use the "@rpc" annotation with "any_peer" and perform a check inside the function instead.)");
-				} else if (previous.get_identifier() == "mastersync") {
-					push_error(R"(The "mastersync" keyword was removed in Godot 4. Use the "@rpc" annotation with "any_peer" and "call_local", and perform a check inside the function instead.)");
+				} else if (previous.get_identifier() == "remote" || previous.get_identifier() == "remotesync" || previous.get_identifier() == "sync" || previous.get_identifier() == "slave" || previous.get_identifier() == "puppet" || previous.get_identifier() == "puppetsync" || previous.get_identifier() == "master" || previous.get_identifier() == "mastersync") {
+					push_error("Legacy script RPC is unavailable in EGP. Migrate to EGPNet messages, entity ownership and replication; see modules/egp_net/README.md.");
 				} else {
 					push_error(vformat(R"(Unexpected %s in class body.)", previous.get_debug_name()));
 				}
@@ -5235,67 +5222,6 @@ bool GDScriptParser::warning_ignore_region_annotations(AnnotationNode *p_annotat
 #endif // DEBUG_ENABLED
 }
 
-bool GDScriptParser::rpc_annotation(AnnotationNode *p_annotation, Node *p_target, ClassNode *p_class) {
-	ERR_FAIL_COND_V_MSG(p_target->type != Node::FUNCTION, false, vformat(R"("%s" annotation can only be applied to functions.)", p_annotation->name));
-
-	FunctionNode *function = static_cast<FunctionNode *>(p_target);
-	if (function->rpc_config.get_type() != Variant::NIL) {
-		push_error(R"(RPC annotations can only be used once per function.)", p_annotation);
-		return false;
-	}
-
-	// Default values should match the annotation registration defaults and `SceneRPCInterface::_parse_rpc_config()`.
-	Dictionary rpc_config;
-	rpc_config["rpc_mode"] = MultiplayerAPI::RPC_MODE_AUTHORITY;
-	if (!p_annotation->resolved_arguments.is_empty()) {
-		unsigned char locality_args = 0;
-		unsigned char permission_args = 0;
-		unsigned char transfer_mode_args = 0;
-
-		for (uint32_t i = 0; i < p_annotation->resolved_arguments.size(); i++) {
-			if (i == 3) {
-				rpc_config["channel"] = p_annotation->resolved_arguments[i].operator int();
-				continue;
-			}
-
-			String arg = p_annotation->resolved_arguments[i].operator String();
-			if (arg == "call_local") {
-				locality_args++;
-				rpc_config["call_local"] = true;
-			} else if (arg == "call_remote") {
-				locality_args++;
-				rpc_config["call_local"] = false;
-			} else if (arg == "any_peer") {
-				permission_args++;
-				rpc_config["rpc_mode"] = MultiplayerAPI::RPC_MODE_ANY_PEER;
-			} else if (arg == "authority") {
-				permission_args++;
-				rpc_config["rpc_mode"] = MultiplayerAPI::RPC_MODE_AUTHORITY;
-			} else if (arg == "reliable") {
-				transfer_mode_args++;
-				rpc_config["transfer_mode"] = MultiplayerPeer::TRANSFER_MODE_RELIABLE;
-			} else if (arg == "unreliable") {
-				transfer_mode_args++;
-				rpc_config["transfer_mode"] = MultiplayerPeer::TRANSFER_MODE_UNRELIABLE;
-			} else if (arg == "unreliable_ordered") {
-				transfer_mode_args++;
-				rpc_config["transfer_mode"] = MultiplayerPeer::TRANSFER_MODE_UNRELIABLE_ORDERED;
-			} else {
-				push_error(R"(Invalid RPC argument. Must be one of: "call_local"/"call_remote" (local calls), "any_peer"/"authority" (permission), "reliable"/"unreliable"/"unreliable_ordered" (transfer mode).)", p_annotation);
-			}
-		}
-
-		if (locality_args > 1) {
-			push_error(R"(Invalid RPC config. The locality ("call_local"/"call_remote") must be specified no more than once.)", p_annotation);
-		} else if (permission_args > 1) {
-			push_error(R"(Invalid RPC config. The permission ("any_peer"/"authority") must be specified no more than once.)", p_annotation);
-		} else if (transfer_mode_args > 1) {
-			push_error(R"(Invalid RPC config. The transfer mode ("reliable"/"unreliable"/"unreliable_ordered") must be specified no more than once.)", p_annotation);
-		}
-	}
-	function->rpc_config = rpc_config;
-	return true;
-}
 
 GDScriptParser::DataType GDScriptParser::SuiteNode::Local::get_datatype() const {
 	switch (type) {

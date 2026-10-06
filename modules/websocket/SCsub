@@ -41,7 +41,8 @@ elif env["builtin_wslay"]:
 
 module_obj = []
 
-env_ws.add_source_files(module_obj, "*.cpp")
+sources = env_ws.Glob("*.cpp")
+env_ws.add_source_files(module_obj, sources)
 if env.editor_build:
     env_ws.add_source_files(module_obj, "editor/*.cpp")
 env.modules_sources += module_obj

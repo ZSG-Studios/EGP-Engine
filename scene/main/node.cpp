@@ -48,7 +48,6 @@ STATIC_ASSERT_INCOMPLETE_TYPE(class, Engine);
 #include "core/string/print_string.h"
 #include "scene/animation/tween.h"
 #include "scene/main/instance_placeholder.h"
-#include "scene/main/multiplayer_api.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/viewport.h"
 #include "scene/main/window.h"
@@ -776,118 +775,7 @@ void Node::_propagate_process_owner(Node *p_owner, int p_pause_notification, int
 	data.blocked--;
 }
 
-void Node::set_multiplayer_authority(int p_peer_id, bool p_recursive) {
-	ERR_THREAD_GUARD
-	data.multiplayer_authority = p_peer_id;
 
-	if (p_recursive) {
-		for (KeyValue<StringName, Node *> &K : data.children) {
-			K.value->set_multiplayer_authority(p_peer_id, true);
-		}
-	}
-}
-
-int Node::get_multiplayer_authority() const {
-	return data.multiplayer_authority;
-}
-
-bool Node::is_multiplayer_authority() const {
-	ERR_FAIL_COND_V(!is_inside_tree(), false);
-
-	Ref<MultiplayerAPI> api = get_multiplayer();
-	return api.is_valid() && (api->get_unique_id() == data.multiplayer_authority);
-}
-
-/***** RPC CONFIG ********/
-
-void Node::rpc_config(const StringName &p_method, const Variant &p_config) {
-	ERR_THREAD_GUARD
-	if (data.rpc_config.get_type() != Variant::DICTIONARY) {
-		data.rpc_config = Dictionary();
-	}
-	Dictionary node_config = data.rpc_config;
-	if (p_config.get_type() == Variant::NIL) {
-		node_config.erase(p_method);
-	} else {
-		ERR_FAIL_COND(p_config.get_type() != Variant::DICTIONARY);
-		node_config[p_method] = p_config;
-	}
-}
-
-const Variant Node::get_node_rpc_config() const {
-	return data.rpc_config;
-}
-
-/***** RPC FUNCTIONS ********/
-
-Error Node::_rpc_bind(const Variant **p_args, int p_argcount, Callable::CallError &r_error) {
-	if (p_argcount < 1) {
-		r_error.error = Callable::CallError::CALL_ERROR_TOO_FEW_ARGUMENTS;
-		r_error.expected = 1;
-		return ERR_INVALID_PARAMETER;
-	}
-
-	if (!p_args[0]->is_string()) {
-		r_error.error = Callable::CallError::CALL_ERROR_INVALID_ARGUMENT;
-		r_error.argument = 0;
-		r_error.expected = Variant::STRING_NAME;
-		return ERR_INVALID_PARAMETER;
-	}
-
-	StringName method = (*p_args[0]).operator StringName();
-
-	Error err = rpcp(0, method, &p_args[1], p_argcount - 1);
-	r_error.error = Callable::CallError::CALL_OK;
-	return err;
-}
-
-Error Node::_rpc_id_bind(const Variant **p_args, int p_argcount, Callable::CallError &r_error) {
-	if (p_argcount < 2) {
-		r_error.error = Callable::CallError::CALL_ERROR_TOO_FEW_ARGUMENTS;
-		r_error.expected = 2;
-		return ERR_INVALID_PARAMETER;
-	}
-
-	if (p_args[0]->get_type() != Variant::INT) {
-		r_error.error = Callable::CallError::CALL_ERROR_INVALID_ARGUMENT;
-		r_error.argument = 0;
-		r_error.expected = Variant::INT;
-		return ERR_INVALID_PARAMETER;
-	}
-
-	if (!p_args[1]->is_string()) {
-		r_error.error = Callable::CallError::CALL_ERROR_INVALID_ARGUMENT;
-		r_error.argument = 1;
-		r_error.expected = Variant::STRING_NAME;
-		return ERR_INVALID_PARAMETER;
-	}
-
-	int peer_id = *p_args[0];
-	StringName method = (*p_args[1]).operator StringName();
-
-	Error err = rpcp(peer_id, method, &p_args[2], p_argcount - 2);
-	r_error.error = Callable::CallError::CALL_OK;
-	return err;
-}
-
-Error Node::rpcp(int p_peer_id, const StringName &p_method, const Variant **p_arg, int p_argcount) {
-	ERR_FAIL_COND_V(!is_inside_tree(), ERR_UNCONFIGURED);
-
-	Ref<MultiplayerAPI> api = get_multiplayer();
-	if (api.is_null()) {
-		return ERR_UNCONFIGURED;
-	}
-	return api->rpcp(this, p_peer_id, p_method, p_arg, p_argcount);
-}
-
-Ref<MultiplayerAPI> Node::get_multiplayer() const {
-	if (!is_inside_tree()) {
-		return Ref<MultiplayerAPI>();
-	}
-	return data.tree->get_multiplayer(get_path());
-}
-
-//////////// end of rpc
 
 bool Node::can_process_notification(int p_what) const {
 	switch (p_what) {
@@ -3916,15 +3804,6 @@ void Node::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("request_ready"), &Node::request_ready);
 	ClassDB::bind_method(D_METHOD("is_node_ready"), &Node::is_ready);
 
-	ClassDB::bind_method(D_METHOD("set_multiplayer_authority", "id", "recursive"), &Node::set_multiplayer_authority, DEFVAL(true));
-	ClassDB::bind_method(D_METHOD("get_multiplayer_authority"), &Node::get_multiplayer_authority);
-
-	ClassDB::bind_method(D_METHOD("is_multiplayer_authority"), &Node::is_multiplayer_authority);
-
-	ClassDB::bind_method(D_METHOD("get_multiplayer"), &Node::get_multiplayer);
-	ClassDB::bind_method(D_METHOD("rpc_config", "method", "config"), &Node::rpc_config);
-	ClassDB::bind_method(D_METHOD("get_node_rpc_config"), &Node::_get_node_rpc_config_bind);
-
 	ClassDB::bind_method(D_METHOD("set_editor_description", "editor_description"), &Node::set_editor_description);
 	ClassDB::bind_method(D_METHOD("get_editor_description"), &Node::get_editor_description);
 
@@ -3937,25 +3816,6 @@ void Node::_bind_methods() {
 #ifdef TOOLS_ENABLED
 	ClassDB::bind_method(D_METHOD("_set_property_pinned", "property", "pinned"), &Node::set_property_pinned);
 #endif
-
-	{
-		MethodInfo mi;
-
-		mi.arguments.push_back(PropertyInfo(Variant::STRING_NAME, "method"));
-
-		mi.name = "rpc";
-		ClassDB::bind_vararg_method(METHOD_FLAGS_DEFAULT, "rpc", &Node::_rpc_bind, mi);
-	}
-
-	{
-		MethodInfo mi;
-
-		mi.arguments.push_back(PropertyInfo(Variant::INT, "peer_id"));
-		mi.arguments.push_back(PropertyInfo(Variant::STRING_NAME, "method"));
-
-		mi.name = "rpc_id";
-		ClassDB::bind_vararg_method(METHOD_FLAGS_DEFAULT, "rpc_id", &Node::_rpc_id_bind, mi);
-	}
 
 	ClassDB::bind_method(D_METHOD("update_configuration_warnings"), &Node::update_configuration_warnings);
 
@@ -4082,7 +3942,6 @@ void Node::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "unique_name_in_owner", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NO_EDITOR), "set_unique_name_in_owner", "is_unique_name_in_owner");
 	ADD_PROPERTY(PropertyInfo(Variant::STRING, "scene_file_path", PROPERTY_HINT_NONE, "", PROPERTY_USAGE_NONE), "set_scene_file_path", "get_scene_file_path");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "owner", PROPERTY_HINT_RESOURCE_TYPE, Node::get_class_static(), PROPERTY_USAGE_NONE), "set_owner", "get_owner");
-	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "multiplayer", PROPERTY_HINT_RESOURCE_TYPE, MultiplayerAPI::get_class_static(), PROPERTY_USAGE_NONE), "", "get_multiplayer");
 
 	ADD_GROUP("Process", "process_");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "process_mode", PROPERTY_HINT_ENUM, "Inherit,Pausable,When Paused,Always,Disabled"), "set_process_mode", "get_process_mode");

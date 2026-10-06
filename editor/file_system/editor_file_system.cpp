@@ -2302,6 +2302,10 @@ bool EditorFileSystem::_should_reload_script(const String &p_path) {
 }
 
 void EditorFileSystem::_process_update_pending() {
+	// Deferred scans must not regenerate documentation after its owner is gone.
+	if (!EditorNode::get_singleton()) {
+		return;
+	}
 	_update_script_classes();
 	// Parse documentation second, as it requires the class names to be loaded
 	// because _update_script_documentation loads the scripts completely.

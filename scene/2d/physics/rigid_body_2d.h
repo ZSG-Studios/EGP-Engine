@@ -57,8 +57,7 @@ public:
 
 	enum CCDMode {
 		CCD_MODE_DISABLED,
-		CCD_MODE_CAST_RAY,
-		CCD_MODE_CAST_SHAPE,
+		CCD_MODE_CAST_SHAPE = 2,
 	};
 
 private:

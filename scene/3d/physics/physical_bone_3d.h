@@ -71,9 +71,8 @@ public:
 		virtual bool _get(const StringName &p_name, Variant &r_ret) const;
 		virtual void _get_property_list(List<PropertyInfo> *p_list) const;
 
-		real_t bias = 0.3;
+		real_t spring_hertz = 9.0;
 		real_t damping = 1.0;
-		real_t impulse_clamp = 0.0;
 	};
 
 	struct ConeJointData : public JointData {
@@ -100,9 +99,6 @@ public:
 		bool angular_limit_enabled = false;
 		real_t angular_limit_upper = Math::PI * 0.5;
 		real_t angular_limit_lower = -Math::PI * 0.5;
-		real_t angular_limit_bias = 0.3;
-		real_t angular_limit_softness = 0.9;
-		real_t angular_limit_relaxation = 1.;
 	};
 
 	struct SliderJointData : public JointData {
@@ -114,14 +110,6 @@ public:
 
 		real_t linear_limit_upper = 1.0;
 		real_t linear_limit_lower = -1.0;
-		real_t linear_limit_softness = 1.0;
-		real_t linear_limit_restitution = 0.7;
-		real_t linear_limit_damping = 1.0;
-		real_t angular_limit_upper = 0.0;
-		real_t angular_limit_lower = 0.0;
-		real_t angular_limit_softness = 1.0;
-		real_t angular_limit_restitution = 0.7;
-		real_t angular_limit_damping = 1.0;
 	};
 
 	struct SixDOFJointData : public JointData {

@@ -8506,7 +8506,8 @@ HashMap<String, Variant> EditorNode::get_initial_settings() {
 	settings["display/window/stretch/mode"] = "canvas_items";
 	settings["gui/common/auto_focus_strategy"] = Control::AutoFocusStrategy::STRATEGY_BALLOON;
 	settings["input_devices/joypads/ignore_joypad_on_unfocused_application"] = true;
-	settings["physics/3d/physics_engine"] = PhysicsServer3DManager::JOLT_PHYSICS_NAME;
+	settings["physics/2d/physics_engine"] = "Box2D Physics";
+	settings["physics/3d/physics_engine"] = PhysicsServer3DManager::BOX3D_PHYSICS_NAME;
 	settings["rendering/rendering_device/driver.windows"] = "d3d12";
 	settings["rendering/lights_and_shadows/multi_bounce_occlusion/enabled"] = true;
 	return settings;

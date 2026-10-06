@@ -105,8 +105,6 @@ void Joint3D::_update_joint(bool p_only_free) {
 		_configure_joint(joint, body_b, nullptr);
 	}
 
-	PhysicsServer3D::get_singleton()->joint_set_solver_priority(joint, solver_priority);
-
 	if (body_a) {
 		ba = body_a->get_rid();
 		if (!body_a->is_connected(SceneStringName(tree_exiting), callable_mp(this, &Joint3D::_body_exit_tree))) {
@@ -156,17 +154,6 @@ void Joint3D::set_node_b(const NodePath &p_node_b) {
 
 NodePath Joint3D::get_node_b() const {
 	return b;
-}
-
-void Joint3D::set_solver_priority(int p_priority) {
-	solver_priority = p_priority;
-	if (joint.is_valid()) {
-		PhysicsServer3D::get_singleton()->joint_set_solver_priority(joint, solver_priority);
-	}
-}
-
-int Joint3D::get_solver_priority() const {
-	return solver_priority;
 }
 
 void Joint3D::_notification(int p_what) {
@@ -220,9 +207,6 @@ void Joint3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_node_b", "node"), &Joint3D::set_node_b);
 	ClassDB::bind_method(D_METHOD("get_node_b"), &Joint3D::get_node_b);
 
-	ClassDB::bind_method(D_METHOD("set_solver_priority", "priority"), &Joint3D::set_solver_priority);
-	ClassDB::bind_method(D_METHOD("get_solver_priority"), &Joint3D::get_solver_priority);
-
 	ClassDB::bind_method(D_METHOD("set_exclude_nodes_from_collision", "enable"), &Joint3D::set_exclude_nodes_from_collision);
 	ClassDB::bind_method(D_METHOD("get_exclude_nodes_from_collision"), &Joint3D::get_exclude_nodes_from_collision);
 
@@ -230,7 +214,6 @@ void Joint3D::_bind_methods() {
 
 	ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "node_a", PROPERTY_HINT_NODE_PATH_VALID_TYPES, "PhysicsBody3D"), "set_node_a", "get_node_a");
 	ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "node_b", PROPERTY_HINT_NODE_PATH_VALID_TYPES, "PhysicsBody3D"), "set_node_b", "get_node_b");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "solver_priority", PROPERTY_HINT_RANGE, "1,8,1"), "set_solver_priority", "get_solver_priority");
 
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "exclude_nodes_from_collision"), "set_exclude_nodes_from_collision", "get_exclude_nodes_from_collision");
 }

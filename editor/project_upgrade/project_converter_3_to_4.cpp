@@ -109,28 +109,31 @@ public:
 
 	// GDScript keywords.
 	RegEx keyword_gdscript_tool = RegEx("^tool");
+	RegEx legacy_networking = RegEx(
+			"\\b(?:ConnectedToServer|ConnectionFailed|ENetConnection|ENetMultiplayerPeer|ENetPacketPeer|GetMultiplayer|GetMultiplayerAuthority|"
+			"GetNetworkConnectedPeers|GetNetworkMaster|GetNetworkPeer|GetNetworkUniqueId|GetRpcSenderId|HasNetworkPeer|IsMultiplayerAuthority|"
+			"IsNetworkMaster|IsNetworkServer|IsRefusingNewNetworkConnections|MultiplayerAPI|MultiplayerAPIExtension|MultiplayerPeer|"
+			"MultiplayerPeerExtension|MultiplayerPeerGDNative|MultiplayerSpawner|MultiplayerSynchronizer|NetworkPeer|NetworkPeerConnected|"
+			"NetworkPeerDisconnected|NetworkPeerPacket|NetworkedMultiplayerCustom|NetworkedMultiplayerENet|NetworkedMultiplayerPeer|"
+			"RefuseNewNetworkConnections|Rpc|RpcConfig|RpcId|RpcUnreliable|RpcUnreliableId|Rset|RsetConfig|RsetId|RsetUnreliable|RsetUnreliableId|"
+			"SceneMultiplayer|ServerDisconnected|SetMultiplayer|SetMultiplayerAuthority|SetNetworkMaster|SetNetworkPeer|SetRefuseNewNetworkConnections|"
+			"WebRTCDataChannel|WebRTCMultiplayer|WebRTCMultiplayerPeer|WebRTCPeerConnection|WebSocketMultiplayerPeer|connected_to_server|"
+			"connection_failed|get_multiplayer|get_multiplayer_authority|get_network_connected_peers|get_network_master|get_network_peer|"
+			"get_network_unique_id|get_rpc_sender_id|has_network_peer|is_multiplayer_authority|is_network_master|is_network_server|"
+			"is_refusing_new_network_connections|multiplayer_peer|network_peer|network_peer_connected|network_peer_disconnected|network_peer_packet|"
+			"refuse_new_network_connections|rpc|rpc_config|rpc_id|rpc_unreliable|rpc_unreliable_id|rset|rset_config|rset_id|rset_unreliable|"
+			"rset_unreliable_id|server_disconnected|set_multiplayer|set_multiplayer_authority|set_network_master|set_network_peer|"
+			"set_refuse_new_network_connections)\\b|@rpc\\b|\\b(?:remote|remotesync|sync|slave|puppet|puppetsync|master|mastersync)\\s+(?:func|var)\\b|"
+			"\\[(?:Godot\\.)?(?:Remote|RemoteSync|Sync|Slave|Puppet|PuppetSync|Master|MasterSync|RPC)(?:Attribute)?\\b");
+
 	RegEx keyword_gdscript_export_single = RegEx("^export");
 	RegEx keyword_gdscript_export_multi = RegEx("([\t]+)export\\b");
 	RegEx keyword_gdscript_onready = RegEx("^onready");
-	RegEx keyword_gdscript_remote = RegEx("^remote func");
-	RegEx keyword_gdscript_remotesync = RegEx("^remotesync func");
-	RegEx keyword_gdscript_sync = RegEx("^sync func");
-	RegEx keyword_gdscript_slave = RegEx("^slave func");
-	RegEx keyword_gdscript_puppet = RegEx("^puppet func");
-	RegEx keyword_gdscript_puppetsync = RegEx("^puppetsync func");
-	RegEx keyword_gdscript_master = RegEx("^master func");
-	RegEx keyword_gdscript_mastersync = RegEx("^mastersync func");
 
 	RegEx gdscript_comment = RegEx("^\\s*#");
 	RegEx csharp_comment = RegEx("^\\s*\\/\\/");
 
 	// CSharp keywords.
-	RegEx keyword_csharp_remote = RegEx("\\[Remote(Attribute)?(\\(\\))?\\]");
-	RegEx keyword_csharp_remotesync = RegEx("\\[(Remote)?Sync(Attribute)?(\\(\\))?\\]");
-	RegEx keyword_csharp_puppet = RegEx("\\[(Puppet|Slave)(Attribute)?(\\(\\))?\\]");
-	RegEx keyword_csharp_puppetsync = RegEx("\\[PuppetSync(Attribute)?(\\(\\))?\\]");
-	RegEx keyword_csharp_master = RegEx("\\[Master(Attribute)?(\\(\\))?\\]");
-	RegEx keyword_csharp_mastersync = RegEx("\\[MasterSync(Attribute)?(\\(\\))?\\]");
 
 	// Colors.
 	LocalVector<Ref<RegEx>> color_regexes;
@@ -271,6 +274,28 @@ ProjectConverter3To4::ProjectConverter3To4(int p_maximum_file_size_kb, int p_max
 	maximum_line_length = p_maximum_line_length;
 }
 
+bool ProjectConverter3To4::check_legacy_networking(const Vector<String> &p_files, const RegExContainer &p_regex) {
+	bool supported = true;
+	for (const String &path : p_files) {
+		Ref<FileAccess> file = FileAccess::open(path, FileAccess::READ);
+		ERR_FAIL_COND_V_MSG(file.is_null(), false, vformat("Unable to check legacy networking in '%s'; conversion has not modified the project.", path));
+		int line_number = 0;
+		while (!file->eof_reached()) {
+			const String line = file->get_line();
+			line_number++;
+			const String trimmed = line.strip_edges();
+			if (trimmed.begins_with("#") || trimmed.begins_with("//") || trimmed.begins_with(";")) {
+				continue;
+			}
+			if (p_regex.legacy_networking.search(line).is_valid()) {
+				print_error(vformat("EGP networking migration required at %s:%d. Legacy RPC/peer APIs cannot be converted automatically. Port this code to EGPNet messages, entity ownership and replication (modules/egp_net/README.md), then rerun conversion. No project files have been modified.", path, line_number));
+				supported = false;
+			}
+		}
+	}
+	return supported;
+}
+
 // Function responsible for converting project.
 bool ProjectConverter3To4::convert() {
 	print_line("Starting conversion.");
@@ -285,6 +310,11 @@ bool ProjectConverter3To4::convert() {
 	ERR_FAIL_COND_V_MSG(!test_conversion(reg_container), false, "Aborting conversion due to validation tests failing");
 
 	maximum_line_length = cached_maximum_line_length;
+
+	Vector<String> collected_files = check_for_files();
+	if (!check_legacy_networking(collected_files, reg_container)) {
+		return false;
+	}
 
 	// Checking if folder contains valid Godot 3 project.
 	// Project should not be converted more than once.
@@ -304,8 +334,6 @@ bool ProjectConverter3To4::convert() {
 
 		file->store_string(converter_text + "\n" + project_godot_content);
 	}
-
-	Vector<String> collected_files = check_for_files();
 
 	uint32_t converted_files = 0;
 
@@ -395,7 +423,6 @@ bool ProjectConverter3To4::convert() {
 				rename_common(RenamesMap3To4::csharp_properties_renames, reg_container.csharp_properties_regexes, source_lines);
 				rename_common(RenamesMap3To4::csharp_signals_renames, reg_container.csharp_signal_regexes, source_lines);
 				rename_csharp_functions(source_lines, reg_container);
-				rename_csharp_attributes(source_lines, reg_container);
 				custom_rename(source_lines, "public class ", "public partial class ");
 				convert_hexadecimal_colors(source_lines, reg_container);
 			} else if (file_name.ends_with(".gdshader") || file_name.ends_with(".shader")) {
@@ -493,6 +520,11 @@ bool ProjectConverter3To4::validate_conversion() {
 
 	maximum_line_length = cached_maximum_line_length;
 
+	Vector<String> collected_files = check_for_files();
+	if (!check_legacy_networking(collected_files, reg_container)) {
+		return false;
+	}
+
 	// Checking if folder contains valid Godot 3 project.
 	// Project should not be converted more than once.
 	{
@@ -506,8 +538,6 @@ bool ProjectConverter3To4::validate_conversion() {
 		ERR_FAIL_COND_V_MSG(err != OK, false, "Failed to read content of \"project.godot\" file.");
 		ERR_FAIL_COND_V_MSG(project_godot_content.contains(conventer_text), false, "Project already was converted with this tool.");
 	}
-
-	Vector<String> collected_files = check_for_files();
 
 	uint32_t converted_files = 0;
 
@@ -583,7 +613,6 @@ bool ProjectConverter3To4::validate_conversion() {
 				changed_elements.append_array(check_for_rename_common(RenamesMap3To4::csharp_properties_renames, reg_container.csharp_properties_regexes, lines));
 				changed_elements.append_array(check_for_rename_common(RenamesMap3To4::csharp_signals_renames, reg_container.csharp_signal_regexes, lines));
 				changed_elements.append_array(check_for_rename_csharp_functions(lines, reg_container));
-				changed_elements.append_array(check_for_rename_csharp_attributes(lines, reg_container));
 				changed_elements.append_array(check_for_custom_rename(lines, "public class ", "public partial class "));
 			} else if (file_name.ends_with(".gdshader") || file_name.ends_with(".shader")) {
 				changed_elements.append_array(check_for_rename_common(RenamesMap3To4::shaders_renames, reg_container.shaders_regexes, lines));
@@ -735,6 +764,19 @@ bool ProjectConverter3To4::test_conversion_basic(const String &name, const Strin
 bool ProjectConverter3To4::test_conversion(RegExContainer &reg_container) {
 	bool valid = true;
 
+	// Migration detection runs before any file is written, including embedded scripts.
+	valid = valid && reg_container.legacy_networking.search("remote func move():").is_valid();
+	valid = valid && reg_container.legacy_networking.search("puppetsync var health").is_valid();
+	valid = valid && reg_container.legacy_networking.search("[RemoteSync] void Move()").is_valid();
+	valid = valid && reg_container.legacy_networking.search("node.rpc_id(2, \"move\")").is_valid();
+	valid = valid && reg_container.legacy_networking.search("tree.SetNetworkPeer(peer)").is_valid();
+	valid = valid && reg_container.legacy_networking.search("NetworkedMultiplayerENet.new()").is_valid();
+	valid = valid && reg_container.legacy_networking.search("script/source = \"remote func move():\"").is_valid();
+	valid = valid && reg_container.legacy_networking.search("remote_position = Vector3.ZERO").is_null();
+	valid = valid && reg_container.legacy_networking.search("network.host(\"127.0.0.1\")").is_null();
+	valid = valid && reg_container.legacy_networking.search("HTTPRequest.new()").is_null();
+	valid = valid && reg_container.legacy_networking.search("WebSocketPeer.new()").is_null();
+
 	valid = valid && test_conversion_with_regex("tool", "@tool", &ProjectConverter3To4::fix_tool_declaration, "gdscript keyword", reg_container);
 	valid = valid && test_conversion_with_regex("\n    tool", "\n    tool", &ProjectConverter3To4::fix_tool_declaration, "gdscript keyword", reg_container);
 	valid = valid && test_conversion_with_regex("\n\ntool", "@tool\n\n", &ProjectConverter3To4::fix_tool_declaration, "gdscript keyword", reg_container);
@@ -775,14 +817,6 @@ bool ProjectConverter3To4::test_conversion(RegExContainer &reg_container) {
 	valid = valid && test_conversion_with_regex("(Disconnect(A,B,C) != OK):", "(Disconnect(A, new Callable(B, C)) != OK):", &ProjectConverter3To4::rename_csharp_functions, "custom rename csharp", reg_container);
 	valid = valid && test_conversion_with_regex("(IsConnected(A,B,C) != OK):", "(IsConnected(A, new Callable(B, C)) != OK):", &ProjectConverter3To4::rename_csharp_functions, "custom rename", reg_container);
 
-	valid = valid && test_conversion_with_regex("[Remote]", "[RPC(MultiplayerAPI.RPCMode.AnyPeer)]", &ProjectConverter3To4::rename_csharp_attributes, "custom rename csharp", reg_container);
-	valid = valid && test_conversion_with_regex("[RemoteSync]", "[RPC(MultiplayerAPI.RPCMode.AnyPeer, CallLocal = true)]", &ProjectConverter3To4::rename_csharp_attributes, "custom rename csharp", reg_container);
-	valid = valid && test_conversion_with_regex("[Sync]", "[RPC(MultiplayerAPI.RPCMode.AnyPeer, CallLocal = true)]", &ProjectConverter3To4::rename_csharp_attributes, "custom rename csharp", reg_container);
-	valid = valid && test_conversion_with_regex("[Slave]", "[RPC]", &ProjectConverter3To4::rename_csharp_attributes, "custom rename csharp", reg_container);
-	valid = valid && test_conversion_with_regex("[Puppet]", "[RPC]", &ProjectConverter3To4::rename_csharp_attributes, "custom rename csharp", reg_container);
-	valid = valid && test_conversion_with_regex("[PuppetSync]", "[RPC(CallLocal = true)]", &ProjectConverter3To4::rename_csharp_attributes, "custom rename csharp", reg_container);
-	valid = valid && test_conversion_with_regex("[Master]", "The master and mastersync rpc behavior is not officially supported anymore. Try using another keyword or making custom logic using Multiplayer.GetRemoteSenderId()\n[RPC]", &ProjectConverter3To4::rename_csharp_attributes, "custom rename csharp", reg_container);
-	valid = valid && test_conversion_with_regex("[MasterSync]", "The master and mastersync rpc behavior is not officially supported anymore. Try using another keyword or making custom logic using Multiplayer.GetRemoteSenderId()\n[RPC(CallLocal = true)]", &ProjectConverter3To4::rename_csharp_attributes, "custom rename csharp", reg_container);
 
 	valid = valid && test_conversion_gdscript_builtin("\tif OS.window_resizable: pass", "\tif (not get_window().unresizable): pass", &ProjectConverter3To4::rename_gdscript_functions, "custom rename", reg_container, false);
 	valid = valid && test_conversion_gdscript_builtin("\tif OS.is_window_resizable(): pass", "\tif (not get_window().unresizable): pass", &ProjectConverter3To4::rename_gdscript_functions, "custom rename", reg_container, false);
@@ -859,18 +893,6 @@ bool ProjectConverter3To4::test_conversion(RegExContainer &reg_container) {
 	valid = valid && test_conversion_gdscript_builtin("\texport_dialog", "\texport_dialog", &ProjectConverter3To4::rename_gdscript_keywords, "gdscript keyword", reg_container, false);
 	valid = valid && test_conversion_gdscript_builtin("export", "@export", &ProjectConverter3To4::rename_gdscript_keywords, "gdscript keyword", reg_container, false);
 	valid = valid && test_conversion_gdscript_builtin(" export", " export", &ProjectConverter3To4::rename_gdscript_keywords, "gdscript keyword", reg_container, false);
-	valid = valid && test_conversion_gdscript_builtin("\n\nremote func", "\n\n@rpc(\"any_peer\") func", &ProjectConverter3To4::rename_gdscript_keywords, "gdscript keyword", reg_container, false);
-	valid = valid && test_conversion_gdscript_builtin("\n\nremote func", "\n\n@rpc(\\\"any_peer\\\") func", &ProjectConverter3To4::rename_gdscript_keywords, "gdscript keyword", reg_container, true);
-	valid = valid && test_conversion_gdscript_builtin("\n\nremotesync func", "\n\n@rpc(\"any_peer\", \"call_local\") func", &ProjectConverter3To4::rename_gdscript_keywords, "gdscript keyword", reg_container, false);
-	valid = valid && test_conversion_gdscript_builtin("\n\nremotesync func", "\n\n@rpc(\\\"any_peer\\\", \\\"call_local\\\") func", &ProjectConverter3To4::rename_gdscript_keywords, "gdscript keyword", reg_container, true);
-	valid = valid && test_conversion_gdscript_builtin("\n\nsync func", "\n\n@rpc(\"any_peer\", \"call_local\") func", &ProjectConverter3To4::rename_gdscript_keywords, "gdscript keyword", reg_container, false);
-	valid = valid && test_conversion_gdscript_builtin("\n\nsync func", "\n\n@rpc(\\\"any_peer\\\", \\\"call_local\\\") func", &ProjectConverter3To4::rename_gdscript_keywords, "gdscript keyword", reg_container, true);
-	valid = valid && test_conversion_gdscript_builtin("\n\nslave func", "\n\n@rpc func", &ProjectConverter3To4::rename_gdscript_keywords, "gdscript keyword", reg_container, false);
-	valid = valid && test_conversion_gdscript_builtin("\n\npuppet func", "\n\n@rpc func", &ProjectConverter3To4::rename_gdscript_keywords, "gdscript keyword", reg_container, false);
-	valid = valid && test_conversion_gdscript_builtin("\n\npuppetsync func", "\n\n@rpc(\"call_local\") func", &ProjectConverter3To4::rename_gdscript_keywords, "gdscript keyword", reg_container, false);
-	valid = valid && test_conversion_gdscript_builtin("\n\npuppetsync func", "\n\n@rpc(\\\"call_local\\\") func", &ProjectConverter3To4::rename_gdscript_keywords, "gdscript keyword", reg_container, true);
-	valid = valid && test_conversion_gdscript_builtin("\n\nmaster func", "\n\nThe master and mastersync rpc behavior is not officially supported anymore. Try using another keyword or making custom logic using get_multiplayer().get_remote_sender_id()\n@rpc func", &ProjectConverter3To4::rename_gdscript_keywords, "gdscript keyword", reg_container, false);
-	valid = valid && test_conversion_gdscript_builtin("\n\nmastersync func", "\n\nThe master and mastersync rpc behavior is not officially supported anymore. Try using another keyword or making custom logic using get_multiplayer().get_remote_sender_id()\n@rpc(\"call_local\") func", &ProjectConverter3To4::rename_gdscript_keywords, "gdscript keyword", reg_container, false);
 
 	valid = valid && test_conversion_gdscript_builtin("var size: Vector2 = Vector2() setget set_function, get_function", "var size: Vector2 = Vector2(): get = get_function, set = set_function", &ProjectConverter3To4::rename_gdscript_functions, "custom rename", reg_container, false);
 	valid = valid && test_conversion_gdscript_builtin("var size: Vector2 = Vector2() setget set_function, ", "var size: Vector2 = Vector2(): set = set_function", &ProjectConverter3To4::rename_gdscript_functions, "custom rename", reg_container, false);
@@ -2413,87 +2435,7 @@ Vector<String> ProjectConverter3To4::check_for_rename_csharp_functions(Vector<St
 	return found_renames;
 }
 
-void ProjectConverter3To4::rename_csharp_attributes(Vector<SourceLine> &source_lines, const RegExContainer &reg_container) {
-	static String error_message = "The master and mastersync rpc behavior is not officially supported anymore. Try using another keyword or making custom logic using Multiplayer.GetRemoteSenderId()\n";
-
-	for (SourceLine &source_line : source_lines) {
-		if (source_line.is_comment) {
-			continue;
-		}
-
-		String &line = source_line.line;
-		if (uint64_t(line.length()) <= maximum_line_length) {
-			line = reg_container.keyword_csharp_remote.sub(line, "[RPC(MultiplayerAPI.RPCMode.AnyPeer)]", true);
-			line = reg_container.keyword_csharp_remotesync.sub(line, "[RPC(MultiplayerAPI.RPCMode.AnyPeer, CallLocal = true)]", true);
-			line = reg_container.keyword_csharp_puppet.sub(line, "[RPC]", true);
-			line = reg_container.keyword_csharp_puppetsync.sub(line, "[RPC(CallLocal = true)]", true);
-			line = reg_container.keyword_csharp_master.sub(line, error_message + "[RPC]", true);
-			line = reg_container.keyword_csharp_mastersync.sub(line, error_message + "[RPC(CallLocal = true)]", true);
-		}
-	}
-}
-
-Vector<String> ProjectConverter3To4::check_for_rename_csharp_attributes(Vector<String> &lines, const RegExContainer &reg_container) {
-	int current_line = 1;
-
-	Vector<String> found_renames;
-
-	for (String &line : lines) {
-		if (uint64_t(line.length()) <= maximum_line_length) {
-			String old;
-			old = line;
-			line = reg_container.keyword_csharp_remote.sub(line, "[RPC(MultiplayerAPI.RPCMode.AnyPeer)]", true);
-			if (old != line) {
-				found_renames.append(line_formatter(current_line, "[Remote]", "[RPC(MultiplayerAPI.RPCMode.AnyPeer)]", line));
-			}
-
-			old = line;
-			line = reg_container.keyword_csharp_remotesync.sub(line, "[RPC(MultiplayerAPI.RPCMode.AnyPeer, CallLocal = true)]", true);
-			if (old != line) {
-				found_renames.append(line_formatter(current_line, "[RemoteSync]", "[RPC(MultiplayerAPI.RPCMode.AnyPeer, CallLocal = true)]", line));
-			}
-
-			old = line;
-			line = reg_container.keyword_csharp_puppet.sub(line, "[RPC]", true);
-			if (old != line) {
-				found_renames.append(line_formatter(current_line, "[Puppet]", "[RPC]", line));
-			}
-
-			old = line;
-			line = reg_container.keyword_csharp_puppetsync.sub(line, "[RPC(CallLocal = true)]", true);
-			if (old != line) {
-				found_renames.append(line_formatter(current_line, "[PuppetSync]", "[RPC(CallLocal = true)]", line));
-			}
-
-			old = line;
-			line = reg_container.keyword_csharp_master.sub(line, "[RPC]", true);
-			if (old != line) {
-				found_renames.append(line_formatter(current_line, "[Master]", "[RPC]", line));
-			}
-
-			old = line;
-			line = reg_container.keyword_csharp_mastersync.sub(line, "[RPC(CallLocal = true)]", true);
-			if (old != line) {
-				found_renames.append(line_formatter(current_line, "[MasterSync]", "[RPC(CallLocal = true)]", line));
-			}
-		}
-		current_line++;
-	}
-
-	return found_renames;
-}
-
-_FORCE_INLINE_ static String builtin_escape(const String &p_str, bool p_builtin) {
-	if (p_builtin) {
-		return p_str.replace("\"", "\\\"");
-	} else {
-		return p_str;
-	}
-}
-
-void ProjectConverter3To4::rename_gdscript_keywords(Vector<SourceLine> &source_lines, const RegExContainer &reg_container, bool builtin) {
-	static String error_message = "The master and mastersync rpc behavior is not officially supported anymore. Try using another keyword or making custom logic using get_multiplayer().get_remote_sender_id()\n";
-
+void ProjectConverter3To4::rename_gdscript_keywords(Vector<SourceLine> &source_lines, const RegExContainer &reg_container, bool) {
 	for (SourceLine &source_line : source_lines) {
 		if (source_line.is_comment) {
 			continue;
@@ -2510,35 +2452,11 @@ void ProjectConverter3To4::rename_gdscript_keywords(Vector<SourceLine> &source_l
 			if (line.contains("onready")) {
 				line = reg_container.keyword_gdscript_onready.sub(line, "@onready", true);
 			}
-			if (line.contains("remote")) {
-				line = reg_container.keyword_gdscript_remote.sub(line, builtin_escape("@rpc(\"any_peer\") func", builtin), true);
-			}
-			if (line.contains("remote")) {
-				line = reg_container.keyword_gdscript_remotesync.sub(line, builtin_escape("@rpc(\"any_peer\", \"call_local\") func", builtin), true);
-			}
-			if (line.contains("sync")) {
-				line = reg_container.keyword_gdscript_sync.sub(line, builtin_escape("@rpc(\"any_peer\", \"call_local\") func", builtin), true);
-			}
-			if (line.contains("slave")) {
-				line = reg_container.keyword_gdscript_slave.sub(line, "@rpc func", true);
-			}
-			if (line.contains("puppet")) {
-				line = reg_container.keyword_gdscript_puppet.sub(line, "@rpc func", true);
-			}
-			if (line.contains("puppet")) {
-				line = reg_container.keyword_gdscript_puppetsync.sub(line, builtin_escape("@rpc(\"call_local\") func", builtin), true);
-			}
-			if (line.contains("master")) {
-				line = reg_container.keyword_gdscript_master.sub(line, error_message + "@rpc func", true);
-			}
-			if (line.contains("master")) {
-				line = reg_container.keyword_gdscript_mastersync.sub(line, error_message + builtin_escape("@rpc(\"call_local\") func", builtin), true);
-			}
 		}
 	}
 }
 
-Vector<String> ProjectConverter3To4::check_for_rename_gdscript_keywords(Vector<String> &lines, const RegExContainer &reg_container, bool builtin) {
+Vector<String> ProjectConverter3To4::check_for_rename_gdscript_keywords(Vector<String> &lines, const RegExContainer &reg_container, bool) {
 	Vector<String> found_renames;
 
 	int current_line = 1;
@@ -2572,73 +2490,9 @@ Vector<String> ProjectConverter3To4::check_for_rename_gdscript_keywords(Vector<S
 
 			if (line.contains("onready")) {
 				old = line;
-				line = reg_container.keyword_gdscript_tool.sub(line, "@onready", true);
+				line = reg_container.keyword_gdscript_onready.sub(line, "@onready", true);
 				if (old != line) {
 					found_renames.append(line_formatter(current_line, "onready", "@onready", line));
-				}
-			}
-
-			if (line.contains("remote")) {
-				old = line;
-				line = reg_container.keyword_gdscript_remote.sub(line, builtin_escape("@rpc(\"any_peer\") func", builtin), true);
-				if (old != line) {
-					found_renames.append(line_formatter(current_line, "remote func", builtin_escape("@rpc(\"any_peer\") func", builtin), line));
-				}
-			}
-
-			if (line.contains("remote")) {
-				old = line;
-				line = reg_container.keyword_gdscript_remotesync.sub(line, builtin_escape("@rpc(\"any_peer\", \"call_local\")) func", builtin), true);
-				if (old != line) {
-					found_renames.append(line_formatter(current_line, "remotesync func", builtin_escape("@rpc(\"any_peer\", \"call_local\")) func", builtin), line));
-				}
-			}
-
-			if (line.contains("sync")) {
-				old = line;
-				line = reg_container.keyword_gdscript_sync.sub(line, builtin_escape("@rpc(\"any_peer\", \"call_local\")) func", builtin), true);
-				if (old != line) {
-					found_renames.append(line_formatter(current_line, "sync func", builtin_escape("@rpc(\"any_peer\", \"call_local\")) func", builtin), line));
-				}
-			}
-
-			if (line.contains("slave")) {
-				old = line;
-				line = reg_container.keyword_gdscript_slave.sub(line, "@rpc func", true);
-				if (old != line) {
-					found_renames.append(line_formatter(current_line, "slave func", "@rpc func", line));
-				}
-			}
-
-			if (line.contains("puppet")) {
-				old = line;
-				line = reg_container.keyword_gdscript_puppet.sub(line, "@rpc func", true);
-				if (old != line) {
-					found_renames.append(line_formatter(current_line, "puppet func", "@rpc func", line));
-				}
-			}
-
-			if (line.contains("puppet")) {
-				old = line;
-				line = reg_container.keyword_gdscript_puppetsync.sub(line, builtin_escape("@rpc(\"call_local\") func", builtin), true);
-				if (old != line) {
-					found_renames.append(line_formatter(current_line, "puppetsync func", builtin_escape("@rpc(\"call_local\") func", builtin), line));
-				}
-			}
-
-			if (line.contains("master")) {
-				old = line;
-				line = reg_container.keyword_gdscript_master.sub(line, "@rpc func", true);
-				if (old != line) {
-					found_renames.append(line_formatter(current_line, "master func", "@rpc func", line));
-				}
-			}
-
-			if (line.contains("master")) {
-				old = line;
-				line = reg_container.keyword_gdscript_master.sub(line, builtin_escape("@rpc(\"call_local\") func", builtin), true);
-				if (old != line) {
-					found_renames.append(line_formatter(current_line, "mastersync func", builtin_escape("@rpc(\"call_local\") func", builtin), line));
 				}
 			}
 		}

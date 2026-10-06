@@ -71,7 +71,6 @@ public:
 	RID shape_create(PS3DE::ShapeType p_shape);
 
 	virtual RID world_boundary_shape_create() = 0;
-	virtual RID separation_ray_shape_create() = 0;
 	virtual RID sphere_shape_create() = 0;
 	virtual RID box_shape_create() = 0;
 	virtual RID capsule_shape_create() = 0;
@@ -79,20 +78,19 @@ public:
 	virtual RID convex_polygon_shape_create() = 0;
 	virtual RID concave_polygon_shape_create() = 0;
 	virtual RID heightmap_shape_create() = 0;
-	virtual RID custom_shape_create() = 0;
 
 	virtual void shape_set_data(RID p_shape, const Variant &p_data) = 0;
-	virtual void shape_set_custom_solver_bias(RID p_shape, real_t p_bias) = 0;
 
 	virtual PS3DE::ShapeType shape_get_type(RID p_shape) const = 0;
 	virtual Variant shape_get_data(RID p_shape) const = 0;
 
-	virtual void shape_set_margin(RID p_shape, real_t p_margin) = 0;
-	virtual real_t shape_get_margin(RID p_shape) const = 0;
-
-	virtual real_t shape_get_custom_solver_bias(RID p_shape) const = 0;
-
 	/* SPACE API */
+
+	virtual void space_apply_explosion(RID p_space, const Vector3 &p_position, real_t p_radius, real_t p_falloff, real_t p_impulse_density, uint32_t p_collision_mask) = 0;
+	virtual Array space_get_contact_hit_events(RID p_space) const = 0;
+	virtual Array space_get_joint_events(RID p_space) const = 0;
+	virtual Vector3 joint_get_constraint_force(RID p_joint) const = 0;
+	virtual Vector3 joint_get_constraint_torque(RID p_joint) const = 0;
 
 	virtual RID space_create() = 0;
 	virtual void space_set_active(RID p_space, bool p_active) = 0;
@@ -190,9 +188,6 @@ public:
 
 	virtual void body_set_collision_mask(RID p_body, uint32_t p_mask) = 0;
 	virtual uint32_t body_get_collision_mask(RID p_body) const = 0;
-
-	virtual void body_set_collision_priority(RID p_body, real_t p_priority) = 0;
-	virtual real_t body_get_collision_priority(RID p_body) const = 0;
 
 	virtual void body_set_user_flags(RID p_body, uint32_t p_flags) = 0;
 	virtual uint32_t body_get_user_flags(RID p_body) const = 0;
@@ -322,14 +317,15 @@ public:
 
 	/* JOINT API */
 
+	virtual void joint_make_configured(RID p_joint, PS3DE::JointType p_type, RID p_body_a, const Transform3D &p_frame_a, RID p_body_b, const Transform3D &p_frame_b, const Dictionary &p_configuration) = 0;
+	virtual void joint_set_configuration(RID p_joint, const Dictionary &p_configuration) = 0;
+	virtual Dictionary joint_get_configuration(RID p_joint) const = 0;
+
 	virtual RID joint_create() = 0;
 
 	virtual void joint_clear(RID p_joint) = 0;
 
 	virtual PS3DE::JointType joint_get_type(RID p_joint) const = 0;
-
-	virtual void joint_set_solver_priority(RID p_joint, int p_priority) = 0;
-	virtual int joint_get_solver_priority(RID p_joint) const = 0;
 
 	virtual void joint_disable_collisions_between_bodies(RID p_joint, bool p_disable) = 0;
 	virtual bool joint_is_disabled_collisions_between_bodies(RID p_joint) const = 0;

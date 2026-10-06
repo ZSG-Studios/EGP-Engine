@@ -56,9 +56,6 @@ public:
 	int get_max_collisions() const { return parameters.max_collisions; }
 	void set_max_collisions(int p_max_collisions) { parameters.max_collisions = p_max_collisions; }
 
-	bool is_collide_separation_ray_enabled() const { return parameters.collide_separation_ray; }
-	void set_collide_separation_ray_enabled(bool p_enabled) { parameters.collide_separation_ray = p_enabled; }
-
 	TypedArray<RID> get_exclude_bodies() const;
 	void set_exclude_bodies(const TypedArray<RID> &p_exclude);
 

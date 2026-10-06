@@ -23,11 +23,19 @@ def main():
     command = [sys.executable, "-m", "SCons", *flags, "target=editor"]
     subprocess.run(command + ([f"egp_cpp_api={api}"] if api.exists() else []), cwd=root, check=True)
     env = json.loads((root / ".scons_env.json").read_text(encoding="utf-8"))
-    suffix = env.get("PROGSUFFIX_WRAP", env["PROGSUFFIX"])
+    suffix = env["PROGSUFFIX"]
     editor = root / "bin" / ("godot" + suffix)
     if not editor.is_file():
-        editor = root / "bin" / ("godot" + env["PROGSUFFIX"])
-    subprocess.run([str(editor), "--headless", "--dump-extension-api"], cwd=api_dir, check=True, timeout=120)
+        editor = root / "bin" / ("godot" + env.get("PROGSUFFIX_WRAP", suffix))
+    # The GUI executable supports redirected headless output directly. Avoid
+    # console-wrapper lifetime issues when its child exits during API export.
+    subprocess.run(
+        [str(editor), "--headless", "--dump-extension-api"],
+        cwd=api_dir,
+        check=True,
+        timeout=120,
+        creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+    )
     subprocess.run(command + [f"egp_cpp_api={api}"], cwd=root, check=True)
     header = json.loads(api.read_text(encoding="utf-8"))["header"]
     print(f"EGP_CPP_EDITOR_READY: {editor}; embedded API {header['version_major']}.{header['version_minor']}")

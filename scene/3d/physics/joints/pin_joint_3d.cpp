@@ -36,17 +36,16 @@ void PinJoint3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_param", "param", "value"), &PinJoint3D::set_param);
 	ClassDB::bind_method(D_METHOD("get_param", "param"), &PinJoint3D::get_param);
 
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "params/bias", PROPERTY_HINT_RANGE, "0.01,0.99,0.01"), "set_param", "get_param", PARAM_BIAS);
+	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "spring/frequency", PROPERTY_HINT_RANGE, "0,1000,0.01,or_greater"), "set_param", "get_param", PARAM_SPRING_HERTZ);
 	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "params/damping", PROPERTY_HINT_RANGE, "0.01,8.0,0.01"), "set_param", "get_param", PARAM_DAMPING);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "params/impulse_clamp", PROPERTY_HINT_RANGE, "0.0,64.0,0.01"), "set_param", "get_param", PARAM_IMPULSE_CLAMP);
 
-	BIND_ENUM_CONSTANT(PARAM_BIAS);
+	BIND_ENUM_CONSTANT(PARAM_SPRING_HERTZ);
 	BIND_ENUM_CONSTANT(PARAM_DAMPING);
-	BIND_ENUM_CONSTANT(PARAM_IMPULSE_CLAMP);
 }
 
 void PinJoint3D::set_param(Param p_param, real_t p_value) {
-	ERR_FAIL_INDEX(p_param, 3);
+	ERR_FAIL_COND(!Math::is_finite(p_value) || p_value < 0);
+	ERR_FAIL_INDEX(p_param, 2);
 	params[p_param] = p_value;
 	if (is_configured()) {
 		PhysicsServer3D::get_singleton()->pin_joint_set_param(get_rid(), PS3DE::PinJointParam(p_param), p_value);
@@ -54,7 +53,7 @@ void PinJoint3D::set_param(Param p_param, real_t p_value) {
 }
 
 real_t PinJoint3D::get_param(Param p_param) const {
-	ERR_FAIL_INDEX_V(p_param, 3, 0);
+	ERR_FAIL_INDEX_V(p_param, 2, 0);
 	return params[p_param];
 }
 
@@ -70,13 +69,12 @@ void PinJoint3D::_configure_joint(RID p_joint, PhysicsBody3D *body_a, PhysicsBod
 	}
 
 	PhysicsServer3D::get_singleton()->joint_make_pin(p_joint, body_a->get_rid(), local_a, body_b ? body_b->get_rid() : RID(), local_b);
-	for (int i = 0; i < 3; i++) {
+	for (int i = 0; i < 2; i++) {
 		PhysicsServer3D::get_singleton()->pin_joint_set_param(p_joint, PS3DE::PinJointParam(i), params[i]);
 	}
 }
 
 PinJoint3D::PinJoint3D() {
-	params[PARAM_BIAS] = 0.3;
+	params[PARAM_SPRING_HERTZ] = 9.0;
 	params[PARAM_DAMPING] = 1;
-	params[PARAM_IMPULSE_CLAMP] = 0;
 }

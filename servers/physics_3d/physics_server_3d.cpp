@@ -73,8 +73,6 @@ RID PhysicsServer3D::shape_create(PS3DE::ShapeType p_shape) {
 	switch (p_shape) {
 		case PS3DE::SHAPE_WORLD_BOUNDARY:
 			return world_boundary_shape_create();
-		case PS3DE::SHAPE_SEPARATION_RAY:
-			return separation_ray_shape_create();
 		case PS3DE::SHAPE_SPHERE:
 			return sphere_shape_create();
 		case PS3DE::SHAPE_BOX:
@@ -89,8 +87,6 @@ RID PhysicsServer3D::shape_create(PS3DE::ShapeType p_shape) {
 			return concave_polygon_shape_create();
 		case PS3DE::SHAPE_HEIGHTMAP:
 			return heightmap_shape_create();
-		case PS3DE::SHAPE_CUSTOM:
-			return custom_shape_create();
 		default:
 			return RID();
 	}
@@ -100,7 +96,6 @@ void PhysicsServer3D::_bind_methods() {
 #ifndef _3D_DISABLED
 
 	ClassDB::bind_method(D_METHOD("world_boundary_shape_create"), &PhysicsServer3D::world_boundary_shape_create);
-	ClassDB::bind_method(D_METHOD("separation_ray_shape_create"), &PhysicsServer3D::separation_ray_shape_create);
 	ClassDB::bind_method(D_METHOD("sphere_shape_create"), &PhysicsServer3D::sphere_shape_create);
 	ClassDB::bind_method(D_METHOD("box_shape_create"), &PhysicsServer3D::box_shape_create);
 	ClassDB::bind_method(D_METHOD("capsule_shape_create"), &PhysicsServer3D::capsule_shape_create);
@@ -108,15 +103,17 @@ void PhysicsServer3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("convex_polygon_shape_create"), &PhysicsServer3D::convex_polygon_shape_create);
 	ClassDB::bind_method(D_METHOD("concave_polygon_shape_create"), &PhysicsServer3D::concave_polygon_shape_create);
 	ClassDB::bind_method(D_METHOD("heightmap_shape_create"), &PhysicsServer3D::heightmap_shape_create);
-	ClassDB::bind_method(D_METHOD("custom_shape_create"), &PhysicsServer3D::custom_shape_create);
 
 	ClassDB::bind_method(D_METHOD("shape_set_data", "shape", "data"), &PhysicsServer3D::shape_set_data);
-	ClassDB::bind_method(D_METHOD("shape_set_margin", "shape", "margin"), &PhysicsServer3D::shape_set_margin);
 
 	ClassDB::bind_method(D_METHOD("shape_get_type", "shape"), &PhysicsServer3D::shape_get_type);
 	ClassDB::bind_method(D_METHOD("shape_get_data", "shape"), &PhysicsServer3D::shape_get_data);
-	ClassDB::bind_method(D_METHOD("shape_get_margin", "shape"), &PhysicsServer3D::shape_get_margin);
 
+	ClassDB::bind_method(D_METHOD("space_apply_explosion", "space", "position", "radius", "falloff", "impulse_density", "collision_mask"), &PhysicsServer3D::space_apply_explosion);
+	ClassDB::bind_method(D_METHOD("space_get_contact_hit_events", "space"), &PhysicsServer3D::space_get_contact_hit_events);
+	ClassDB::bind_method(D_METHOD("space_get_joint_events", "space"), &PhysicsServer3D::space_get_joint_events);
+	ClassDB::bind_method(D_METHOD("joint_get_constraint_force", "joint"), &PhysicsServer3D::joint_get_constraint_force);
+	ClassDB::bind_method(D_METHOD("joint_get_constraint_torque", "joint"), &PhysicsServer3D::joint_get_constraint_torque);
 	ClassDB::bind_method(D_METHOD("space_create"), &PhysicsServer3D::space_create);
 	ClassDB::bind_method(D_METHOD("space_set_active", "space", "active"), &PhysicsServer3D::space_set_active);
 	ClassDB::bind_method(D_METHOD("space_is_active", "space"), &PhysicsServer3D::space_is_active);
@@ -174,9 +171,6 @@ void PhysicsServer3D::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("body_set_collision_mask", "body", "mask"), &PhysicsServer3D::body_set_collision_mask);
 	ClassDB::bind_method(D_METHOD("body_get_collision_mask", "body"), &PhysicsServer3D::body_get_collision_mask);
-
-	ClassDB::bind_method(D_METHOD("body_set_collision_priority", "body", "priority"), &PhysicsServer3D::body_set_collision_priority);
-	ClassDB::bind_method(D_METHOD("body_get_collision_priority", "body"), &PhysicsServer3D::body_get_collision_priority);
 
 	ClassDB::bind_method(D_METHOD("body_add_shape", "body", "shape", "transform", "disabled"), &PhysicsServer3D::body_add_shape, DEFVAL(Transform3D()), DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("body_set_shape", "body", "shape_idx", "shape"), &PhysicsServer3D::body_set_shape);
@@ -312,6 +306,9 @@ void PhysicsServer3D::_bind_methods() {
 
 	/* JOINT API */
 
+	ClassDB::bind_method(D_METHOD("joint_make_configured", "joint", "type", "body_a", "frame_a", "body_b", "frame_b", "configuration"), &PhysicsServer3D::joint_make_configured);
+	ClassDB::bind_method(D_METHOD("joint_set_configuration", "joint", "configuration"), &PhysicsServer3D::joint_set_configuration);
+	ClassDB::bind_method(D_METHOD("joint_get_configuration", "joint"), &PhysicsServer3D::joint_get_configuration);
 	ClassDB::bind_method(D_METHOD("joint_create"), &PhysicsServer3D::joint_create);
 	ClassDB::bind_method(D_METHOD("joint_clear", "joint"), &PhysicsServer3D::joint_clear);
 
@@ -320,6 +317,15 @@ void PhysicsServer3D::_bind_methods() {
 	BIND_ENUM_CONSTANT(PS3DE::JOINT_TYPE_SLIDER);
 	BIND_ENUM_CONSTANT(PS3DE::JOINT_TYPE_CONE_TWIST);
 	BIND_ENUM_CONSTANT(PS3DE::JOINT_TYPE_6DOF);
+	BIND_ENUM_CONSTANT(PS3DE::JOINT_TYPE_DISTANCE);
+	BIND_ENUM_CONSTANT(PS3DE::JOINT_TYPE_FILTER);
+	BIND_ENUM_CONSTANT(PS3DE::JOINT_TYPE_MOTOR);
+	BIND_ENUM_CONSTANT(PS3DE::JOINT_TYPE_PARALLEL);
+	BIND_ENUM_CONSTANT(PS3DE::JOINT_TYPE_PRISMATIC);
+	BIND_ENUM_CONSTANT(PS3DE::JOINT_TYPE_REVOLUTE);
+	BIND_ENUM_CONSTANT(PS3DE::JOINT_TYPE_SPHERICAL);
+	BIND_ENUM_CONSTANT(PS3DE::JOINT_TYPE_WELD);
+	BIND_ENUM_CONSTANT(PS3DE::JOINT_TYPE_WHEEL);
 	BIND_ENUM_CONSTANT(PS3DE::JOINT_TYPE_MAX);
 
 	ClassDB::bind_method(D_METHOD("joint_make_pin", "joint", "body_A", "local_A", "body_B", "local_B"), &PhysicsServer3D::joint_make_pin);
@@ -332,18 +338,17 @@ void PhysicsServer3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("pin_joint_set_local_b", "joint", "local_B"), &PhysicsServer3D::pin_joint_set_local_b);
 	ClassDB::bind_method(D_METHOD("pin_joint_get_local_b", "joint"), &PhysicsServer3D::pin_joint_get_local_b);
 
-	BIND_ENUM_CONSTANT(PS3DE::PIN_JOINT_BIAS);
+	BIND_ENUM_CONSTANT(PS3DE::PIN_JOINT_SPRING_HERTZ);
 	BIND_ENUM_CONSTANT(PS3DE::PIN_JOINT_DAMPING);
-	BIND_ENUM_CONSTANT(PS3DE::PIN_JOINT_IMPULSE_CLAMP);
 
-	BIND_ENUM_CONSTANT(PS3DE::HINGE_JOINT_BIAS);
+	BIND_ENUM_CONSTANT(PS3DE::HINGE_JOINT_SPRING_ENABLED);
+	BIND_ENUM_CONSTANT(PS3DE::HINGE_JOINT_SPRING_HERTZ);
+	BIND_ENUM_CONSTANT(PS3DE::HINGE_JOINT_SPRING_DAMPING_RATIO);
+	BIND_ENUM_CONSTANT(PS3DE::HINGE_JOINT_SPRING_TARGET_ANGLE);
 	BIND_ENUM_CONSTANT(PS3DE::HINGE_JOINT_LIMIT_UPPER);
 	BIND_ENUM_CONSTANT(PS3DE::HINGE_JOINT_LIMIT_LOWER);
-	BIND_ENUM_CONSTANT(PS3DE::HINGE_JOINT_LIMIT_BIAS);
-	BIND_ENUM_CONSTANT(PS3DE::HINGE_JOINT_LIMIT_SOFTNESS);
-	BIND_ENUM_CONSTANT(PS3DE::HINGE_JOINT_LIMIT_RELAXATION);
 	BIND_ENUM_CONSTANT(PS3DE::HINGE_JOINT_MOTOR_TARGET_VELOCITY);
-	BIND_ENUM_CONSTANT(PS3DE::HINGE_JOINT_MOTOR_MAX_IMPULSE);
+	BIND_ENUM_CONSTANT(PS3DE::HINGE_JOINT_MOTOR_MAX_TORQUE);
 
 	BIND_ENUM_CONSTANT(PS3DE::HINGE_JOINT_FLAG_USE_LIMIT);
 	BIND_ENUM_CONSTANT(PS3DE::HINGE_JOINT_FLAG_ENABLE_MOTOR);
@@ -363,27 +368,15 @@ void PhysicsServer3D::_bind_methods() {
 
 	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_LINEAR_LIMIT_UPPER);
 	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_LINEAR_LIMIT_LOWER);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_LINEAR_LIMIT_SOFTNESS);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_LINEAR_LIMIT_RESTITUTION);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_LINEAR_LIMIT_DAMPING);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_LINEAR_MOTION_SOFTNESS);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_LINEAR_MOTION_RESTITUTION);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_LINEAR_MOTION_DAMPING);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_LINEAR_ORTHOGONAL_SOFTNESS);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_LINEAR_ORTHOGONAL_RESTITUTION);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_LINEAR_ORTHOGONAL_DAMPING);
 
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_ANGULAR_LIMIT_UPPER);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_ANGULAR_LIMIT_LOWER);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_ANGULAR_LIMIT_SOFTNESS);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_ANGULAR_LIMIT_RESTITUTION);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_ANGULAR_LIMIT_DAMPING);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_ANGULAR_MOTION_SOFTNESS);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_ANGULAR_MOTION_RESTITUTION);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_ANGULAR_MOTION_DAMPING);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_ANGULAR_ORTHOGONAL_SOFTNESS);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_ANGULAR_ORTHOGONAL_RESTITUTION);
-	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_ANGULAR_ORTHOGONAL_DAMPING);
+	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_LIMIT_ENABLED);
+	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_MOTOR_ENABLED);
+	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_MOTOR_TARGET_VELOCITY);
+	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_MOTOR_MAX_FORCE);
+	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_SPRING_ENABLED);
+	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_SPRING_HERTZ);
+	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_SPRING_DAMPING_RATIO);
+	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_SPRING_TARGET_TRANSLATION);
 	BIND_ENUM_CONSTANT(PS3DE::SLIDER_JOINT_MAX);
 
 	ClassDB::bind_method(D_METHOD("joint_make_cone_twist", "joint", "body_A", "local_ref_A", "body_B", "local_ref_B"), &PhysicsServer3D::joint_make_cone_twist);
@@ -436,9 +429,6 @@ void PhysicsServer3D::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("joint_get_type", "joint"), &PhysicsServer3D::joint_get_type);
 
-	ClassDB::bind_method(D_METHOD("joint_set_solver_priority", "joint", "priority"), &PhysicsServer3D::joint_set_solver_priority);
-	ClassDB::bind_method(D_METHOD("joint_get_solver_priority", "joint"), &PhysicsServer3D::joint_get_solver_priority);
-
 	ClassDB::bind_method(D_METHOD("joint_disable_collisions_between_bodies", "joint", "disable"), &PhysicsServer3D::joint_disable_collisions_between_bodies);
 	ClassDB::bind_method(D_METHOD("joint_is_disabled_collisions_between_bodies", "joint"), &PhysicsServer3D::joint_is_disabled_collisions_between_bodies);
 
@@ -460,7 +450,6 @@ void PhysicsServer3D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_process_info", "process_info"), &PhysicsServer3D::get_process_info);
 
 	BIND_ENUM_CONSTANT(PS3DE::SHAPE_WORLD_BOUNDARY);
-	BIND_ENUM_CONSTANT(PS3DE::SHAPE_SEPARATION_RAY);
 	BIND_ENUM_CONSTANT(PS3DE::SHAPE_SPHERE);
 	BIND_ENUM_CONSTANT(PS3DE::SHAPE_BOX);
 	BIND_ENUM_CONSTANT(PS3DE::SHAPE_CAPSULE);
@@ -469,7 +458,18 @@ void PhysicsServer3D::_bind_methods() {
 	BIND_ENUM_CONSTANT(PS3DE::SHAPE_CONCAVE_POLYGON);
 	BIND_ENUM_CONSTANT(PS3DE::SHAPE_HEIGHTMAP);
 	BIND_ENUM_CONSTANT(PS3DE::SHAPE_SOFT_BODY);
-	BIND_ENUM_CONSTANT(PS3DE::SHAPE_CUSTOM);
+
+	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_CONTACT_RECYCLE_RADIUS);
+	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_CONTACT_HERTZ);
+	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_CONTACT_DAMPING_RATIO);
+	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_CONTACT_MAX_PUSH_SPEED);
+	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_RESTITUTION_THRESHOLD);
+	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_MAXIMUM_LINEAR_SPEED);
+	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_SLEEP_ENABLED);
+	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_CONTINUOUS_ENABLED);
+	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_WARM_STARTING_ENABLED);
+	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_RESTITUTION_ITERATIONS);
+	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_RESTITUTION_PROPAGATION_ENABLED);
 
 	BIND_ENUM_CONSTANT(PS3DE::AREA_PARAM_GRAVITY_OVERRIDE_MODE);
 	BIND_ENUM_CONSTANT(PS3DE::AREA_PARAM_GRAVITY);
@@ -507,6 +507,11 @@ void PhysicsServer3D::_bind_methods() {
 	BIND_ENUM_CONSTANT(PS3DE::BODY_PARAM_ANGULAR_DAMP_MODE);
 	BIND_ENUM_CONSTANT(PS3DE::BODY_PARAM_LINEAR_DAMP);
 	BIND_ENUM_CONSTANT(PS3DE::BODY_PARAM_ANGULAR_DAMP);
+	BIND_ENUM_CONSTANT(PS3DE::BODY_PARAM_SLEEP_THRESHOLD);
+	BIND_ENUM_CONSTANT(PS3DE::BODY_PARAM_HIT_EVENTS_ENABLED);
+	BIND_ENUM_CONSTANT(PS3DE::BODY_PARAM_CONTACT_REPORT_SPECULATIVE);
+	BIND_ENUM_CONSTANT(PS3DE::BODY_PARAM_CCD_SAFETY_FACTOR);
+	BIND_ENUM_CONSTANT(PS3DE::BODY_PARAM_CONTACT_RECYCLING_ENABLED);
 	BIND_ENUM_CONSTANT(PS3DE::BODY_PARAM_MAX);
 
 	BIND_ENUM_CONSTANT(PS3DE::BODY_DAMP_MODE_COMBINE);
@@ -524,15 +529,6 @@ void PhysicsServer3D::_bind_methods() {
 	BIND_ENUM_CONSTANT(PS3DE::INFO_ACTIVE_OBJECTS);
 	BIND_ENUM_CONSTANT(PS3DE::INFO_COLLISION_PAIRS);
 	BIND_ENUM_CONSTANT(PS3DE::INFO_ISLAND_COUNT);
-
-	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_CONTACT_RECYCLE_RADIUS);
-	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_CONTACT_MAX_SEPARATION);
-	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_CONTACT_MAX_ALLOWED_PENETRATION);
-	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_CONTACT_DEFAULT_BIAS);
-	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_BODY_LINEAR_VELOCITY_SLEEP_THRESHOLD);
-	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_BODY_ANGULAR_VELOCITY_SLEEP_THRESHOLD);
-	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_BODY_TIME_TO_SLEEP);
-	BIND_ENUM_CONSTANT(PS3DE::SPACE_PARAM_SOLVER_ITERATIONS);
 
 	BIND_ENUM_CONSTANT(PS3DE::BODY_AXIS_LINEAR_X);
 	BIND_ENUM_CONSTANT(PS3DE::BODY_AXIS_LINEAR_Y);
@@ -557,14 +553,6 @@ PhysicsServer3D::PhysicsServer3D() {
 	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/3d/default_angular_damp", PROPERTY_HINT_RANGE, "0,100,0.001,or_greater"), 0.1);
 
 	// PhysicsServer3D
-	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/3d/sleep_threshold_linear", PROPERTY_HINT_RANGE, "0,1,0.001,or_greater,suffix:m/s"), 0.1);
-	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/3d/sleep_threshold_angular", PROPERTY_HINT_RANGE, U"0,90,0.1,radians_as_degrees,suffix:°/s"), Math::deg_to_rad(8.0));
-	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/3d/time_before_sleep", PROPERTY_HINT_RANGE, "0,5,0.01,or_greater,suffix:s"), 0.5);
-	GLOBAL_DEF(PropertyInfo(Variant::INT, "physics/3d/solver/solver_iterations", PROPERTY_HINT_RANGE, "1,32,1,or_greater"), 16);
-	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/3d/solver/contact_recycle_radius", PROPERTY_HINT_RANGE, "0,0.1,0.001,or_greater,suffix:m"), 0.01);
-	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/3d/solver/contact_max_separation", PROPERTY_HINT_RANGE, "0,0.1,0.001,or_greater,suffix:m"), 0.05);
-	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/3d/solver/contact_max_allowed_penetration", PROPERTY_HINT_RANGE, "0.001,0.1,0.001,or_greater,suffix:m"), 0.01);
-	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/3d/solver/default_contact_bias", PROPERTY_HINT_RANGE, "0,1,0.01"), 0.8);
 }
 
 PhysicsServer3D::~PhysicsServer3D() {

@@ -136,7 +136,6 @@ struct MotionParameters {
 	Vector3 motion;
 	real_t margin = 0.001;
 	int max_collisions = 1;
-	bool collide_separation_ray = false;
 	HashSet<RID> exclude_bodies;
 	HashSet<ObjectID> exclude_objects;
 	bool recovery_as_collision = false;

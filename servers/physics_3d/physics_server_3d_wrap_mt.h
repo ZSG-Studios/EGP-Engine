@@ -93,14 +93,9 @@ public:
 	FUNCRID(custom_shape)
 
 	FUNC2(shape_set_data, RID, const Variant &);
-	FUNC2(shape_set_custom_solver_bias, RID, real_t);
-
-	FUNC2(shape_set_margin, RID, real_t)
-	FUNC1RC(real_t, shape_get_margin, RID)
 
 	FUNC1RC(PS3DE::ShapeType, shape_get_type, RID);
 	FUNC1RC(Variant, shape_get_data, RID);
-	FUNC1RC(real_t, shape_get_custom_solver_bias, RID);
 #if 0
 	//these work well, but should be used from the main thread only
 	bool shape_collide(RID p_shape_A, const Transform &p_xform_A, const Vector3 &p_motion_A, RID p_shape_B, const Transform &p_xform_B, const Vector3 &p_motion_B, Vector3 *r_results, int p_result_max, int &r_result_count) {
@@ -110,6 +105,11 @@ public:
 #endif
 	/* SPACE API */
 
+	FUNC6(space_apply_explosion, RID, const Vector3 &, real_t, real_t, real_t, uint32_t)
+	FUNC1RC(Array, space_get_contact_hit_events, RID)
+	FUNC1RC(Array, space_get_joint_events, RID)
+	FUNC1RC(Vector3, joint_get_constraint_force, RID)
+	FUNC1RC(Vector3, joint_get_constraint_torque, RID)
 	FUNCRID(space);
 	FUNC2(space_set_active, RID, bool);
 	FUNC1RC(bool, space_is_active, RID);
@@ -209,9 +209,6 @@ public:
 
 	FUNC2(body_set_collision_mask, RID, uint32_t);
 	FUNC1RC(uint32_t, body_get_collision_mask, RID);
-
-	FUNC2(body_set_collision_priority, RID, real_t);
-	FUNC1RC(real_t, body_get_collision_priority, RID);
 
 	FUNC2(body_set_user_flags, RID, uint32_t);
 	FUNC1RC(uint32_t, body_get_user_flags, RID);
@@ -341,6 +338,9 @@ public:
 
 	/* JOINT API */
 
+	FUNC7(joint_make_configured, RID, PS3DE::JointType, RID, const Transform3D &, RID, const Transform3D &, const Dictionary &)
+	FUNC2(joint_set_configuration, RID, const Dictionary &)
+	FUNC1RC(Dictionary, joint_get_configuration, RID)
 	FUNCRID(joint)
 
 	FUNC1(joint_clear, RID)
@@ -387,9 +387,6 @@ public:
 	FUNC1RC(Quaternion, generic_6dof_joint_get_angular_target_rotation, RID)
 
 	FUNC1RC(PS3DE::JointType, joint_get_type, RID);
-
-	FUNC2(joint_set_solver_priority, RID, int);
-	FUNC1RC(int, joint_get_solver_priority, RID);
 
 	FUNC2(joint_disable_collisions_between_bodies, RID, bool);
 	FUNC1RC(bool, joint_is_disabled_collisions_between_bodies, RID);

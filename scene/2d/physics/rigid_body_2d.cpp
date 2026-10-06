@@ -572,6 +572,7 @@ real_t RigidBody2D::get_constant_torque() const {
 }
 
 void RigidBody2D::set_continuous_collision_detection_mode(CCDMode p_mode) {
+	ERR_FAIL_COND(p_mode != CCD_MODE_DISABLED && p_mode != CCD_MODE_CAST_SHAPE);
 	ccd_mode = p_mode;
 	PhysicsServer2D::get_singleton()->body_set_continuous_collision_detection_mode(get_rid(), PS2DE::CCDMode(p_mode));
 }
@@ -765,7 +766,7 @@ void RigidBody2D::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "freeze_mode", PROPERTY_HINT_ENUM, "Static,Kinematic"), "set_freeze_mode", "get_freeze_mode");
 	ADD_GROUP("Solver", "");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "custom_integrator"), "set_use_custom_integrator", "is_using_custom_integrator");
-	ADD_PROPERTY(PropertyInfo(Variant::INT, "continuous_cd", PROPERTY_HINT_ENUM, "Disabled,Cast Ray,Cast Shape"), "set_continuous_collision_detection_mode", "get_continuous_collision_detection_mode");
+	ADD_PROPERTY(PropertyInfo(Variant::INT, "continuous_cd", PROPERTY_HINT_ENUM, "Disabled,Cast Shape:2"), "set_continuous_collision_detection_mode", "get_continuous_collision_detection_mode");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "contact_monitor"), "set_contact_monitor", "is_contact_monitor_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "max_contacts_reported", PROPERTY_HINT_RANGE, "0,64,1,or_greater"), "set_max_contacts_reported", "get_max_contacts_reported");
 	ADD_GROUP("Linear", "linear_");
@@ -796,7 +797,6 @@ void RigidBody2D::_bind_methods() {
 	BIND_ENUM_CONSTANT(DAMP_MODE_REPLACE);
 
 	BIND_ENUM_CONSTANT(CCD_MODE_DISABLED);
-	BIND_ENUM_CONSTANT(CCD_MODE_CAST_RAY);
 	BIND_ENUM_CONSTANT(CCD_MODE_CAST_SHAPE);
 }
 

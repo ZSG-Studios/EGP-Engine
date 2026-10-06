@@ -33,7 +33,6 @@
 #include "core/config/project_settings.h"
 #include "core/object/class_db.h"
 #include "servers/physics_2d/physics_server_2d.h"
-#include "servers/physics_2d/physics_server_2d_dummy.h"
 
 static PhysicsServer2D *physics_server_2d = nullptr;
 
@@ -54,18 +53,18 @@ void PhysicsServer2DManager::finalize_server_manager() {
 void PhysicsServer2DManager::initialize_server() {
 #ifndef PHYSICS_2D_DISABLED
 	// 2D Physics server
-	physics_server_2d = PhysicsServer2DManager::get_singleton()->new_server(
-			GLOBAL_GET(PhysicsServer2DManager::get_singleton()->setting_property_name));
+	const String selected_backend = GLOBAL_GET(setting_property_name);
+	if (selected_backend != "DEFAULT" && selected_backend != "Box2D Physics") {
+		WARN_PRINT(vformat("Physics backend '%s' was removed; migrating to Box2D Physics.", selected_backend));
+		ProjectSettings::get_singleton()->set(setting_property_name, "Box2D Physics");
+	}
+	physics_server_2d = PhysicsServer2DManager::get_singleton()->new_server(GLOBAL_GET(setting_property_name));
 	if (!physics_server_2d) {
 		// Physics server not found, Use the default physics
 		physics_server_2d = PhysicsServer2DManager::get_singleton()->new_default_server();
 	}
 
-	// Fall back to dummy if no default server has been registered.
-	if (!physics_server_2d) {
-		WARN_PRINT(vformat("Falling back to dummy PhysicsServer2D; 2D physics functionality will be disabled. If this is intended, set the %s project setting to Dummy.", PhysicsServer2DManager::setting_property_name));
-		physics_server_2d = memnew(PhysicsServer2DDummy);
-	}
+	CRASH_COND_MSG(!physics_server_2d, "EGP requires its Box2D physics backend.");
 
 	// Should be impossible, but make sure it's not null.
 	ERR_FAIL_NULL_MSG(physics_server_2d, "Failed to initialize PhysicsServer2D.");

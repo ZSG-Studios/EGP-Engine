@@ -1,0 +1,17 @@
+{
+  "required": {
+    "EGPNetSession": {
+      "methods": ["configure", "listen", "connect_to_server", "connect_token", "issue_token", "poll", "stop", "close", "get_state", "get_fingerprint", "get_statistics", "send_application", "command"],
+      "signals": ["state_changed", "peer_connected", "peer_disconnected", "application_received", "packet_received", "simulation_tick", "diagnostic"]
+    },
+    "EGPBox3DWorld": {
+      "methods": ["configure", "queue_create_box", "queue_create_sphere", "queue_create_capsule", "queue_destroy_body", "queue_impulse", "queue_linear_velocity", "queue_body_state", "apply_queued_commands", "clear_pending_commands", "step_tick", "get_tick", "get_body_count", "get_body_state", "capture_snapshot", "restore_snapshot", "get_state_hash", "get_simulation_fingerprint"]
+    }
+  },
+  "removed": {
+    "Script": {"methods": ["get_rpc_config"]},
+    "ScriptExtension": {"methods": ["_get_rpc_config"]},
+    "Node": {"methods": ["rpc", "rpc_id", "rpc_config", "get_multiplayer", "set_multiplayer_authority", "get_multiplayer_authority", "is_multiplayer_authority"]},
+    "SceneTree": {"methods": ["get_multiplayer", "set_multiplayer"]}
+  }
+}

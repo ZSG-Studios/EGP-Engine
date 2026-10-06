@@ -217,12 +217,9 @@ public:
 
 	EXBIND0RC(bool, is_placeholder_fallback_enabled)
 
-	GDVIRTUAL0RC_REQUIRED(Variant, _get_rpc_config)
-
+	// Reserved internal Script ABI metadata; EGP has no script RPC dispatcher.
 	virtual const Variant get_rpc_config() const override {
-		Variant ret;
-		GDVIRTUAL_CALL(_get_rpc_config, ret);
-		return ret;
+		return Variant();
 	}
 
 #ifndef DISABLE_DEPRECATED

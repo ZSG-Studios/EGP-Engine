@@ -74,16 +74,20 @@ public:
 	virtual RID concave_polygon_shape_create() = 0;
 
 	virtual void shape_set_data(RID p_shape, const Variant &p_data) = 0;
-	virtual void shape_set_custom_solver_bias(RID p_shape, real_t p_bias) = 0;
 
 	virtual PS2DE::ShapeType shape_get_type(RID p_shape) const = 0;
 	virtual Variant shape_get_data(RID p_shape) const = 0;
-	virtual real_t shape_get_custom_solver_bias(RID p_shape) const = 0;
 
 	//these work well, but should be used from the main thread only
 	virtual bool shape_collide(RID p_shape_A, const Transform2D &p_xform_A, const Vector2 &p_motion_A, RID p_shape_B, const Transform2D &p_xform_B, const Vector2 &p_motion_B, Vector2 *r_results, int p_result_max, int &r_result_count) = 0;
 
 	/* SPACE API */
+
+	virtual void space_apply_explosion(RID p_space, const Vector2 &p_position, real_t p_radius, real_t p_falloff, real_t p_impulse_density, uint32_t p_collision_mask) = 0;
+	virtual Array space_get_contact_hit_events(RID p_space) const = 0;
+	virtual Array space_get_joint_events(RID p_space) const = 0;
+	virtual Vector2 joint_get_constraint_force(RID p_joint) const = 0;
+	virtual real_t joint_get_constraint_torque(RID p_joint) const = 0;
 
 	virtual RID space_create() = 0;
 	virtual void space_set_active(RID p_space, bool p_active) = 0;
@@ -249,6 +253,10 @@ public:
 	virtual bool body_test_motion(RID p_body, const PS2DT::MotionParameters &p_parameters, PS2DT::MotionResult *r_result = nullptr) = 0;
 
 	/* JOINT API */
+
+	virtual void joint_make_configured(RID p_joint, PS2DE::JointType p_type, RID p_body_a, const Transform2D &p_frame_a, RID p_body_b, const Transform2D &p_frame_b, const Dictionary &p_configuration) = 0;
+	virtual void joint_set_configuration(RID p_joint, const Dictionary &p_configuration) = 0;
+	virtual Dictionary joint_get_configuration(RID p_joint) const = 0;
 
 	virtual RID joint_create() = 0;
 

@@ -5207,7 +5207,9 @@ void BindingsGenerator::_log(const char *p_format, ...) {
 void BindingsGenerator::_initialize() {
 	initialized = false;
 
-	EditorHelp::generate_doc(false);
+	// This command runs before EditorNode construction. Use shipped metadata
+	// synchronously; editor cache workers and default-property probes are not needed.
+	EditorHelp::load_shipped_doc();
 
 	enum_types.clear();
 

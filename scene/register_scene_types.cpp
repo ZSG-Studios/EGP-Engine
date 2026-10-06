@@ -103,7 +103,6 @@
 #include "scene/main/http_request.h"
 #include "scene/main/instance_placeholder.h"
 #include "scene/main/missing_node.h"
-#include "scene/main/multiplayer_api.h"
 #include "scene/main/resource_preloader.h"
 #include "scene/main/scene_tree.h"
 #include "scene/main/shader_globals_override.h"
@@ -375,7 +374,6 @@
 #include "scene/resources/3d/mesh_library.h"
 #include "scene/resources/3d/navigation_mesh_source_geometry_data_3d.h"
 #include "scene/resources/3d/primitive_meshes.h"
-#include "scene/resources/3d/separation_ray_shape_3d.h"
 #include "scene/resources/3d/sphere_shape_3d.h"
 #include "scene/resources/3d/world_boundary_shape_3d.h"
 #endif // PHYSICS_3D_DISABLED
@@ -464,11 +462,6 @@ void register_scene_types() {
 	GDREGISTER_CLASS(ViewportTexture);
 
 	GDREGISTER_VIRTUAL_CLASS(CompositorEffect);
-
-	GDREGISTER_ABSTRACT_CLASS(MultiplayerPeer);
-	GDREGISTER_CLASS(MultiplayerPeerExtension);
-	GDREGISTER_ABSTRACT_CLASS(MultiplayerAPI);
-	GDREGISTER_CLASS(MultiplayerAPIExtension);
 
 	GDREGISTER_CLASS(HTTPRequest);
 	GDREGISTER_CLASS(Timer);
@@ -933,7 +926,6 @@ void register_scene_types() {
 
 #ifndef PHYSICS_3D_DISABLED
 	GDREGISTER_ABSTRACT_CLASS(Shape3D);
-	GDREGISTER_CLASS(SeparationRayShape3D);
 	GDREGISTER_CLASS(SphereShape3D);
 	GDREGISTER_CLASS(BoxShape3D);
 	GDREGISTER_CLASS(CapsuleShape3D);
@@ -1253,7 +1245,6 @@ void register_scene_types() {
 	ClassDB::add_compatibility_class("PinJoint", "PinJoint3D");
 	ClassDB::add_compatibility_class("PlaneShape", "WorldBoundaryShape3D");
 	ClassDB::add_compatibility_class("RayCast", "RayCast3D");
-	ClassDB::add_compatibility_class("RayShape", "SeparationRayShape3D");
 	ClassDB::add_compatibility_class("RigidBody", "RigidBody3D");
 	ClassDB::add_compatibility_class("RigidDynamicBody2D", "RigidBody2D");
 	ClassDB::add_compatibility_class("RigidDynamicBody3D", "RigidBody3D");

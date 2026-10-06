@@ -37,7 +37,6 @@ class PhysicsBody2D;
 class PinJoint2D : public Joint2D {
 	GDCLASS(PinJoint2D, Joint2D);
 
-	real_t softness = 0.0;
 	real_t angular_limit_lower = 0.0;
 	real_t angular_limit_upper = 0.0;
 	real_t motor_target_velocity = 0.0;
@@ -50,8 +49,6 @@ protected:
 	static void _bind_methods();
 
 public:
-	void set_softness(real_t p_softness);
-	real_t get_softness() const;
 	void set_angular_limit_lower(real_t p_angular_limit_lower);
 	real_t get_angular_limit_lower() const;
 	void set_angular_limit_upper(real_t p_angular_limit_upper);

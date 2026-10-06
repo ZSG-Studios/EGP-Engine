@@ -33,7 +33,6 @@
 #include "core/config/project_settings.h"
 #include "core/object/class_db.h"
 #include "servers/physics_3d/physics_server_3d.h"
-#include "servers/physics_3d/physics_server_3d_dummy.h"
 
 static PhysicsServer3D *physics_server_3d = nullptr;
 
@@ -54,18 +53,18 @@ void PhysicsServer3DManager::finalize_server_manager() {
 void PhysicsServer3DManager::initialize_server() {
 #ifndef PHYSICS_3D_DISABLED
 	/// 3D Physics Server
-	physics_server_3d = PhysicsServer3DManager::get_singleton()->new_server(
-			GLOBAL_GET(PhysicsServer3DManager::setting_property_name));
+	const String selected_backend = GLOBAL_GET(setting_property_name);
+	if (selected_backend != "DEFAULT" && selected_backend != BOX3D_PHYSICS_NAME) {
+		WARN_PRINT(vformat("Physics backend '%s' was removed; migrating to Box3D Physics.", selected_backend));
+		ProjectSettings::get_singleton()->set(setting_property_name, BOX3D_PHYSICS_NAME);
+	}
+	physics_server_3d = PhysicsServer3DManager::get_singleton()->new_server(GLOBAL_GET(setting_property_name));
 	if (!physics_server_3d) {
 		// Physics server not found, Use the default physics
 		physics_server_3d = PhysicsServer3DManager::get_singleton()->new_default_server();
 	}
 
-	// Fall back to dummy if no default server has been registered.
-	if (!physics_server_3d) {
-		WARN_PRINT(vformat("Falling back to dummy PhysicsServer3D; 3D physics functionality will be disabled. If this is intended, set the %s project setting to Dummy.", PhysicsServer3DManager::setting_property_name));
-		physics_server_3d = memnew(PhysicsServer3DDummy);
-	}
+	CRASH_COND_MSG(!physics_server_3d, "EGP requires its Box3D physics backend.");
 
 	// Should be impossible, but make sure it's not null.
 	ERR_FAIL_NULL_MSG(physics_server_3d, "Failed to initialize PhysicsServer3D.");

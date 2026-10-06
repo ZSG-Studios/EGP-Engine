@@ -24,8 +24,5 @@
 		<member name="motor_target_velocity" type="float" setter="set_motor_target_velocity" getter="get_motor_target_velocity" default="0.0">
 			Target speed for the motor. In radians per second.
 		</member>
-		<member name="softness" type="float" setter="set_softness" getter="get_softness" default="0.0">
-			The higher this value, the more the bond to the pinned partner can flex.
-		</member>
 	</members>
 </class>

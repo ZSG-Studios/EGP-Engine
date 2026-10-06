@@ -3164,6 +3164,10 @@ static void _load_script_doc_cache(bool p_changes) {
 }
 
 void EditorHelp::load_script_doc_cache() {
+	// Queued filesystem notifications may arrive while the editor is tearing down.
+	if (!EditorNode::get_singleton()) {
+		return;
+	}
 	if (!ProjectSettings::get_singleton()->is_project_loaded()) {
 		print_verbose("Skipping loading script doc cache since no project is open.");
 		return;
@@ -3322,6 +3326,17 @@ void EditorHelp::save_script_doc_cache() {
 	ERR_FAIL_COND_MSG(err != OK, vformat("Cannot save script documentation cache in %s.", get_script_doc_cache_full_path()));
 }
 
+void EditorHelp::load_shipped_doc() {
+	_wait_for_thread();
+	if (!doc) {
+		doc = memnew(DocTools);
+	}
+	doc->load_compressed(_doc_data_compressed, _doc_data_compressed_size, _doc_data_uncompressed_size);
+	if (ext_doc) {
+		doc->merge_from(*ext_doc);
+	}
+}
+
 void EditorHelp::generate_doc(bool p_use_cache, bool p_use_script_cache) {
 	// Deferred cache work can arrive after the editor has been destroyed.
 	if (!EditorNode::get_singleton()) {
@@ -3339,10 +3354,7 @@ void EditorHelp::generate_doc(bool p_use_cache, bool p_use_script_cache) {
 	if (EditorNode::is_cmdline_mode()) {
 		// CLI builds and exports need the shipped help metadata, not runtime
 		// default-property probing or asynchronous documentation/cache workers.
-		doc->load_compressed(_doc_data_compressed, _doc_data_compressed_size, _doc_data_uncompressed_size);
-		if (ext_doc) {
-			doc->merge_from(*ext_doc);
-		}
+		load_shipped_doc();
 		OS::get_singleton()->benchmark_end_measure("EditorHelp", vformat("Generate Documentation (Run %d)", doc_generation_count));
 		return;
 	}

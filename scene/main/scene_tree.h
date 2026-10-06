@@ -46,7 +46,6 @@ class AudioStreamPlayback;
 class AudioStreamPlayer;
 class InputEvent;
 class Material;
-class MultiplayerAPI;
 class Node;
 class PackedScene;
 class Tween;
@@ -223,9 +222,6 @@ private:
 
 	///network///
 
-	Ref<MultiplayerAPI> multiplayer;
-	HashMap<NodePath, Ref<MultiplayerAPI>> custom_multiplayers;
-	bool multiplayer_poll = true;
 
 	static SceneTree *singleton;
 	friend class Node;
@@ -453,10 +449,6 @@ public:
 
 	//network API
 
-	RequiredResult<MultiplayerAPI> get_multiplayer(const NodePath &p_for_path = NodePath()) const;
-	void set_multiplayer(Ref<MultiplayerAPI> p_multiplayer, const NodePath &p_root_path = NodePath());
-	void set_multiplayer_poll_enabled(bool p_enabled);
-	bool is_multiplayer_poll_enabled() const;
 
 	static void add_idle_callback(IdleCallback p_callback);
 

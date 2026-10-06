@@ -42,13 +42,15 @@ class Joint2D : public Node2D {
 
 	NodePath a;
 	NodePath b;
-	real_t bias = 0.0;
 
 	bool exclude_from_collision = true;
 	bool configured = false;
 	String warning;
 
 protected:
+	real_t constraint_hertz = 60;
+	real_t constraint_damping_ratio = 2;
+
 	void _disconnect_signals();
 	void _body_exit_tree();
 	void _update_joint(bool p_only_free = false);
@@ -61,6 +63,11 @@ protected:
 	_FORCE_INLINE_ bool is_configured() const { return configured; }
 
 public:
+	void set_constraint_hertz(real_t p_value);
+	real_t get_constraint_hertz() const { return constraint_hertz; }
+	void set_constraint_damping_ratio(real_t p_value);
+	real_t get_constraint_damping_ratio() const { return constraint_damping_ratio; }
+
 	virtual PackedStringArray get_configuration_warnings() const override;
 
 	void set_node_a(const NodePath &p_node_a);
@@ -68,9 +75,6 @@ public:
 
 	void set_node_b(const NodePath &p_node_b);
 	NodePath get_node_b() const;
-
-	void set_bias(real_t p_bias);
-	real_t get_bias() const;
 
 	void set_exclude_nodes_from_collision(bool p_enable);
 	bool get_exclude_nodes_from_collision() const;

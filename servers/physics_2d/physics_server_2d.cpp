@@ -84,6 +84,11 @@ void PhysicsServer2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("shape_get_type", "shape"), &PhysicsServer2D::shape_get_type);
 	ClassDB::bind_method(D_METHOD("shape_get_data", "shape"), &PhysicsServer2D::shape_get_data);
 
+	ClassDB::bind_method(D_METHOD("space_apply_explosion", "space", "position", "radius", "falloff", "impulse_density", "collision_mask"), &PhysicsServer2D::space_apply_explosion);
+	ClassDB::bind_method(D_METHOD("space_get_contact_hit_events", "space"), &PhysicsServer2D::space_get_contact_hit_events);
+	ClassDB::bind_method(D_METHOD("space_get_joint_events", "space"), &PhysicsServer2D::space_get_joint_events);
+	ClassDB::bind_method(D_METHOD("joint_get_constraint_force", "joint"), &PhysicsServer2D::joint_get_constraint_force);
+	ClassDB::bind_method(D_METHOD("joint_get_constraint_torque", "joint"), &PhysicsServer2D::joint_get_constraint_torque);
 	ClassDB::bind_method(D_METHOD("space_create"), &PhysicsServer2D::space_create);
 	ClassDB::bind_method(D_METHOD("space_set_active", "space", "active"), &PhysicsServer2D::space_set_active);
 	ClassDB::bind_method(D_METHOD("space_is_active", "space"), &PhysicsServer2D::space_is_active);
@@ -216,6 +221,9 @@ void PhysicsServer2D::_bind_methods() {
 
 	/* JOINT API */
 
+	ClassDB::bind_method(D_METHOD("joint_make_configured", "joint", "type", "body_a", "frame_a", "body_b", "frame_b", "configuration"), &PhysicsServer2D::joint_make_configured);
+	ClassDB::bind_method(D_METHOD("joint_set_configuration", "joint", "configuration"), &PhysicsServer2D::joint_set_configuration);
+	ClassDB::bind_method(D_METHOD("joint_get_configuration", "joint"), &PhysicsServer2D::joint_get_configuration);
 	ClassDB::bind_method(D_METHOD("joint_create"), &PhysicsServer2D::joint_create);
 
 	ClassDB::bind_method(D_METHOD("joint_clear", "joint"), &PhysicsServer2D::joint_clear);
@@ -247,16 +255,6 @@ void PhysicsServer2D::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("get_process_info", "process_info"), &PhysicsServer2D::get_process_info);
 
-	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_CONTACT_RECYCLE_RADIUS);
-	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_CONTACT_MAX_SEPARATION);
-	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_CONTACT_MAX_ALLOWED_PENETRATION);
-	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_CONTACT_DEFAULT_BIAS);
-	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_BODY_LINEAR_VELOCITY_SLEEP_THRESHOLD);
-	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_BODY_ANGULAR_VELOCITY_SLEEP_THRESHOLD);
-	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_BODY_TIME_TO_SLEEP);
-	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_CONSTRAINT_DEFAULT_BIAS);
-	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_SOLVER_ITERATIONS);
-
 	BIND_ENUM_CONSTANT(PS2DE::SHAPE_WORLD_BOUNDARY);
 	BIND_ENUM_CONSTANT(PS2DE::SHAPE_SEPARATION_RAY);
 	BIND_ENUM_CONSTANT(PS2DE::SHAPE_SEGMENT);
@@ -265,7 +263,15 @@ void PhysicsServer2D::_bind_methods() {
 	BIND_ENUM_CONSTANT(PS2DE::SHAPE_CAPSULE);
 	BIND_ENUM_CONSTANT(PS2DE::SHAPE_CONVEX_POLYGON);
 	BIND_ENUM_CONSTANT(PS2DE::SHAPE_CONCAVE_POLYGON);
-	BIND_ENUM_CONSTANT(PS2DE::SHAPE_CUSTOM);
+
+	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_CONTACT_HERTZ);
+	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_CONTACT_DAMPING_RATIO);
+	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_CONTACT_MAX_PUSH_SPEED);
+	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_RESTITUTION_THRESHOLD);
+	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_MAXIMUM_LINEAR_SPEED);
+	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_SLEEP_ENABLED);
+	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_CONTINUOUS_ENABLED);
+	BIND_ENUM_CONSTANT(PS2DE::SPACE_PARAM_WARM_STARTING_ENABLED);
 
 	BIND_ENUM_CONSTANT(PS2DE::AREA_PARAM_GRAVITY_OVERRIDE_MODE);
 	BIND_ENUM_CONSTANT(PS2DE::AREA_PARAM_GRAVITY);
@@ -299,6 +305,9 @@ void PhysicsServer2D::_bind_methods() {
 	BIND_ENUM_CONSTANT(PS2DE::BODY_PARAM_ANGULAR_DAMP_MODE);
 	BIND_ENUM_CONSTANT(PS2DE::BODY_PARAM_LINEAR_DAMP);
 	BIND_ENUM_CONSTANT(PS2DE::BODY_PARAM_ANGULAR_DAMP);
+	BIND_ENUM_CONSTANT(PS2DE::BODY_PARAM_SLEEP_THRESHOLD);
+	BIND_ENUM_CONSTANT(PS2DE::BODY_PARAM_HIT_EVENTS_ENABLED);
+	BIND_ENUM_CONSTANT(PS2DE::BODY_PARAM_CONTACT_REPORT_SPECULATIVE);
 	BIND_ENUM_CONSTANT(PS2DE::BODY_PARAM_MAX);
 
 	BIND_ENUM_CONSTANT(PS2DE::BODY_DAMP_MODE_COMBINE);
@@ -310,16 +319,20 @@ void PhysicsServer2D::_bind_methods() {
 	BIND_ENUM_CONSTANT(PS2DE::BODY_STATE_SLEEPING);
 	BIND_ENUM_CONSTANT(PS2DE::BODY_STATE_CAN_SLEEP);
 
+	BIND_ENUM_CONSTANT(PS2DE::JOINT_PARAM_HERTZ);
+	BIND_ENUM_CONSTANT(PS2DE::JOINT_PARAM_DAMPING_RATIO);
 	BIND_ENUM_CONSTANT(PS2DE::JOINT_TYPE_PIN);
 	BIND_ENUM_CONSTANT(PS2DE::JOINT_TYPE_GROOVE);
 	BIND_ENUM_CONSTANT(PS2DE::JOINT_TYPE_DAMPED_SPRING);
+	BIND_ENUM_CONSTANT(PS2DE::JOINT_TYPE_DISTANCE);
+	BIND_ENUM_CONSTANT(PS2DE::JOINT_TYPE_FILTER);
+	BIND_ENUM_CONSTANT(PS2DE::JOINT_TYPE_MOTOR);
+	BIND_ENUM_CONSTANT(PS2DE::JOINT_TYPE_PRISMATIC);
+	BIND_ENUM_CONSTANT(PS2DE::JOINT_TYPE_REVOLUTE);
+	BIND_ENUM_CONSTANT(PS2DE::JOINT_TYPE_WELD);
+	BIND_ENUM_CONSTANT(PS2DE::JOINT_TYPE_WHEEL);
 	BIND_ENUM_CONSTANT(PS2DE::JOINT_TYPE_MAX);
 
-	BIND_ENUM_CONSTANT(PS2DE::JOINT_PARAM_BIAS);
-	BIND_ENUM_CONSTANT(PS2DE::JOINT_PARAM_MAX_BIAS);
-	BIND_ENUM_CONSTANT(PS2DE::JOINT_PARAM_MAX_FORCE);
-
-	BIND_ENUM_CONSTANT(PS2DE::PIN_JOINT_SOFTNESS);
 	BIND_ENUM_CONSTANT(PS2DE::PIN_JOINT_LIMIT_UPPER);
 	BIND_ENUM_CONSTANT(PS2DE::PIN_JOINT_LIMIT_LOWER);
 	BIND_ENUM_CONSTANT(PS2DE::PIN_JOINT_MOTOR_TARGET_VELOCITY);
@@ -332,7 +345,6 @@ void PhysicsServer2D::_bind_methods() {
 	BIND_ENUM_CONSTANT(PS2DE::DAMPED_SPRING_DAMPING);
 
 	BIND_ENUM_CONSTANT(PS2DE::CCD_MODE_DISABLED);
-	BIND_ENUM_CONSTANT(PS2DE::CCD_MODE_CAST_RAY);
 	BIND_ENUM_CONSTANT(PS2DE::CCD_MODE_CAST_SHAPE);
 
 	BIND_ENUM_CONSTANT(PS2DE::AREA_BODY_ADDED);
@@ -357,15 +369,6 @@ PhysicsServer2D::PhysicsServer2D() {
 	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/2d/default_angular_damp", PROPERTY_HINT_RANGE, "-1,100,0.001,or_greater"), 1.0);
 
 	// PhysicsServer2D
-	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/2d/sleep_threshold_linear", PROPERTY_HINT_RANGE, "0,10,0.001,or_greater,suffix:m/s"), 2.0);
-	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/2d/sleep_threshold_angular", PROPERTY_HINT_RANGE, U"0,90,0.1,radians_as_degrees,suffix:°/s"), Math::deg_to_rad(8.0));
-	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/2d/time_before_sleep", PROPERTY_HINT_RANGE, "0,5,0.01,or_greater,suffix:s"), 0.5);
-	GLOBAL_DEF(PropertyInfo(Variant::INT, "physics/2d/solver/solver_iterations", PROPERTY_HINT_RANGE, "1,32,1,or_greater"), 16);
-	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/2d/solver/contact_recycle_radius", PROPERTY_HINT_RANGE, "0,10,0.01,or_greater,suffix:m"), 1.0);
-	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/2d/solver/contact_max_separation", PROPERTY_HINT_RANGE, "0,10,0.01,or_greater,suffix:m"), 1.5);
-	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/2d/solver/contact_max_allowed_penetration", PROPERTY_HINT_RANGE, "0.01,10,0.01,or_greater,suffix:m"), 0.3);
-	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/2d/solver/default_contact_bias", PROPERTY_HINT_RANGE, "0,1,0.01"), 0.8);
-	GLOBAL_DEF(PropertyInfo(Variant::FLOAT, "physics/2d/solver/default_constraint_bias", PROPERTY_HINT_RANGE, "0,1,0.01"), 0.2);
 }
 
 PhysicsServer2D::~PhysicsServer2D() {

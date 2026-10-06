@@ -4,6 +4,7 @@
 		A 2D world boundary (half-plane) shape used for physics collision.
 	</brief_description>
 	<description>
+		[b]Note:[/b] EGP's Box2D backend does not currently implement this shape. Use finite static collision geometry.
 		A 2D world boundary shape, intended for use in physics. [WorldBoundaryShape2D] works like an infinite straight line that forces all physics bodies to stay above it. The line's normal determines which direction is considered as "above" and in the editor, the smaller line over it represents this direction. It can for example be used for endless flat floors.
 	</description>
 	<tutorials>

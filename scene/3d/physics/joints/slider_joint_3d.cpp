@@ -38,57 +38,39 @@ void SliderJoint3D::_bind_methods() {
 
 	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "linear_limit/upper_distance", PROPERTY_HINT_RANGE, "-1024,1024,0.01,suffix:m"), "set_param", "get_param", PARAM_LINEAR_LIMIT_UPPER);
 	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "linear_limit/lower_distance", PROPERTY_HINT_RANGE, "-1024,1024,0.01,suffix:m"), "set_param", "get_param", PARAM_LINEAR_LIMIT_LOWER);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "linear_limit/softness", PROPERTY_HINT_RANGE, "0.01,16.0,0.01"), "set_param", "get_param", PARAM_LINEAR_LIMIT_SOFTNESS);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "linear_limit/restitution", PROPERTY_HINT_RANGE, "0.01,16.0,0.01"), "set_param", "get_param", PARAM_LINEAR_LIMIT_RESTITUTION);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "linear_limit/damping", PROPERTY_HINT_RANGE, "0,16.0,0.01"), "set_param", "get_param", PARAM_LINEAR_LIMIT_DAMPING);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "linear_motion/softness", PROPERTY_HINT_RANGE, "0.01,16.0,0.01"), "set_param", "get_param", PARAM_LINEAR_MOTION_SOFTNESS);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "linear_motion/restitution", PROPERTY_HINT_RANGE, "0.01,16.0,0.01"), "set_param", "get_param", PARAM_LINEAR_MOTION_RESTITUTION);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "linear_motion/damping", PROPERTY_HINT_RANGE, "0,16.0,0.01"), "set_param", "get_param", PARAM_LINEAR_MOTION_DAMPING);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "linear_ortho/softness", PROPERTY_HINT_RANGE, "0.01,16.0,0.01"), "set_param", "get_param", PARAM_LINEAR_ORTHOGONAL_SOFTNESS);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "linear_ortho/restitution", PROPERTY_HINT_RANGE, "0.01,16.0,0.01"), "set_param", "get_param", PARAM_LINEAR_ORTHOGONAL_RESTITUTION);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "linear_ortho/damping", PROPERTY_HINT_RANGE, "0,16.0,0.01"), "set_param", "get_param", PARAM_LINEAR_ORTHOGONAL_DAMPING);
-
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "angular_limit/upper_angle", PROPERTY_HINT_RANGE, "-180,180,0.1,radians_as_degrees"), "set_param", "get_param", PARAM_ANGULAR_LIMIT_UPPER);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "angular_limit/lower_angle", PROPERTY_HINT_RANGE, "-180,180,0.1,radians_as_degrees"), "set_param", "get_param", PARAM_ANGULAR_LIMIT_LOWER);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "angular_limit/softness", PROPERTY_HINT_RANGE, "0.01,16.0,0.01"), "set_param", "get_param", PARAM_ANGULAR_LIMIT_SOFTNESS);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "angular_limit/restitution", PROPERTY_HINT_RANGE, "0.01,16.0,0.01"), "set_param", "get_param", PARAM_ANGULAR_LIMIT_RESTITUTION);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "angular_limit/damping", PROPERTY_HINT_RANGE, "0,16.0,0.01"), "set_param", "get_param", PARAM_ANGULAR_LIMIT_DAMPING);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "angular_motion/softness", PROPERTY_HINT_RANGE, "0.01,16.0,0.01"), "set_param", "get_param", PARAM_ANGULAR_MOTION_SOFTNESS);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "angular_motion/restitution", PROPERTY_HINT_RANGE, "0.01,16.0,0.01"), "set_param", "get_param", PARAM_ANGULAR_MOTION_RESTITUTION);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "angular_motion/damping", PROPERTY_HINT_RANGE, "0,16.0,0.01"), "set_param", "get_param", PARAM_ANGULAR_MOTION_DAMPING);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "angular_ortho/softness", PROPERTY_HINT_RANGE, "0.01,16.0,0.01"), "set_param", "get_param", PARAM_ANGULAR_ORTHOGONAL_SOFTNESS);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "angular_ortho/restitution", PROPERTY_HINT_RANGE, "0.01,16.0,0.01"), "set_param", "get_param", PARAM_ANGULAR_ORTHOGONAL_RESTITUTION);
-	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "angular_ortho/damping", PROPERTY_HINT_RANGE, "0,16.0,0.01"), "set_param", "get_param", PARAM_ANGULAR_ORTHOGONAL_DAMPING);
 
 	BIND_ENUM_CONSTANT(PARAM_LINEAR_LIMIT_UPPER);
 	BIND_ENUM_CONSTANT(PARAM_LINEAR_LIMIT_LOWER);
-	BIND_ENUM_CONSTANT(PARAM_LINEAR_LIMIT_SOFTNESS);
-	BIND_ENUM_CONSTANT(PARAM_LINEAR_LIMIT_RESTITUTION);
-	BIND_ENUM_CONSTANT(PARAM_LINEAR_LIMIT_DAMPING);
-	BIND_ENUM_CONSTANT(PARAM_LINEAR_MOTION_SOFTNESS);
-	BIND_ENUM_CONSTANT(PARAM_LINEAR_MOTION_RESTITUTION);
-	BIND_ENUM_CONSTANT(PARAM_LINEAR_MOTION_DAMPING);
-	BIND_ENUM_CONSTANT(PARAM_LINEAR_ORTHOGONAL_SOFTNESS);
-	BIND_ENUM_CONSTANT(PARAM_LINEAR_ORTHOGONAL_RESTITUTION);
-	BIND_ENUM_CONSTANT(PARAM_LINEAR_ORTHOGONAL_DAMPING);
 
-	BIND_ENUM_CONSTANT(PARAM_ANGULAR_LIMIT_UPPER);
-	BIND_ENUM_CONSTANT(PARAM_ANGULAR_LIMIT_LOWER);
-	BIND_ENUM_CONSTANT(PARAM_ANGULAR_LIMIT_SOFTNESS);
-	BIND_ENUM_CONSTANT(PARAM_ANGULAR_LIMIT_RESTITUTION);
-	BIND_ENUM_CONSTANT(PARAM_ANGULAR_LIMIT_DAMPING);
-	BIND_ENUM_CONSTANT(PARAM_ANGULAR_MOTION_SOFTNESS);
-	BIND_ENUM_CONSTANT(PARAM_ANGULAR_MOTION_RESTITUTION);
-	BIND_ENUM_CONSTANT(PARAM_ANGULAR_MOTION_DAMPING);
-	BIND_ENUM_CONSTANT(PARAM_ANGULAR_ORTHOGONAL_SOFTNESS);
-	BIND_ENUM_CONSTANT(PARAM_ANGULAR_ORTHOGONAL_RESTITUTION);
-	BIND_ENUM_CONSTANT(PARAM_ANGULAR_ORTHOGONAL_DAMPING);
-
+	ADD_PROPERTYI(PropertyInfo(Variant::BOOL, "linear_limit/enabled"), "set_param", "get_param", PARAM_LIMIT_ENABLED);
+	BIND_ENUM_CONSTANT(PARAM_LIMIT_ENABLED);
+	ADD_PROPERTYI(PropertyInfo(Variant::BOOL, "motor/enabled"), "set_param", "get_param", PARAM_MOTOR_ENABLED);
+	BIND_ENUM_CONSTANT(PARAM_MOTOR_ENABLED);
+	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "motor/target_velocity", PROPERTY_HINT_RANGE, "-1000,1000,0.01,or_greater,or_less"), "set_param", "get_param", PARAM_MOTOR_TARGET_VELOCITY);
+	BIND_ENUM_CONSTANT(PARAM_MOTOR_TARGET_VELOCITY);
+	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "motor/max_force", PROPERTY_HINT_RANGE, "0,1000,0.01,or_greater"), "set_param", "get_param", PARAM_MOTOR_MAX_FORCE);
+	BIND_ENUM_CONSTANT(PARAM_MOTOR_MAX_FORCE);
+	ADD_PROPERTYI(PropertyInfo(Variant::BOOL, "spring/enabled"), "set_param", "get_param", PARAM_SPRING_ENABLED);
+	BIND_ENUM_CONSTANT(PARAM_SPRING_ENABLED);
+	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "spring/frequency", PROPERTY_HINT_RANGE, "0,1000,0.01,or_greater"), "set_param", "get_param", PARAM_SPRING_HERTZ);
+	BIND_ENUM_CONSTANT(PARAM_SPRING_HERTZ);
+	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "spring/damping_ratio", PROPERTY_HINT_RANGE, "0,1000,0.01,or_greater"), "set_param", "get_param", PARAM_SPRING_DAMPING_RATIO);
+	BIND_ENUM_CONSTANT(PARAM_SPRING_DAMPING_RATIO);
+	ADD_PROPERTYI(PropertyInfo(Variant::FLOAT, "spring/target_translation", PROPERTY_HINT_RANGE, "-1000,1000,0.01,or_greater,or_less"), "set_param", "get_param", PARAM_SPRING_TARGET_TRANSLATION);
+	BIND_ENUM_CONSTANT(PARAM_SPRING_TARGET_TRANSLATION);
 	BIND_ENUM_CONSTANT(PARAM_MAX);
 }
 
 void SliderJoint3D::set_param(Param p_param, real_t p_value) {
 	ERR_FAIL_INDEX(p_param, PARAM_MAX);
+	ERR_FAIL_COND_MSG(!Math::is_finite(p_value), "Joint parameters must be finite.");
+	ERR_FAIL_COND(p_param == PARAM_LIMIT_ENABLED && p_value != 0 && p_value != 1);
+	ERR_FAIL_COND(p_param == PARAM_MOTOR_ENABLED && p_value != 0 && p_value != 1);
+	ERR_FAIL_COND(p_param == PARAM_MOTOR_MAX_FORCE && p_value < 0);
+	ERR_FAIL_COND(p_param == PARAM_SPRING_ENABLED && p_value != 0 && p_value != 1);
+	ERR_FAIL_COND(p_param == PARAM_SPRING_HERTZ && p_value < 0);
+	ERR_FAIL_COND(p_param == PARAM_SPRING_DAMPING_RATIO && p_value < 0);
+
 	params[p_param] = p_value;
 	if (is_configured()) {
 		PhysicsServer3D::get_singleton()->slider_joint_set_param(get_rid(), PS3DE::SliderJointParam(p_param), p_value);
@@ -123,27 +105,15 @@ void SliderJoint3D::_configure_joint(RID p_joint, PhysicsBody3D *body_a, Physics
 }
 
 SliderJoint3D::SliderJoint3D() {
+	params[PARAM_LIMIT_ENABLED] = 1;
+	params[PARAM_MOTOR_ENABLED] = 0;
+	params[PARAM_MOTOR_TARGET_VELOCITY] = 0;
+	params[PARAM_MOTOR_MAX_FORCE] = 0;
+	params[PARAM_SPRING_ENABLED] = 0;
+	params[PARAM_SPRING_HERTZ] = 0;
+	params[PARAM_SPRING_DAMPING_RATIO] = 1;
+	params[PARAM_SPRING_TARGET_TRANSLATION] = 0;
+
 	params[PARAM_LINEAR_LIMIT_UPPER] = 1.0;
 	params[PARAM_LINEAR_LIMIT_LOWER] = -1.0;
-	params[PARAM_LINEAR_LIMIT_SOFTNESS] = 1.0;
-	params[PARAM_LINEAR_LIMIT_RESTITUTION] = 0.7;
-	params[PARAM_LINEAR_LIMIT_DAMPING] = 1.0;
-	params[PARAM_LINEAR_MOTION_SOFTNESS] = 1.0;
-	params[PARAM_LINEAR_MOTION_RESTITUTION] = 0.7;
-	params[PARAM_LINEAR_MOTION_DAMPING] = 0; //1.0;
-	params[PARAM_LINEAR_ORTHOGONAL_SOFTNESS] = 1.0;
-	params[PARAM_LINEAR_ORTHOGONAL_RESTITUTION] = 0.7;
-	params[PARAM_LINEAR_ORTHOGONAL_DAMPING] = 1.0;
-
-	params[PARAM_ANGULAR_LIMIT_UPPER] = 0;
-	params[PARAM_ANGULAR_LIMIT_LOWER] = 0;
-	params[PARAM_ANGULAR_LIMIT_SOFTNESS] = 1.0;
-	params[PARAM_ANGULAR_LIMIT_RESTITUTION] = 0.7;
-	params[PARAM_ANGULAR_LIMIT_DAMPING] = 0; //1.0;
-	params[PARAM_ANGULAR_MOTION_SOFTNESS] = 1.0;
-	params[PARAM_ANGULAR_MOTION_RESTITUTION] = 0.7;
-	params[PARAM_ANGULAR_MOTION_DAMPING] = 1.0;
-	params[PARAM_ANGULAR_ORTHOGONAL_SOFTNESS] = 1.0;
-	params[PARAM_ANGULAR_ORTHOGONAL_RESTITUTION] = 0.7;
-	params[PARAM_ANGULAR_ORTHOGONAL_DAMPING] = 1.0;
 }

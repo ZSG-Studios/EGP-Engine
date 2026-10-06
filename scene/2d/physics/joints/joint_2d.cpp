@@ -113,10 +113,10 @@ void Joint2D::_update_joint(bool p_only_free) {
 	configured = true;
 
 	_configure_joint(joint, body_a, body_b);
+	set_constraint_hertz(constraint_hertz);
+	set_constraint_damping_ratio(constraint_damping_ratio);
 
 	ERR_FAIL_COND_MSG(!joint.is_valid(), "Failed to configure the joint.");
-
-	PhysicsServer2D::get_singleton()->joint_set_param(joint, PS2DE::JOINT_PARAM_BIAS, bias);
 
 	ba = body_a->get_rid();
 	bb = body_b->get_rid();
@@ -193,17 +193,6 @@ void Joint2D::_notification(int p_what) {
 	}
 }
 
-void Joint2D::set_bias(real_t p_bias) {
-	bias = p_bias;
-	if (joint.is_valid()) {
-		PhysicsServer2D::get_singleton()->joint_set_param(joint, PS2DE::JOINT_PARAM_BIAS, bias);
-	}
-}
-
-real_t Joint2D::get_bias() const {
-	return bias;
-}
-
 void Joint2D::set_exclude_nodes_from_collision(bool p_enable) {
 	if (exclude_from_collision == p_enable) {
 		return;
@@ -231,14 +220,17 @@ PackedStringArray Joint2D::get_configuration_warnings() const {
 }
 
 void Joint2D::_bind_methods() {
+	ClassDB::bind_method(D_METHOD("set_constraint_damping_ratio", "value"), &Joint2D::set_constraint_damping_ratio);
+	ClassDB::bind_method(D_METHOD("get_constraint_damping_ratio"), &Joint2D::get_constraint_damping_ratio);
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "constraint_damping_ratio", PROPERTY_HINT_RANGE, "0,1000,0.01,or_greater"), "set_constraint_damping_ratio", "get_constraint_damping_ratio");
+	ClassDB::bind_method(D_METHOD("set_constraint_hertz", "value"), &Joint2D::set_constraint_hertz);
+	ClassDB::bind_method(D_METHOD("get_constraint_hertz"), &Joint2D::get_constraint_hertz);
+	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "constraint_hertz", PROPERTY_HINT_RANGE, "0,1000,0.01,or_greater"), "set_constraint_hertz", "get_constraint_hertz");
 	ClassDB::bind_method(D_METHOD("set_node_a", "node"), &Joint2D::set_node_a);
 	ClassDB::bind_method(D_METHOD("get_node_a"), &Joint2D::get_node_a);
 
 	ClassDB::bind_method(D_METHOD("set_node_b", "node"), &Joint2D::set_node_b);
 	ClassDB::bind_method(D_METHOD("get_node_b"), &Joint2D::get_node_b);
-
-	ClassDB::bind_method(D_METHOD("set_bias", "bias"), &Joint2D::set_bias);
-	ClassDB::bind_method(D_METHOD("get_bias"), &Joint2D::get_bias);
 
 	ClassDB::bind_method(D_METHOD("set_exclude_nodes_from_collision", "enable"), &Joint2D::set_exclude_nodes_from_collision);
 	ClassDB::bind_method(D_METHOD("get_exclude_nodes_from_collision"), &Joint2D::get_exclude_nodes_from_collision);
@@ -247,7 +239,6 @@ void Joint2D::_bind_methods() {
 
 	ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "node_a", PROPERTY_HINT_NODE_PATH_VALID_TYPES, "PhysicsBody2D"), "set_node_a", "get_node_a");
 	ADD_PROPERTY(PropertyInfo(Variant::NODE_PATH, "node_b", PROPERTY_HINT_NODE_PATH_VALID_TYPES, "PhysicsBody2D"), "set_node_b", "get_node_b");
-	ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "bias", PROPERTY_HINT_RANGE, "0,0.9,0.001"), "set_bias", "get_bias");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "disable_collision"), "set_exclude_nodes_from_collision", "get_exclude_nodes_from_collision");
 }
 
@@ -263,4 +254,20 @@ Joint2D::Joint2D() {
 Joint2D::~Joint2D() {
 	ERR_FAIL_NULL(PhysicsServer2D::get_singleton());
 	PhysicsServer2D::get_singleton()->free_rid(joint);
+}
+
+void Joint2D::set_constraint_hertz(real_t p_value) {
+	ERR_FAIL_COND(!Math::is_finite(p_value) || p_value < 0);
+	constraint_hertz = p_value;
+	if (joint.is_valid()) {
+		PhysicsServer2D::get_singleton()->joint_set_param(joint, PS2DE::JOINT_PARAM_HERTZ, p_value);
+	}
+}
+
+void Joint2D::set_constraint_damping_ratio(real_t p_value) {
+	ERR_FAIL_COND(!Math::is_finite(p_value) || p_value < 0);
+	constraint_damping_ratio = p_value;
+	if (joint.is_valid()) {
+		PhysicsServer2D::get_singleton()->joint_set_param(joint, PS2DE::JOINT_PARAM_DAMPING_RATIO, p_value);
+	}
 }

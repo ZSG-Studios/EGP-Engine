@@ -1,0 +1,414 @@
+/*
+    Yojimbo Client/Server Network Library.
+
+    Copyright © 2016 - 2026, Más Bandwidth LLC.
+
+    Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+        1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+        2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer 
+           in the documentation and/or other materials provided with the distribution.
+
+        3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived 
+           from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, 
+    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
+    DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
+    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
+    WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+    USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+#include "yojimbo_base_client.h"
+#include "yojimbo_allocator.h"
+#include "yojimbo_connection.h"
+#include "yojimbo_network_simulator.h"
+#include "yojimbo_adapter.h"
+#include "yojimbo_utils.h"
+#include "yojimbo_client.h"             // for the ClientDisconnectReason enum
+#include "reliable.h"
+
+namespace yojimbo
+{
+    BaseClient::BaseClient( Allocator & allocator, const ClientServerConfig & config, Adapter & adapter, double time ) : m_config( config )
+    {
+        m_allocator = &allocator;
+        m_adapter = &adapter;
+        m_time = time;
+        m_context = NULL;
+        m_clientMemory = NULL;
+        m_clientAllocator = NULL;
+        m_endpoint = NULL;
+        m_connection = NULL;
+        m_messageFactory = NULL;
+        m_networkSimulator = NULL;
+        m_clientState = CLIENT_STATE_DISCONNECTED;
+        m_clientIndex = -1;
+        m_disconnectReason = YOJIMBO_CLIENT_DISCONNECT_REASON_NONE;
+        m_packetBuffer = NULL;
+    }
+
+    BaseClient::~BaseClient()
+    {
+        // IMPORTANT: Please disconnect the client before destroying it
+        yojimbo_assert( m_clientState <= CLIENT_STATE_DISCONNECTED );
+        yojimbo_assert( m_packetBuffer == NULL );
+        m_allocator = NULL;
+    }
+
+    void BaseClient::Disconnect()
+    {
+        SetClientState( CLIENT_STATE_DISCONNECTED );
+        Reset();
+    }
+
+    // Map the error that drove the connection into an error state to the disconnect reason we
+    // record for this client. For channel errors, drill into the channels to find the one in
+    // error, because that is where the actionable detail lives (eg. serialize failure vs desync
+    // vs out of memory).
+    static int ClientDisconnectReasonForConnectionError( const Connection & connection, ConnectionErrorLevel errorLevel, int numChannels )
+    {
+        switch ( errorLevel )
+        {
+            case CONNECTION_ERROR_ALLOCATOR:            return YOJIMBO_CLIENT_DISCONNECT_REASON_OUT_OF_MEMORY;
+            case CONNECTION_ERROR_MESSAGE_FACTORY:      return YOJIMBO_CLIENT_DISCONNECT_REASON_OUT_OF_MEMORY;
+            case CONNECTION_ERROR_READ_PACKET_FAILED:   return YOJIMBO_CLIENT_DISCONNECT_REASON_READ_PACKET_FAILED;
+
+            case CONNECTION_ERROR_CHANNEL:
+            {
+                for ( int i = 0; i < numChannels; ++i )
+                {
+                    switch ( connection.GetChannelErrorLevel( i ) )
+                    {
+                        case CHANNEL_ERROR_DESYNC:                  return YOJIMBO_CLIENT_DISCONNECT_REASON_DESYNC;
+                        case CHANNEL_ERROR_SEND_QUEUE_FULL:         return YOJIMBO_CLIENT_DISCONNECT_REASON_SEND_QUEUE_FULL;
+                        case CHANNEL_ERROR_BLOCKS_DISABLED:         return YOJIMBO_CLIENT_DISCONNECT_REASON_BLOCKS_DISABLED;
+                        case CHANNEL_ERROR_FAILED_TO_SERIALIZE:     return YOJIMBO_CLIENT_DISCONNECT_REASON_FAILED_TO_SERIALIZE;
+                        case CHANNEL_ERROR_OUT_OF_MEMORY:           return YOJIMBO_CLIENT_DISCONNECT_REASON_OUT_OF_MEMORY;
+                        case CHANNEL_ERROR_MESSAGE_TOO_LARGE:       return YOJIMBO_CLIENT_DISCONNECT_REASON_MESSAGE_TOO_LARGE;
+                        case CHANNEL_ERROR_NONE:                    break;
+                    }
+                }
+            }
+            break;
+
+            case CONNECTION_ERROR_NONE:
+                break;
+        }
+
+        // A connection in an error state always matches one of the cases above; keep a sane
+        // value if that ever changes rather than reporting garbage.
+        return YOJIMBO_CLIENT_DISCONNECT_REASON_DISCONNECTED;
+    }
+
+    void BaseClient::AdvanceTime( double time )
+    {
+        m_time = time;
+        if ( m_endpoint )
+        {
+            m_connection->AdvanceTime( time );
+            const ConnectionErrorLevel connectionErrorLevel = m_connection->GetErrorLevel();
+            if ( connectionErrorLevel != CONNECTION_ERROR_NONE )
+            {
+                yojimbo_printf( YOJIMBO_LOG_LEVEL_DEBUG, "connection error. disconnecting client\n" );
+                SetDisconnectReason( ClientDisconnectReasonForConnectionError( *m_connection, connectionErrorLevel, m_config.numChannels ) );
+                Disconnect();
+                return;
+            }
+            reliable_endpoint_update( m_endpoint, m_time );
+            int numAcks;
+            const uint16_t * acks = reliable_endpoint_get_acks( m_endpoint, &numAcks );
+            m_connection->ProcessAcks( acks, numAcks );
+            reliable_endpoint_clear_acks( m_endpoint );
+        }
+        NetworkSimulator * networkSimulator = GetNetworkSimulator();
+        if ( networkSimulator )
+        {
+            networkSimulator->AdvanceTime( time );
+        }
+    }
+
+    void BaseClient::SetLatency( float milliseconds )
+    {
+        yojimbo_assert( m_networkSimulator );
+        if ( m_networkSimulator )
+        {
+            m_networkSimulator->SetLatency( milliseconds );
+        }
+    }
+
+    void BaseClient::SetJitter( float milliseconds )
+    {
+        yojimbo_assert( m_networkSimulator );
+        if ( m_networkSimulator )
+        {
+            m_networkSimulator->SetJitter( milliseconds );
+        }
+    }
+
+    void BaseClient::SetPacketLoss( float percent )
+    {
+        yojimbo_assert( m_networkSimulator );
+        if ( m_networkSimulator )
+        {
+            m_networkSimulator->SetPacketLoss( percent );
+        }
+    }
+
+    void BaseClient::SetDuplicates( float percent )
+    {
+        yojimbo_assert( m_networkSimulator );
+        if ( m_networkSimulator )
+        {
+            m_networkSimulator->SetDuplicates( percent );
+        }
+    }
+
+    void BaseClient::SetClientState( ClientState clientState )
+    {
+        m_clientState = clientState;
+    }
+
+    // Startup is transactional: every allocation and every adapter factory result is checked in
+    // every build (Debug and Release alike -- yojimbo_assert compiles out under NDEBUG, so an
+    // assert is not a check), and the first failure unwinds everything already created and leaves
+    // the client exactly as it was before the call. The caller learns that from the return value.
+    bool BaseClient::CreateInternal()
+    {
+        yojimbo_assert( m_allocator );
+        yojimbo_assert( m_adapter );
+        yojimbo_assert( m_clientMemory == NULL );
+        yojimbo_assert( m_clientAllocator == NULL );
+        yojimbo_assert( m_messageFactory == NULL );
+
+        m_config.Validate();
+
+        m_packetBuffer = (uint8_t*) YOJIMBO_ALLOCATE( *m_allocator, m_config.maxPacketSize );
+        if ( !m_packetBuffer )
+        {
+            DestroyInternal();
+            return false;
+        }
+
+        m_clientMemory = (uint8_t*) YOJIMBO_ALLOCATE( *m_allocator, m_config.clientMemory );
+        if ( !m_clientMemory )
+        {
+            DestroyInternal();
+            return false;
+        }
+
+        m_clientAllocator = m_adapter->CreateAllocator( *m_allocator, m_clientMemory, m_config.clientMemory );
+        if ( !m_clientAllocator )
+        {
+            DestroyInternal();
+            return false;
+        }
+
+        m_messageFactory = m_adapter->CreateMessageFactory( *m_clientAllocator );
+        if ( !m_messageFactory )
+        {
+            DestroyInternal();
+            return false;
+        }
+
+        m_connection = YOJIMBO_NEW( *m_clientAllocator, Connection, *m_clientAllocator, *m_messageFactory, m_config, m_time );
+        if ( !m_connection )
+        {
+            DestroyInternal();
+            return false;
+        }
+
+        if ( m_config.networkSimulator )
+        {
+            m_networkSimulator = YOJIMBO_NEW( *m_clientAllocator, NetworkSimulator, *m_clientAllocator, m_config.maxSimulatorPackets, m_time );
+            if ( !m_networkSimulator )
+            {
+                DestroyInternal();
+                return false;
+            }
+        }
+
+        reliable_config_t reliable_config;
+        reliable_default_config( &reliable_config );
+        yojimbo_copy_string( reliable_config.name, "client endpoint", sizeof( reliable_config.name ) );
+        reliable_config.context = (void*) this;
+        reliable_config.max_packet_size = m_config.maxPacketSize;
+        reliable_config.fragment_above = m_config.fragmentPacketsAbove;
+        reliable_config.max_fragments = m_config.maxPacketFragments;
+        reliable_config.fragment_size = m_config.packetFragmentSize; 
+        reliable_config.ack_buffer_size = m_config.ackedPacketsBufferSize;
+        reliable_config.received_packets_buffer_size = m_config.receivedPacketsBufferSize;
+        reliable_config.fragment_reassembly_buffer_size = m_config.packetReassemblyBufferSize;
+        reliable_config.rtt_smoothing_factor = m_config.rttSmoothingFactor;
+        reliable_config.transmit_packet_function = BaseClient::StaticTransmitPacketFunction;
+        reliable_config.process_packet_function = BaseClient::StaticProcessPacketFunction;
+        reliable_config.allocator_context = m_clientAllocator;
+        reliable_config.allocate_function = BaseClient::StaticAllocateFunction;
+        reliable_config.free_function = BaseClient::StaticFreeFunction;
+
+        m_endpoint = reliable_endpoint_create( &reliable_config, m_time );
+        if ( !m_endpoint )
+        {
+            DestroyInternal();
+            return false;
+        }
+
+        reliable_endpoint_reset( m_endpoint );
+
+        return true;
+    }
+
+    // Safe to call on a partially created client: CreateInternal unwinds through it, so every
+    // pointer is checked rather than assumed.
+    void BaseClient::DestroyInternal()
+    {
+        yojimbo_assert( m_allocator );
+        if ( m_endpoint )
+        {
+            reliable_endpoint_destroy( m_endpoint );
+            m_endpoint = NULL;
+        }
+        if ( m_clientAllocator )
+        {
+            YOJIMBO_DELETE( *m_clientAllocator, NetworkSimulator, m_networkSimulator );
+            YOJIMBO_DELETE( *m_clientAllocator, Connection, m_connection );
+            YOJIMBO_DELETE( *m_clientAllocator, MessageFactory, m_messageFactory );
+            YOJIMBO_DELETE( *m_allocator, Allocator, m_clientAllocator );
+        }
+        else
+        {
+            // Nothing was ever built inside the client allocator, so nothing can be outstanding.
+            m_networkSimulator = NULL;
+            m_connection = NULL;
+            m_messageFactory = NULL;
+        }
+        YOJIMBO_FREE( *m_allocator, m_clientMemory );
+        YOJIMBO_FREE( *m_allocator, m_packetBuffer );
+    }
+
+    void BaseClient::StaticTransmitPacketFunction( void * context, uint64_t index, uint16_t packetSequence, uint8_t * packetData, int packetBytes )
+    {
+        (void) index;
+        BaseClient * client = (BaseClient*) context;
+        client->TransmitPacketFunction( packetSequence, packetData, packetBytes );
+    }
+    
+    int BaseClient::StaticProcessPacketFunction( void * context, uint64_t index, uint16_t packetSequence, uint8_t * packetData, int packetBytes )
+    {
+        (void) index;
+        BaseClient * client = (BaseClient*) context;
+        return client->ProcessPacketFunction( packetSequence, packetData, packetBytes );
+    }
+
+    void * BaseClient::StaticAllocateFunction( void * context, size_t bytes )
+    {
+        yojimbo_assert( context );
+        Allocator * allocator = (Allocator*) context;
+        return YOJIMBO_ALLOCATE( *allocator, bytes );
+    }
+    
+    void BaseClient::StaticFreeFunction( void * context, void * pointer )
+    {
+        yojimbo_assert( context );
+        yojimbo_assert( pointer );
+        Allocator * allocator = (Allocator*) context;
+        YOJIMBO_FREE( *allocator, pointer );
+    }
+
+    Message * BaseClient::CreateMessage( int type )
+    {
+        yojimbo_assert( m_messageFactory );
+        return m_messageFactory->CreateMessage( type );
+    }
+
+    uint8_t * BaseClient::AllocateBlock( int bytes )
+    {
+        return (uint8_t*) YOJIMBO_ALLOCATE( *m_clientAllocator, bytes );
+    }
+
+    void BaseClient::AttachBlockToMessage( Message * message, uint8_t * block, int bytes )
+    {
+        yojimbo_assert( message );
+        yojimbo_assert( block );
+        yojimbo_assert( bytes > 0 );
+        yojimbo_assert( message->IsBlockMessage() );
+        BlockMessage * blockMessage = (BlockMessage*) message;
+        blockMessage->AttachBlock( *m_clientAllocator, block, bytes );
+    }
+
+    void BaseClient::FreeBlock( uint8_t * block )
+    {
+        YOJIMBO_FREE( *m_clientAllocator, block );
+    }
+
+    bool BaseClient::CanSendMessage( int channelIndex ) const
+    {
+        yojimbo_assert( m_connection );
+        yojimbo_assert( channelIndex >= 0 );
+        yojimbo_assert( channelIndex < m_config.numChannels );
+        return m_connection->CanSendMessage( channelIndex );
+    }
+
+    bool BaseClient::HasMessagesToSend( int channelIndex ) const
+    {
+        yojimbo_assert( m_connection );
+        yojimbo_assert( channelIndex >= 0 );
+        yojimbo_assert( channelIndex < m_config.numChannels );
+        return m_connection->HasMessagesToSend( channelIndex );
+    }
+
+    void BaseClient::SendMessage( int channelIndex, Message * message )
+    {
+        yojimbo_assert( m_connection );
+        yojimbo_assert( channelIndex >= 0 );
+        yojimbo_assert( channelIndex < m_config.numChannels );
+        m_connection->SendMessage( channelIndex, message, GetContext() );
+    }
+
+    Message * BaseClient::ReceiveMessage( int channelIndex )
+    {
+        yojimbo_assert( m_connection );
+        yojimbo_assert( channelIndex >= 0 );
+        yojimbo_assert( channelIndex < m_config.numChannels );
+        return m_connection->ReceiveMessage( channelIndex );
+    }
+
+    void BaseClient::ReleaseMessage( Message * message )
+    {
+        yojimbo_assert( m_connection );
+        m_connection->ReleaseMessage( message );
+    }
+
+    void BaseClient::GetNetworkInfo( NetworkInfo & info ) const
+    {
+        memset( &info, 0, sizeof( info ) );
+        if ( m_connection )
+        {
+            yojimbo_assert( m_endpoint );
+            const uint64_t * counters = reliable_endpoint_counters( m_endpoint );
+            info.numPacketsSent = counters[RELIABLE_ENDPOINT_COUNTER_NUM_PACKETS_SENT];
+            info.numPacketsReceived = counters[RELIABLE_ENDPOINT_COUNTER_NUM_PACKETS_RECEIVED];
+            info.numPacketsAcked = counters[RELIABLE_ENDPOINT_COUNTER_NUM_PACKETS_ACKED];
+            info.RTT = reliable_endpoint_rtt( m_endpoint );
+            info.minRTT = reliable_endpoint_rtt_min( m_endpoint );
+            info.maxRTT = reliable_endpoint_rtt_max( m_endpoint );
+            info.averageRTT = reliable_endpoint_rtt_avg( m_endpoint );
+            info.averageJitter = reliable_endpoint_jitter_avg_vs_min_rtt( m_endpoint );
+            info.maxJitter = reliable_endpoint_jitter_max_vs_min_rtt( m_endpoint );
+            info.stddevJitter = reliable_endpoint_jitter_stddev_vs_avg_rtt( m_endpoint );
+            info.packetLoss = reliable_endpoint_packet_loss( m_endpoint );
+            reliable_endpoint_bandwidth( m_endpoint, &info.sentBandwidth, &info.receivedBandwidth, &info.ackedBandwidth );
+        }
+    }
+
+    void BaseClient::Reset()
+    {
+        if ( m_connection )
+        {
+            m_connection->Reset();
+        }
+    }
+}

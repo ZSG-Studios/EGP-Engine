@@ -52,7 +52,6 @@
 #include "scene/resources/3d/box_shape_3d.h"
 #include "scene/resources/3d/importer_mesh.h"
 #include "scene/resources/3d/mesh_library.h"
-#include "scene/resources/3d/separation_ray_shape_3d.h"
 #include "scene/resources/3d/sphere_shape_3d.h"
 #include "scene/resources/3d/world_boundary_shape_3d.h"
 #include "scene/resources/animation.h"
@@ -901,12 +900,6 @@ Node *ResourceImporterScene::_pre_fix_node(Node *p_node, Node *p_root, HashMap<R
 				boxShape.instantiate();
 				boxShape->set_size(Vector3(2, 2, 2));
 				colshape->set_shape(boxShape);
-			} else if (empty_draw_type == "SINGLE_ARROW") {
-				Ref<SeparationRayShape3D> rayShape;
-				rayShape.instantiate();
-				rayShape->set_length(1);
-				colshape->set_shape(rayShape);
-				Object::cast_to<Node3D>(sb)->rotate_x(Math::PI / 2);
 			} else if (empty_draw_type == "IMAGE") {
 				Ref<WorldBoundaryShape3D> world_boundary_shape;
 				world_boundary_shape.instantiate();

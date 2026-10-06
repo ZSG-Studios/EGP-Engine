@@ -37,13 +37,12 @@ class PinJoint3D : public Joint3D {
 
 public:
 	enum Param {
-		PARAM_BIAS = PS3DE::PIN_JOINT_BIAS,
+		PARAM_SPRING_HERTZ = PS3DE::PIN_JOINT_SPRING_HERTZ,
 		PARAM_DAMPING = PS3DE::PIN_JOINT_DAMPING,
-		PARAM_IMPULSE_CLAMP = PS3DE::PIN_JOINT_IMPULSE_CLAMP
 	};
 
 protected:
-	real_t params[3];
+	real_t params[2];
 	virtual void _configure_joint(RID p_joint, PhysicsBody3D *body_a, PhysicsBody3D *body_b) override;
 	static void _bind_methods();
 

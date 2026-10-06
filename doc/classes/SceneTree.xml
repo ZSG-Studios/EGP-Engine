@@ -122,13 +122,6 @@
 				Returns how many physics process steps have been processed, since the application started. This is [i]not[/i] a measurement of elapsed time. See also [signal physics_frame]. For the number of frames rendered, see [method Engine.get_process_frames].
 			</description>
 		</method>
-		<method name="get_multiplayer" qualifiers="const">
-			<return type="MultiplayerAPI" />
-			<param index="0" name="for_path" type="NodePath" default="NodePath(&quot;&quot;)" />
-			<description>
-				Searches for the [MultiplayerAPI] configured for the given path, if one does not exist it searches the parent paths until one is found. If the path is empty, or none is found, the default one is returned. See [method set_multiplayer].
-			</description>
-		</method>
 		<method name="get_node_count" qualifiers="const">
 			<return type="int" />
 			<description>
@@ -237,16 +230,6 @@
 				[b]Note:[/b] In C#, [param property] must be in snake_case when referring to built-in Godot properties. Prefer using the names exposed in the [code]PropertyName[/code] class to avoid allocating a new [StringName] on each call.
 			</description>
 		</method>
-		<method name="set_multiplayer">
-			<return type="void" />
-			<param index="0" name="multiplayer" type="MultiplayerAPI" />
-			<param index="1" name="root_path" type="NodePath" default="NodePath(&quot;&quot;)" />
-			<description>
-				Sets a custom [MultiplayerAPI] with the given [param root_path] (controlling also the relative subpaths), or override the default one if [param root_path] is empty.
-				[b]Note:[/b] No [MultiplayerAPI] must be configured for the subpath containing [param root_path], nested custom multiplayers are not allowed. I.e. if one is configured for [code]"/root/Foo"[/code] setting one for [code]"/root/Foo/Bar"[/code] will cause an error.
-				[b]Note:[/b] [method set_multiplayer] should be called [i]before[/i] the child nodes are ready at the given [param root_path]. If multiplayer nodes like [MultiplayerSpawner] or [MultiplayerSynchronizer] are added to the tree before the custom multiplayer API is set, they will not work.
-			</description>
-		</method>
 		<method name="unload_current_scene">
 			<return type="void" />
 			<description>
@@ -277,10 +260,6 @@
 		<member name="edited_scene_root" type="Node" setter="set_edited_scene_root" getter="get_edited_scene_root">
 			The root of the scene currently being edited in the editor. This is usually a direct child of [member root].
 			[b]Note:[/b] This property does nothing in release builds.
-		</member>
-		<member name="multiplayer_poll" type="bool" setter="set_multiplayer_poll_enabled" getter="is_multiplayer_poll_enabled" default="true">
-			If [code]true[/code] (default value), enables automatic polling of the [MultiplayerAPI] for this SceneTree during [signal process_frame].
-			If [code]false[/code], you need to manually call [method MultiplayerAPI.poll] to process network packets and deliver RPCs. This allows running RPCs in a different loop (e.g. physics, thread, specific time step) and for manual [Mutex] protection when accessing the [MultiplayerAPI] from threads.
 		</member>
 		<member name="paused" type="bool" setter="set_pause" getter="is_paused" default="false">
 			If [code]true[/code], the scene tree is considered paused. This causes the following behavior:

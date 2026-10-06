@@ -307,12 +307,6 @@
 			<description>
 			</description>
 		</method>
-		<method name="_body_get_collision_priority" qualifiers="virtual required const">
-			<return type="float" />
-			<param index="0" name="body" type="RID" />
-			<description>
-			</description>
-		</method>
 		<method name="_body_get_constant_force" qualifiers="virtual required const">
 			<return type="Vector3" />
 			<param index="0" name="body" type="RID" />
@@ -469,13 +463,6 @@
 			<description>
 			</description>
 		</method>
-		<method name="_body_set_collision_priority" qualifiers="virtual required">
-			<return type="void" />
-			<param index="0" name="body" type="RID" />
-			<param index="1" name="priority" type="float" />
-			<description>
-			</description>
-		</method>
 		<method name="_body_set_constant_force" qualifiers="virtual required">
 			<return type="void" />
 			<param index="0" name="body" type="RID" />
@@ -608,9 +595,8 @@
 			<param index="2" name="motion" type="Vector3" />
 			<param index="3" name="margin" type="float" />
 			<param index="4" name="max_collisions" type="int" />
-			<param index="5" name="collide_separation_ray" type="bool" />
-			<param index="6" name="recovery_as_collision" type="bool" />
-			<param index="7" name="r_result" type="PhysicsServer3DExtensionMotionResult*" />
+			<param index="5" name="recovery_as_collision" type="bool" />
+			<param index="6" name="r_result" type="PhysicsServer3DExtensionMotionResult*" />
 			<description>
 			</description>
 		</method>
@@ -645,11 +631,6 @@
 			</description>
 		</method>
 		<method name="_convex_polygon_shape_create" qualifiers="virtual required">
-			<return type="RID" />
-			<description>
-			</description>
-		</method>
-		<method name="_custom_shape_create" qualifiers="virtual required">
 			<return type="RID" />
 			<description>
 			</description>
@@ -796,12 +777,6 @@
 			<description>
 			</description>
 		</method>
-		<method name="_joint_get_solver_priority" qualifiers="virtual required const">
-			<return type="int" />
-			<param index="0" name="joint" type="RID" />
-			<description>
-			</description>
-		</method>
 		<method name="_joint_get_type" qualifiers="virtual required const">
 			<return type="int" enum="PhysicsServer3D.JointType" />
 			<param index="0" name="joint" type="RID" />
@@ -876,13 +851,6 @@
 			<description>
 			</description>
 		</method>
-		<method name="_joint_set_solver_priority" qualifiers="virtual required">
-			<return type="void" />
-			<param index="0" name="joint" type="RID" />
-			<param index="1" name="priority" type="int" />
-			<description>
-			</description>
-		</method>
 		<method name="_pin_joint_get_local_a" qualifiers="virtual required const">
 			<return type="Vector3" />
 			<param index="0" name="joint" type="RID" />
@@ -924,31 +892,14 @@
 			<description>
 			</description>
 		</method>
-		<method name="_separation_ray_shape_create" qualifiers="virtual required">
-			<return type="RID" />
-			<description>
-			</description>
-		</method>
 		<method name="_set_active" qualifiers="virtual required">
 			<return type="void" />
 			<param index="0" name="active" type="bool" />
 			<description>
 			</description>
 		</method>
-		<method name="_shape_get_custom_solver_bias" qualifiers="virtual required const">
-			<return type="float" />
-			<param index="0" name="shape" type="RID" />
-			<description>
-			</description>
-		</method>
 		<method name="_shape_get_data" qualifiers="virtual required const">
 			<return type="Variant" />
-			<param index="0" name="shape" type="RID" />
-			<description>
-			</description>
-		</method>
-		<method name="_shape_get_margin" qualifiers="virtual required const">
-			<return type="float" />
 			<param index="0" name="shape" type="RID" />
 			<description>
 			</description>
@@ -959,24 +910,10 @@
 			<description>
 			</description>
 		</method>
-		<method name="_shape_set_custom_solver_bias" qualifiers="virtual required">
-			<return type="void" />
-			<param index="0" name="shape" type="RID" />
-			<param index="1" name="bias" type="float" />
-			<description>
-			</description>
-		</method>
 		<method name="_shape_set_data" qualifiers="virtual required">
 			<return type="void" />
 			<param index="0" name="shape" type="RID" />
 			<param index="1" name="data" type="Variant" />
-			<description>
-			</description>
-		</method>
-		<method name="_shape_set_margin" qualifiers="virtual required">
-			<return type="void" />
-			<param index="0" name="shape" type="RID" />
-			<param index="1" name="margin" type="float" />
 			<description>
 			</description>
 		</method>

@@ -93,6 +93,17 @@ Patches:
 - `0006-explicit-includes.patch` ([GH-111557](https://github.com/godotengine/godot/pull/111557))
 
 
+## box3d
+
+- Upstream: https://github.com/erincatto/box3d
+- Version: 0.1.0 development (e77352cd606dc1a34209094076199549a52ea0a1)
+- License: MIT
+
+The `include`, `src`, `test`, and `shared` directories, top-level `CMakeLists.txt`
+and `LICENSE` are vendored unchanged. `UPSTREAM.json` records normalized hashes.
+EGP's adapter and deterministic compilation policy live in `modules/box3d`.
+
+
 ## brotli
 
 - Upstream: https://github.com/google/brotli
@@ -239,27 +250,6 @@ Patches:
 The `modules/raycast/godot_update_embree.py` script can be used to pull the
 relevant files from the latest Embree release and apply patches automatically.
 
-
-## enet
-
-- Upstream: https://github.com/lsalzman/enet
-- Version: 1.3.18 (2662c0de09e36f2a2030ccc2c528a3e4c9e8138a, 2024)
-- License: MIT
-
-Files extracted from upstream source:
-
-- All `.c` files in the main directory (except `unix.c` and `win32.c`)
-- The `include/enet/` folder as `enet/` (except `unix.h` and `win32.h`)
-- `LICENSE` file
-- Added 3 files `enet_godot.cpp`, `enet/enet_godot.h`, and `enet/enet_godot_ext.h`,
-  providing ENet socket implementation using Godot classes, allowing IPv6 and DTLS.
-
-Patches:
-
-- `0001-godot-socket.patch` ([GH-7985](https://github.com/godotengine/godot/pull/7985))
-
-Important: Building against a system wide ENet is possible, but will limit its
-functionality to IPv4 only and no DTLS. We recommend against it.
 
 
 ## etcpak
@@ -518,22 +508,6 @@ Files generated from upstream source:
    `ICU_DATA_FILTER_FILE={GODOT_SOURCE}/thirdparty/icu4c/godot_data.json ./runConfigureICU {PLATFORM} --with-data-packaging=common`
 4. Delete `data/out` folder and rebuild data: `cd data && rm -rf ./out && make`
 5. Copy `source/data/out/icudt{ICU_VERSION}l.dat` to the `{GODOT_SOURCE}/thirdparty/icu4c/icudt_godot.dat`
-
-
-## jolt_physics
-
-- Upstream: https://github.com/jrouwe/JoltPhysics
-- Version: 5.6.0 (e77f175595e64cb44218cc9d9d56fc365ad0e36a, 2026)
-- License: MIT
-
-Files extracted from upstream source:
-
-- All files in `Jolt/`, except `Jolt/Jolt.cmake`, any files dependent on `ENABLE_OBJECT_STREAM` as seen in `Jolt/Jolt.cmake` and the `Jolt/Physics/Hair/`, `Jolt/Compute/` and `Jolt/Shaders/` folders.
-- `LICENSE`
-
-Patches:
-
-- `0001-backport-upstream-commit-63f2f57.patch` (GH-121974)
 
 
 ## libbacktrace
@@ -1344,3 +1318,28 @@ Files extracted from upstream source:
 
 - `lib/{common/,compress/,decompress/,zstd.h,zstd_errors.h}`
 - `LICENSE`
+
+## Box2D and native scene adapter
+
+The unchanged solver in `thirdparty/box2d` is pinned to
+`56edae79f2949d86142b03450d5d60f63bcf5a6f`, MIT, Erin Catto.
+`UPSTREAM.json` records normalized source hashes, including upstream tests.
+The modified native adapter in `modules/box2d` derives from
+[erincatto/godot-box2d](https://github.com/erincatto/godot-box2d), revision
+`66260bc0eb77a9e6eb78b80cc163ed2c912b448b`, MIT, Andrew Song. Its original
+license and source hashes are retained in that module.
+
+## godot-box3d (EGP native scene adapter)
+
+The sole native 3D scene physics adapter in `modules/box3d/scene_backend` is adapted
+from [godot-box3d](https://github.com/bearlikelion/godot-box3d), revision
+`dd7964f7091d8c74fb21fdd47d6a536eccbcc20f`, MIT, Mark Arneman 2026. Its original
+license and source provenance are retained beside the modified files. It shares
+the pinned Box3D solver; it does not vendor another solver or godot-cpp runtime.
+
+## Yojimbo (EGP native networking)
+
+- Upstream: https://github.com/mas-bandwidth/yojimbo
+- Version: 1.13.5, commit 272153a10f32135bb44bb60e7467072baf48f762
+- BSD-3-Clause, with bundled netcode/reliable/serialize/TLSF and ISC libsodium notices retained.
+- File hashes and the ephemeral bind-port integration patch are in yojimbo/EGP-UPSTREAM.json.

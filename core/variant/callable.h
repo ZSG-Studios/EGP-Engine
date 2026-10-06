@@ -84,7 +84,6 @@ public:
 		return call_deferredp(sizeof...(p_args) == 0 ? nullptr : (const Variant **)argptrs, sizeof...(p_args));
 	}
 
-	Error rpcp(int p_id, const Variant **p_arguments, int p_argcount, CallError &r_call_error) const;
 
 	_FORCE_INLINE_ bool is_null() const {
 		return method == StringName() && object == 0;
@@ -158,7 +157,6 @@ public:
 	virtual StringName get_method() const;
 	virtual ObjectID get_object() const = 0;
 	virtual void call(const Variant **p_arguments, int p_argcount, Variant &r_return_value, Callable::CallError &r_call_error) const = 0;
-	virtual Error rpc(int p_peer_id, const Variant **p_arguments, int p_argcount, Callable::CallError &r_call_error) const;
 	virtual const Callable *get_base_comparator() const;
 	virtual int get_argument_count(bool &r_is_valid) const;
 	virtual int get_bound_arguments_count() const;

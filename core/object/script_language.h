@@ -137,10 +137,6 @@ protected:
 
 	void _set_debugger_break_language();
 
-	Variant _get_rpc_config_bind() const {
-		return get_rpc_config().duplicate(true);
-	}
-
 public:
 	static constexpr AncestralClass static_ancestral_class = AncestralClass::SCRIPT;
 

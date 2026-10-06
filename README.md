@@ -5,19 +5,41 @@ EGP is a fork of [Godot Engine](https://github.com/godotengine/godot) built arou
 ## Goals
 
 - Keep the fork up to date with Godot `master`, validating upstream updates before promoting them to the working engine.
-- Make [Box3D](https://github.com/erincatto/box3d) the sole 3D physics backend, with engine integration and compatibility checks before removing existing backends. The 2D physics direction remains undecided.
-- Use [LiteNetLib](https://github.com/RevenantX/LiteNetLib) and [LiteEntitySystem](https://github.com/RevenantX/LiteEntitySystem) for multiplayer transport and entity replication.
+- Use [Box3D](https://github.com/erincatto/box3d) as the sole native 3D physics backend and [Box2D](https://github.com/erincatto/box2d) for 2D physics, with continued engine compatibility and runtime qualification. See the [3D](doc/egp_box3d.md) and [2D](doc/egp_box2d.md) integration guides.
+- Use [Yojimbo](https://github.com/mas-bandwidth/yojimbo) for native encrypted UDP transport, C++ entity replication and GDScript high-level and raw APIs.
 - Build native editor tooling for [godot-cpp](https://github.com/godotengine/godot-cpp) GDExtensions directly into EGP: project scaffolding, compiler/toolchain configuration, editor-driven builds, clickable diagnostics, extension reload where supported, and export integration.
 - Investigate scene processing, C# interop, threading, resource streaming, rendering, navigation, and dedicated-server performance. Select further replacements using measured results.
 - Keep fork changes modular and reviewable so upstream updates remain manageable.
 
 ## Current status
 
-The fork is being established. Native C++ extension tooling is built into the editor, with a bundled godot-cpp SDK, project scaffolding, Debug/Release builds, clickable diagnostics, and extension reload. See [the C++ extension guide](doc/egp_cpp_extensions.md). Box3D and the LiteNet stack are separate integrations. No general performance improvements or production readiness are claimed.
+The native networking foundation uses pinned Yojimbo 1.13.5 and does not require Mono. The standalone Windows Debug and Release suites pass 101 UDP, replication, authority, interest, reconnect and token checks, plus separate-process encrypted connections, an interest-memory regression, and upstream suites. The current native editor and relocated debug export pass all five GDScript fixtures and separate Godot server/client checks, integrated with the Box physics chat. See [networking setup and qualification](modules/egp_net/README.md). Native C++ extension tooling is built into the editor; see [the C++ extension guide](doc/egp_cpp_extensions.md). A bounded GDScript prediction/reconciliation helper also verifies native Box3D correction and replay. Game-level prediction integration, physics rollback fidelity, performance and AAA readiness require further qualification.
 
-The first milestone is a working stock Godot baseline: build the C# editor and Windows export template, run a minimal C# scene, and verify its exported executable. Engine replacements follow that baseline.
+FASTBuild v1.20 is integrated with SCons on Windows x64/MSVC. Distributed compilation against the WireGuard worker at `10.77.64.1` and the forced-remote integration fixture passed. A fixed source snapshot produced the C# development editor and both Windows export templates, including the editor's embedded C++ SDK, Debug/Release C# API assemblies, editor tools and SDK packages. All three executables passed headless startup checks with Box2D and Box3D active.
+
+Those build outputs are in `.build/fb-source/bin`, with source and executable hashes in `.build/fastbuild-build-receipt.json`. The snapshot contains the earlier LiteNet implementation and excludes the later Yojimbo migration and subsequent changes to the main checkout. Editor project import completes but reports unsupported Box physics features, including soft bodies, separation rays and world boundaries. These checks establish build and startup status; feature parity, C# game export and gameplay behavior need separate qualification.
 
 ## Validation approach
+
+### FASTBuild on Windows
+
+Keep the WireGuard tunnel active and FASTBuild v1.20 running on the worker at
+`10.77.64.1:31264`. From the repository root, run:
+
+```powershell
+.\misc\scripts\build_egp.ps1 -Setup -CheckWorker
+.\misc\scripts\build_egp.ps1 -Target editor
+.\misc\scripts\build_egp.ps1 -Target template_debug
+.\misc\scripts\build_egp.ps1 -Target template_release
+```
+
+The editor command completes native linking, C# glue generation, API assemblies,
+editor tools and SDK packages. Fresh builds of the current checkout write to
+`bin`; the verified snapshot outputs above remain in `.build/fb-source/bin`.
+Use `-Local` for local compilation, `-Jobs 6` to limit parallel jobs, or
+`-DistVerbose` to inspect remote activity. See [the EGP FASTBuild guide](doc/egp_fastbuild.md)
+for toolchain requirements, alternate workers, BFF targets and remote-compilation
+validation.
 
 ### Native C++ extension workflow
 

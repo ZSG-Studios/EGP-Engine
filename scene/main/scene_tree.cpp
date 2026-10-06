@@ -46,7 +46,6 @@ STATIC_ASSERT_INCOMPLETE_TYPE(class, RenderingServer);
 #include "scene/audio/audio_stream_player.h"
 #include "scene/debugger/scene_debugger.h"
 #include "scene/gui/control.h"
-#include "scene/main/multiplayer_api.h"
 #include "scene/main/node.h"
 #include "scene/main/viewport.h"
 #include "scene/main/window.h"
@@ -704,12 +703,6 @@ bool SceneTree::process(double p_time) {
 
 	process_time = p_time;
 
-	if (multiplayer_poll) {
-		multiplayer->poll();
-		for (KeyValue<NodePath, Ref<MultiplayerAPI>> &E : custom_multiplayers) {
-			E.value->poll();
-		}
-	}
 
 	emit_signal(SNAME("process_frame"));
 
@@ -1836,84 +1829,6 @@ void SceneTree::play_theme_sound(const Ref<AudioStream> &p_stream) {
 	root->add_child(audio_stream_player);
 }
 
-RequiredResult<MultiplayerAPI> SceneTree::get_multiplayer(const NodePath &p_for_path) const {
-	ERR_FAIL_COND_V_MSG(!Thread::is_main_thread(), Ref<MultiplayerAPI>(), "Multiplayer can only be manipulated from the main thread.");
-	if (p_for_path.is_empty()) {
-		return multiplayer;
-	}
-
-	const Vector<StringName> tnames = p_for_path.get_names();
-	const StringName *nptr = tnames.ptr();
-	for (const KeyValue<NodePath, Ref<MultiplayerAPI>> &E : custom_multiplayers) {
-		const Vector<StringName> snames = E.key.get_names();
-		if (tnames.size() < snames.size()) {
-			continue;
-		}
-		const StringName *sptr = snames.ptr();
-		bool valid = true;
-		for (int i = 0; i < snames.size(); i++) {
-			if (sptr[i] != nptr[i]) {
-				valid = false;
-				break;
-			}
-		}
-		if (valid) {
-			return E.value;
-		}
-	}
-
-	return multiplayer;
-}
-
-void SceneTree::set_multiplayer(Ref<MultiplayerAPI> p_multiplayer, const NodePath &p_root_path) {
-	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "Multiplayer can only be manipulated from the main thread.");
-	if (p_root_path.is_empty()) {
-		ERR_FAIL_COND(p_multiplayer.is_null());
-		if (multiplayer.is_valid()) {
-			multiplayer->object_configuration_remove(nullptr, NodePath("/" + root->get_name()));
-		}
-		multiplayer = p_multiplayer;
-		multiplayer->object_configuration_add(nullptr, NodePath("/" + root->get_name()));
-	} else {
-		if (custom_multiplayers.has(p_root_path)) {
-			custom_multiplayers[p_root_path]->object_configuration_remove(nullptr, p_root_path);
-		} else if (p_multiplayer.is_valid()) {
-			const Vector<StringName> tnames = p_root_path.get_names();
-			const StringName *nptr = tnames.ptr();
-			for (const KeyValue<NodePath, Ref<MultiplayerAPI>> &E : custom_multiplayers) {
-				const Vector<StringName> snames = E.key.get_names();
-				if (tnames.size() < snames.size()) {
-					continue;
-				}
-				const StringName *sptr = snames.ptr();
-				bool valid = true;
-				for (int i = 0; i < snames.size(); i++) {
-					if (sptr[i] != nptr[i]) {
-						valid = false;
-						break;
-					}
-				}
-				ERR_FAIL_COND_MSG(valid, "Multiplayer is already configured for a parent of this path: '" + String(p_root_path) + "' in '" + String(E.key) + "'.");
-			}
-		}
-		if (p_multiplayer.is_valid()) {
-			custom_multiplayers[p_root_path] = p_multiplayer;
-			p_multiplayer->object_configuration_add(nullptr, p_root_path);
-		} else {
-			custom_multiplayers.erase(p_root_path);
-		}
-	}
-}
-
-void SceneTree::set_multiplayer_poll_enabled(bool p_enabled) {
-	ERR_FAIL_COND_MSG(!Thread::is_main_thread(), "Multiplayer can only be manipulated from the main thread.");
-	multiplayer_poll = p_enabled;
-}
-
-bool SceneTree::is_multiplayer_poll_enabled() const {
-	return multiplayer_poll;
-}
-
 void SceneTree::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("get_root"), &SceneTree::get_root);
 	ClassDB::bind_method(D_METHOD("has_group", "name"), &SceneTree::has_group);
@@ -1987,10 +1902,6 @@ void SceneTree::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("reload_current_scene"), &SceneTree::reload_current_scene);
 	ClassDB::bind_method(D_METHOD("unload_current_scene"), &SceneTree::unload_current_scene);
 
-	ClassDB::bind_method(D_METHOD("set_multiplayer", "multiplayer", "root_path"), &SceneTree::set_multiplayer, DEFVAL(NodePath()));
-	ClassDB::bind_method(D_METHOD("get_multiplayer", "for_path"), &SceneTree::get_multiplayer, DEFVAL(NodePath()));
-	ClassDB::bind_method(D_METHOD("set_multiplayer_poll_enabled", "enabled"), &SceneTree::set_multiplayer_poll_enabled);
-	ClassDB::bind_method(D_METHOD("is_multiplayer_poll_enabled"), &SceneTree::is_multiplayer_poll_enabled);
 
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "auto_accept_quit"), "set_auto_accept_quit", "is_auto_accept_quit");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "quit_on_go_back"), "set_quit_on_go_back", "is_quit_on_go_back");
@@ -2001,7 +1912,6 @@ void SceneTree::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "edited_scene_root", PROPERTY_HINT_RESOURCE_TYPE, Node::get_class_static(), PROPERTY_USAGE_NONE), "set_edited_scene_root", "get_edited_scene_root");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "current_scene", PROPERTY_HINT_RESOURCE_TYPE, Node::get_class_static(), PROPERTY_USAGE_NONE), "set_current_scene", "get_current_scene");
 	ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "root", PROPERTY_HINT_RESOURCE_TYPE, Node::get_class_static(), PROPERTY_USAGE_NONE), "", "get_root");
-	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "multiplayer_poll"), "set_multiplayer_poll_enabled", "is_multiplayer_poll_enabled");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "physics_interpolation"), "set_physics_interpolation_enabled", "is_physics_interpolation_enabled");
 
 	ADD_SIGNAL(MethodInfo("tree_changed"));
@@ -2125,7 +2035,6 @@ SceneTree::SceneTree() {
 	}
 
 	// Initialize network state.
-	set_multiplayer(MultiplayerAPI::create_default_interface());
 
 #ifndef _2D_DISABLED
 	root->set_as_audio_listener_2d(true);

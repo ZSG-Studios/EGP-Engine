@@ -1176,24 +1176,7 @@ struct _VariantCall {
 		callable->call_deferredp(p_args, p_argcount);
 	}
 
-	static void func_Callable_rpc(Variant *p_variant, const Variant **p_args, int p_argcount, Variant &r_ret, Callable::CallError &r_error) {
-		Callable *callable = &VariantInternalAccessor<Callable>::get(p_variant);
-		callable->rpcp(0, p_args, p_argcount, r_error);
-	}
 
-	static void func_Callable_rpc_id(Variant *p_variant, const Variant **p_args, int p_argcount, Variant &r_ret, Callable::CallError &r_error) {
-		if (p_argcount == 0) {
-			r_error.error = Callable::CallError::CALL_ERROR_TOO_FEW_ARGUMENTS;
-			r_error.expected = 1;
-		} else if (p_args[0]->get_type() != Variant::INT) {
-			r_error.error = Callable::CallError::CALL_ERROR_INVALID_ARGUMENT;
-			r_error.argument = 0;
-			r_error.expected = Variant::INT;
-		} else {
-			Callable *callable = &VariantInternalAccessor<Callable>::get(p_variant);
-			callable->rpcp(*p_args[0], &p_args[1], p_argcount - 1, r_error);
-		}
-	}
 
 	static void func_Callable_bind(Variant *p_variant, const Variant **p_args, int p_argcount, Variant &r_ret, Callable::CallError &r_error) {
 		Callable *callable = &VariantInternalAccessor<Callable>::get(p_variant);
@@ -2447,8 +2430,6 @@ static void _register_variant_builtin_methods_misc() {
 
 	bind_custom(Callable, call, _VariantCall::func_Callable_call, true, Variant);
 	bind_custom(Callable, call_deferred, _VariantCall::func_Callable_call_deferred, false, Variant);
-	bind_custom(Callable, rpc, _VariantCall::func_Callable_rpc, false, Variant);
-	bind_custom1(Callable, rpc_id, _VariantCall::func_Callable_rpc_id, Variant::INT, "peer_id");
 	bind_custom(Callable, bind, _VariantCall::func_Callable_bind, true, Callable);
 
 	/* Signal */

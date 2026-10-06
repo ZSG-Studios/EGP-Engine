@@ -29,9 +29,9 @@
 /**************************************************************************/
 
 #include "register_types.h"
+#include "modules/modules_enabled.gen.h"
 
 #include "remote_debugger_peer_websocket.h"
-#include "websocket_multiplayer_peer.h"
 #include "websocket_peer.h"
 
 #ifdef WEB_ENABLED
@@ -67,7 +67,6 @@ void initialize_websocket_module(ModuleInitializationLevel p_level) {
 		WSLPeer::initialize();
 #endif
 
-		GDREGISTER_CLASS(WebSocketMultiplayerPeer);
 		ClassDB::register_custom_instance_class<WebSocketPeer>();
 
 		EngineDebugger::register_uri_handler("ws://", RemoteDebuggerPeerWebSocket::create);

@@ -313,15 +313,6 @@ void GDExtensionSpecialCompatHashes::initialize() {
 	mappings.insert("EditorProperty", {
 		{ "emit_changed", 3069422438, 1822500399 },
 	});
-	mappings.insert("ENetConnection", {
-		{ "create_host_bound", 866250949, 1515002313 },
-		{ "connect_to_host", 385984708, 2171300490 },
-		{ "dtls_client_setup", 3097527179, 1966198364 },
-	});
-	mappings.insert("ENetMultiplayerPeer", {
-		{ "create_server", 1616151701, 2917761309 },
-		{ "create_client", 920217784, 2327163476 },
-	});
 	mappings.insert("EditorCommandPalette", {
 		{ "add_command", 3664614892, 864043298 },
 	});
@@ -483,9 +474,6 @@ void GDExtensionSpecialCompatHashes::initialize() {
 	mappings.insert("Line2D", {
 		{ "add_point", 468506575, 2654014372 },
 	});
-	mappings.insert("MultiplayerAPI", {
-		{ "rpc", 1833408346, 2077486355 },
-	});
 	mappings.insert("NativeMenu", {
 		{ "add_item", 2553375659, 980552939 },
 		{ "add_check_item", 2553375659, 980552939 },
@@ -522,7 +510,6 @@ void GDExtensionSpecialCompatHashes::initialize() {
 		{ "find_child", 4253159453, 2008217037 },
 		{ "find_children", 1585018254, 2560337219 },
 		{ "propagate_call", 1667910434, 1871007965 },
-		{ "set_multiplayer_authority", 4023243586, 972357352 },
 	});
 	mappings.insert("Node3D", {
 #ifdef REAL_T_IS_DOUBLE
@@ -976,18 +963,6 @@ void GDExtensionSpecialCompatHashes::initialize() {
 	});
 	mappings.insert("VideoStreamPlayback", {
 		{ "mix_audio", 1369271885, 93876830 },
-	});
-	mappings.insert("WebRTCMultiplayerPeer", {
-		{ "create_client", 1777354631, 2641732907 },
-		{ "create_mesh", 1777354631, 2641732907 },
-		{ "add_peer", 2555866323, 4078953270 },
-	});
-	mappings.insert("WebRTCPeerConnection", {
-		{ "create_data_channel", 3997447457, 1288557393 },
-	});
-	mappings.insert("WebSocketMultiplayerPeer", {
-		{ "create_client", 3097527179, 1966198364 },
-		{ "create_server", 337374795, 2400822951 },
 	});
 	mappings.insert("WebSocketPeer", {
 		{ "connect_to_url", 3097527179, 1966198364 },

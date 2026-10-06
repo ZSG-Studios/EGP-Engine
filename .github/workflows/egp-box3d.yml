@@ -1,0 +1,29 @@
+name: EGP Box3D determinism
+on:
+  push:
+    paths: ["modules/box3d/**", "thirdparty/box3d/**", "tests/physics/box3d/**", "misc/scripts/validate_box3d.py", ".github/workflows/egp-box3d.yml"]
+  pull_request:
+    paths: ["modules/box3d/**", "thirdparty/box3d/**", "tests/physics/box3d/**", "misc/scripts/validate_box3d.py", ".github/workflows/egp-box3d.yml"]
+  workflow_dispatch:
+jobs:
+  native:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+        config: [Debug, Release]
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python misc/scripts/validate_box3d.py --config ${{ matrix.config }} --upstream-tests
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: box3d-${{ matrix.os }}-${{ matrix.config }}
+          path: |
+            .build/box3d-validation/${{ matrix.config }}/receipt.json
+            .build/box3d-validation/${{ matrix.config }}/*.log

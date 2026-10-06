@@ -90,11 +90,9 @@ public:
 	FUNCRID(concave_polygon_shape)
 
 	FUNC2(shape_set_data, RID, const Variant &);
-	FUNC2(shape_set_custom_solver_bias, RID, real_t);
 
 	FUNC1RC(PS2DE::ShapeType, shape_get_type, RID);
 	FUNC1RC(Variant, shape_get_data, RID);
-	FUNC1RC(real_t, shape_get_custom_solver_bias, RID);
 
 	//these work well, but should be used from the main thread only
 	bool shape_collide(RID p_shape_A, const Transform2D &p_xform_A, const Vector2 &p_motion_A, RID p_shape_B, const Transform2D &p_xform_B, const Vector2 &p_motion_B, Vector2 *r_results, int p_result_max, int &r_result_count) override {
@@ -104,6 +102,11 @@ public:
 
 	/* SPACE API */
 
+	FUNC6(space_apply_explosion, RID, const Vector2 &, real_t, real_t, real_t, uint32_t)
+	FUNC1RC(Array, space_get_contact_hit_events, RID)
+	FUNC1RC(Array, space_get_joint_events, RID)
+	FUNC1RC(Vector2, joint_get_constraint_force, RID)
+	FUNC1RC(real_t, joint_get_constraint_torque, RID)
 	FUNCRID(space);
 	FUNC2(space_set_active, RID, bool);
 	FUNC1RC(bool, space_is_active, RID);
@@ -277,6 +280,9 @@ public:
 
 	/* JOINT API */
 
+	FUNC7(joint_make_configured, RID, PS2DE::JointType, RID, const Transform2D &, RID, const Transform2D &, const Dictionary &)
+	FUNC2(joint_set_configuration, RID, const Dictionary &)
+	FUNC1RC(Dictionary, joint_get_configuration, RID)
 	FUNCRID(joint)
 
 	FUNC1(joint_clear, RID)

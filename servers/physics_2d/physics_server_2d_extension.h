@@ -218,11 +218,9 @@ public:
 	EXBIND0R(RID, concave_polygon_shape_create)
 
 	EXBIND2(shape_set_data, RID, const Variant &)
-	EXBIND2(shape_set_custom_solver_bias, RID, real_t)
 
 	EXBIND1RC(PS2DE::ShapeType, shape_get_type, RID)
 	EXBIND1RC(Variant, shape_get_data, RID)
-	EXBIND1RC(real_t, shape_get_custom_solver_bias, RID)
 
 	virtual bool shape_collide(RID p_shape_A, const Transform2D &p_xform_A, const Vector2 &p_motion_A, RID p_shape_B, const Transform2D &p_xform_B, const Vector2 &p_motion_B, Vector2 *r_results, int p_result_max, int &r_result_count) override {
 		bool ret = false;
@@ -232,6 +230,11 @@ public:
 
 	/* SPACE API */
 
+	EXBIND6(space_apply_explosion, RID, const Vector2 &, real_t, real_t, real_t, uint32_t)
+	EXBIND1RC(Array, space_get_contact_hit_events, RID)
+	EXBIND1RC(Array, space_get_joint_events, RID)
+	EXBIND1RC(Vector2, joint_get_constraint_force, RID)
+	EXBIND1RC(real_t, joint_get_constraint_torque, RID)
 	EXBIND0R(RID, space_create)
 	EXBIND2(space_set_active, RID, bool)
 	EXBIND1RC(bool, space_is_active, RID)
@@ -414,6 +417,9 @@ public:
 
 	/* JOINT API */
 
+	EXBIND7(joint_make_configured, RID, PS2DE::JointType, RID, const Transform2D &, RID, const Transform2D &, const Dictionary &)
+	EXBIND2(joint_set_configuration, RID, const Dictionary &)
+	EXBIND1RC(Dictionary, joint_get_configuration, RID)
 	EXBIND0R(RID, joint_create)
 	EXBIND1(joint_clear, RID)
 

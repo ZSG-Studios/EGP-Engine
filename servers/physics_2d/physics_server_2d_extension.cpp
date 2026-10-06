@@ -147,15 +147,18 @@ void PhysicsServer2DExtension::_bind_methods() {
 	GDVIRTUAL_BIND(_concave_polygon_shape_create);
 
 	GDVIRTUAL_BIND(_shape_set_data, "shape", "data");
-	GDVIRTUAL_BIND(_shape_set_custom_solver_bias, "shape", "bias");
 
 	GDVIRTUAL_BIND(_shape_get_type, "shape");
 	GDVIRTUAL_BIND(_shape_get_data, "shape");
-	GDVIRTUAL_BIND(_shape_get_custom_solver_bias, "shape");
 	GDVIRTUAL_BIND(_shape_collide, "shape_A", "xform_A", "motion_A", "shape_B", "xform_B", "motion_B", "r_results", "result_max", "r_result_count");
 
 	/* SPACE API */
 
+	GDVIRTUAL_BIND(_space_apply_explosion, "space", "position", "radius", "falloff", "impulse_density", "collision_mask");
+	GDVIRTUAL_BIND(_space_get_contact_hit_events, "space");
+	GDVIRTUAL_BIND(_space_get_joint_events, "space");
+	GDVIRTUAL_BIND(_joint_get_constraint_force, "joint");
+	GDVIRTUAL_BIND(_joint_get_constraint_torque, "joint");
 	GDVIRTUAL_BIND(_space_create);
 	GDVIRTUAL_BIND(_space_set_active, "space", "active");
 	GDVIRTUAL_BIND(_space_is_active, "space");
@@ -311,6 +314,9 @@ void PhysicsServer2DExtension::_bind_methods() {
 
 	/* JOINT API */
 
+	GDVIRTUAL_BIND(_joint_make_configured, "joint", "type", "body_a", "frame_a", "body_b", "frame_b", "configuration");
+	GDVIRTUAL_BIND(_joint_set_configuration, "joint", "configuration");
+	GDVIRTUAL_BIND(_joint_get_configuration, "joint");
 	GDVIRTUAL_BIND(_joint_create);
 	GDVIRTUAL_BIND(_joint_clear, "joint");
 

@@ -38,7 +38,6 @@
 #include "core/templates/iterable.h"
 #include "scene/scene_string_names.h" // IWYU pragma: export. Make available to all Nodes.
 
-class MultiplayerAPI;
 class NodePath;
 class Resource;
 class SceneState;
@@ -235,8 +234,6 @@ private:
 		BitField<ProcessThreadMessages> process_thread_messages = {};
 		void *process_group = nullptr; // to avoid cyclic dependency
 
-		int multiplayer_authority = 1; // Server by default.
-		Variant rpc_config;
 
 		// Variables used to properly sort the node when processing, ignored otherwise.
 		int process_priority = 0;
@@ -326,8 +323,6 @@ private:
 
 	TypedArray<StringName> _get_groups() const;
 
-	Error _rpc_bind(const Variant **p_args, int p_argcount, Callable::CallError &r_error);
-	Error _rpc_id_bind(const Variant **p_args, int p_argcount, Callable::CallError &r_error);
 
 	friend class SceneTree;
 
@@ -418,9 +413,6 @@ protected:
 
 	virtual StringName _get_translation_context_with_override(const StringName &p_context) const { return p_context; }
 
-	Variant _get_node_rpc_config_bind() const {
-		return get_node_rpc_config().duplicate(true);
-	}
 
 protected:
 	virtual bool _uses_signal_mutex() const override { return false; } // Node uses thread guards instead.
@@ -447,7 +439,6 @@ protected:
 
 #ifndef DISABLE_DEPRECATED
 	void _set_name_bind_compat_76560(const String &p_name);
-	Variant _get_rpc_config_bind_compat_106848() const;
 	static void _bind_compatibility_methods();
 #endif
 
@@ -802,25 +793,6 @@ public:
 	void set_display_folded(bool p_folded);
 	bool is_displayed_folded() const;
 
-	/* NETWORK */
-
-	virtual void set_multiplayer_authority(int p_peer_id, bool p_recursive = true);
-	int get_multiplayer_authority() const;
-	bool is_multiplayer_authority() const;
-
-	void rpc_config(const StringName &p_method, const Variant &p_config); // config a local method for RPC
-	const Variant get_node_rpc_config() const;
-
-	template <typename... VarArgs>
-	Error rpc(const StringName &p_method, VarArgs... p_args);
-
-	template <typename... VarArgs>
-	Error rpc_id(int p_peer_id, const StringName &p_method, VarArgs... p_args);
-
-	Error rpcp(int p_peer_id, const StringName &p_method, const Variant **p_arg, int p_argcount);
-
-	Ref<MultiplayerAPI> get_multiplayer() const;
-
 	/* INTERNATIONALIZATION */
 
 	void set_auto_translate_mode(AutoTranslateMode p_mode);
@@ -915,21 +887,6 @@ typedef HashSet<Node *, Node::Comparator> NodeSet;
 
 // Template definitions must be in the header so they are always fully initialized before their usage.
 // See this StackOverflow question for more information: https://stackoverflow.com/questions/495021/why-can-templates-only-be-implemented-in-the-header-file
-
-template <typename... VarArgs>
-Error Node::rpc(const StringName &p_method, VarArgs... p_args) {
-	return rpc_id(0, p_method, p_args...);
-}
-
-template <typename... VarArgs>
-Error Node::rpc_id(int p_peer_id, const StringName &p_method, VarArgs... p_args) {
-	Variant args[sizeof...(p_args) + 1] = { p_args..., Variant() }; // +1 makes sure zero sized arrays are also supported.
-	const Variant *argptrs[sizeof...(p_args) + 1];
-	for (uint32_t i = 0; i < sizeof...(p_args); i++) {
-		argptrs[i] = &args[i];
-	}
-	return rpcp(p_peer_id, p_method, sizeof...(p_args) == 0 ? nullptr : (const Variant **)argptrs, sizeof...(p_args));
-}
 
 #ifdef DEBUG_ENABLED
 #define ERR_THREAD_GUARD ERR_FAIL_COND_MSG(!is_accessible_from_caller_thread(), vformat("%s: The caller thread can't call the function `%s()` on this node. Use `call_deferred()` or `call_deferred_thread_group()` instead.", get_description(), FUNCTION_STR));

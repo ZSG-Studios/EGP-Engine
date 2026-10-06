@@ -59,12 +59,6 @@
 				[b]Note:[/b] In GDScript and C#, this method returns [code]null[/code] outside of editor builds.
 			</description>
 		</method>
-		<method name="get_rpc_config" qualifiers="const">
-			<return type="Variant" />
-			<description>
-				Returns a [Dictionary] mapping method names to their RPC configuration defined by this script.
-			</description>
-		</method>
 		<method name="get_script_constant_map">
 			<return type="Dictionary" />
 			<description>

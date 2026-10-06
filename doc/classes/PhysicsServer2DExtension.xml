@@ -980,14 +980,6 @@
 				Overridable version of [PhysicsServer2D]'s internal [code]shape_collide[/code] method. Corresponds to [method PhysicsDirectSpaceState2D.collide_shape].
 			</description>
 		</method>
-		<method name="_shape_get_custom_solver_bias" qualifiers="virtual required const">
-			<return type="float" />
-			<param index="0" name="shape" type="RID" />
-			<description>
-				Should return the custom solver bias of the given [param shape], which defines how much bodies are forced to separate on contact when this shape is involved.
-				Overridable version of [PhysicsServer2D]'s internal [code]shape_get_custom_solver_bias[/code] method. Corresponds to [member Shape2D.custom_solver_bias].
-			</description>
-		</method>
 		<method name="_shape_get_data" qualifiers="virtual required const">
 			<return type="Variant" />
 			<param index="0" name="shape" type="RID" />
@@ -1000,15 +992,6 @@
 			<param index="0" name="shape" type="RID" />
 			<description>
 				Overridable version of [method PhysicsServer2D.shape_get_type].
-			</description>
-		</method>
-		<method name="_shape_set_custom_solver_bias" qualifiers="virtual required">
-			<return type="void" />
-			<param index="0" name="shape" type="RID" />
-			<param index="1" name="bias" type="float" />
-			<description>
-				Should set the custom solver bias for the given [param shape]. It defines how much bodies are forced to separate on contact.
-				Overridable version of [PhysicsServer2D]'s internal [code]shape_get_custom_solver_bias[/code] method. Corresponds to [member Shape2D.custom_solver_bias].
 			</description>
 		</method>
 		<method name="_shape_set_data" qualifiers="virtual required">

@@ -95,7 +95,6 @@
 #endif // NAVIGATION_2D_DISABLED
 #ifndef PHYSICS_2D_DISABLED
 #include "servers/physics_2d/physics_server_2d.h"
-#include "servers/physics_2d/physics_server_2d_dummy.h"
 #include "servers/physics_2d/physics_server_2d_extension.h"
 #include "servers/physics_2d/physics_server_2d_manager.h"
 #endif // PHYSICS_2D_DISABLED
@@ -109,7 +108,6 @@
 #endif // NAVIGATION_3D_DISABLED
 #ifndef PHYSICS_3D_DISABLED
 #include "servers/physics_3d/physics_server_3d.h"
-#include "servers/physics_3d/physics_server_3d_dummy.h"
 #include "servers/physics_3d/physics_server_3d_extension.h"
 #include "servers/physics_3d/physics_server_3d_manager.h"
 #endif // PHYSICS_3D_DISABLED
@@ -129,17 +127,7 @@
 
 ShaderTypes *shader_types = nullptr;
 
-#ifndef PHYSICS_2D_DISABLED
-static PhysicsServer2D *_create_dummy_physics_server_2d() {
-	return memnew(PhysicsServer2DDummy);
-}
-#endif // PHYSICS_2D_DISABLED
 
-#ifndef PHYSICS_3D_DISABLED
-static PhysicsServer3D *_create_dummy_physics_server_3d() {
-	return memnew(PhysicsServer3DDummy);
-}
-#endif // PHYSICS_3D_DISABLED
 
 static bool has_server_feature_callback(const String &p_feature) {
 	if (RenderingServer::get_singleton()) {
@@ -319,9 +307,7 @@ void register_server_types() {
 	GDREGISTER_CLASS(PhysicsTestMotionParameters2D);
 	GDREGISTER_CLASS(PhysicsTestMotionResult2D);
 
-	GLOBAL_DEF(PropertyInfo(Variant::STRING, PhysicsServer2DManager::setting_property_name, PROPERTY_HINT_ENUM, "DEFAULT"), "DEFAULT");
-
-	PhysicsServer2DManager::get_singleton()->register_server("Dummy", callable_mp_static(_create_dummy_physics_server_2d));
+	GLOBAL_DEF(PropertyInfo(Variant::STRING, PhysicsServer2DManager::setting_property_name, PROPERTY_HINT_ENUM, "Box2D Physics"), "Box2D Physics");
 #endif // PHYSICS_2D_DISABLED
 
 #ifndef NAVIGATION_3D_DISABLED
@@ -368,9 +354,7 @@ void register_server_types() {
 	GDREGISTER_CLASS(PhysicsTestMotionParameters3D);
 	GDREGISTER_CLASS(PhysicsTestMotionResult3D);
 
-	GLOBAL_DEF(PropertyInfo(Variant::STRING, PhysicsServer3DManager::setting_property_name, PROPERTY_HINT_ENUM, "DEFAULT"), "DEFAULT");
-
-	PhysicsServer3DManager::get_singleton()->register_server("Dummy", callable_mp_static(_create_dummy_physics_server_3d));
+	GLOBAL_DEF(PropertyInfo(Variant::STRING, PhysicsServer3DManager::setting_property_name, PROPERTY_HINT_ENUM, "Box3D Physics"), "Box3D Physics");
 #endif // PHYSICS_3D_DISABLED
 
 #ifndef XR_DISABLED

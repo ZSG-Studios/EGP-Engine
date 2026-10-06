@@ -44,7 +44,6 @@
 #include "scene/resources/3d/convex_polygon_shape_3d.h"
 #include "scene/resources/3d/cylinder_shape_3d.h"
 #include "scene/resources/3d/height_map_shape_3d.h"
-#include "scene/resources/3d/separation_ray_shape_3d.h"
 #include "scene/resources/3d/sphere_shape_3d.h"
 #include "scene/resources/3d/world_boundary_shape_3d.h"
 
@@ -126,10 +125,6 @@ String CollisionShape3DGizmoPlugin::get_handle_name(const EditorNode3DGizmo *p_g
 		return helper->cylinder_get_handle_name(p_id);
 	}
 
-	if (Object::cast_to<SeparationRayShape3D>(*s)) {
-		return "Length";
-	}
-
 	return "";
 }
 
@@ -159,11 +154,6 @@ Variant CollisionShape3DGizmoPlugin::get_handle_value(const EditorNode3DGizmo *p
 	if (Object::cast_to<CylinderShape3D>(*s)) {
 		Ref<CylinderShape3D> cs2 = s;
 		return Vector2(cs2->get_radius(), cs2->get_height());
-	}
-
-	if (Object::cast_to<SeparationRayShape3D>(*s)) {
-		Ref<SeparationRayShape3D> cs2 = s;
-		return cs2->get_length();
 	}
 
 	return Variant();
@@ -198,22 +188,6 @@ void CollisionShape3DGizmoPlugin::set_handle(const EditorNode3DGizmo *p_gizmo, i
 		}
 
 		ss->set_radius(d);
-	}
-
-	if (Object::cast_to<SeparationRayShape3D>(*s)) {
-		Ref<SeparationRayShape3D> rs = s;
-		Vector3 ra, rb;
-		Geometry3D::get_closest_points_between_segments(Vector3(), Vector3(0, 0, 4096), sg[0], sg[1], ra, rb);
-		float d = ra.z;
-		if (Node3DEditor::get_singleton()->is_snap_enabled()) {
-			d = Math::snapped(d, Node3DEditor::get_singleton()->get_translate_snap());
-		}
-
-		if (d < 0.001) {
-			d = 0.001;
-		}
-
-		rs->set_length(d);
 	}
 
 	if (Object::cast_to<BoxShape3D>(*s)) {
@@ -284,20 +258,6 @@ void CollisionShape3DGizmoPlugin::commit_handle(const EditorNode3DGizmo *p_gizmo
 	if (Object::cast_to<CylinderShape3D>(*s)) {
 		Ref<CylinderShape3D> ss = s;
 		helper->cylinder_commit_handle(p_id, TTR("Change Cylinder Shape Radius"), TTR("Change Cylinder Shape Height"), p_cancel, cs, *ss, *ss);
-	}
-
-	if (Object::cast_to<SeparationRayShape3D>(*s)) {
-		Ref<SeparationRayShape3D> ss = s;
-		if (p_cancel) {
-			ss->set_length(p_restore);
-			return;
-		}
-
-		EditorUndoRedoManager *ur = EditorUndoRedoManager::get_singleton();
-		ur->create_action(TTR("Change Separation Ray Shape Length"));
-		ur->add_do_method(ss.ptr(), "set_length", ss->get_length());
-		ur->add_undo_method(ss.ptr(), "set_length", p_restore);
-		ur->commit_action();
 	}
 }
 
@@ -662,22 +622,6 @@ void CollisionShape3DGizmoPlugin::redraw(EditorNode3DGizmo *p_gizmo) {
 		Ref<ArrayMesh> mesh = cs2->get_debug_mesh();
 		p_gizmo->add_lines(cs2->get_debug_mesh_lines(), material, false, collision_color);
 		p_gizmo->add_collision_segments(cs2->get_debug_mesh_lines());
-	}
-
-	if (Object::cast_to<SeparationRayShape3D>(*s)) {
-		Ref<SeparationRayShape3D> rs = s;
-
-		Vector<Vector3> points = {
-			Vector3(),
-			Vector3(0, 0, rs->get_length())
-		};
-		p_gizmo->add_lines(points, material, false, collision_color);
-		p_gizmo->add_collision_segments(points);
-		if (!shape_readonly) {
-			Vector<Vector3> handles;
-			handles.push_back(Vector3(0, 0, rs->get_length()));
-			p_gizmo->add_handles(handles, handles_material);
-		}
 	}
 
 	if (Object::cast_to<HeightMapShape3D>(*s)) {

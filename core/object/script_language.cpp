@@ -184,7 +184,6 @@ void Script::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("is_tool"), &Script::is_tool);
 	ClassDB::bind_method(D_METHOD("is_abstract"), &Script::is_abstract);
 
-	ClassDB::bind_method(D_METHOD("get_rpc_config"), &Script::_get_rpc_config_bind);
 
 #ifndef DISABLE_DEPRECATED
 	GODOT_PUSH_IGNORE_DEPRECATION();

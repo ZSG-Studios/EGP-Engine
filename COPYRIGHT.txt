@@ -45,6 +45,31 @@ Copyright: 2014-present, Godot Engine contributors
  2007-2014, Juan Linietsky, Ariel Manzur
 License: Expat
 
+Files: modules/box3d/scene_backend/*
+ tests/physics/box3d/scene/*_test.gd
+Comment: Native adapter and regression fixtures adapted from godot-box3d
+Copyright: 2026, Mark Arneman
+License: Expat
+
+Files: thirdparty/yojimbo/include/*
+ thirdparty/yojimbo/source/*
+ thirdparty/yojimbo/netcode/*
+ thirdparty/yojimbo/reliable/*
+ thirdparty/yojimbo/serialize/*
+Comment: Yojimbo, netcode, reliable and serialize
+Copyright: 2016-2026, Mas Bandwidth LLC
+License: BSD-3-clause
+
+Files: thirdparty/yojimbo/tlsf/*
+Comment: Two Level Segregated Fit memory allocator
+Copyright: 2006-2016, Matthew Conte
+License: BSD-3-clause
+
+Files: thirdparty/yojimbo/sodium/*
+Comment: Minimal libsodium subset
+Copyright: 2013-2026, Frank Denis
+License: ISC
+
 Files: core/math/convex_hull.cpp
  core/math/convex_hull.h
 Comment: Bullet Continuous Collision Detection and Physics Library
@@ -69,51 +94,6 @@ Files: modules/betsy/alpha_stitch.glsl
  modules/betsy/bc6h.glsl
 Comment: Betsy
 Copyright: 2020-2022, Matias N. Goldberg
-License: Expat
-
-Files: modules/godot_physics_2d/godot_joints_2d.cpp
-Comment: Chipmunk2D Joint Constraints
-Copyright: 2007, Scott Lembcke
-License: Expat
-
-Files: modules/godot_physics_3d/gjk_epa.cpp
- modules/godot_physics_3d/joints/godot_generic_6dof_joint_3d.cpp
- modules/godot_physics_3d/joints/godot_generic_6dof_joint_3d.h
- modules/godot_physics_3d/joints/godot_hinge_joint_3d.cpp
- modules/godot_physics_3d/joints/godot_hinge_joint_3d.h
- modules/godot_physics_3d/joints/godot_jacobian_entry_3d.h
- modules/godot_physics_3d/joints/godot_pin_joint_3d.cpp
- modules/godot_physics_3d/joints/godot_pin_joint_3d.h
- modules/godot_physics_3d/joints/godot_slider_joint_3d.cpp
- modules/godot_physics_3d/joints/godot_slider_joint_3d.h
- modules/godot_physics_3d/godot_soft_body_3d.cpp
- modules/godot_physics_3d/godot_soft_body_3d.h
- modules/godot_physics_3d/godot_shape_3d.cpp
- modules/godot_physics_3d/godot_shape_3d.h
-Comment: Bullet Continuous Collision Detection and Physics Library
-Copyright: 2003-2008, Erwin Coumans
- 2014-present, Godot Engine contributors
- 2007-2014, Juan Linietsky, Ariel Manzur
-License: Expat and Zlib
-
-Files: modules/godot_physics_3d/godot_collision_solver_3d_sat.cpp
-Comment: Open Dynamics Engine
-Copyright: 2001-2003, Russell L. Smith, Alen Ladavac, Nguyen Binh
-License: BSD-3-clause
-
-Files: modules/godot_physics_3d/joints/godot_cone_twist_joint_3d.cpp
- modules/godot_physics_3d/joints/godot_cone_twist_joint_3d.h
-Comment: Bullet Continuous Collision Detection and Physics Library
-Copyright: 2007, Starbreeze Studios
- 2014-present, Godot Engine contributors
- 2007-2014, Juan Linietsky, Ariel Manzur
-License: Expat and Zlib
-
-Files: modules/jolt_physics/spaces/jolt_temp_allocator.cpp
-Comment: Jolt Physics
-Copyright: 2021, Jorrit Rouwe
- 2014-present, Godot Engine contributors
- 2007-2014, Juan Linietsky, Ariel Manzur
 License: Expat
 
 Files: modules/lightmapper_rd/lm_compute.glsl
@@ -222,6 +202,23 @@ Comment: Basis Universal
 Copyright: 2019-2025, Binomial LLC.
 License: Apache-2.0
 
+Files: thirdparty/box3d/*
+Comment: Box3D 3D rigid body physics, including retained upstream dependencies
+Copyright: 2024-2026, Erin Catto
+ 2023-2025, Jackson L. Allan
+ 2025, Nicolas De Carli
+License: Expat
+
+Files: thirdparty/box2d/*
+Comment: Box2D 2D rigid body physics
+Copyright: 2023-2026, Erin Catto
+License: Expat
+
+Files: modules/box2d/*
+Comment: Native EGP adapter derived from godot-box2d
+Copyright: 2024-present, Andrew Song
+License: Expat
+
 Files: thirdparty/brotli/*
 Comment: Brotli
 Copyright: 2009, 2010, 2013-2016 by the Brotli Authors.
@@ -268,10 +265,6 @@ Comment: Embree
 Copyright: 2009-2021 Intel Corporation
 License: Apache-2.0
 
-Files: thirdparty/enet/*
-Comment: ENet
-Copyright: 2002-2024, Lee Salzman
-License: Expat
 
 Files: thirdparty/etcpak/*
 Comment: etcpak
@@ -373,11 +366,6 @@ Files: thirdparty/icu4c/*
 Comment: International Components for Unicode
 Copyright: 2016-2024, Unicode, Inc.
 License: Unicode
-
-Files: thirdparty/jolt_physics/*
-Comment: Jolt Physics
-Copyright: 2021, Jorrit Rouwe
-License: Expat
 
 Files: thirdparty/libbacktrace/*
 Comment: libbacktrace

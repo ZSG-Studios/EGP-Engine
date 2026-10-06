@@ -140,7 +140,6 @@ void PhysicsServer3DExtension::_bind_methods() {
 	/* SHAPE API */
 
 	GDVIRTUAL_BIND(_world_boundary_shape_create);
-	GDVIRTUAL_BIND(_separation_ray_shape_create);
 	GDVIRTUAL_BIND(_sphere_shape_create);
 	GDVIRTUAL_BIND(_box_shape_create);
 	GDVIRTUAL_BIND(_capsule_shape_create);
@@ -148,20 +147,19 @@ void PhysicsServer3DExtension::_bind_methods() {
 	GDVIRTUAL_BIND(_convex_polygon_shape_create);
 	GDVIRTUAL_BIND(_concave_polygon_shape_create);
 	GDVIRTUAL_BIND(_heightmap_shape_create);
-	GDVIRTUAL_BIND(_custom_shape_create);
 
 	GDVIRTUAL_BIND(_shape_set_data, "shape", "data");
-	GDVIRTUAL_BIND(_shape_set_custom_solver_bias, "shape", "bias");
-
-	GDVIRTUAL_BIND(_shape_set_margin, "shape", "margin");
-	GDVIRTUAL_BIND(_shape_get_margin, "shape");
 
 	GDVIRTUAL_BIND(_shape_get_type, "shape");
 	GDVIRTUAL_BIND(_shape_get_data, "shape");
-	GDVIRTUAL_BIND(_shape_get_custom_solver_bias, "shape");
 
 	/* SPACE API */
 
+	GDVIRTUAL_BIND(_space_apply_explosion, "space", "position", "radius", "falloff", "impulse_density", "collision_mask");
+	GDVIRTUAL_BIND(_space_get_contact_hit_events, "space");
+	GDVIRTUAL_BIND(_space_get_joint_events, "space");
+	GDVIRTUAL_BIND(_joint_get_constraint_force, "joint");
+	GDVIRTUAL_BIND(_joint_get_constraint_torque, "joint");
 	GDVIRTUAL_BIND(_space_create);
 	GDVIRTUAL_BIND(_space_set_active, "space", "active");
 	GDVIRTUAL_BIND(_space_is_active, "space");
@@ -252,9 +250,6 @@ void PhysicsServer3DExtension::_bind_methods() {
 	GDVIRTUAL_BIND(_body_set_collision_mask, "body", "mask");
 	GDVIRTUAL_BIND(_body_get_collision_mask, "body");
 
-	GDVIRTUAL_BIND(_body_set_collision_priority, "body", "priority");
-	GDVIRTUAL_BIND(_body_get_collision_priority, "body");
-
 	GDVIRTUAL_BIND(_body_set_user_flags, "body", "flags");
 	GDVIRTUAL_BIND(_body_get_user_flags, "body");
 
@@ -307,7 +302,7 @@ void PhysicsServer3DExtension::_bind_methods() {
 
 	GDVIRTUAL_BIND(_body_set_ray_pickable, "body", "enable");
 
-	GDVIRTUAL_BIND(_body_test_motion, "body", "from", "motion", "margin", "max_collisions", "collide_separation_ray", "recovery_as_collision", "r_result");
+	GDVIRTUAL_BIND(_body_test_motion, "body", "from", "motion", "margin", "max_collisions", "recovery_as_collision", "r_result");
 
 	GDVIRTUAL_BIND(_body_get_direct_state, "body");
 
@@ -376,6 +371,9 @@ void PhysicsServer3DExtension::_bind_methods() {
 
 	/* JOINT API */
 
+	GDVIRTUAL_BIND(_joint_make_configured, "joint", "type", "body_a", "frame_a", "body_b", "frame_b", "configuration");
+	GDVIRTUAL_BIND(_joint_set_configuration, "joint", "configuration");
+	GDVIRTUAL_BIND(_joint_get_configuration, "joint");
 	GDVIRTUAL_BIND(_joint_create);
 	GDVIRTUAL_BIND(_joint_clear, "joint");
 
@@ -421,9 +419,6 @@ void PhysicsServer3DExtension::_bind_methods() {
 	GDVIRTUAL_BIND(_generic_6dof_joint_get_angular_target_rotation, "joint");
 
 	GDVIRTUAL_BIND(_joint_get_type, "joint");
-
-	GDVIRTUAL_BIND(_joint_set_solver_priority, "joint", "priority");
-	GDVIRTUAL_BIND(_joint_get_solver_priority, "joint");
 
 	GDVIRTUAL_BIND(_joint_disable_collisions_between_bodies, "joint", "disable");
 	GDVIRTUAL_BIND(_joint_is_disabled_collisions_between_bodies, "joint");

@@ -212,7 +212,6 @@ public:
 	/* SHAPE API */
 
 	EXBIND0R(RID, world_boundary_shape_create)
-	EXBIND0R(RID, separation_ray_shape_create)
 	EXBIND0R(RID, sphere_shape_create)
 	EXBIND0R(RID, box_shape_create)
 	EXBIND0R(RID, capsule_shape_create)
@@ -220,20 +219,19 @@ public:
 	EXBIND0R(RID, convex_polygon_shape_create)
 	EXBIND0R(RID, concave_polygon_shape_create)
 	EXBIND0R(RID, heightmap_shape_create)
-	EXBIND0R(RID, custom_shape_create)
 
 	EXBIND2(shape_set_data, RID, const Variant &)
-	EXBIND2(shape_set_custom_solver_bias, RID, real_t)
-
-	EXBIND2(shape_set_margin, RID, real_t)
-	EXBIND1RC(real_t, shape_get_margin, RID)
 
 	EXBIND1RC(PS3DE::ShapeType, shape_get_type, RID)
 	EXBIND1RC(Variant, shape_get_data, RID)
-	EXBIND1RC(real_t, shape_get_custom_solver_bias, RID)
 
 	/* SPACE API */
 
+	EXBIND6(space_apply_explosion, RID, const Vector3 &, real_t, real_t, real_t, uint32_t)
+	EXBIND1RC(Array, space_get_contact_hit_events, RID)
+	EXBIND1RC(Array, space_get_joint_events, RID)
+	EXBIND1RC(Vector3, joint_get_constraint_force, RID)
+	EXBIND1RC(Vector3, joint_get_constraint_torque, RID)
 	EXBIND0R(RID, space_create)
 	EXBIND2(space_set_active, RID, bool)
 	EXBIND1RC(bool, space_is_active, RID)
@@ -323,9 +321,6 @@ public:
 	EXBIND2(body_set_collision_mask, RID, uint32_t)
 	EXBIND1RC(uint32_t, body_get_collision_mask, RID)
 
-	EXBIND2(body_set_collision_priority, RID, real_t)
-	EXBIND1RC(real_t, body_get_collision_priority, RID)
-
 	EXBIND2(body_set_user_flags, RID, uint32_t)
 	EXBIND1RC(uint32_t, body_get_user_flags, RID)
 
@@ -387,7 +382,7 @@ public:
 
 	EXBIND2(body_set_ray_pickable, RID, bool)
 
-	GDVIRTUAL8RC_REQUIRED(bool, _body_test_motion, RID, const Transform3D &, const Vector3 &, real_t, int, bool, bool, GDExtensionPtr<PhysicsServer3DExtensionMotionResult>)
+	GDVIRTUAL7RC_REQUIRED(bool, _body_test_motion, RID, const Transform3D &, const Vector3 &, real_t, int, bool, GDExtensionPtr<PhysicsServer3DExtensionMotionResult>)
 
 	thread_local static const HashSet<RID> *exclude_bodies;
 	thread_local static const HashSet<ObjectID> *exclude_objects;
@@ -399,7 +394,7 @@ public:
 		bool ret = false;
 		exclude_bodies = &p_parameters.exclude_bodies;
 		exclude_objects = &p_parameters.exclude_objects;
-		GDVIRTUAL_CALL(_body_test_motion, p_body, p_parameters.from, p_parameters.motion, p_parameters.margin, p_parameters.max_collisions, p_parameters.collide_separation_ray, p_parameters.recovery_as_collision, r_result, ret);
+		GDVIRTUAL_CALL(_body_test_motion, p_body, p_parameters.from, p_parameters.motion, p_parameters.margin, p_parameters.max_collisions, p_parameters.recovery_as_collision, r_result, ret);
 		exclude_bodies = nullptr;
 		exclude_objects = nullptr;
 		return ret;
@@ -481,6 +476,9 @@ public:
 
 	/* JOINT API */
 
+	EXBIND7(joint_make_configured, RID, PS3DE::JointType, RID, const Transform3D &, RID, const Transform3D &, const Dictionary &)
+	EXBIND2(joint_set_configuration, RID, const Dictionary &)
+	EXBIND1RC(Dictionary, joint_get_configuration, RID)
 	EXBIND0R(RID, joint_create)
 	EXBIND1(joint_clear, RID)
 
@@ -526,9 +524,6 @@ public:
 	EXBIND1RC(Quaternion, generic_6dof_joint_get_angular_target_rotation, RID)
 
 	EXBIND1RC(PS3DE::JointType, joint_get_type, RID)
-
-	EXBIND2(joint_set_solver_priority, RID, int)
-	EXBIND1RC(int, joint_get_solver_priority, RID)
 
 	EXBIND2(joint_disable_collisions_between_bodies, RID, bool)
 	EXBIND1RC(bool, joint_is_disabled_collisions_between_bodies, RID)
