@@ -8,7 +8,13 @@ import test_builders
 Import("env")
 
 # Sources with tests must be explicitly linked first.
-force_link_sources = glob.glob("*/**/*.cpp", recursive=True)
+# Box3D's standalone main() fixtures have their own CMake/CTest targets.
+# They are not engine doctests and cannot participate in the force-link runner.
+force_link_sources = [
+    source
+    for source in glob.glob("*/**/*.cpp", recursive=True)
+    if not source.replace("\\", "/").startswith("physics/box3d/")
+]
 force_link_header = env.CommandNoCache(
     "force_link.gen.h", env.Value(force_link_sources), env.Run(test_builders.force_link_builder)
 )

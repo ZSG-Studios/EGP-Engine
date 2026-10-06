@@ -3191,3 +3191,54 @@ The recovery publication receipt verifies the consolidated source, merge
 ancestry, unchanged 95 installed artifacts, inherited combined-engine evidence
 and all eight current worktrees. Six foreign dirty snapshots and both unrelated
 canonical files remain preserved. Full feature and release acceptance remain open.
+
+## 2026-10-06: Hosted networking passes; engine unit-test migration repair
+
+Networking run `37530772200` at `6a3690387a` passes Windows, Ubuntu and macOS.
+The downloaded artifacts in `.build/integration-github-network-6a` preserve each
+native receipt and build/test logs. The same source's GHA static checks pass,
+but all 19 inherited platform build jobs fail before completing engine/runtime
+qualification. Desktop builds still include removed dummy physics headers;
+unsupported mobile/double profiles request physics unavailable in those profiles;
+the minimal template accidentally compiles standalone Box3D executables as
+engine unit tests. These are recorded failures, not successful engine builds.
+
+The unit-test runner now requires the configured real backend whenever a physics
+dimension is enabled. It has no dummy fallback. The viewport physics-picking
+test requires a real 2D server and retains all its assertions and subcases.
+No viewport test case was removed. `tests/SCsub` excludes just Box3D's two
+standalone `main()` fixtures from engine force-linking: 173 of the original 175
+recursive engine-test sources remain, and both excluded programs retain their
+independent CMake/CTest targets.
+
+`.build/integration-engine-test-migration/receipt.json` records an isolated
+Windows MSVC compiler control reproducing `test_main.cpp:69`'s missing dummy
+header, then successful compilation of `test_main.cpp` and `test_viewport.cpp`
+with physics enabled in an editor and explicitly disabled in a debug template.
+The force-link header retains the viewport registration and omits both standalone
+entry points. Four object files and the generated header are preserved in that
+evidence directory before archiving the managed fixture. The rejected attempt
+to disable physics in an editor is retained: SConstruct's export-only guard is
+intentional and remains enforced. These are compiler/graph checks, not a linked
+engine or execution of its unit-test runner.
+
+Both standalone native Box3D targets also rebuild and pass CTest in
+`.build/box3d-current-validation/Release/native`; the exact build and test logs
+are retained in `.build/integration-engine-test-migration`. This preserves their
+deterministic replay and joint coverage independently of the engine test runner.
+
+Docs-owner commits `f65c3357c1`, `acaf0b78a7` and `88f35a1802` correct the inherited
+CI profiles. Android arm32/arm64, iOS and Web templates explicitly omit physics.
+Double-precision Linux remains a sanitizer/debug template with `tests=yes` and
+physics omitted; the regression-project check moves to the single-precision
+Clang sanitizer editor. Existing supported desktop editor jobs and unit checks
+remain. Android and double-precision editors are unavailable until their physics
+profiles are implemented and qualified; their omission is not a passing editor
+test or evidence of mobile/double physics support.
+
+Production engine/module/API/helper sources and the 95 installed artifacts remain
+unchanged. Replacement GHA must still build, link and run the enabled unit tests,
+including real Box2D picking. Existing C++ editor/template matrix `37528340019`
+continues independently, and its queued successor retains its own source pin.
+The loop still owns any subsequent compile/runtime failures and broader feature
+acceptance.

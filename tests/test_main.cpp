@@ -66,12 +66,10 @@
 
 #ifndef PHYSICS_2D_DISABLED
 #include "servers/physics_2d/physics_server_2d.h"
-#include "servers/physics_2d/physics_server_2d_dummy.h"
 #include "servers/physics_2d/physics_server_2d_manager.h"
 #endif // PHYSICS_2D_DISABLED
 #ifndef PHYSICS_3D_DISABLED
 #include "servers/physics_3d/physics_server_3d.h"
-#include "servers/physics_3d/physics_server_3d_dummy.h"
 #include "servers/physics_3d/physics_server_3d_manager.h"
 #endif // PHYSICS_3D_DISABLED
 
@@ -208,17 +206,13 @@ struct GodotTestCaseListener : public doctest::IReporter {
 
 #ifndef PHYSICS_3D_DISABLED
 			physics_server_3d = PhysicsServer3DManager::get_singleton()->new_default_server();
-			if (!physics_server_3d) {
-				physics_server_3d = memnew(PhysicsServer3DDummy);
-			}
+			CRASH_COND_MSG(!physics_server_3d, "Physics-enabled engine tests require a registered 3D physics backend.");
 			physics_server_3d->init();
 #endif // PHYSICS_3D_DISABLED
 
 #ifndef PHYSICS_2D_DISABLED
 			physics_server_2d = PhysicsServer2DManager::get_singleton()->new_default_server();
-			if (!physics_server_2d) {
-				physics_server_2d = memnew(PhysicsServer2DDummy);
-			}
+			CRASH_COND_MSG(!physics_server_2d, "Physics-enabled engine tests require a registered 2D physics backend.");
 			physics_server_2d->init();
 #endif // PHYSICS_2D_DISABLED
 
