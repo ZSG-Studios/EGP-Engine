@@ -46,7 +46,7 @@ def main():
         text = log.read_text(encoding="utf-8", errors="replace")
         results.append({"check": name, "exit_code": code, "seconds": round(time.monotonic() - started, 2)})
         (output / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")
-        if code != expected or (marker and marker not in text):
+        if code != expected or (marker and marker not in text) or (expected == 0 and "ERROR:" in text):
             raise RuntimeError(f"{name} failed ({code}, expected {expected}); see {log}\n{text[-5000:]}")
         print(f"PASS: {name}", flush=True)
 
@@ -105,7 +105,7 @@ func _ready():
     options = f"custom_template/debug={json.dumps(templates[0].as_posix())}\ncustom_template/release={json.dumps(templates[1].as_posix())}\n"
     options += f'binary_format/architecture="{arch}"\napplication/modify_resources=false\napplication/bundle_identifier="com.egp.cppsmoke"\ncodesign/codesign=0\n'
     (project / "export_presets.cfg").write_text(
-        f'[preset.0]\nname="Host"\nplatform="{export_platform}"\nrunnable=true\nexport_filter="all_resources"\n[preset.0.options]\n{options}',
+        f'[preset.0]\nname="Host"\nplatform="{export_platform}"\nrunnable=true\nexport_filter="all_resources"\ninclude_filter=""\nexclude_filter=""\n[preset.0.options]\n{options}',
         encoding="utf-8",
     )
     for config in ("debug",) if args.debug_only else ("debug", "release"):

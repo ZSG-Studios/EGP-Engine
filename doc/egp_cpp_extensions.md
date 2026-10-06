@@ -106,13 +106,18 @@ EGP --headless --editor --path <disposable project> --script <absolute path to e
 ```
 
 The test expects a new project without an existing `extensions/smoke` directory.
-Windows x64 validation passed with MSVC and CMake. A packaged Debug game also
-loaded the extension and verified its rebuilt C++ method using the validation
-editor as a custom export template. The editor-script harness reports RID/Object
-cleanup warnings at exit; the packaged-game check exits without those warnings.
-These checks do not establish memory-cleanup qualification, platform parity, or
-production export-template qualification. The validation editor build disabled
-Mono, D3D12, and AccessKit; their integration is outside this check.
+Windows x64 panel validation passed with MSVC and CMake. The older editor-script
+harness reports RID/Object cleanup warnings at exit, so that harness does not
+establish leak-free teardown.
+
+The built-in CLI was separately verified with bindings generated from the
+editor's actual 4.8 API. Installation detected the existing tools and verified
+compilation/linking; creation, Debug/Release builds, and four failure exit-code
+cases passed. A separately built Debug export template produced a game that
+loaded the extension and verified its C++ method. The positive CLI, export, and
+game checks completed without engine errors. The standalone validation editor
+disabled Mono, D3D12, and AccessKit; the Debug template included Mono. This does
+not establish full feature parity or performance qualification.
 
 `misc/scripts/validate_egp_cpp.py` checks the built-in CLI, error exit codes, and
 actual Debug/Release exports using separately built templates. The
@@ -120,5 +125,6 @@ actual Debug/Release exports using separately built templates. The
 macOS ARM64 and retains logs and timings. Its headless validation builds disable
 rendering backends, Mono, and AccessKit. Workflow results qualify the tested
 architecture and features only; adding a workflow does not establish a passing
-result. Native CLI toolchain installation/check and extension Debug/Release builds
-have passed locally on Windows without the script-harness cleanup warnings.
+result. Release-template exports and Linux/macOS parity remain pending current
+workflow results. Positive checks reject unexpected engine errors as well as
+incorrect exit codes or missing expected output.
