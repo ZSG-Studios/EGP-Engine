@@ -129,7 +129,8 @@ Current build supervision (do not start duplicates):
   `.build/box3d-parity-editor-build.json`. Frozen source manifest
   `.build/box3d-parity-source-snapshot.json`. Inspect receipt timestamps; older
   receipts may still exist while a new run is active. Original session `88174`
-  failed on collision-polygon margin and is finished.
+  failed on collision-polygon margin and is finished. The current snapshot includes
+  typed boolean joint accessors and the margin caller removal from `b93b930200`.
 - Combined Mono editor, fresh exact SDK/API, glue/assemblies, Debug and Release
   templates: shell session `7202`, runner `.build/build_combined_mono.py`, worktree
   `net-trilingual-api/EGP`. Current PID/step/log in
@@ -141,6 +142,14 @@ Current build supervision (do not start duplicates):
   `.build/integration-native-net/receipt.json`. Box3D Release golden trajectory,
   native joints/replay and upstream suite passed:
   `.build/integration-box3d-native/Release/receipt.json`.
+- C++ editor-panel regression passed with clean shutdown after repairing the
+  fixture's close notification. Permanent validator:
+  `misc/scripts/validate_egp_cpp_ui.py`; receipt
+  `.build/egp-cpp-ui/1791264409488401100/receipt.json`. It verifies scaffold,
+  registration, SDK reuse, deliberate compiler failure, diagnostics/source save,
+  changed implementation reload and Release mappings through editor controls.
+  This is headless validation on the earlier native binary, not current combined
+  engine or running-game reload qualification.
 - Network lab also passed client-only wifi impairment:
   `.build/egp-network-lab/1791264175579256000/receipt.json`. A 100% packet-loss run
   correctly failed and its processes exited; receipt at `1791263869496218800`.
@@ -164,7 +173,8 @@ a worktree while its build is running.
 
 After combined gates pass, complete the authorized final merge/push to master,
 verify remote SHA and reconcile PR #1. Preserve both accidental root artifacts
-(`Temp Plan.md`, `tagged_query_test.b3rec`) outside commits. Finish C++ editor smoke
-teardown by replacing the test plugin's recursive close propagation with a deferred
-EditorNode close notification; qualify it, then proceed to actual C#/C++ running-game
-reload, state/instances/events and repeat-load cleanup. Those remain incomplete.
+(`Temp Plan.md`, `tagged_query_test.b3rec`) outside commits. Re-run the permanent C++
+panel validator against the final combined editor, then proceed to actual C#/C++
+running-game reload, state/instances/events and repeat-load cleanup. Those remain
+incomplete. Keep the repaired deferred EditorNode close path in the fixture; do
+not restore recursive root notification propagation.
