@@ -42,8 +42,8 @@ because these chats exist.
 | Advanced networking | Field deltas, bounded bandwidth/queues, input acknowledgments, lag compensation, scale/soak, malicious input rejection | Implementation/qualification gaps remain |
 | Network lab | Dedicated server, listen host, N clients, visible windows, latency/jitter/loss, directional simulation, reconnect, logs/watchdog/cleanup | Native host and packaged Mono Debug host/Release dedicated server pass simultaneous visible clients, WAN simulation and reconnect; broader matrix remains |
 | Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Pending |
-| C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Matching SDK/editor controls, mixed-language exports and live compatible Debug reload pass on Windows; incompatible ABI/restart recovery and other platforms remain |
-| C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Two live Debug rebuilds preserve existing IDs, property state, callables and signals; failed compile retains published code; Missing/invalid DLL recovery also preserves extension and editable parent state; incompatible class/ABI changes and soak remain |
+| C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Matching SDK/editor controls, mixed-language exports, dynamic signature changes and rejected hierarchy/class repair pass on Windows; raw cached bindings, arbitrary ABI changes and other platforms remain |
+| C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Two live Debug rebuilds preserve existing IDs, property state, callables and signals; failed compile retains published code; Missing/invalid DLL recovery and rejected base/extension-parent/ancestor/class-removal repair preserve extension and editable parent state; raw cached bindings, arbitrary ABI changes and soak remain |
 | C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Six combined native/managed reloads including corrupted-DLL and blocked-unload recovery preserve instances, properties and events; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
 | Export/platform | Relocated Debug/Release games with C#/GDScript/C++ and Box physics/networking; platform-specific binaries and missing-binary diagnostics | Relocated Windows Debug/Release trilingual games pass on the matching API; broader platform/export matrix remains |
 | Performance | Identical-scenes upstream comparison; p95/p99, CPU/GPU/memory/allocations, server tick, bandwidth and long sessions | No AAA readiness claim |
@@ -825,3 +825,70 @@ server restart/adversarial networking, ownership/interest scaling, authoritative
 physics gameplay, platform/performance and package/build-version identity remain
 open. Limited Windows fixtures do not establish full integration, parity or AAA
 readiness.
+
+
+### Native signature and rejected hierarchy reload recovery
+
+Frozen combined source: `184998304308421542889bd1c4fa2a8c0542dc0a`. The Mono editor hash is
+`97ee09fdefe87575195e60ed7e058ba6dc360bde245976f24b73218dad3a2e61`;
+Debug/Release template hashes are
+`6485d101f6a826bc25d797199ae6c223634881f002820158dfa26c1d4c02d641` and
+`bf9c7a9f535859470c73ba06cf5ea8d8cfa24958f54d572113ce003ce24b92c9`.
+The plain API remains `e84e140b923451849e88aab8300021fd9d32f95c31825bb6d7e25a4235953271`
+with SDK `4bc13481314e7023`; the refreshed compiled help is `cc71bebdbfda7f440cfec2c52cb7bd510c0fa796969a20e9bd25d9a89977a883`.
+Exact commands, all tracked-source hashes and build stages are in
+`.build/integration-native-abi-build`, `.build/integration-native-abi-templates`,
+and the preserved `.build/integration-native-abi-documentation-build`.
+
+The baseline at `.build/integration-native-abi-baseline/1791277458347572900`
+rejected a native-base change but could not restore the original live class.
+The next candidate preserved game state but failed the diagnostic gate because
+an editor without live objects discarded its rejected registration record:
+`.build/integration-native-abi-hot-reload/1791278033273734700`. Both failures and
+their logs remain preserved. The final fix retains rejected/removed class records
+and pending instance state, skips already-cleared objects/ClassDB entries on
+retry, and returns `LOAD_STATUS_NEEDS_RESTART` while any class is unavailable.
+Changed method signatures warn that raw cached bindings are invalid. Changed
+extension parents cannot bypass the hierarchy check; descendants cannot reload
+until their parent has been restored.
+
+The live fixture now has `--native-abi-recovery`. Its exact invocation used the
+matched build-tree Mono editor and `bin/GodotSharp/Tools/nupkgs`, with
+`--feature-override --assembly-recovery --unload-recovery --native-recovery
+--native-abi-recovery`. `.build/integration-native-abi-hot-reload-final/1791278918055712400/receipt.json` verifies eleven native rebuilds: changed
+argument count and return type through dynamic methods/cached Callable lookup;
+rejected native-base, extension-parent and ancestor changes; live class removal;
+and compatible repairs. Forced retries return NEEDS_RESTART, and a compatible
+explicit retry returns OK. Object IDs, native counter 91, managed counter 87,
+parent edits, signal/delegate subscriptions and serialization state survive.
+Normal editor/game teardown passes without invalid unregister, double-clear,
+invalid cached-call or script-error diagnostics. Expected fault diagnostics are
+retained. The default non-collectible player also passes at `.build/integration-native-abi-default/1791278923279823400/receipt.json`.
+
+The exposed `GDExtensionManager.reload_extension` help now describes runtime
+opt-in, partial reloads, retained state and restart/repair behavior. Compiled
+native help matches the source exactly; Debug and Release managed XML contain
+the same recovery guidance. Paired API/ClassDB/SDK/C# and 1,358 compiled EGP
+description checks, 19 Box2D cases including one/four-worker trajectories,
+28 Box3D cases, 12 packaged Box2D cases, and 59 mixed-language interoperability
+checks pass on the final engine. Documentation RST and XML-schema checks pass.
+The current qualification and artifact receipts record final hashes and preserve
+prior failed attempts; an evidence helper's initial UTF-8 decoding failure is
+recorded separately from engine failures.
+
+Merge provenance: all four original handoff chats remain idle/completed, the
+original feature ancestors remain in the canonical branch, and the fresh
+seven-worktree inventory preserves tracked patches/untracked hashes. Installation
+and remote/local canonical publication must be verified in
+`.build/canonical-native-abi-artifacts.json` and
+`.build/integration-native-abi-publication.json` before reporting this increment
+published. These checks do not qualify raw cached MethodBind pointers, arbitrary
+ABI/layout/schema changes, wider inheritance graphs, cross-platform reload or soak.
+
+Next concrete acceptance item: add a bounded dedicated-server restart mode to
+the networking lab and verify server PID replacement, client disconnect/reconnect,
+and resumed authoritative ownership/state with visible clients under impairment.
+Wider C# collection/resource/static-state reload, native picking and shape/scaling/
+double-precision, adversarial networking, ownership/interest scaling, authoritative
+physics gameplay, performance and package/build-version identity remain open.
+The loop remains ACTIVE; limited Windows fixtures do not establish AAA readiness.
