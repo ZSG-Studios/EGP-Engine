@@ -470,6 +470,7 @@ Result Session::pump() {
     if (!p.on_owner() || p.pumping) return Result::Busy;
     if (!p.server && !p.client) return p.valid;
     p.pumping = true;
+    const bool clock_was_running = p.server || p.client_connected;
     const double time = now(), elapsed = std::max(0.0, time - p.last_time);
     p.last_time = time;
     if (p.server) { p.server->AdvanceTime(time); p.server->ReceivePackets(); }
@@ -494,7 +495,9 @@ Result Session::pump() {
         }
     }
     if (p.server || p.client_connected) {
-        p.accumulator += elapsed;
+        // Start the client clock at admission. A delayed handshake poll cannot
+        // charge time before this simulation existed to its catch-up budget.
+        if (clock_was_running) p.accumulator += elapsed;
         const double step = 1.0 / p.options.tick_rate;
         if (p.accumulator > 0.5) {
             if (diagnostic) diagnostic("Fixed simulation exceeded its catch-up budget; resynchronization required.");

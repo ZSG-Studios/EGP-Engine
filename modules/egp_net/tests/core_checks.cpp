@@ -112,5 +112,33 @@ int main() {
     check(until(rejection_server,rejection_client,[&]{return rejection_client.state()=="Disconnected";},2500),"corrupted token authentication rejected");
     check(rejection_server.peers().empty(),"tampered token creates no peer");
     rejection_client.stop();rejection_server.stop();
+    // The first connected poll starts a new simulation clock. Time spent
+    // waiting for the handshake must not become simulation catch-up debt.
+    Session startup_server(secure), startup_client(secure);
+    check(startup_server.listen(0,"127.0.0.1")==Result::Ok,"clock startup secure listener");
+    std::vector<uint8_t> startup_token;
+    check(startup_server.issue_token(4004,"127.0.0.1:"+std::to_string(startup_server.statistics().local_port),startup_token)==Result::Ok,"clock startup admission");
+    check(startup_client.connect_token(4004,startup_token)==Result::Ok,"clock startup token join");
+    int startup_diagnostics = 0;
+    startup_client.diagnostic = [&](const std::string &) { ++startup_diagnostics; };
+    bool handshake_ok = true, server_clock_ok = true;
+    auto advance_startup_server = [&] {
+        auto deadline=std::chrono::steady_clock::now()+std::chrono::milliseconds(750);
+        while(std::chrono::steady_clock::now()<deadline) {
+            server_clock_ok = (startup_server.pump()==Result::Ok) && server_clock_ok;
+            std::this_thread::sleep_for(std::chrono::milliseconds(5));
+        }
+    };
+    for(int attempt=0;attempt<8 && startup_client.state()!="Connected";++attempt) {
+        if(startup_client.pump()!=Result::Ok) { handshake_ok=false;break; }
+        if(startup_client.state()!="Connected") advance_startup_server();
+    }
+    check(handshake_ok,"handshake gap does not consume new simulation clock budget");
+    check(server_clock_ok,"server clock advances during delayed client handshake");
+    check(startup_client.state()=="Connected" && startup_diagnostics==0,"delayed encrypted handshake establishes a fresh clock");
+    check(startup_client.statistics().tick==0,"first connected poll starts without pre-admission simulation ticks");
+    advance_startup_server();
+    check(startup_client.pump()==Result::Failed && startup_diagnostics==1 && startup_client.state()=="Stopped" && startup_client.statistics().tick==0 && startup_client.entities().empty(),"connected clock gap still rejects and clears simulation");
+    startup_server.stop();startup_client.stop();
     std::cout << "EGP_NATIVE_NETWORK_CHECKS=" << checks << std::endl;
 }
