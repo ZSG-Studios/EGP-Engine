@@ -44,7 +44,7 @@ because these chats exist.
 | Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Packaged Debug graceful and Release abrupt dedicated-server replacement pass with three persistent visible clients under WAN impairment; eight-second headless outage passes; single and repeated selected-client recovery and same-process server clock rejection/checkpoint/fresh admission/ownership recovery pass in editor and packaged Debug host/Release dedicated WAN runs; retired-token and retired-entity input rejection are covered; broader controls/scale/soak remain |
 | C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Matching SDK/editor controls, mixed-language exports, dynamic signature changes and rejected hierarchy/class repair pass on Windows; six cached instance/static call paths and nine return kinds now pass on Windows Debug SDK; arbitrary ABI changes and other platforms remain |
 | C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Two live Debug rebuilds preserve existing IDs, property state, callables and signals; failed compile retains published code; Missing/invalid DLL recovery and rejected base/extension-parent/ancestor/class-removal repair preserve extension and editable parent state; cached binding failure/default-return and compatible repair checks now pass; arbitrary ABI changes and soak remain |
-| C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Combined native/managed reload and corrupted-DLL/blocked-unload repair preserve instances, properties and events; public low-level C# session handoff and high-level NetNode reload preserve connected/stopped sessions and exact signal counts; high-level tree exit/reentry and freed codec replacement pass; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
+| C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Combined native/managed reload and corrupted-DLL/blocked-unload repair preserve instances, properties and events; public low-level C# session handoff and high-level NetNode reload preserve connected/stopped sessions and exact signal counts; high-level tree exit/reentry, fresh session traffic, retired callback isolation, reentrant close/stop replacement and freed codec replacement pass; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
 | Export/platform | Relocated Debug/Release games with C#/GDScript/C++ and Box physics/networking; platform-specific binaries and missing-binary diagnostics | Relocated Windows Debug/Release trilingual games pass on the matching API; broader platform/export matrix remains |
 | Performance | Identical-scenes upstream comparison; p95/p99, CPU/GPU/memory/allocations, server tick, bandwidth and long sessions | No AAA readiness claim |
 
@@ -2712,3 +2712,94 @@ admission/retry/checkpoint delivery, larger worlds and WAN/scale/soak/platform
 performance. One local Windows Debug authority/client pair shares the game
 process during reload. Full feature acceptance and AAA readiness remain open;
 the loop stays ACTIVE.
+
+
+### 2026-10-06 — retired native codec callbacks and fresh traffic after tree reentry
+
+The shared GDScript codec now uses seven named native signal callbacks and
+disconnects them when close releases its native session. GDScript, C# NetNode and
+C++ Net all use this codec. Stop keeps its configured native session and callbacks
+for explicit listener/client restart. Close and stop also check session identity
+after state callbacks so a reentrant callback that closes and configures a fresh
+session does not have that new session or cache cleared by the outer operation.
+The shared helper and both GDScript/trilingual sample mirrors match exactly.
+
+The isolated legacy control `.build/integration-native-callback-close-control/1791308718803167500/receipt.json`
+reproduced the bug after successful fresh admission: all seven retired native
+callbacks were still attached. Injecting a local stale packet/state signal changed
+the new session's typed packet count and cleared its codec entity cache to zero.
+This is a lifetime test using a retained native reference, not a remote attack
+or WAN security claim. The failing generated code, assemblies/DLLs and logs are
+preserved. Repaired focused runs also remain separate from final qualification.
+
+API and fixture commit `8198c7159660075d39e7981a956c68a6b8d561e8` is followed by
+sample-mirror commit `59bc47dcee2e8b0fc9d79aec463ec90b49542460`. The stopped receipt was captured
+before the mirror commit; all of its executed helper/fixture inputs are identical
+and the default GDScript sample below executes the updated mirror. No native
+engine rebuild: compiled native source `4d64b38c554ab3dc491285f4ffa5119c001da56f` and
+engine SHA `20be5396d78b4c9873d4a355132f62366be58fcf9b1519bb595006fb07e74342` remain pinned.
+
+| Check | Exact evidence |
+| --- | --- |
+| Full live C#/C++ reload and three fresh-session cycles | `.build/integration-native-callback-live-qualified/1791309289155550500/receipt.json`; editor 34604, game 33668; original six live phases pass, then reentry sequences [7, 8, 9] with new native session IDs and retained node/codec IDs |
+| Full stopped-authority repair and three fresh-session cycles | `.build/integration-native-callback-stopped-qualified/1791309154280188700/receipt.json`; editor 14988, game 32356; 66 client polls during 566 ms fault; explicit stopped-session recovery, followed by reentry sequences [3, 4, 5] |
+| Native and high-level callback ownership | Every reentry checkpoint verifies all seven retired native callbacks are zero, all seven new native callbacks are exactly one, all eleven typed forwarding connections are exactly one, one retained codec child and zero closed peer/entity caches |
+| Managed runtime lifecycle checks | 18 checks per high-level fixture prove replacement from both close and stop state callbacks preserves a fresh listening session and its spawned entity; the previous six freed-codec replacement checks also pass and survive managed reload |
+| Low-level facade/Box3D and runtime default | `.build/integration-native-callback-low-regression/1791310317978790600/receipt.json` and `.build/integration-native-callback-default/1791310418152448000/receipt.json`; fresh live facade/world regression and non-collectible default pass |
+| Trilingual editor and relocated exports | `.build/integration-native-callback-languages/receipt.json`; fresh 27 stages, [('interop', 29292, 197), ('export-interop', 28140, 197), ('export-interop-release', 9308, 197)]; independent high-level C#/C++ process fault cycles also pass |
+| Token admission | `.build/integration-native-callback-admission-qualification/receipt.json`; 72 native/GDScript cases across editor/Debug/Release with configured/generated keys, same/cross-second token creation and graceful/clock failure |
+| Physics/network lab | `.build/integration-native-callback-physics-qualification/receipt.json`; seven fresh editor, packaged visible listen-host/dedicated multi-client, impaired/stalled/checkpoint/owner-input cases and controls; default sample `.build/integration-native-callback-physics-default/receipt.json` also passes |
+| Evidence and options | `.build/integration-native-callback-tool-checks/receipt.json`; 293 semantic tests, 15 invalid CLI cases, help/Ruff/format/mypy pass; existing Python 3.9 configuration warning retained |
+
+Fresh-session reentry explicitly reapplies options, hosts on the released port,
+issues a fresh token for account 424242, joins, spawns a new owned entity, and
+checks exact typed messages/handler payloads, owned input, unowned-input rejection,
+raw packet counts and advancing native ticks. Registered message handlers remain
+on the retained codec. The three successive new sessions are distinct from every
+retired session. Numeric peer/entity IDs may repeat across different native
+sessions; ownership commands and saved handles must include their issuing session
+identity. This differs from monotonic handle generations when restarting a retained
+native session after a fixed-clock fault.
+
+Generic corrupt-assembly, blocked-unload and rejected ABI repair still precedes
+network-node creation. Live networking phases test failed managed/native builds
+and compatible C#-only/C++-only/combined reload; stopped phases reload before
+explicit fresh admission. Those injected generic failures while an authenticated
+NetNode is active remain open. Application C# events explicitly resubscribe;
+arbitrary closures or game state are not automatically persisted.
+
+Commands:
+
+```powershell
+$egpPython = 'C:/Users/Rose-X/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe'
+& $egpPython misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --output .build/integration-native-callback-stopped-qualified --network-recovery --network-csharp-node --assembly-recovery --unload-recovery --native-recovery --native-abi-recovery
+& $egpPython misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --output .build/integration-native-callback-live-qualified --network-live-reload --network-csharp-node --assembly-recovery --unload-recovery --native-recovery --native-abi-recovery
+& $egpPython misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --output .build/integration-native-callback-low-regression --network-live-reload --network-csharp-facade --network-physics
+& $egpPython misc/scripts/validate_egp_hot_reload.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --output .build/integration-native-callback-default --disable-runtime
+```
+
+The complete SDK/template trilingual argv is recorded in
+`.build/integration-native-callback-languages/source.json`. Exact seven lab and
+three admission argv arrays are in their qualification receipts. Current shared
+helper bytes require fresh executed-input evidence: the 72 admission cases, seven
+physics/lab cases and default GDScript sample above replace the historical reuse
+entries. Native 120-check/ten-test suites, ClassDB/SDK/glue and 86 installed
+artifacts keep their unchanged bounded evidence. Fresh trilingual Debug DLL
+`ecc31bd6c25643bd3e6818c6698fdc11c00fe006418504b700b6414309c4e976`, Release DLL `a8baaa98e609d64eac331acb9c8cf6e0e791b9f65159c599b93f7c24c5c618fc` and C#
+assembly `2b1acbea33f104f8bfc9dc8e9e04be8fbf73b23546229bd52259f2ba71ad268f` are recorded with fixture/runtime/log hashes.
+
+`.build/integration-native-callback-publication.json` validates normal publication,
+canonical/remote master equality, original handoff ancestry, all seven actual
+worktrees, foreign tracked/untracked bytes, no open PRs, matching sample mirrors
+and the combined evidence above. The temporary docs source worktree used earlier
+in this run belonged to the separate docs owner and was archived after its
+b7c02a7275 publication. Foreign historical leftovers remain preserved and
+accounted for, not declared clean or universally merged. A new qualified source
+handoff follows normal push; the integration loop remains ACTIVE.
+
+Next: authenticated-node assembly/unload/ABI failures, high-level C++/physics
+adapter ownership, arbitrary in-flight callback/lifecycle mutations, low-level
+independent-process fault/reload, concurrent/exported-runtime reload, automatic
+client physics prediction/rollback, production admission/retry/checkpoint delivery
+and platform/scale/soak/performance. Configured impairments do not quantify packet
+loss or WAN performance; full feature completion and AAA readiness remain open.
