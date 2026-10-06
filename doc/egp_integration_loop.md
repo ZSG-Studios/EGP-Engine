@@ -3427,3 +3427,26 @@ marker and exit 7 through redirected output. Applicable pre-commit checks passed
 Hosted baseline artifacts and local logs are preserved under
 `.build/integration-restored-0783/`; a fresh hosted run is required. This improves
 diagnostics and does not establish that the hosted failure has been repaired.
+
+### 2026-10-06 ownership fairness deadline regression
+
+Hosted `37545879122` on `c6aec20fee9dad32bc86297ada6b54dbfce8596e`
+passed Windows/Linux but failed macOS symmetric fairness while waiting for
+ownership revocation. All upstream Yojimbo checks passed in this run. The fixture
+combined disconnect detection and state delivery into one five-second deadline,
+while transport timeout is itself five seconds. A deterministic isolated abrupt
+outage (cease client pumping without sending a disconnect notification) reproduced
+the exact legacy assertion with exit 1; the corrected fixture passed exit 0.
+
+The fixture now bounds transport detection separately by configured timeout plus
+one second for pumping, asserts immediate server-side authority revocation, then
+retains the original five-second replication deadline under the same 64-entity,
+32-message/second pressure. The permanent abrupt symmetric profile covers two
+outages, reconnects and interest cycles. This is a test contract repair, with no
+network implementation or budget change. Applicable pre-commit checks pass.
+Evidence: `.build/integration-restored-c6aec/timeout-{legacy,split}.log`, isolated
+fixture sources/builds, and `fairness-final-tests.log`. Hosted macOS requalification
+is required before attributing its original failure conclusively to this deadline.
+Final Windows Debug CTest: `egp_net_symmetric_fairness` passed in 20.39 seconds;
+`egp_net_abrupt_symmetric_fairness` passed in 29.41 seconds with a 60-second
+watchdog. Both passed on the final formatted source; total 49.85 seconds.

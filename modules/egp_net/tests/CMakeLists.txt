@@ -47,6 +47,8 @@ set_tests_properties(egp_net_receive_budget PROPERTIES TIMEOUT 40)
 
 add_test(NAME egp_net_symmetric_fairness COMMAND egp_net_fairness_check --symmetric)
 set_tests_properties(egp_net_symmetric_fairness PROPERTIES TIMEOUT 45)
+add_test(NAME egp_net_abrupt_symmetric_fairness COMMAND egp_net_fairness_check --symmetric --abrupt)
+set_tests_properties(egp_net_abrupt_symmetric_fairness PROPERTIES TIMEOUT 60)
 
 add_executable(egp_net_replication_load_check replication_load_check.cpp)
 target_link_libraries(egp_net_replication_load_check PRIVATE egp_net_core)
