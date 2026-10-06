@@ -19,6 +19,49 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def clock_recovery_failure(result):
+    """Reject missing repeated failures, reused handles and lost physics time."""
+    diagnostic = "Fixed simulation exceeded its catch-up budget; resynchronization required."
+    for language, body in (("csharp", 10000), ("cpp", 20000)):
+        proof = result.get("clock_recovery", {}).get(language, {})
+        if proof.get("passed") is not True or proof.get("same_session") is not True or proof.get("body_id") != body:
+            return f"Missing {language} retained-session recovery"
+        for kind in ("cycles", "low_cycles"):
+            records = proof.get(kind, [])
+            diagnostics = proof.get("diagnostics" if kind == "cycles" else "low_diagnostics")
+            if len(records) != 3 or diagnostics != [diagnostic] * 3:
+                return f"Missing {language} {kind} faults/diagnostics"
+            previous = None
+            for number, record in enumerate(records, 1):
+                old, new = record.get("old_entity"), record.get("new_entity")
+                if (
+                    record.get("cycle") != number
+                    or not isinstance(old, int)
+                    or not isinstance(new, int)
+                    or old <= 0
+                    or new <= 0
+                    or old == new
+                    or (previous is not None and old != previous)
+                    or record.get("poll_error") != 1
+                    or record.get("gap_ms", 0) < 550
+                ):
+                    return f"Invalid {language} {kind} handle/fault history"
+                previous = new
+                if kind == "cycles":
+                    tick, advanced = record.get("checkpoint_tick", 0), record.get("final_network_tick", 0)
+                    state_hash = record.get("checkpoint_hash", "")
+                    if (
+                        tick <= 0
+                        or advanced < 8
+                        or record.get("final_physics_tick") != tick + advanced
+                        or not isinstance(state_hash, str)
+                        or len(state_hash) != 16
+                        or any(c not in "0123456789abcdef" for c in state_hash)
+                    ):
+                        return f"Invalid {language} restored physics clock/hash"
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, required=True)
@@ -68,6 +111,14 @@ def main():
             if p.is_file()
         },
     }
+    receipt["source_sha256"].update({
+        rel: digest(ROOT / rel)
+        for rel in (
+            "modules/egp_net/samples/trilingual/InteropFixture.cs",
+            "modules/egp_net/samples/trilingual/extension/probe.cpp",
+            "misc/scripts/validate_egp_net_languages.py",
+        )
+    })
 
     def run(label, command, timeout, marker=None, cwd=None):
         start = time.monotonic()
@@ -102,11 +153,16 @@ def main():
             "exit_code": code,
             "elapsed_seconds": round(time.monotonic() - start, 3),
             "log": str(logfile),
+            "pid": process.pid,
         })
         if marker == "EGP_TRILINGUAL_PASSED":
             match = re.search(r"EGP_TRILINGUAL_PASSED (\{[^\n]+\})", text)
             if match:
                 receipt[label] = json.loads(match.group(1))
+                failure = clock_recovery_failure(receipt[label])
+                if failure:
+                    checks[-1]["passed"] = passed = False
+                    checks[-1]["evidence_failure"] = failure
         (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n")
         print(label, "PASS" if passed else "FAIL", flush=True)
         if not passed:

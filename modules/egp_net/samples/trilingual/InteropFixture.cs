@@ -15,6 +15,7 @@ public partial class InteropFixture : Node
     private Node? gdPeer, cppPeer;
     private NetBox3D? physics;
     private string physicsProfile = "";
+    private readonly Dictionary clockRecovery = new();
     private void Check(bool condition, string label)
     {
         if (!condition) throw new InvalidOperationException(label);
@@ -31,7 +32,7 @@ public partial class InteropFixture : Node
                 }
                 await RunProcess(args); Cleanup(); GetTree().Quit(); return;
             }
-            await Run(); GD.Print("EGP_TRILINGUAL_PASSED " + Json.Stringify(new Dictionary { ["checks"] = checks.Count, ["languages"] = new Array { "csharp", "gdscript", "cpp" }, ["physics_profile"] = physicsProfile })); Cleanup(); GetTree().Quit();
+            await Run(); GD.Print("EGP_TRILINGUAL_PASSED " + Json.Stringify(new Dictionary { ["checks"] = checks.Count, ["languages"] = new Array { "csharp", "gdscript", "cpp" }, ["physics_profile"] = physicsProfile, ["clock_recovery"] = clockRecovery })); Cleanup(); GetTree().Quit();
         }
         catch (Exception error) { GD.PushError("EGP_TRILINGUAL_FAILED " + error); Cleanup(); GetTree().Quit(1); }
     }
@@ -69,7 +70,7 @@ public partial class InteropFixture : Node
         }
         ulong started = Time.GetTicksMsec();
         while (Time.GetTicksMsec() - started < 10000) {
-            CheckPoll(server?.Poll()); cppPeer?.Call("poll");
+            CheckPoll(server?.Poll()); if (cppPeer != null) CheckPoll(CallError(cppPeer, "poll"));
             if (cppPeer != null) { if (cppPeer.Call("status").AsGodotDictionary()["process_passed"].AsBool()) break; }
             else if (role == "server") { if (drain > 0 && ++drain >= 15) break; }
             else {
@@ -97,7 +98,7 @@ public partial class InteropFixture : Node
         {
             CheckPoll(server?.Poll()); CheckPoll(csPeer?.Poll());
             if (gdPeer != null) CheckPoll(CallError(gdPeer, "poll"));
-            cppPeer?.Call("poll"); CheckPoll(lowServer?.Poll()); CheckPoll(lowPeer?.Poll());
+            if (cppPeer != null) CheckPoll(CallError(cppPeer, "poll")); CheckPoll(lowServer?.Poll()); CheckPoll(lowPeer?.Poll());
             await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
         }
     }
@@ -209,5 +210,58 @@ public partial class InteropFixture : Node
         cppStatus = cppPeer.Call("status").AsGodotDictionary();
         Check(cppStatus["physics_tick"].AsInt64() >= 30 && cppStatus["physics_tick"].AsInt64() == cppStatus["network_tick"].AsInt64()
             && cppStatus["body"].AsGodotDictionary()["position"].AsVector3().Y < 9.5f, "C++ Box3D fixed network clock and state");
+        cppPeer.Call("stop");
+        await CheckClockRecovery(world, entity);
+        server.Stop(); physics.Detach();
+        var cppRecovery = cppPeer.Call("clock_recovery_check").AsGodotDictionary();
+        Check(cppRecovery["passed"].AsBool() && cppRecovery["cycles"].AsGodotArray().Count == 3
+            && cppRecovery["low_cycles"].AsGodotArray().Count == 3 && cppRecovery["same_session"].AsBool(), "C++ high/low repeated clock recovery");
+        clockRecovery["cpp"] = cppRecovery;
+    }
+
+    private async Task CheckClockRecovery(GodotObject world, long entity)
+    {
+        var native = server!.NativeSession!.GetInstanceId();
+        int port = server.Statistics["local_port"].AsInt32();
+        var diagnostics = new List<string>(); server.Diagnostic += diagnostics.Add;
+        var cycles = new Array();
+        for (int cycle = 1; cycle <= 3; cycle++) {
+            long savedTick = world.Call("get_tick").AsInt64(); string hash = world.Call("get_state_hash").AsString();
+            var snapshot = world.Call("capture_snapshot").AsByteArray(); Check(snapshot.Length > 0, "C# clock checkpoint " + cycle);
+            ulong before = Time.GetTicksMsec(); OS.DelayMsec(550); var error = server.Poll();
+            ulong gap = Time.GetTicksMsec() - before;
+            Check(error == Error.Failed && diagnostics.Count == cycle && diagnostics[^1] == "Fixed simulation exceeded its catch-up budget; resynchronization required.", "C# clock rejects scheduling debt " + cycle);
+            Check(server.State == "Stopped" && server.GetEntities().Count == 0 && server.GetPeers().Count == 0 && server.Statistics["tick"].AsInt64() == 0
+                && server.Spawn(1) == 0 && server.UpdateEntity(entity, new()) == Error.Unauthorized, "C# stopped authority " + cycle);
+            physics!.Detach();
+            Check(CallError(world, "step_tick", savedTick + 1) == Error.Ok && CallError(world, "restore_snapshot", snapshot) == Error.Ok
+                && world.Call("get_tick").AsInt64() == savedTick && world.Call("get_state_hash").AsString() == hash, "C# trusted checkpoint restore " + cycle);
+            Check(server.Host(port) == Error.Ok && server.NativeSession!.GetInstanceId() == native && server.GetEntity(entity).Count == 0
+                && server.UpdateEntity(entity, new()) == Error.DoesNotExist, "C# retained session/rebind/retired entity " + cycle);
+            long next = server.Spawn(1); Check(next != 0 && next != entity && physics.Attach(server, world) == Error.Ok && physics.Track(next, 10000) == Error.Ok, "C# fresh handle stable body " + cycle);
+            ulong deadline = Time.GetTicksMsec() + 2000;
+            while (Time.GetTicksMsec() < deadline && server.Statistics["tick"].AsInt64() < 8) await Frames(1);
+            Check(server.Statistics["tick"].AsInt64() >= 8 && world.Call("get_tick").AsInt64() == savedTick + server.Statistics["tick"].AsInt64()
+                && server.GetEntity(next)["state"].AsGodotDictionary()["physics_tick"].AsInt64() > savedTick, "C# restored world/transport clock offset " + cycle);
+            cycles.Add(new Dictionary { ["cycle"] = cycle, ["old_entity"] = entity, ["new_entity"] = next, ["checkpoint_tick"] = savedTick, ["checkpoint_hash"] = hash,
+                ["final_physics_tick"] = world.Call("get_tick"), ["final_network_tick"] = server.Statistics["tick"], ["gap_ms"] = gap, ["poll_error"] = (int)error });
+            entity = next;
+        }
+        server.Stop(); physics!.Detach();
+        using var low = new NetSession(); Check(low.Configure() == Error.Ok && low.Listen(0) == Error.Ok, "C# low clock host");
+        var lowDiagnostics = new List<string>(); low.Diagnostic += lowDiagnostics.Add;
+        ulong lowId = low.Native.GetInstanceId(); int lowPort = low.Statistics["local_port"].AsInt32(); long old = low.Spawn(1, new byte[] { 1 }).Entity;
+        var lowCycles = new Array();
+        for (int cycle = 1; cycle <= 3; cycle++) {
+            ulong before = Time.GetTicksMsec(); OS.DelayMsec(550);
+            Check(low.Poll() == Error.Failed && low.State == "Stopped" && low.GetEntities().Length == 0 && low.GetPeers().Length == 0
+                && low.Spawn(1, new byte[] { 1 }).Error == Error.Unauthorized, "C# low clock fails closed " + cycle);
+            Check(low.Listen(lowPort) == Error.Ok && low.Native.GetInstanceId() == lowId, "C# low session retained " + cycle);
+            var next = low.Spawn(1, new byte[] { 2 });
+            Check(next.Error == Error.Ok && next.Entity != 0 && next.Entity != old && low.UpdateEntity(old, new byte[] { 3 }) == Error.DoesNotExist, "C# low retired handle " + cycle);
+            lowCycles.Add(new Dictionary { ["cycle"] = cycle, ["old_entity"] = old, ["new_entity"] = next.Entity, ["poll_error"] = (int)Error.Failed, ["gap_ms"] = Time.GetTicksMsec() - before }); old = next.Entity;
+        }
+        Check(lowDiagnostics.Count == 3 && lowDiagnostics.TrueForAll(s => s == "Fixed simulation exceeded its catch-up budget; resynchronization required."), "C# low clock diagnostics");
+        clockRecovery["csharp"] = new Dictionary { ["passed"] = true, ["same_session"] = true, ["body_id"] = 10000, ["cycles"] = cycles, ["low_cycles"] = lowCycles, ["diagnostics"] = new Array(diagnostics.ConvertAll(s => (Variant)s).ToArray()), ["low_diagnostics"] = new Array(lowDiagnostics.ConvertAll(s => (Variant)s).ToArray()) };
     }
 }
