@@ -595,6 +595,7 @@ void GDExtension::_register_extension_class_method(GDExtensionClassLibraryPtr p_
 		// Try to update the method bind. If it doesn't work (because it's incompatible) then
 		// mark as invalid and create a new one.
 		if (!method->is_reloading || !method->try_update(p_method_info)) {
+			WARN_PRINT(vformat("GDExtension method '%s::%s' changed signature during hot reload. Cached method bindings are invalid; restart Godot if your code uses them.", class_name, method_name));
 			method->valid = false;
 			method = nullptr;
 		}
@@ -742,7 +743,15 @@ void GDExtension::_unregister_extension_class(GDExtensionClassLibraryPtr p_libra
 #endif
 	ERR_FAIL_COND_MSG(ext->gdextension.children.size(), vformat("Attempt to unregister class '%s' while other extension classes inherit from it.", class_name));
 
+#ifdef TOOLS_ENABLED
+	// A rejected reload leaves the class unregistered, with its saved state
+	// retained for repair. There is no ClassDB entry to unregister on retry.
+	if (!ext->is_reloading || ClassDB::class_exists(class_name)) {
+		ClassDB::unregister_extension_class(class_name);
+	}
+#else
 	ClassDB::unregister_extension_class(class_name);
+#endif
 
 	if (ext->gdextension.parent != nullptr) {
 		ext->gdextension.parent->children.erase(&ext->gdextension);
@@ -1012,15 +1021,33 @@ void GDExtension::clear_instance_bindings() {
 	instance_bindings.clear();
 }
 
-void GDExtension::finish_reload() {
+bool GDExtension::finish_reload() {
 	is_reloading = false;
+	bool complete = true;
 
 	// Clean up any classes or methods that didn't get re-added.
 	Vector<StringName> classes_to_remove;
 	for (KeyValue<StringName, Extension> &E : extension_classes) {
 		if (E.value.is_reloading) {
-			E.value.is_reloading = false;
-			classes_to_remove.push_back(E.key);
+			// Rejected or removed classes can still have live parent objects.
+			// Keep their state until a compatible class is registered on retry.
+			Vector<ObjectID> freed_instances;
+			for (const KeyValue<ObjectID, Extension::InstanceState> &S : E.value.instance_state) {
+				if (!ObjectDB::get_instance(S.key)) {
+					freed_instances.push_back(S.key);
+				}
+			}
+			for (ObjectID id : freed_instances) {
+				E.value.instance_state.erase(id);
+				E.value.instances.erase(id);
+			}
+			if (E.value.instance_state.is_empty()) {
+				E.value.is_reloading = false;
+				classes_to_remove.push_back(E.key);
+			} else {
+				complete = false;
+				ERR_PRINT(vformat("GDExtension class '%s' was not restored during hot reload. Live objects retain their native parent and saved state. Restore the compatible class and reload, or restart Godot.", E.key));
+			}
 		}
 
 		Vector<StringName> methods_to_remove;
@@ -1042,6 +1069,9 @@ void GDExtension::finish_reload() {
 
 	// Reset any the extension on instances made from the classes that remain.
 	for (KeyValue<StringName, Extension> &E : extension_classes) {
+		if (E.value.is_reloading) {
+			continue;
+		}
 		// Loop over 'instance_state' rather than 'instance' because new instances
 		// may have been created when re-initializing the extension.
 		for (const KeyValue<ObjectID, Extension::InstanceState> &S : E.value.instance_state) {
@@ -1060,6 +1090,9 @@ void GDExtension::finish_reload() {
 
 	// Now that all the classes are back, restore the state.
 	for (KeyValue<StringName, Extension> &E : extension_classes) {
+		if (E.value.is_reloading) {
+			continue;
+		}
 		for (const KeyValue<ObjectID, Extension::InstanceState> &S : E.value.instance_state) {
 			Object *obj = ObjectDB::get_instance(S.key);
 			if (!obj) {
@@ -1074,6 +1107,9 @@ void GDExtension::finish_reload() {
 
 	// Finally, let the objects know that we are done reloading them.
 	for (KeyValue<StringName, Extension> &E : extension_classes) {
+		if (E.value.is_reloading) {
+			continue;
+		}
 		for (const KeyValue<ObjectID, Extension::InstanceState> &S : E.value.instance_state) {
 			Object *obj = ObjectDB::get_instance(S.key);
 			if (!obj) {
@@ -1086,6 +1122,7 @@ void GDExtension::finish_reload() {
 		// Clear the instance state, we're done looping.
 		E.value.instance_state.clear();
 	}
+	return complete;
 }
 
 void GDExtension::_track_instance(void *p_user_data, void *p_instance) {

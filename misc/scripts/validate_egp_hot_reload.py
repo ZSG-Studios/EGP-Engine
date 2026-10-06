@@ -74,9 +74,16 @@ def main():
     parser.add_argument(
         "--native-recovery", action="store_true", help="Also recover a missing and invalid native library"
     )
+    parser.add_argument(
+        "--native-abi-recovery",
+        action="store_true",
+        help="Exercise changed method signatures and rejected base-class repair",
+    )
     args = parser.parse_args()
     if args.disable_runtime and args.feature_override:
         parser.error("--disable-runtime and --feature-override are mutually exclusive")
+    if args.native_abi_recovery and (args.disable_runtime or args.expect_disabled):
+        parser.error("--native-abi-recovery requires runtime reload")
     output = args.output.resolve() / str(time.time_ns())
     project = output / "project"
     addon = project / "addons/reload_fixture"
@@ -165,8 +172,8 @@ def main():
         require(response["passed"], action + " command failed")
         return response
 
-    def sample():
-        command("sample")
+    def sample(action="sample"):
+        command(action)
         state = wait_json(project / "sample.json", lambda x: x["request"] == request_id, 15)
         receipt["samples"].append(state)
         save()
@@ -174,6 +181,7 @@ def main():
 
     def verify(state, version, previous, cs_version=None):
         cs_version = version if cs_version is None else cs_version
+        require(not state.get("native_unavailable"), "Compatible native repair did not restore the live class")
         require(not state["editor_hint"], "Fixture is an editor tool rather than a running game")
         require(int(state["pid"]) != process.pid, "Game was not launched as a separate process")
         require(state["collectible"], "Running-game project assembly is not collectible")
@@ -411,6 +419,101 @@ def main():
                     "Native failed-load diagnostic missing from debugger",
                 )
                 receipt["native_recovery"] = True
+                previous = state
+            if args.native_abi_recovery:
+                original = source.replace("VERSION", "3")
+                for return_type, result in (("String", '"7"'), ("int", "7")):
+                    changed = original.replace('D_METHOD("get_message")', 'D_METHOD("get_message", "value")').replace(
+                        'String get_message() const { return "3"; }',
+                        f"{return_type} get_message(int value) const {{ return {result}; }}",
+                    )
+                    require(changed != original, "Unexpected native method scaffold")
+                    source_path.write_text(changed, encoding="utf-8")
+                    require(command("build", 900)["build_result"] == 0, "Changed-signature build failed")
+                    time.sleep(2)
+                    changed_state = sample("sample-abi")
+                    expected = "7" if return_type == "String" else 7
+                    require(
+                        changed_state["cpp_version"] == expected
+                        and changed_state["cpp_callable"] == expected
+                        and changed_state["cpp_counter"] == 91
+                        and changed_state["cpp_id"] == previous["cpp_id"]
+                        and changed_state["parent_ok"],
+                        "Changed-signature dynamic call lost code, state or identity",
+                    )
+                source_path.write_text(original, encoding="utf-8")
+                require(command("build", 900)["build_result"] == 0, "Original-signature repair build failed")
+                time.sleep(2)
+                state = sample()
+                verify(state, 3, previous, cs_version=5 if args.unload_recovery else 4)
+                previous = state
+                changed_base = (
+                    original
+                    .replace("classes/node.hpp", "classes/node2d.hpp")
+                    .replace("public Node {", "public Node2D {")
+                    .replace("GDCLASS(EGP_reload_Node, Node)", "GDCLASS(EGP_reload_Node, Node2D)")
+                )
+                require(changed_base != original, "Unexpected native base scaffold")
+                source_path.write_text(changed_base, encoding="utf-8")
+                require(command("build", 900)["build_result"] == 0, "Changed-base build failed")
+                time.sleep(2)
+                fallback = sample()
+                require(
+                    fallback.get("native_unavailable")
+                    and fallback["cpp_id"] == previous["cpp_id"]
+                    and fallback["base_class"] == "Node"
+                    and fallback["parent_ok"],
+                    "Rejected native base change lost parent identity",
+                )
+                diagnostics = command("diagnostics")["diagnostics"]
+                require(
+                    any("cannot change parent type" in text and "Restart Godot" in text for text in diagnostics),
+                    "Changed-base restart diagnostic missing",
+                )
+                require(sample("reload-native")["status"] == 4, "Rejected-base retry did not report NEEDS_RESTART")
+                require(
+                    any("changed signature" in text and "Cached method bindings" in text for text in diagnostics),
+                    "Changed-signature cached-binding diagnostic missing",
+                )
+                command("rename-native")
+                source_path.write_text(original, encoding="utf-8")
+                require(command("build", 900)["build_result"] == 0, "Original-base repair build failed")
+                time.sleep(2)
+                state = sample()
+                verify(state, 3, previous, cs_version=5 if args.unload_recovery else 4)
+                require(state["cpp_name"] == "RecoveredNative", "Rejected-base parent property edit was lost")
+                previous = state
+                # Removing a class with a live object must also allow restoring it.
+                removed_class = original.replace("GDREGISTER_CLASS(EGP_reload_Node);", "/* class removed */")
+                require(removed_class != original, "Unexpected class registration scaffold")
+                source_path.write_text(removed_class, encoding="utf-8")
+                require(command("build", 900)["build_result"] == 0, "Removed-class build failed")
+                time.sleep(2)
+                fallback = sample()
+                require(
+                    fallback.get("native_unavailable")
+                    and fallback["cpp_id"] == previous["cpp_id"]
+                    and fallback["parent_ok"],
+                    "Removed class lost native parent identity",
+                )
+                require(sample("reload-native")["status"] == 4, "Removed-class retry did not report NEEDS_RESTART")
+                source_path.write_text(original, encoding="utf-8")
+                require(command("build", 900)["build_result"] == 0, "Removed-class repair build failed")
+                time.sleep(2)
+                state = sample()
+                verify(state, 3, previous, cs_version=5 if args.unload_recovery else 4)
+                require(sample("reload-native")["status"] == 0, "Compatible native retry did not report OK")
+                previous = state
+                state = sample()
+                verify(state, 3, previous, cs_version=5 if args.unload_recovery else 4)
+                receipt["native_abi_recovery"] = {
+                    "passed": True,
+                    "method_changes": ["argument-count", "return-type"],
+                    "base_change": "Node to Node2D rejected; Node repair retains state and identity",
+                    "class_removal": "Live parent and state retained until original class is restored",
+                    "diagnostics": diagnostics,
+                    "scope": "Dynamic methods and Callable lookup; cached raw MethodBind pointers and arbitrary ABI changes remain open",
+                }
             receipt["reloads"] = 3 + int(args.assembly_recovery) + int(args.unload_recovery) + int(args.native_recovery)
         command("close")
         require(process.wait(timeout=60) == 0, "Editor/game teardown failed")

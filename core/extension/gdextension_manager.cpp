@@ -206,13 +206,13 @@ GDExtensionManager::LoadStatus GDExtensionManager::reload_extension(const String
 		return status;
 	}
 
-	extension->finish_reload();
+	const bool reload_complete = extension->finish_reload();
 
 	// Needs to come after reload is fully finished, so all objects using
 	// extension classes are in a consistent state.
 	_finish_load_extension(extension);
 
-	return LOAD_STATUS_OK;
+	return reload_complete ? LOAD_STATUS_OK : LOAD_STATUS_NEEDS_RESTART;
 #endif
 }
 

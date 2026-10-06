@@ -113,7 +113,7 @@ class GDExtension : public Resource {
 
 	// Only called by GDExtensionManager during the reload process.
 	void prepare_reload();
-	void finish_reload();
+	bool finish_reload();
 	void clear_instance_bindings();
 #endif
 

@@ -34,6 +34,10 @@ func _ready() -> void:
 	temporary.free()
 
 func _capture(message: String, data: Array) -> bool:
+	if message == "reload-native":
+		var status := GDExtensionManager.reload_extension("res://extensions/reload/reload.gdextension")
+		EngineDebugger.send_message("egp_reload:state", [{"request": data[0], "status": status}])
+		return true
 	if message == "hold":
 		managed.HoldRoot(ProjectSettings.globalize_path("res://release-root"))
 		return true
@@ -47,10 +51,19 @@ func _capture(message: String, data: Array) -> bool:
 	if message == "finish":
 		get_tree().quit.call_deferred(0)
 		return true
+	if message == "sample-abi":
+		EngineDebugger.send_message("egp_reload:state", [{
+			"request": data[0], "cpp_id": str(native.get_instance_id()),
+			"cpp_counter": native.counter, "cpp_name": str(native.name),
+			"parent_ok": native.get_parent() == self,
+			"cpp_version": native.call("get_message", 7),
+			"cpp_callable": cpp_callable.call(7),
+		}])
+		return true
 	if message != "sample":
 		return false
 	var extension := GDExtensionManager.get_extension("res://extensions/reload/reload.gdextension")
-	if not extension.is_library_open():
+	if not extension.is_library_open() or not native.has_method("get_message"):
 		# Failed native loads retain the parent object, with no extension methods.
 		# Do not call cached native methods until a valid library is restored.
 		EngineDebugger.send_message("egp_reload:state", [{
