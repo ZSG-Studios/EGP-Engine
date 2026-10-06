@@ -8,12 +8,17 @@ import subprocess
 import sys
 from pathlib import Path
 
+from egp_vendor_manifest import normalization_pins, pinned_digest_match
+
 ROOT = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--configuration", choices=("Debug", "Release"), default="Debug")
 parser.add_argument("--engine", type=Path)
 parser.add_argument("--output", type=Path, help="Keep this qualification separate from earlier binary receipts")
+parser.add_argument("--verify-vendor-only", action="store_true", help="Verify pinned vendor bytes without building or running networking")
 args = parser.parse_args()
+if args.verify_vendor_only and args.engine:
+    parser.error("--verify-vendor-only cannot qualify an engine")
 output = (args.output or ROOT / ".build/egp-net-validation" / args.configuration).resolve()
 output.mkdir(parents=True, exist_ok=True)
 build = ROOT / ".build/egp-net-native"
@@ -34,12 +39,23 @@ def run(name, command, timeout=180):
 try:
     vendor = ROOT / "thirdparty/yojimbo"
     manifest = json.loads((vendor / "EGP-UPSTREAM.json").read_text(encoding="utf-8"))
+    normalized = normalization_pins(manifest)
+    receipt["vendor_file_identity"] = {}
     for relative, expected in manifest["files"].items():
         source = (vendor / relative).resolve()
-        if not source.is_relative_to(vendor.resolve()) or not source.is_file() or hashlib.sha256(source.read_bytes()).hexdigest() != expected:
+        if not source.is_relative_to(vendor.resolve()) or not source.is_file():
             raise RuntimeError("Vendored source hash mismatch: " + relative)
+        identity = pinned_digest_match(source.read_bytes(), expected, normalized_lf_expected=normalized.get(relative))
+        if identity is None:
+            raise RuntimeError("Vendored source hash mismatch: " + relative)
+        receipt["vendor_file_identity"][relative] = identity
     receipt["upstream_commit"] = manifest["commit"]
     receipt["vendor_verified"] = True
+    if args.verify_vendor_only:
+        receipt.update(passed=True, scope="Pinned vendor source identity only; no native build, networking test or engine runtime qualification")
+        (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
+        print("Pinned vendor source identity: PASS")
+        sys.exit(0)
     run("configure", ["cmake", "-S", ROOT / "modules/egp_net/tests", "-B", build, "-DCMAKE_BUILD_TYPE=" + args.configuration])
     run("build", ["cmake", "--build", build, "--config", args.configuration, "--parallel", "6", "--target",
                   "egp_net_checks", "egp_net_process_check", "egp_net_interest_memory_check", "egp_net_state_pressure_check", "egp_net_fairness_check", "egp_net_receive_budget_check", "egp_net_replication_load_check",
@@ -102,7 +118,7 @@ try:
         if not receipt["processes"]["passed"]:
             raise RuntimeError("Separate Godot server/client fixture failed")
     receipt["passed"] = True
-except (RuntimeError, subprocess.TimeoutExpired, OSError) as failure:
+except (RuntimeError, ValueError, subprocess.TimeoutExpired, OSError) as failure:
     receipt["error"] = str(failure)
 finally:
     (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")

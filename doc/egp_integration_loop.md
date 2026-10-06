@@ -2890,3 +2890,112 @@ process fault/reload, concurrent/exported-runtime reload, automatic client physi
 prediction/rollback, production admission/retry/checkpoint delivery and wider
 platform/scale/soak/performance. Full feature acceptance and AAA readiness remain
 open.
+
+## 2026-10-06: qualified upstream consolidation and binary scene export repair
+
+Canonical `master` now contains upstream snapshot
+`3ea0cf3e72699c5e3b35f7956670ac93b9d1d4a0`, including all 16 commits that were
+previously incoming. Merge `95daeae78e` integrates qualified source
+`7b57a3b3140cb1c8b0bbcfb6bbe2c1f4eab70161`; merge `5e9239d70b` integrates the
+two subsequent compile-time zstd compatibility commits. The README replacement
+rationale and the requested removal of obsolete networking development history
+are preserved. Source publication and exact remote equality are recorded in
+`.build/integration-upstream-publication.json` after the normal push.
+
+The editor is compiled from `7b57a3b3140cb1c8b0bbcfb6bbe2c1f4eab70161`; the
+Debug and Release templates are compiled from
+`c6a6920685b844ff0ba30d2e794117b776edf72a`. Their runtime source is unchanged
+by the editor-only repair. The two later upstream commits only wrap an existing
+`static_assert` with `#ifdef ZSTD_WINDOWLOG_LIMIT_DEFAULT`. Three actual MSVC
+compile probes accept the pinned header and an absent macro, and reject an
+incorrect value. `.build/integration-upstream-zstd-guard/receipt.json` records
+that bounded validation. The binaries were **not rebuilt** for those two commits;
+a complete engine using system zstd was **not qualified**. Final source and
+compiled source identities must not be presented as identical.
+
+| Installed artifact | SHA-256 |
+| --- | --- |
+| Mono editor | `2fdd2e4d30aecb40b2645e6ed96b757658347e7945a1c2885008ed8a6e7fc313` |
+| Mono Debug template | `0404c8ab70a880367579c5428559b33b523d773dfa58d989fc0f6d3a86ec8ff1` |
+| Mono Release template | `55b9ca7b3e8fae6f260a0fa6f041c9ba4ab5c6294bd8aa5a031a67149bb0b680` |
+| Captured extension API | `e84e140b923451849e88aab8300021fd9d32f95c31825bb6d7e25a4235953271` |
+| Matching Debug godot-cpp library | `4784d97057412f1ee36db659765ed6c05ee15fa9493f712cab9d6f9ac60b2ffe` |
+| Matching Release godot-cpp library | `fafc0664a21efe4feb1d075dcd41d9719865e943ba1848e7d5cd94ca4bcaac17` |
+
+`.build/canonical-upstream-artifacts.json` pins all 95 installed native/managed
+files, their owned-worktree sources and the verified backups of replaced files.
+The older 86-file artifact receipt remains historical; its binaries have been
+superseded. SDK key `4bc13481314e7023` and its MSVC-19.51.36260.0 libraries match
+the freshly captured, byte-identical API. No second native build owner was used.
+
+### Repair and combined qualification
+
+Unmodified TSCN-to-SCN conversion instantiated and repacked an inherited base
+scene independently. A base property referencing a child introduced by a derived
+scene then lost that reference. The exporter now saves the original PackedScene
+when no export plugin modified it, preserving its serialized NodePaths. Modified
+scenes still instantiate and repack to retain actual plugin changes.
+
+`.build/integration-upstream-export-qualification/state.json` contains exact
+commands, working directories, source/binary identities and log hashes for all
+29 effective passing stages. One failed trilingual attempt is retained alongside
+its successful replacement; historical failures are not relabelled as passes.
+
+| Scope | Fresh or explicitly unchanged-source evidence |
+| --- | --- |
+| Native Debug and Release | 120 checks and ten CTest tests each; compiled runtime source unchanged by the export repair |
+| Public API and managed documentation | 77 classes, 1,299 methods, 55 signals, 371 enums and 1,358 compiled descriptions; actual SDK/cache identity verified |
+| Inherited scene references | 36 assertions in the editor and each relocated Debug/Release game: 108 total, six plain/inherited/layered scenes with GDScript Node and C# NetNode references |
+| Customized binary exports | Six checks for plugin-added metadata and renamed children across both relocated templates; `.build/integration-upstream-export-customization-generic/1791316763850032200/receipt.json` |
+| Physics | 19 Box2D runs, matching one/four-worker traces; 28 Box3D cases; 12 relocated Box2D runtime cases |
+| Trilingual API | 27 stages, 197 assertions per editor/Debug/Release configuration, plus six independent high-level C#/C++ clock/fault processes |
+| Reload and recovery | Fresh live/stopped C# Box3D ownership, low session/world reload, default-disabled runtime and opt-in assembly/unload/native/ABI recovery stages |
+| Network lab | Packaged dedicated Release and listen-host Debug with three visible clients each, configured WAN simulation and reconnect; seven authoritative-physics/control cases |
+| Admission | 24 editor, 24 Debug and 24 Release cases: 72 total, including clock/graceful/fresh/retired-token boundaries |
+
+The original legacy reference failures and the candidate binary-export failure
+remain under `.build/integration-upstream-scene-*`. The export-error control
+retains the missing-solution logs and invalid bundle; the validator now rejects
+export `ERROR:` output even when the exporter exits zero. Fresh isolated fixtures
+create a standard solution and NuGet cache. The required trilingual
+`modules/egp_net/samples/trilingual/NetInterop.sln` is tracked explicitly so a
+fresh checkout does not depend on an ignored local solution.
+
+### Repeatable tools and checkout provenance
+
+Public tools reproduce the focused scene/export fixtures:
+
+```powershell
+$egpPython = 'C:/Users/Rose-X/.cache/codex-runtimes/codex-primary-runtime/dependencies/python/python.exe'
+& $egpPython misc/scripts/validate_egp_scene_node_refs.py --engine bin/godot.windows.editor.dev.x86_64.mono.exe --packages bin/GodotSharp/Tools/nupkgs --debug-template bin/godot.windows.template_debug.x86_64.mono.exe --release-template bin/godot.windows.template_release.x86_64.mono.exe --output .build/scene-references-repeat
+& $egpPython misc/scripts/validate_egp_export_customization.py --editor bin/godot.windows.editor.dev.x86_64.mono.exe --debug-template bin/godot.windows.template_debug.x86_64.mono.exe --release-template bin/godot.windows.template_release.x86_64.mono.exe --output .build/export-customization-repeat
+& $egpPython misc/scripts/validate_egp_net.py --verify-vendor-only --output .build/vendor-identity-repeat
+& $egpPython -m unittest discover -s misc/scripts -p test_egp_vendor_manifest.py
+& $egpPython -m unittest discover -s misc/scripts -p test_egp_scene_node_refs.py
+```
+
+The original 82 raw Yojimbo source pins remain unchanged. An explicit secondary
+UTF-8/LF pin map accepts Git line-ending conversion only. Non-line-ending edits,
+binary changes, malformed pins and unsupported text are rejected. Seven semantic
+tests, a fresh Git-blob fixture and a deliberately changed-content rejection are
+recorded in `.build/integration-upstream-vendor-portability/receipt.json`.
+Vendor-only validation explicitly makes no native/runtime claim. Both new scene
+tools match the bytes used in their passing runtime fixtures; their evidence
+reader has three additional semantic tests. Ruff and the strict manifest-helper
+type check pass.
+
+Fresh inventory accounts for the seven original checkouts plus the owned eighth
+`egp-upstream-sync` tree. The six foreign trees retain their exact tracked patches
+and untracked file hashes; canonical `Temp Plan.md` and `tagged_query_test.b3rec`
+remain untouched. The owned tree's 82 vendor differences are verified line-ending
+restorations, with the required solution separately accounted for. Historical
+dirty/superseded snapshots are preserved, not blindly merged. There are no open
+EGP PRs in this inventory; publication records local/remote refs and provenance.
+
+Acceptance remains open for high-level C++ adapter ownership, arbitrary in-flight
+callback mutation, authenticated-node injected recovery, concurrent/exported
+reload, full prediction/rollback and lag compensation, production admission,
+broader physics parity, platform/hardware coverage (including PowerVR), scale,
+soak and performance. Ordinary customized-scene checks do not prove every
+customized inherited-reference combination. This qualification does not establish
+full feature completion or AAA readiness. The integration loop remains ACTIVE.
