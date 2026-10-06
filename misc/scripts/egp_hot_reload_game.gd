@@ -8,6 +8,7 @@ var cpp_callable: Callable
 var cs_callable: Callable
 var cpp_hits := 0
 var cs_hits := 0
+var network: Node
 
 func _ready() -> void:
 	EngineDebugger.register_message_capture("egp_reload", _capture)
@@ -34,6 +35,15 @@ func _ready() -> void:
 	temporary.free()
 
 func _capture(message: String, data: Array) -> bool:
+	if message.begins_with("network-"):
+		if network == null:
+			network = load("res://network.gd").new()
+			add_child(network)
+			network.setup(native, managed)
+		var proof: Dictionary = await network.run_action(message)
+		proof.request = data[0]
+		EngineDebugger.send_message("egp_reload:state", [proof])
+		return true
 	if message == "reload-native":
 		var status := GDExtensionManager.reload_extension("res://extensions/reload/reload.gdextension")
 		EngineDebugger.send_message("egp_reload:state", [{"request": data[0], "status": status}])
@@ -49,6 +59,8 @@ func _capture(message: String, data: Array) -> bool:
 		native.name = "RecoveredNative"
 		return true
 	if message == "finish":
+		if network != null:
+			network.close()
 		get_tree().quit.call_deferred(0)
 		return true
 	if message == "sample-abi":

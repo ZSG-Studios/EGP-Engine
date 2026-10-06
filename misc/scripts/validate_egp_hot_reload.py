@@ -22,11 +22,21 @@ public partial class ReloadProbe : Node, ISerializationListener {
     [Export] public int ReadyCount { get; set; }
     [Export] public int BeforeCount { get; set; }
     [Export] public int AfterCount { get; set; }
+    [Export] public Godot.Collections.Dictionary NetworkState { get; set; } = new();
+    [Export] public int NetworkHits { get; set; }
     [Signal] public delegate void PulseEventHandler(int value);
     public override void _Ready() { ReadyCount++; }
     public int Version() => VERSION;
     public bool Collectible() => AssemblyLoadContext.GetLoadContext(GetType().Assembly)!.IsCollectible;
     public void Fire() => EmitSignal(SignalName.Pulse, 1);
+    public Error PollNetwork(bool authority) {
+        var server = NetworkState["server"].AsGodotObject();
+        var client = NetworkState["client"].AsGodotObject();
+        var result = authority ? (Error)server.Call("poll").AsInt32() : Error.Ok;
+        var clientResult = (Error)client.Call("poll").AsInt32();
+        return result != Error.Ok ? result : clientResult;
+    }
+    public void ReceiveNetwork(long peer, byte[] payload) { NetworkHits++; }
     public void HoldRoot(string path) {
         var thread = new System.Threading.Thread(() => {
             System.IO.File.WriteAllText(path + ".started", "started");
@@ -53,6 +63,86 @@ def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def network_recovery_failure(proofs):
+    """Reject incomplete combined-reload evidence, including implicit recovery."""
+    if len(proofs) != 4 or [p.get("action") for p in proofs] != [
+        "network-start",
+        "network-fault",
+        "network-stopped",
+        "network-recover",
+    ]:
+        return "Missing ordered network reload checkpoints"
+    initial, fault, stopped, recovered = proofs
+    for proof in proofs:
+        if not proof.get("passed") or not proof.get("references_ok"):
+            return "Native session references or runtime checks failed"
+        if any(proof.get(k) != initial.get(k) for k in ("pid", "server_id", "client_id")):
+            return "Game or native sessions were replaced during reload"
+    if initial.get("server_id") == initial.get("client_id") or int(initial.get("pid", 0)) <= 0:
+        return "Invalid native session/process identities"
+    if fault.get("poll_error") != 1 or fault.get("gap_ms", 0) < 550 or fault.get("client_polls", 0) < 20:
+        return "Authority fault or continuing client poll evidence missing"
+    for proof in (fault, stopped):
+        if any(
+            proof.get(k) != v
+            for k, v in {
+                "server_state": "Stopped",
+                "client_state": "Stopped",
+                "server_tick": 0,
+                "peers": 0,
+                "entities": 0,
+                "epoch": 1,
+                "cpp_hits": 1,
+                "cs_hits": 1,
+            }.items()
+        ):
+            return "Fault caches were retained or reload implicitly restarted networking"
+        if proof.get("diagnostics") != ["Fixed simulation exceeded its catch-up budget; resynchronization required."]:
+            return "Fixed-clock diagnostic missing or duplicated"
+    for proof, epoch in ((initial, 1), (recovered, 2)):
+        if (
+            any(
+                proof.get(k) != v
+                for k, v in {
+                    "server_state": "Listening",
+                    "client_state": "Connected",
+                    "peers": 1,
+                    "entities": 1,
+                    "epoch": epoch,
+                    "cpp_hits": epoch,
+                    "cs_hits": epoch,
+                }.items()
+            )
+            or proof.get("server_tick", 0) < 8
+        ):
+            return "Fresh admission, replication or callback checks missing"
+        expected = [{"peer": initial["peer"], "payload": "0100ff2a"}]
+        if epoch == 2:
+            expected.append({"peer": recovered["peer"], "payload": "0200ff2a"})
+        if proof.get("packets") != expected:
+            return "Application data lost, duplicated or assigned to a retired peer"
+    if recovered.get("peer", 0) <= initial.get("peer", 0) or recovered.get("entity", 0) <= initial.get("entity", 0):
+        return "Recovery reused retired handles"
+    if recovered.get("old_peer") != initial["peer"] or recovered.get("old_entity") != initial["entity"]:
+        return "Recovery lost original handle provenance"
+    if recovered.get("retired_peer_error") != 33 or recovered.get("retired_entity_error") != 33:
+        return "Retired handles remain usable"
+    expected_states = [
+        "Connecting",
+        "Synchronizing",
+        "Connected",
+        "Stopped",
+        "Disconnected",
+        "Stopped",
+        "Connecting",
+        "Synchronizing",
+        "Connected",
+    ]
+    if recovered.get("states") != expected_states:
+        return "Unexpected native client recovery lifecycle"
+    return None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, required=True)
@@ -60,6 +150,11 @@ def main():
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--expect-disabled", action="store_true", help="Record the pre-fix opt-in rejection")
     parser.add_argument("--disable-runtime", action="store_true", help="Verify the default non-collectible player")
+    parser.add_argument(
+        "--network-recovery",
+        action="store_true",
+        help="Retain native sessions through C++/C# reload after an authority clock fault",
+    )
     parser.add_argument(
         "--feature-override", action="store_true", help="Enable runtime reload through the editor feature override"
     )
@@ -84,6 +179,8 @@ def main():
         parser.error("--disable-runtime and --feature-override are mutually exclusive")
     if args.native_abi_recovery and (args.disable_runtime or args.expect_disabled):
         parser.error("--native-abi-recovery requires runtime reload")
+    if args.network_recovery and (args.disable_runtime or args.expect_disabled):
+        parser.error("--network-recovery requires runtime reload")
     output = args.output.resolve() / str(time.time_ns())
     project = output / "project"
     addon = project / "addons/reload_fixture"
@@ -93,6 +190,17 @@ def main():
     env["NUGET_PACKAGES"] = str(output / "nuget-packages")
     options = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
     receipt = {"passed": False, "engine": str(engine), "engine_sha256": digest(engine), "steps": [], "samples": []}
+    fixture_paths = [
+        ROOT / "misc/scripts" / name
+        for name in (
+            "egp_hot_reload_game.gd",
+            "egp_hot_reload_editor.gd",
+            "egp_hot_reload_network.gd",
+            "validate_egp_hot_reload.py",
+        )
+    ]
+    receipt["source_commit"] = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
+    receipt["fixture_sha256"] = {str(p.relative_to(ROOT)): digest(p) for p in fixture_paths}
     runtime_files = [engine.parent / "GodotSharp/Api/Debug" / name for name in ("GodotSharp.dll", "GodotPlugins.dll")]
     receipt["managed_runtime_sha256"] = {str(path): digest(path) for path in runtime_files}
     receipt["scope"] = (
@@ -124,6 +232,8 @@ def main():
             "name": name,
             "command": command,
             "exit_code": code,
+            "pid": child.pid,
+            "log": str(output / (name + ".log")),
             "passed": passed,
             "elapsed_seconds": round(time.monotonic() - start, 3),
         })
@@ -230,6 +340,8 @@ def main():
         )
         shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_game.gd", project / "main.gd")
         shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_editor.gd", addon / "plugin.gd")
+        if args.network_recovery:
+            shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_network.gd", project / "network.gd")
         (addon / "plugin.cfg").write_text(
             '[plugin]\nname="ReloadFixture"\ndescription="Isolated reload fixture"\nauthor="EGP"\nversion="1"\nscript="plugin.gd"\n',
             encoding="utf-8",
@@ -249,6 +361,7 @@ def main():
         receipt["editor_command"] = editor_command
         stream = (output / "editor.log").open("w", encoding="utf-8")
         process = subprocess.Popen(editor_command, env=env, stdout=stream, stderr=subprocess.STDOUT, **options)
+        receipt["editor_pid"] = process.pid
         command("prepare", 120)
         source_path = project / "extensions/reload/src/extension.cpp"
         source = source_path.read_text(encoding="utf-8")
@@ -262,6 +375,35 @@ def main():
         )
         require("Hello from reload!" in source, "Unexpected scaffold template")
         source = source.replace("Hello from reload!", "VERSION")
+        if args.network_recovery:
+            source = "#include <godot_cpp/classes/egp_net_session.hpp>\n" + source
+            source = source.replace(
+                'ClassDB::bind_method(D_METHOD("get_message"), &EGP_reload_Node::get_message);',
+                'ClassDB::bind_method(D_METHOD("get_message"), &EGP_reload_Node::get_message);\n'
+                '\t\tClassDB::bind_method(D_METHOD("set_network_state", "value"), &EGP_reload_Node::set_network_state);\n'
+                '\t\tClassDB::bind_method(D_METHOD("get_network_state"), &EGP_reload_Node::get_network_state);\n'
+                '\t\tADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "network_state"), "set_network_state", "get_network_state");\n'
+                '\t\tClassDB::bind_method(D_METHOD("set_network_hits", "value"), &EGP_reload_Node::set_network_hits);\n'
+                '\t\tClassDB::bind_method(D_METHOD("get_network_hits"), &EGP_reload_Node::get_network_hits);\n'
+                '\t\tADD_PROPERTY(PropertyInfo(Variant::INT, "network_hits"), "set_network_hits", "get_network_hits");\n'
+                '\t\tClassDB::bind_method(D_METHOD("poll_network", "authority"), &EGP_reload_Node::poll_network);\n'
+                '\t\tClassDB::bind_method(D_METHOD("receive_network", "peer", "payload"), &EGP_reload_Node::receive_network);',
+            ).replace(
+                "public:\n",
+                "public:\n"
+                "\tDictionary network_state;\n\tint network_hits = 0;\n"
+                "\tvoid set_network_state(const Dictionary &value) { network_state = value; }\n"
+                "\tDictionary get_network_state() const { return network_state; }\n"
+                "\tvoid set_network_hits(int value) { network_hits = value; }\n"
+                "\tint get_network_hits() const { return network_hits; }\n"
+                "\tvoid receive_network(int64_t peer, const PackedByteArray &payload) { network_hits++; }\n"
+                "\tError poll_network(bool authority) {\n"
+                '\t\tRef<EGPNetSession> server = network_state["server"];\n'
+                '\t\tRef<EGPNetSession> client = network_state["client"];\n'
+                "\t\tError result = authority ? server->poll() : OK;\n"
+                "\t\tError client_result = client->poll();\n"
+                "\t\treturn result != OK ? result : client_result;\n\t}\n",
+            )
         if args.native_abi_recovery:
             source = (
                 source
@@ -595,6 +737,31 @@ def main():
                     "scope": "Dynamic methods and Callable lookup; cached raw MethodBind pointers and arbitrary ABI changes remain open",
                 }
             receipt["reloads"] = 3 + int(args.assembly_recovery) + int(args.unload_recovery) + int(args.native_recovery)
+            if args.network_recovery:
+                proofs = [sample("network-start"), sample("network-fault")]
+                require(all(p["passed"] for p in proofs), "Network fault setup failed")
+                # Rebuild both live language objects while the authority remains stopped.
+                # Only a later explicit fresh-token admission may restart it.
+                (project / "ReloadProbe.cs").write_text(PROBE.replace("VERSION", "6"), encoding="utf-8")
+                run("managed-network-recovery", ["dotnet", "build", "--nologo", "-v", "minimal"])
+                source_path.write_text(source.replace("VERSION", "4"), encoding="utf-8")
+                require(command("build", 900)["build_result"] == 0, "Network fault reload build failed")
+                time.sleep(2)
+                state = sample()
+                verify(state, 4, previous, cs_version=6)
+                require(
+                    state["after_count"] > previous["after_count"], "Network fault reload skipped managed lifecycle"
+                )
+                proofs.extend([sample("network-stopped"), sample("network-recover")])
+                failure = network_recovery_failure(proofs)
+                require(failure is None, failure or "Network reload proof failed")
+                receipt["network_recovery"] = {
+                    "passed": True,
+                    "proofs": proofs,
+                    "cpp_version": 4,
+                    "cs_version": 6,
+                    "scope": "Windows Debug editor/game, one authenticated local client; native session references in serialized dictionaries and dynamic signal callbacks. Explicit admission after a stopped-authority fault; no physics checkpoint, concurrent reload or exported-runtime claim.",
+                }
         command("close")
         require(process.wait(timeout=60) == 0, "Editor/game teardown failed")
         if args.native_abi_recovery:
@@ -612,6 +779,10 @@ def main():
             all(digest(Path(path)) == expected for path, expected in receipt["managed_runtime_sha256"].items()),
             "Managed runtime changed during validation",
         )
+        require(
+            all(digest(ROOT / path) == expected for path, expected in receipt["fixture_sha256"].items()),
+            "Fixture source changed during validation",
+        )
         receipt["passed"] = True
     except (OSError, RuntimeError, KeyError, subprocess.TimeoutExpired) as error:
         receipt["error"] = str(error)
@@ -621,12 +792,13 @@ def main():
             terminate(process)
         if stream is not None:
             stream.close()
-        receipt["fixture_sha256"] = {
-            str(p.relative_to(ROOT)): digest(p)
-            for p in (
-                ROOT / "misc/scripts/egp_hot_reload_game.gd",
-                ROOT / "misc/scripts/egp_hot_reload_editor.gd",
-                Path(__file__).resolve(),
+        receipt["generated_sha256"] = {
+            str(p.relative_to(project)): digest(p)
+            for p in project.rglob("*")
+            if p.is_file()
+            and (
+                p.name in ("ReloadFixture.dll", "extension.cpp", "ReloadProbe.cs", "reload.gdextension")
+                or (p.suffix == ".dll" and "extensions" in p.relative_to(project).parts)
             )
         }
         save()

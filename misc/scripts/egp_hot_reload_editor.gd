@@ -74,7 +74,7 @@ func run_command(command: Dictionary) -> void:
 							messages.append(text)
 					items.append_array(item.get_children())
 			result.diagnostics = messages
-		"reload", "reload-native", "sample", "sample-abi", "drop", "hold", "rename-native":
+		"reload", "reload-native", "sample", "sample-abi", "drop", "hold", "rename-native", "network-start", "network-fault", "network-stopped", "network-recover":
 			var sessions := debugger.get_sessions()
 			result.passed = not sessions.is_empty() and sessions[0].is_active()
 			if result.passed:
