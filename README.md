@@ -7,16 +7,27 @@ EGP is a fork of [Godot Engine](https://github.com/godotengine/godot) built arou
 - Keep the fork up to date with Godot `master`, validating upstream updates before promoting them to the working engine.
 - Make [Box3D](https://github.com/erincatto/box3d) the sole 3D physics backend, with engine integration and compatibility checks before removing existing backends. The 2D physics direction remains undecided.
 - Use [LiteNetLib](https://github.com/RevenantX/LiteNetLib) and [LiteEntitySystem](https://github.com/RevenantX/LiteEntitySystem) for multiplayer transport and entity replication.
+- Build native editor tooling for [godot-cpp](https://github.com/godotengine/godot-cpp) GDExtensions directly into EGP: project scaffolding, compiler/toolchain configuration, editor-driven builds, clickable diagnostics, extension reload where supported, and export integration.
 - Investigate scene processing, C# interop, threading, resource streaming, rendering, navigation, and dedicated-server performance. Select further replacements using measured results.
 - Keep fork changes modular and reviewable so upstream updates remain manageable.
 
 ## Current status
 
-The fork is being established. Box3D and the LiteNet stack are planned integrations; they are not implemented in this repository yet. No performance improvements or EGP build qualification are claimed at this stage.
+The fork is being established. Box3D, the LiteNet stack, and the additional native C++ editor tooling are planned integrations; they are not implemented in this repository yet. No performance improvements or EGP build qualification are claimed at this stage.
 
 The first milestone is a working stock Godot baseline: build the C# editor and Windows export template, run a minimal C# scene, and verify its exported executable. Engine replacements follow that baseline.
 
 ## Validation approach
+
+### Native C++ extension workflow
+
+The goal is to create a C++ extension project, configure its toolchain, build it, and navigate compiler errors from the editor. Match godot-cpp bindings to EGP's extension API, support debug and release builds, reload compatible extensions after successful builds, and offer an editor restart when reload is unsupported. Package the appropriate extension libraries with exported games.
+
+The editor tooling will be part of the engine distribution. Project extensions will remain standard GDExtension libraries; developing one should not require rebuilding the engine. A platform compiler and build tools are still required.
+
+Acceptance includes a generated extension whose custom node appears in the editor, a compiler error that opens the correct source location, a successful rebuild/reload or restart, and an exported game that loads the extension.
+
+### Performance and runtime checks
 
 Compare stock Godot and EGP with identical scenes and settings. Track CPU/GPU time, p95/p99 frame times, memory, allocations, and server tick time. Validate physics behaviour and multiplayer operation under latency, packet loss, disconnects, and reconnects.
 
