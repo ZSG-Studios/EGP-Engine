@@ -1086,12 +1086,17 @@ String EditorExportPlatform::_export_customize(const String &p_path, LocalVector
 		if (modified || p_force_save) {
 			// If modified, save it again. This is also used for TSCN -> SCN conversion on export.
 
-			String base_file = p_path.get_file().get_basename() + ".scn"; // use SCN for saving (binary) and repack (If conversting, TSCN PackedScene representation is inefficient, so repacking is also desired).
+			String base_file = p_path.get_file().get_basename() + ".scn";
 			save_path = export_base_path.path_join("export-" + p_path.md5_text() + "-" + base_file);
 
-			Ref<PackedScene> s;
-			s.instantiate();
-			s->pack(node);
+			// An inherited base may refer to nodes introduced by a derived scene.
+			// Repacking its standalone instance discards these unresolved paths.
+			// Preserve serialized state when only converting the resource format.
+			Ref<PackedScene> s = ps;
+			if (modified) {
+				s.instantiate();
+				s->pack(node);
+			}
 			Error err = ResourceSaver::save(s, save_path);
 			ERR_FAIL_COND_V_MSG(err != OK, p_path, "Unable to save export scene file to: " + save_path);
 		}
