@@ -14,6 +14,31 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
+def validate_result(exit_code, log, fixture_name, completion_marker="RESULT: PASS"):
+    expected_errors = []
+    if fixture_name == "invalid_parameters.gd":
+        expected_errors = ["Box2D: Shape cast parameters must not be null."] * 2 + [
+            "Box2D: Rectangle is degenerate or smaller than the configured physics tolerance."
+        ] * 4
+    errors = re.findall(r"^ERROR: (.*)$", log, re.M)
+    passed = (
+        exit_code == 0
+        and completion_marker in log
+        and sorted(errors) == sorted(expected_errors)
+        and not any(
+            marker in log
+            for marker in (
+                "RESULT: FAIL",
+                "SCRIPT ERROR",
+                "BOX2D ASSERTION",
+                "CrashHandlerException",
+                "RID allocations of type",
+            )
+        )
+    )
+    return {"passed": passed, "expected_errors": expected_errors, "observed_errors": errors}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", required=True)
@@ -100,29 +125,7 @@ def main():
                 )
                 log = result.stdout + result.stderr
                 entry["exit_code"] = result.returncode
-                expected_errors = []
-                if fixture.name == "invalid_parameters.gd":
-                    expected_errors = ["Box2D: Shape cast parameters must not be null."] * 2 + [
-                        "Box2D: Rectangle is degenerate or smaller than the configured physics tolerance."
-                    ] * 4
-                errors = re.findall(r"^ERROR: (.*)$", log, re.M)
-                entry["expected_errors"] = expected_errors
-                entry["observed_errors"] = errors
-                entry["passed"] = (
-                    result.returncode == 0
-                    and "RESULT: PASS" in log
-                    and sorted(errors) == sorted(expected_errors)
-                    and not any(
-                        marker in log
-                        for marker in (
-                            "RESULT: FAIL",
-                            "SCRIPT ERROR",
-                            "BOX2D ASSERTION",
-                            "CrashHandlerException",
-                            "RID allocations of type",
-                        )
-                    )
-                )
+                entry.update(validate_result(result.returncode, log, fixture.name))
                 trace = re.search(r"^TRACE_SHA256: ([0-9a-f]{64})$", log, re.M)
                 if trace:
                     entry["trace_sha256"] = trace.group(1)

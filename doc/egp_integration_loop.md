@@ -36,7 +36,7 @@ because these chats exist.
 | Public API | Actual ClassDB dump matches embedded SDK, generated C# and docs; signatures, enums, properties, signals, defaults and errors consistent | 77 classes, 1299 method contracts, 55 signal contracts, 371 enum constants and 1358 compiled descriptions pass; broader behavioral and semantic documentation coverage remains |
 | API usability | Familiar naming; typed options/results; actionable errors; examples for GDScript/C#/C++; threading and ownership documented | Native session options/results/errors and physics event/joint contracts documented; broader facade ergonomics audit remains |
 | Library/build | Native and Mono builds; exact fork bindings; dependency/license manifests; lean server build; reproducible toolchain | Combined Mono editor, glue/assemblies, exact SDK and Debug/Release templates pass; lean server/platform/reproducibility gates remain |
-| Physics | Box2D/Box3D scene integration, joints, characters, queries, events, serialization, deterministic stepping and restore; unsupported capabilities exposed honestly | Combined native/Mono editors passed 14 Box2D runs and all 28 Box3D cases; wider parity/scale/platform gates remain |
+| Physics | Box2D/Box3D scene integration, joints, characters, queries, events, serialization, deterministic stepping and restore; unsupported capabilities exposed honestly | Combined Mono editor passes 17 Box2D runs and 28 Box3D cases; eight relocated Debug/Release Box2D checks qualify configured joints, event copies, explosions, canvas filters, casts and invalid-input recovery; picking, wider parity/scale/platform gates remain |
 | Physics/network | Explicit fixed clock, fingerprint validation, authoritative state, commands, prediction/correction/replay and recovery | Existing limited fixtures; full game contract pending |
 | Networking | Encrypted admission, account/peer/entity identities, authority, ownership, interest, lifecycle, reconnect and backpressure | Native and language fixtures exist |
 | Advanced networking | Field deltas, bounded bandwidth/queues, input acknowledgments, lag compensation, scale/soak, malicious input rejection | Implementation/qualification gaps remain |
@@ -633,3 +633,97 @@ engine version still comes from the frozen worktree base; verified source and
 binary hashes identify this build. Next items include incompatible ABI/class
 reload recovery, remaining 2D native event/capability fixtures, broader networking
 simulation/ownership/authoritative physics, package identity and build provenance.
+
+## Native Box2D capabilities and runtime query recovery (2026-10-06)
+
+Frozen engine source `4165334987` adds null-parameter guards to both native shape
+casts and validates rectangle hulls before calling Box2D. The previously published
+editor crashes on null shape-cast parameters and on rectangles below the configured
+native tolerance. Original failures and backtraces remain under
+`.build/integration-box2d-capabilities-baseline` and
+`.build/integration-box2d-capabilities-repro`; they are not passing qualification.
+Invalid calls now return empty query results and report actionable diagnostics.
+No fallback rectangle or silent geometry substitution is introduced.
+
+The new `native_capabilities_test.gd` checks all seven configured 2D joint families,
+distance/weld/filter behavior, linear and angular motor targets, independent joint
+configuration dictionaries, finite reaction force/torque, joint-threshold events,
+nonbreaking threshold behavior, copied event dictionaries, masked explosions and
+native contact-hit geometry. `canvas_cast_test.gd` checks canvas reassignment,
+body/area/RID filtering, nearest/all-hit ordering, destinations, exclusions and
+empty results. Box2D uses pixels and its default cast tolerance is 0.5 pixels;
+the initial test incorrectly reused 3D metre dimensions and was corrected. The
+small rectangle crash discovered by that fixture remains a regression case.
+
+The invalid-input runner requires exactly two null-query and four invalid-hull
+messages, normal exit and a completion marker. Any extra/missing diagnostic,
+script error, native assertion, crash or RID leak fails. Six gate regression tests
+also reject completion from the wrong exported fixture. Exported templates disable
+path/script overrides: the packaged validator combines unchanged fixture bodies
+into a namespaced MainLoop selected through user arguments, with an ordinary main
+scene, and records input/generated script hashes. Initial loose-project rejection,
+missing-main-scene watchdog and CLI-selection failure are preserved under
+`.build/integration-box2d-query-recovery-debug-scenes`, the release counterpart,
+`.build/integration-box2d-query-recovery-exports` and
+`.build/integration-box2d-query-recovery-exports-final`. Those incomplete runs do
+not establish exported capability coverage. Final packaged evidence is
+`.build/integration-box2d-query-recovery-export-mainloop/receipt.json`.
+
+Verified frozen-source binaries from the sole combined build tree:
+
+- Editor SHA256 `9e421dff29f73f3248776c571de4d498ed29057fa02298ed76e79195a0ccff91`.
+- Debug template SHA256 `6066cdb4fd708a169d8e6ba2a26f938c2959be0b41868390f70ff269eabe9803`.
+- Release template SHA256 `9ab45e46141a2506aa1a2f23db5a7b20b6d7ed2e66ac101f1a09fb6845f05af6`.
+- Build/source receipts: `.build/integration-box2d-query-recovery-build` and
+  `.build/integration-box2d-query-recovery-templates`. Both runtime templates now
+  include the frozen source; they supersede the retained `bd4dfee3` templates.
+- Actual plain/compiled APIs remain the qualified `e84e140b...` and `7414596a...`
+  identities, with unchanged matching C++ SDK and generated managed bindings.
+  Paired capture is `.build/integration-box2d-query-recovery-api/1791275263050508600`;
+  `.build/integration-box2d-query-recovery-api-audit.json` passes 77 classes,
+  1299 method contracts, 55 signals, 371 enums and 1358 compiled descriptions.
+- `.build/integration-box2d-query-recovery-scenes/receipt.json` passes 17 runs,
+  exact one/four-worker trajectory equality and the six expected diagnostics.
+  `.build/integration-box2d-query-recovery-box3d/receipt.json` passes all 28 cases.
+- Final packaged physics receipt passes four cases per configuration: backend
+  activation, canvas/casts, configured native capabilities and rejected inputs.
+  Each case must print its own exact completion message; templates run without
+  loose-project overrides, and EXE/PCK hashes are recorded after relocation.
+- `.build/integration-box2d-query-recovery-net-languages/receipt.json` passes
+  trilingual assertions and separate GDScript/C#/C++ clients, cold import and
+  relocated Debug/Release exports using the newly built templates.
+- `.build/integration-box2d-query-recovery-hot-reload/1791275468233871200/receipt.json`
+  passes six combined native/managed reloads, invalid assembly and blocked-unload
+  recovery, missing/invalid native libraries, retained state/events/parent edits,
+  debugger diagnostics and normal teardown. Default opt-out passes separately at
+  `.build/integration-box2d-query-recovery-default/1791275598885648100/receipt.json`.
+- Release dedicated server plus three visible clients passes under
+  `.build/integration-box2d-query-recovery-dedicated/1791275598862583300`.
+  Debug listen host plus three visible clients passes under
+  `.build/integration-box2d-query-recovery-host/1791275742756037100`.
+  Both use WAN latency/jitter/loss on both endpoints, ten seconds and reconnect
+  at four seconds; all requested windows are observed simultaneously and every
+  owned process exits normally. This short fixture is not a soak/performance gate.
+
+```powershell
+python misc/scripts/validate_box2d_scene.py --engine C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe --output .build/integration-box2d-query-recovery-scenes
+python misc/scripts/validate_box2d_exports.py --editor C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.editor.dev.x86_64.mono.exe --debug-template C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.template_debug.x86_64.mono.exe --release-template C:/Users/Rose-X/.codex/worktrees/net-trilingual-api/EGP/bin/godot.windows.template_release.x86_64.mono.exe --output .build/integration-box2d-query-recovery-export-mainloop
+python -m unittest discover -s misc/scripts -p test_validate_box2d_scene.py
+```
+
+Installation and publication receipts are
+`.build/canonical-box2d-query-recovery-artifacts.json` and
+`.build/integration-box2d-query-recovery-publication.json`. They record verified
+canonical/local/remote commit identities, foreign merge ancestry, fresh seven-tree
+inventory, unchanged managed artifacts, backups and combined qualification before
+publication. All existing foreign source handoffs remain consolidated; unrelated
+files and older dirty worktrees remain preserved. Subsequent source changes are
+qualification tools and documentation only. The loop remains ACTIVE.
+
+Next: incompatible ABI/class reload recovery, native picking filters, packed-float
+convex polygon input validation (the backend conversion still has suspect count/
+index handling), wider state/collection/reload-soak cases, server restart and
+adversarial networking, ownership/interest scaling, authoritative physics gameplay,
+platform/performance qualification, unique managed package identity and reliable
+build-version provenance. This increment does not establish full parity or AAA
+readiness.
