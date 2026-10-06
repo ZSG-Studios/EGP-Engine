@@ -267,14 +267,21 @@ def main():
                 source
                 .replace("classes/node.hpp", "classes/node2d.hpp")
                 .replace(
+                    "class EGP_reload_Node : public Node {", "class EGP_reload_Node : public EGP_reload_Ancestor {"
+                )
+                .replace("GDCLASS(EGP_reload_Node, Node)", "GDCLASS(EGP_reload_Node, EGP_reload_Ancestor)")
+                .replace(
                     "class EGP_reload_Node :",
+                    "class EGP_reload_Ancestor : public Node {\n"
+                    "    GDCLASS(EGP_reload_Ancestor, Node);\n"
+                    "protected:\n    static void _bind_methods() {}\n};\n\n"
                     "class EGP_reload_Parent : public Node2D {\n"
                     "    GDCLASS(EGP_reload_Parent, Node2D);\n"
                     "protected:\n    static void _bind_methods() {}\n};\n\nclass EGP_reload_Node :",
                 )
                 .replace(
                     "GDREGISTER_CLASS(EGP_reload_Node);",
-                    "GDREGISTER_CLASS(EGP_reload_Parent);\n        GDREGISTER_CLASS(EGP_reload_Node);",
+                    "GDREGISTER_CLASS(EGP_reload_Ancestor);\n        GDREGISTER_CLASS(EGP_reload_Parent);\n        GDREGISTER_CLASS(EGP_reload_Node);",
                 )
             )
         source_path.write_text(source.replace("VERSION", "1"), encoding="utf-8")
@@ -465,8 +472,11 @@ def main():
                 changed_base = (
                     original
                     .replace("classes/node.hpp", "classes/node2d.hpp")
-                    .replace("public Node {", "public Node2D {")
-                    .replace("GDCLASS(EGP_reload_Node, Node)", "GDCLASS(EGP_reload_Node, Node2D)")
+                    .replace(
+                        "class EGP_reload_Node : public EGP_reload_Ancestor {",
+                        "class EGP_reload_Node : public Node2D {",
+                    )
+                    .replace("GDCLASS(EGP_reload_Node, EGP_reload_Ancestor)", "GDCLASS(EGP_reload_Node, Node2D)")
                 )
                 require(changed_base != original, "Unexpected native base scaffold")
                 source_path.write_text(changed_base, encoding="utf-8")
@@ -501,8 +511,11 @@ def main():
                 verify(state, 3, previous, cs_version=5 if args.unload_recovery else 4)
                 require(state["cpp_name"] == "RecoveredNative", "Rejected-base parent property edit was lost")
                 previous = state
-                changed_parent = original.replace("public Node {", "public EGP_reload_Parent {").replace(
-                    "GDCLASS(EGP_reload_Node, Node)", "GDCLASS(EGP_reload_Node, EGP_reload_Parent)"
+                changed_parent = original.replace(
+                    "class EGP_reload_Node : public EGP_reload_Ancestor {",
+                    "class EGP_reload_Node : public EGP_reload_Parent {",
+                ).replace(
+                    "GDCLASS(EGP_reload_Node, EGP_reload_Ancestor)", "GDCLASS(EGP_reload_Node, EGP_reload_Parent)"
                 )
                 require(changed_parent != original, "Unexpected extension-parent scaffold")
                 source_path.write_text(changed_parent, encoding="utf-8")
@@ -519,6 +532,28 @@ def main():
                 )
                 source_path.write_text(original, encoding="utf-8")
                 require(command("build", 900)["build_result"] == 0, "Extension-parent repair build failed")
+                time.sleep(2)
+                state = sample()
+                verify(state, 3, previous, cs_version=5 if args.unload_recovery else 4)
+                previous = state
+                changed_ancestor = original.replace(
+                    "class EGP_reload_Ancestor : public Node {", "class EGP_reload_Ancestor : public Node2D {"
+                ).replace("GDCLASS(EGP_reload_Ancestor, Node)", "GDCLASS(EGP_reload_Ancestor, Node2D)")
+                require(changed_ancestor != original, "Unexpected extension ancestor scaffold")
+                source_path.write_text(changed_ancestor, encoding="utf-8")
+                require(command("build", 900)["build_result"] == 0, "Changed ancestor build failed")
+                time.sleep(2)
+                require(sample("reload-native")["status"] == 4, "Rejected ancestor did not block descendant reload")
+                fallback = sample()
+                require(
+                    fallback.get("native_unavailable")
+                    and fallback["cpp_id"] == previous["cpp_id"]
+                    and fallback["base_class"] == "Node"
+                    and fallback["parent_ok"],
+                    "Rejected ancestor lost descendant's native parent",
+                )
+                source_path.write_text(original, encoding="utf-8")
+                require(command("build", 900)["build_result"] == 0, "Ancestor repair build failed")
                 time.sleep(2)
                 state = sample()
                 verify(state, 3, previous, cs_version=5 if args.unload_recovery else 4)
@@ -549,11 +584,12 @@ def main():
                 verify(state, 3, previous, cs_version=5 if args.unload_recovery else 4)
                 receipt["native_abi_recovery"] = {
                     "passed": True,
-                    "native_builds": 9,
+                    "native_builds": 11,
                     "rejected_explicit_retries": 2,
                     "method_changes": ["argument-count", "return-type"],
                     "base_change": "Node to Node2D rejected; Node repair retains state and identity",
                     "extension_parent_change": "Node to extension-derived Node2D rejected; compatible repair retains state",
+                    "ancestor_change": "Rejected ancestor blocks descendant registration; compatible repair retains state",
                     "class_removal": "Live parent and state retained until original class is restored",
                     "diagnostics": diagnostics,
                     "scope": "Dynamic methods and Callable lookup; cached raw MethodBind pointers and arbitrary ABI changes remain open",

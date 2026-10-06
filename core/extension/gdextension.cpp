@@ -468,6 +468,7 @@ void GDExtension::_register_extension_class_internal(GDExtensionClassLibraryPtr 
 	}
 
 #ifdef TOOLS_ENABLED
+	ERR_FAIL_COND_MSG(self->is_reloading && parent_extension && parent_extension->is_reloading, vformat("GDExtension class '%s' cannot reload because its parent '%s' was not restored. Restore the compatible parent and reload, or restart Godot.", class_name, parent_class_name));
 	Extension *extension = nullptr;
 	bool is_runtime = (bool)p_extension_funcs->is_runtime;
 	if (self->is_reloading && self->extension_classes.has(class_name)) {
