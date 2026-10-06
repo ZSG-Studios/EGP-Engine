@@ -56,7 +56,7 @@ retired and must fail the audit if regenerated bindings still contain them.
 
 Networking options, lifecycle, thread ownership, errors and limits are documented
 in `modules/egp_net/README.md`. Native session wrappers can operate without the
-GDScript helper; higher-level C#/C++ faÃƒÂ§ades use the shared GDScript codec and
+GDScript helper; higher-level C#/C++ facades use the shared GDScript codec and
 adapters. This dependency must stay clear in SDK installation and examples.
 
 Pass `--docs <repository-root>` to check XML method, signal and enum documentation
