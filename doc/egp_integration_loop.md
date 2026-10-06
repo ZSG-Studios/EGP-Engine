@@ -2263,6 +2263,11 @@ replaced native sessions/game process, lost serialized references, implicit
 restart, missing diagnostics/client polls, lost/duplicated callbacks, corrupt
 payloads, reused/usable retired handles and missing admission/checkpoints.
 
+The runtime-disabled player also freshly passes with current fixture sources at
+`.build/integration-network-reload-default/1791301774032497900/receipt.json`:
+the separate game retains a non-collectible assembly. Its input/generated hashes
+are checked in the publication gate. No exported-runtime reload claim follows.
+
 Failed fixture iterations remain preserved: initial C# type lookup at
 `.build/integration-network-reload-initial/1791301246924050300/receipt.json`, the
 incorrect client server-peer argument at
