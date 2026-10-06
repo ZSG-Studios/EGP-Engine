@@ -20,6 +20,19 @@ def validate_result(exit_code, log, fixture_name, completion_marker="RESULT: PAS
         expected_errors = ["Box2D: Shape cast parameters must not be null."] * 2 + [
             "Box2D: Rectangle is degenerate or smaller than the configured physics tolerance."
         ] * 4
+    elif fixture_name == "invalid_convex_input.gd":
+        expected_errors = (
+            [
+                "Box2D: Convex polygon data must be a vector array or a packed float array matching engine precision.",
+                "Box2D: Packed convex polygon data must contain complete point/normal tuples of four floats.",
+                "Box2D: Convex polygons cannot have more than 8 vertices",
+                "Box2D: Packed convex polygon normals must be finite.",
+                "Box2D: Convex polygon transform must be finite.",
+            ]
+            + ["Box2D: Convex polygons require at least three points."] * 2
+            + ["Box2D: Convex polygon transformed points must be finite and inside native coordinate bounds."] * 2
+            + ["Box2D: Failed to compute a valid convex hull; check polygon scale and noncollinear points."] * 3
+        )
     errors = re.findall(r"^ERROR: (.*)$", log, re.M)
     passed = (
         exit_code == 0
@@ -71,13 +84,15 @@ def main():
             "character_motion_test.gd",
             "native_capabilities_test.gd",
             "canvas_cast_test.gd",
+            "convex_input_test.gd",
         }
         if required - {p.name for p in fixtures}:
             raise RuntimeError("Required Box2D fixture missing")
-        if not (source / "invalid_parameters.gd").is_file():
+        if not all((source / name).is_file() for name in ["invalid_parameters.gd", "invalid_convex_input.gd"]):
             raise RuntimeError("Required Box2D invalid-parameter fixture missing")
         runs = [(fixture, 1, False) for fixture in fixtures] + [
             (source / "invalid_parameters.gd", 1, False),
+            (source / "invalid_convex_input.gd", 1, False),
             (source / "native_determinism_test.gd", 4, False),
             (source / "backend_activation_test.gd", 1, True),
         ]

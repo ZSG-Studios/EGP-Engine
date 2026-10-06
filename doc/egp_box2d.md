@@ -73,3 +73,23 @@ scene nodes or application state. Cross-platform and performance qualification
 remain separate release gates. Packaged networking evidence covers the Windows
 debug template and tested fixtures; it does not establish scene rollback or
 release-template/platform coverage.
+
+## Convex polygon input
+
+`PhysicsServer2D.shape_set_data` accepts three to eight convex input points as
+`PackedVector2Array`, or complete `(x, y, normal_x, normal_y)` tuples in
+`PackedFloat32Array` (`PackedFloat64Array` for double-precision engines). Box2D
+builds a convex hull and recomputes outward normals. Supplied normal values must
+be finite. Input count is checked before writing bounded native storage; malformed
+tuples, nonfinite values, transformed coordinates beyond native bounds, singular
+transforms and invalid hulls report errors and produce no native query results.
+The original data remains stored; attaching or querying it performs conversion.
+Duplicate/interior points may be removed by the hull builder, and geometry below
+the configured native tolerance is rejected without a fallback shape.
+
+The focused fixtures compare transformed ray hits and shape-cast destinations for
+three-, four- and eight-point vector/packed inputs. Negative fixtures exercise
+count/tuple/type checks, nonfinite points/normals/transforms, native coordinate
+bounds, collinear/tiny/singular geometry and successful queries after repair.
+`validate_box2d_exports.py` includes these cases in relocated Debug/Release games.
+Double-precision and broader polygon/scaling/platform qualification remain open.

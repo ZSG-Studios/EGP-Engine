@@ -1006,9 +1006,9 @@
 				- [constant SHAPE_CIRCLE]: a [float] [code]radius[/code],
 				- [constant SHAPE_RECTANGLE]: a [Vector2] [code]half_extents[/code],
 				- [constant SHAPE_CAPSULE]: an array of length two (or a [Vector2]) containing a [float] [code]height[/code] and a [float] [code]radius[/code],
-				- [constant SHAPE_CONVEX_POLYGON]: either a [PackedVector2Array] of points defining a convex polygon in counterclockwise order (the clockwise outward normal of each segment formed by consecutive points is calculated internally), or a [PackedFloat32Array] of length divisible by four so that every 4-tuple of [float]s contains the coordinates of a point followed by the coordinates of the clockwise outward normal vector to the segment between the current point and the next point,
+				- [constant SHAPE_CONVEX_POLYGON]: either a [PackedVector2Array] of points, or a [PackedFloat32Array] of complete four-float tuples [code](point.x, point.y, normal.x, normal.y)[/code]. Double-precision engine builds use [PackedFloat64Array] for the packed format. Box2D requires between three and eight input points, computes their convex hull and recomputes outward normals; supplied normal values must be finite but do not override the hull normals. Points after the shape transform must be finite and within native coordinate bounds. Invalid counts, incomplete tuples, nonfinite values, collinear points, and geometry below the configured physics tolerance report an error when native geometry is constructed or queried,
 				- [constant SHAPE_CONCAVE_POLYGON]: a [PackedVector2Array] of length divisible by two (each pair of points forms one segment).
-				[b]Warning:[/b] In the case of [constant SHAPE_CONVEX_POLYGON], this method does not check if the points supplied actually form a convex polygon (unlike the [member CollisionPolygon2D.polygon] property).
+				[b]Note:[/b] Convex input is stored as supplied and converted to native geometry when attached or queried. The convex hull can remove duplicate or interior points; no invalid-hull fallback shape is created. Query results for invalid convex geometry are empty. Use [member CollisionPolygon2D.polygon] when concave geometry needs decomposition into multiple convex shapes.
 			</description>
 		</method>
 		<method name="space_apply_explosion">

@@ -49,6 +49,17 @@ class Box2DDiagnosticGateTests(unittest.TestCase):
             )["passed"]
         )
 
+    def test_convex_rejection_requires_all_twelve_diagnostics(self):
+        result = validate_result(0, "RESULT: PASS", "invalid_convex_input.gd")
+        self.assertFalse(result["passed"])
+        self.assertEqual(len(result["expected_errors"]), 12)
+
+    def test_convex_diagnostics_do_not_waive_other_fixture_errors(self):
+        self.assertFalse(validate_result(0, self.expected, "invalid_convex_input.gd")["passed"])
+        self.assertFalse(
+            validate_result(0, "RESULT: PASS\nERROR: Convex input failed", "convex_input_test.gd")["passed"]
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

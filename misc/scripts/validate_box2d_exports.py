@@ -83,6 +83,8 @@ def main():
             "canvas_cast_test.gd",
             "native_capabilities_test.gd",
             "invalid_parameters.gd",
+            "convex_input_test.gd",
+            "invalid_convex_input.gd",
         ]
         project = output / "project"
         project.mkdir(exist_ok=True)
