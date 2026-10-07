@@ -159,6 +159,7 @@ struct Session::Impl : yojimbo::Adapter {
 	double last_time = 0, accumulator = 0, connected_since = 0;
 	uint64_t peer_generation = 0, entity_generation = 0;
 	std::map<uint64_t, Entity> entity_map;
+	std::map<uint64_t, int> replication_priorities;
 	struct Incoming {
 		int type = -1, action = -1, user_channel = 0, delivery = 2, application = 0;
 		uint64_t handle = 0, tick = 0;
@@ -173,6 +174,10 @@ struct Session::Impl : yojimbo::Adapter {
 		std::map<uint64_t, uint64_t> revisions;
 		std::map<uint64_t, std::weak_ptr<uint8_t>> in_flight_states;
 		std::set<uint64_t> hidden;
+		std::map<uint64_t, double> last_finish, queued_base;
+		double virtual_finish = 0;
+		ReplicationStatistics replication;
+		double replication_time = 0;
 		// Decoded traffic may arrive in bursts across sender budget windows.
 		// Keep one copied envelope per channel while the receive budget drains;
 		// remaining messages stay in Yojimbo's bounded queues.
@@ -296,6 +301,7 @@ struct Session::Impl : yojimbo::Adapter {
 		client.reset();
 		links.clear();
 		entity_map.clear();
+		replication_priorities.clear();
 		client_link = Link();
 		client_connected = false;
 		accumulator = 0;
@@ -387,6 +393,8 @@ struct Session::Impl : yojimbo::Adapter {
 						break;
 					}
 					link.in_flight_states.erase(it->first);
+					link.last_finish.erase(it->first);
+					link.queued_base.erase(it->first);
 					it = link.revisions.erase(it);
 				} else {
 					++it;
@@ -402,6 +410,18 @@ struct Session::Impl : yojimbo::Adapter {
 			if (!link.complete && baseline_ready() && meta(slot, EndBaseline)) {
 				link.complete = true;
 			}
+			const double current_time = now();
+			if (link.replication.bytes_per_second > 0) {
+				const double capacity = std::max(MaxStateBytes + 64, link.replication.bytes_per_second);
+				link.replication.available_bytes = std::min(capacity, link.replication.available_bytes + std::max(0.0, current_time - link.replication_time) * link.replication.bytes_per_second);
+			}
+			link.replication_time = current_time;
+			struct Candidate {
+				const Entity *entity;
+				double finish;
+				bool baseline;
+			};
+			std::vector<Candidate> candidates;
 			auto next = entity_map.upper_bound(link.last_entity_sent);
 			for (size_t remaining = entity_map.size(); remaining > 0; --remaining) {
 				if (next == entity_map.end()) {
@@ -411,15 +431,36 @@ struct Session::Impl : yojimbo::Adapter {
 				if (link.hidden.count(entity.handle)) {
 					continue;
 				}
-				auto revision = link.revisions.find(entity.handle);
+				const auto revision = link.revisions.find(entity.handle);
 				if (revision != link.revisions.end() && revision->second == entity.revision) {
 					continue;
 				}
-				// One queued state per entity/peer bounds stale revisions under
-				// latency and leaves capacity for newly spawned owned entities.
 				auto pending = link.in_flight_states.find(entity.handle);
 				if (pending != link.in_flight_states.end() && !pending->second.expired()) {
 					continue;
+				}
+				const bool baseline = revision == link.revisions.end();
+				double finish = 0;
+				if (!baseline && !replication_priorities.empty()) {
+					auto base = link.queued_base.find(entity.handle);
+					if (base == link.queued_base.end()) {
+						base = link.queued_base.emplace(entity.handle, std::max(link.virtual_finish, link.last_finish[entity.handle])).first;
+					}
+					const auto policy = replication_priorities.find(entity.handle);
+					const int priority = policy == replication_priorities.end() ? 1 : policy->second;
+					finish = base->second + double(entity.state.size() + 64) / priority;
+				}
+				candidates.push_back({ &entity, finish, baseline });
+			}
+			if (!replication_priorities.empty() || link.replication.bytes_per_second > 0) {
+				std::stable_sort(candidates.begin(), candidates.end(), [](const Candidate &a, const Candidate &b) { return a.baseline != b.baseline ? a.baseline : a.finish < b.finish; });
+			}
+			for (const Candidate &candidate : candidates) {
+				const Entity &entity = *candidate.entity;
+				const size_t charge = entity.state.size() + 64;
+				if (!candidate.baseline && link.replication.bytes_per_second > 0 && link.replication.available_bytes < charge) {
+					++link.replication.budget_deferrals;
+					break;
 				}
 				if (!room(slot, 0, entity.state.size() + 64)) {
 					break;
@@ -455,6 +496,18 @@ struct Session::Impl : yojimbo::Adapter {
 					queue(slot, 0, m, entity.state.size() + 64);
 				}
 				link.revisions[entity.handle] = entity.revision;
+				if (!candidate.baseline) {
+					++link.replication.sent_updates;
+					link.replication.sent_bytes += charge;
+					if (link.replication.bytes_per_second > 0) {
+						link.replication.available_bytes = std::max(0.0, link.replication.available_bytes - charge);
+					}
+					if (!replication_priorities.empty()) {
+						link.virtual_finish = std::max(link.virtual_finish, candidate.finish);
+						link.last_finish[entity.handle] = candidate.finish;
+						link.queued_base.erase(entity.handle);
+					}
+				}
 				// Resume after the last admitted entity when the bounded queue
 				// or rate budget fills; lower IDs cannot monopolize each reset.
 				link.last_entity_sent = entity.handle;
@@ -660,8 +713,13 @@ Result Session::listen(int port, const std::string &binding) {
 	} else {
 		netcode_random_bytes(p.server_key.data(), int(p.server_key.size()));
 	}
+	// The simulator ring is shared by all server peers. Reserve a bounded
+	// per-peer allowance so later slots cannot overwrite earlier peers'
+	// delayed fragments under a many-player workload. Clients keep 512 slots.
+	auto server_config = p.config;
+	server_config.maxSimulatorPackets = std::max(512, p.options.max_players * 128);
 	p.last_time = now();
-	p.server = std::make_unique<yojimbo::Server>(yojimbo::GetDefaultAllocator(), p.server_key.data(), address, p.config, p, p.last_time);
+	p.server = std::make_unique<yojimbo::Server>(yojimbo::GetDefaultAllocator(), p.server_key.data(), address, server_config, p, p.last_time);
 	if (!p.server->Start(p.options.max_players)) {
 		p.server.reset();
 		return Result::Failed;
@@ -1017,7 +1075,10 @@ Result Session::despawn(uint64_t handle) {
 	if (!impl->entity_map.erase(handle)) {
 		return Result::NotFound;
 	}
+	impl->replication_priorities.erase(handle);
 	for (auto &link : impl->links) {
+		link.second.last_finish.erase(handle);
+		link.second.queued_base.erase(handle);
 		link.second.hidden.erase(handle);
 	}
 	return Result::Ok;
@@ -1041,9 +1102,73 @@ Result Session::set_visible(uint64_t handle, int64_t peer, bool visible) {
 	}
 	return Result::Ok;
 }
+Result Session::set_replication_priority(uint64_t handle, int priority) {
+	std::lock_guard<std::recursive_mutex> guard(library_mutex);
+	auto &p = *impl;
+	if (!p.on_owner()) {
+		return Result::Busy;
+	}
+	if (!p.server) {
+		return Result::Unauthorized;
+	}
+	if (priority < 1 || priority > 16) {
+		return Result::Invalid;
+	}
+	if (!p.entity_map.count(handle)) {
+		return Result::NotFound;
+	}
+	if (priority == 1) {
+		p.replication_priorities.erase(handle);
+	} else {
+		p.replication_priorities[handle] = priority;
+	}
+	return Result::Ok;
+}
+Result Session::set_peer_replication_budget(int64_t peer, int bytes_per_second) {
+	std::lock_guard<std::recursive_mutex> guard(library_mutex);
+	auto &p = *impl;
+	if (!p.on_owner()) {
+		return Result::Busy;
+	}
+	if (!p.server) {
+		return Result::Unauthorized;
+	}
+	if (bytes_per_second < 0 || bytes_per_second > p.options.bytes_per_second) {
+		return Result::Invalid;
+	}
+	const int slot = p.slot_for(peer);
+	if (slot < 0) {
+		return Result::NotFound;
+	}
+	auto &link = p.links[slot];
+	if (link.replication.bytes_per_second == bytes_per_second) {
+		return Result::Ok;
+	}
+	link.replication.bytes_per_second = bytes_per_second;
+	link.replication.available_bytes = std::max(MaxStateBytes + 64, bytes_per_second);
+	link.replication_time = now();
+	return Result::Ok;
+}
+std::optional<ReplicationStatistics> Session::replication_statistics(int64_t peer) const {
+	std::lock_guard<std::recursive_mutex> guard(library_mutex);
+	auto &p = *impl;
+	if (!p.on_owner() || !p.server) {
+		return std::nullopt;
+	}
+	const int slot = p.slot_for(peer);
+	return slot < 0 ? std::nullopt : std::optional<ReplicationStatistics>(p.links.at(slot).replication);
+}
 std::map<uint64_t, Entity> Session::entities() const {
 	std::lock_guard<std::recursive_mutex> guard(library_mutex);
 	return impl->on_owner() ? impl->entity_map : std::map<uint64_t, Entity>();
+}
+std::optional<Entity> Session::entity(uint64_t handle) const {
+	std::lock_guard<std::recursive_mutex> guard(library_mutex);
+	if (!impl->on_owner()) {
+		return std::nullopt;
+	}
+	const auto found = impl->entity_map.find(handle);
+	return found == impl->entity_map.end() ? std::nullopt : std::optional<Entity>(found->second);
 }
 std::vector<Peer> Session::peers() const {
 	std::lock_guard<std::recursive_mutex> guard(library_mutex);

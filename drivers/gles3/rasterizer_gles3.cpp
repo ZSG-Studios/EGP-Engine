@@ -333,8 +333,8 @@ RasterizerGLES3::RasterizerGLES3() {
 
 #endif // GL_DEBUG_CALLBACK
 
-	{
-		// Setup shader cache.
+	if (Engine::get_singleton()->is_editor_hint() || bool(GLOBAL_GET("rendering/shader_compiler/shader_cache/enabled"))) {
+		// Disabled game caches must not touch shared directories during startup.
 
 		String shader_cache_dir = Engine::get_singleton()->get_shader_cache_path();
 		if (shader_cache_dir.is_empty()) {
@@ -347,16 +347,15 @@ RasterizerGLES3::RasterizerGLES3() {
 			Error err = da->change_dir("shader_cache");
 			if (err != OK) {
 				err = da->make_dir("shader_cache");
+				if (err == OK || err == ERR_ALREADY_EXISTS) {
+					// Another process may have created it after our first change_dir.
+					err = da->change_dir("shader_cache");
+				}
 			}
 			if (err != OK) {
 				ERR_PRINT("Can't create shader cache folder, no shader caching will happen: " + shader_cache_dir);
 			} else {
 				shader_cache_dir = shader_cache_dir.path_join("shader_cache");
-
-				bool shader_cache_enabled = GLOBAL_GET("rendering/shader_compiler/shader_cache/enabled");
-				if (!Engine::get_singleton()->is_editor_hint() && !shader_cache_enabled) {
-					shader_cache_dir = String(); //disable only if not editor
-				}
 
 				if (!shader_cache_dir.is_empty()) {
 					ShaderGLES3::set_shader_cache_dir(shader_cache_dir);

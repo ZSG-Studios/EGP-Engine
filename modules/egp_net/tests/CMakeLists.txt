@@ -63,3 +63,8 @@ add_executable(egp_net_state_encoding_check state_encoding_check.cpp)
 target_link_libraries(egp_net_state_encoding_check PRIVATE egp_net_core)
 add_test(NAME egp_net_state_encoding COMMAND egp_net_state_encoding_check)
 set_tests_properties(egp_net_state_encoding PROPERTIES TIMEOUT 45)
+
+add_executable(egp_net_replication_policy_check replication_policy_check.cpp)
+target_link_libraries(egp_net_replication_policy_check PRIVATE egp_net_core)
+add_test(NAME egp_net_replication_policy COMMAND egp_net_replication_policy_check)
+set_tests_properties(egp_net_replication_policy PROPERTIES TIMEOUT 25)

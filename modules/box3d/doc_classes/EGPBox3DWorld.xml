@@ -6,6 +6,7 @@
 	<description>
 		Owns a Box3D world independent of the scene physics server. Call [method configure], queue commands, then call [method step_tick] once per simulation tick. Commands execute in entity ID and sequence order. Use one constructing thread for every call. Body types are 0 (static), 1 (kinematic), and 2 (dynamic).
 		Snapshots include the solver state and are only for trusted local history on a compatible build. Never restore bytes received from a peer. This class does not replace the physics of [RigidBody3D] or [CharacterBody3D].
+		Enable [code]physics/box3d/audit_determinism[/code] before configuring a world to run a separate native mirror solver. Commands, fixed steps and trusted restores are repeated and their diagnostic hashes compared. Divergence fails closed with [constant ERR_INVALID_DATA]. Object metadata [code]box3d_audit_verified_steps[/code], [code]box3d_audit_verified_boundaries[/code] and [code]box3d_audit_hash_mismatches[/code] provide evidence. This diagnostic doubles solver work; it is disabled by default and does not implement remote prediction or establish cross-platform determinism.
 	</description>
 	<tutorials>
 	</tutorials>

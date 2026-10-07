@@ -2,9 +2,9 @@ name: EGP C++ editor and exports
 on:
   push:
     branches: [master]
-    paths: ["core/extension/**", "drivers/windows/file_access_windows_pipe.*", "editor/editor_node.*", "editor/doc/editor_help.*", "editor/settings/gdextension/**", "misc/scripts/*egp_cpp*", ".github/workflows/egp-cpp.yml", ".gitmodules", "thirdparty/godot-cpp"]
+    paths: ["core/extension/**", "drivers/windows/file_access_windows_pipe.*", "editor/editor_node.*", "editor/doc/editor_help.*", "editor/settings/gdextension/**", "misc/scripts/*egp_cpp*", "misc/scripts/*egp_generated_api*", "misc/scripts/*egp_net*", "misc/egp/generated_api/**", "misc/egp/api_contract.json", "modules/egp_net/**", "tests/networking/**", ".github/workflows/egp-cpp.yml", ".gitmodules", "thirdparty/godot-cpp"]
   pull_request:
-    paths: ["core/extension/**", "drivers/windows/file_access_windows_pipe.*", "editor/editor_node.*", "editor/doc/editor_help.*", "editor/settings/gdextension/**", "misc/scripts/*egp_cpp*", ".github/workflows/egp-cpp.yml", ".gitmodules", "thirdparty/godot-cpp"]
+    paths: ["core/extension/**", "drivers/windows/file_access_windows_pipe.*", "editor/editor_node.*", "editor/doc/editor_help.*", "editor/settings/gdextension/**", "misc/scripts/*egp_cpp*", "misc/scripts/*egp_generated_api*", "misc/scripts/*egp_net*", "misc/egp/generated_api/**", "misc/egp/api_contract.json", "modules/egp_net/**", "tests/networking/**", ".github/workflows/egp-cpp.yml", ".gitmodules", "thirdparty/godot-cpp"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -59,6 +59,12 @@ jobs:
       - run: python misc/scripts/test_egp_cpp_sdk.py
       - name: Validate CLI and exported games
         run: python misc/scripts/validate_egp_cpp.py --editor ${{ matrix.editor }} --debug-template ${{ matrix.debug }} --release-template ${{ matrix.release }}
+      - name: Compile typed Superposition and interpolation C++ APIs
+        run: python misc/scripts/validate_egp_generated_api.py --cpp --output .build/generated-api-cpp
+      - name: Validate engine networking, replication, interpolation and physics replay
+        run: python misc/scripts/validate_egp_net.py --engine ${{ matrix.editor }} --output .build/engine-networking
+      - name: Validate C++ editor workflow and actionable compiler diagnostics
+        run: python misc/scripts/validate_egp_cpp_ui.py --engine ${{ matrix.editor }} --output .build/cpp-ui-ci
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -66,3 +72,8 @@ jobs:
           path: |
             .build/cpp-qualification/*.log
             .build/cpp-qualification/results.json
+            .build/generated-api-cpp/**/receipt.json
+            .build/generated-api-cpp/**/*.log
+            .build/engine-networking/**
+            .build/cpp-ui-ci/**/receipt.json
+            .build/cpp-ui-ci/**/editor.log

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperpositionConfig" inherits="Resource" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" api_type="core">
+	<brief_description>Reusable Superposition property schema and update policy.</brief_description>
+	<description>Save as a resource shared by matching server/client scenes. Select supported target properties through [Superposition] checkboxes, then edit type, quantization and smoothing on each rule. This initial reliable gameplay state slice provides change suppression and update scheduling rather than a general prediction or RPC framework.</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="properties" type="SuperpositionProperty[]" setter="set_properties" getter="get_properties" default="[]">One to 32 enabled typed properties, with no duplicate names. At most 32 total rules.</member>
+		<member name="update_rate" type="float" setter="set_update_rate" getter="get_update_rate" default="10.0">Server capture and client application rate from 1 to 30 Hz. Catch-up does not emit bursts.</member>
+		<member name="interest_radius" type="float" setter="set_interest_radius" getter="get_interest_radius" default="0.0">Radius around a Node3D target used for explicitly supplied observer positions. Zero disables spatial relevance filtering. Unspecified observers remain visible.</member>
+		<member name="priority" type="int" setter="set_priority" getter="get_priority" default="1">Native scheduling service weight from 1 to 16. Higher values favor this object under a peer update budget; waiting lower-priority flows retain their scheduling position.</member>
+		<member name="capture_mode" type="int" setter="set_capture_mode" getter="get_capture_mode" default="0">Automatic (0) polls selected properties. Pushed (1) skips target capture until [method Superposition.mark_dirty] is called. Baselines and schema/session changes still capture automatically.</member>
+		<member name="interest_hysteresis" type="float" setter="set_interest_hysteresis" getter="get_interest_hysteresis" default="2.0">Visible objects leave at Radius + Hysteresis; hidden objects re-enter at Radius. Prevents interest boundary churn.</member>
+	</members>
+</class>

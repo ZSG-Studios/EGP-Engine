@@ -1,6 +1,36 @@
-// SPDX-License-Identifier: MIT
+/**************************************************************************/
+/*  egp_box3d_world.cpp                                                   */
+/**************************************************************************/
+/*                         This file is part of:                          */
+/*                             GODOT ENGINE                               */
+/*                        https://godotengine.org                         */
+/**************************************************************************/
+/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
+/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
+/*                                                                        */
+/* Permission is hereby granted, free of charge, to any person obtaining  */
+/* a copy of this software and associated documentation files (the        */
+/* "Software"), to deal in the Software without restriction, including    */
+/* without limitation the rights to use, copy, modify, merge, publish,    */
+/* distribute, sublicense, and/or sell copies of the Software, and to     */
+/* permit persons to whom the Software is furnished to do so, subject to  */
+/* the following conditions:                                              */
+/*                                                                        */
+/* The above copyright notice and this permission notice shall be         */
+/* included in all copies or substantial portions of the Software.        */
+/*                                                                        */
+/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
+/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
+/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
+/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
+/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
+/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
+/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
+/**************************************************************************/
+
 #include "egp_box3d_world.h"
 
+#include "core/config/project_settings.h"
 #include "core/object/class_db.h"
 
 #include <cstdio>
@@ -60,7 +90,47 @@ void EGPBox3DWorld::_bind_methods() {
 Error EGPBox3DWorld::configure(int64_t rate, int64_t steps, int64_t workers, const Vector3 &g) {
 	ERR_FAIL_COND_V(Thread::get_caller_id() != owner_thread, ERR_BUSY);
 	ERR_FAIL_COND_V(rate < 1 || rate > 240 || steps < 1 || steps > 16 || workers < 1 || workers > B3_MAX_WORKERS, ERR_INVALID_PARAMETER);
-	return to_error(simulation.configure(uint32_t(rate), uint32_t(steps), uint32_t(workers), to_b3(g)));
+	const Error error = to_error(simulation.configure(uint32_t(rate), uint32_t(steps), uint32_t(workers), to_b3(g)));
+	if (error != OK) {
+		return error;
+	}
+	audit_world.reset();
+	audit_steps = audit_boundaries = 0;
+	audit_failed = false;
+	set_meta("box3d_audit_verified_steps", int64_t(0));
+	set_meta("box3d_audit_verified_boundaries", int64_t(0));
+	set_meta("box3d_audit_hash_mismatches", int64_t(0));
+	if (bool(GLOBAL_GET("physics/box3d/audit_determinism"))) {
+		audit_world = std::make_unique<egp::box3d::DeterministicWorld>();
+		return to_error(audit_world->configure(uint32_t(rate), uint32_t(steps), uint32_t(workers), to_b3(g)));
+	}
+	return OK;
+}
+Error EGPBox3DWorld::queue_command(const egp::box3d::Command &command) {
+	if (audit_failed) {
+		return ERR_INVALID_DATA;
+	}
+	const auto result = simulation.queue(command);
+	if (audit_world && audit_world->queue(command) != result) {
+		audit_failed = true;
+		set_meta("box3d_audit_hash_mismatches", int64_t(1));
+		ERR_PRINT("Box3D determinism audit command result differs.");
+		return ERR_INVALID_DATA;
+	}
+	return to_error(result);
+}
+Error EGPBox3DWorld::verify_audit() {
+	if (!audit_world) {
+		return OK;
+	}
+	if (audit_failed || simulation.get_state_hash() != audit_world->get_state_hash()) {
+		audit_failed = true;
+		set_meta("box3d_audit_hash_mismatches", int64_t(1));
+		ERR_PRINT("Box3D determinism audit state differs at tick " + itos(simulation.get_tick()));
+		return ERR_INVALID_DATA;
+	}
+	set_meta("box3d_audit_verified_boundaries", ++audit_boundaries);
+	return OK;
 }
 Error EGPBox3DWorld::queue_shape(int64_t entity, int64_t sequence, const Vector3 &position, const Vector3 &size, int64_t type, double density, egp::box3d::Operation operation) {
 	ERR_FAIL_COND_V(Thread::get_caller_id() != owner_thread, ERR_BUSY);
@@ -73,7 +143,7 @@ Error EGPBox3DWorld::queue_shape(int64_t entity, int64_t sequence, const Vector3
 	c.size = to_b3(size);
 	c.body_type = b3BodyType(type);
 	c.density = float(density);
-	return to_error(simulation.queue(c));
+	return queue_command(c);
 }
 Error EGPBox3DWorld::queue_create_box(int64_t entity, int64_t sequence, const Vector3 &position, const Vector3 &size, int64_t type, double density) {
 	return queue_shape(entity, sequence, position, size, type, density, egp::box3d::Operation::CREATE_BOX);
@@ -92,7 +162,7 @@ Error EGPBox3DWorld::queue_vector(int64_t entity, int64_t sequence, const Vector
 	c.sequence = uint32_t(sequence);
 	c.value = to_b3(value);
 	c.operation = operation;
-	return to_error(simulation.queue(c));
+	return queue_command(c);
 }
 Error EGPBox3DWorld::queue_destroy_body(int64_t entity, int64_t sequence) {
 	return queue_vector(entity, sequence, Vector3(), egp::box3d::Operation::DESTROY);
@@ -114,20 +184,46 @@ Error EGPBox3DWorld::queue_body_state(int64_t entity, int64_t sequence, const Ve
 	c.rotation = { { float(rotation.x), float(rotation.y), float(rotation.z) }, float(rotation.w) };
 	c.linear_velocity = to_b3(linear);
 	c.angular_velocity = to_b3(angular);
-	return to_error(simulation.queue(c));
+	return queue_command(c);
 }
 Error EGPBox3DWorld::apply_queued_commands() {
 	ERR_FAIL_COND_V(Thread::get_caller_id() != owner_thread, ERR_BUSY);
-	return to_error(simulation.apply_queued_commands());
+	if (audit_failed) {
+		return ERR_INVALID_DATA;
+	}
+	const auto result = simulation.apply_queued_commands();
+	if (audit_world && audit_world->apply_queued_commands() != result) {
+		audit_failed = true;
+		return verify_audit();
+	}
+	return result == egp::box3d::Result::OK ? verify_audit() : to_error(result);
 }
 void EGPBox3DWorld::clear_pending_commands() {
 	ERR_FAIL_COND(Thread::get_caller_id() != owner_thread);
 	simulation.clear_pending_commands();
+	if (audit_world) {
+		audit_world->clear_pending_commands();
+	}
 }
 Error EGPBox3DWorld::step_tick(int64_t expected) {
 	ERR_FAIL_COND_V(Thread::get_caller_id() != owner_thread, ERR_BUSY);
 	ERR_FAIL_COND_V(expected < 1, ERR_INVALID_PARAMETER);
-	return to_error(simulation.step_tick(uint64_t(expected)));
+	if (audit_failed) {
+		return ERR_INVALID_DATA;
+	}
+	const auto result = simulation.step_tick(uint64_t(expected));
+	if (audit_world && audit_world->step_tick(uint64_t(expected)) != result) {
+		audit_failed = true;
+		return verify_audit();
+	}
+	if (result != egp::box3d::Result::OK) {
+		return to_error(result);
+	}
+	const Error error = verify_audit();
+	if (error == OK && audit_world) {
+		set_meta("box3d_audit_verified_steps", ++audit_steps);
+	}
+	return error;
 }
 int64_t EGPBox3DWorld::get_tick() const {
 	ERR_FAIL_COND_V(Thread::get_caller_id() != owner_thread, 0);
@@ -164,7 +260,15 @@ Error EGPBox3DWorld::restore_snapshot(const PackedByteArray &bytes) {
 	ERR_FAIL_COND_V(Thread::get_caller_id() != owner_thread, ERR_BUSY);
 	ERR_FAIL_COND_V(bytes.size() < 89 || bytes.size() > egp::box3d::DeterministicWorld::MAX_SNAPSHOT_BYTES, ERR_FILE_CORRUPT);
 	std::vector<uint8_t> copy(bytes.ptr(), bytes.ptr() + bytes.size());
-	return to_error(simulation.restore_snapshot(copy));
+	if (audit_failed) {
+		return ERR_INVALID_DATA;
+	}
+	const auto result = simulation.restore_snapshot(copy);
+	if (audit_world && audit_world->restore_snapshot(copy) != result) {
+		audit_failed = true;
+		return verify_audit();
+	}
+	return result == egp::box3d::Result::OK ? verify_audit() : to_error(result);
 }
 String EGPBox3DWorld::get_state_hash() const {
 	ERR_FAIL_COND_V(Thread::get_caller_id() != owner_thread, String());

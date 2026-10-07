@@ -1,0 +1,13 @@
+config_version=5
+[application]
+config/name="EGP Deterministic Physics Networking"
+run/main_scene="res://main.tscn"
+run/max_fps=60
+[display]
+window/size/viewport_width=900
+window/size/viewport_height=640
+[rendering]
+renderer/rendering_method="gl_compatibility"
+shader_compiler/shader_cache/enabled=false
+[threading]
+worker_pool/max_threads=2

@@ -1,0 +1,22 @@
+config_version=5
+
+[application]
+config/name="EGP • Box3D Arena"
+run/main_scene="res://arena.tscn"
+run/max_fps=60
+
+[threading]
+worker_pool/max_threads=2
+
+[display]
+window/size/viewport_width=960
+window/size/viewport_height=640
+window/size/window_width_override=960
+window/size/window_height_override=640
+
+[rendering]
+renderer/rendering_method="gl_compatibility"
+renderer/rendering_method.mobile="gl_compatibility"
+# Concurrent demo clients must not race to populate one shared GLES shader cache.
+shader_compiler/shader_cache/enabled=false
+environment/defaults/default_clear_color=Color(0.025, 0.04, 0.07, 1)

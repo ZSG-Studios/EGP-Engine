@@ -65,8 +65,12 @@ five runtime fixtures and separate authenticated server/client processes.
 
 ## Remaining parity gates
 
-The inherited adapter does not implement infinite world boundaries or separation
-rays. Native contact tuning, speed bounds, sleep, continuous collision and warm
+The adapter does not implement infinite world boundary collisions. A
+`WorldBoundaryShape2D` resource can be inspected, serialized and freed normally;
+attaching it to an active physics body or using it in a query reports the
+unsupported operation and creates no collision fixture. Use finite segment or
+rectangle boundaries. This is resource compatibility, not infinite-plane physics
+support. Separation rays remain subject to their documented backend limits. Native contact tuning, speed bounds, sleep, continuous collision and warm
 starting are exposed as space parameters; broader tuning behavior still requires
 qualification. Ray CCD was removed; shape CCD remains supported. One-way rigid-body
 penetration margins and moving-platform behavior need further qualification.

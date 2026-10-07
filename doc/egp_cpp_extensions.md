@@ -9,21 +9,29 @@ Windows is the initial validation platform.
 
 ## In the editor
 
-1. Open **Project → Project Settings → GDExtensions**.
+1. Open **Project â†’ Project Settings â†’ Addons â†’ GDExtension**.
    Select **Check Toolchain** to verify CMake, C++17 compilation, and linking.
    Select **Install Tools** if dependencies are missing; installer output appears
    in the panel. Complete any operating-system installation/admin prompts.
 2. Enter a lowercase C++ identifier, such as `movement`, and select **Create Extension**.
 3. Edit `res://extensions/movement/src/extension.cpp`. The sample registers
    `EGP_movement_Node` with a callable `get_message()` method.
-4. Select **Build Debug**. The first build compiles the bundled bindings; later
+4. Select **Build Debug and Load**. The first build compiles the bundled bindings; later
    extensions reuse the SDK library cache across projects.
 5. Compiler diagnostics link to the source line in the editor's text editor.
 6. A successful build loads or reloads the extension. If loading needs a restart,
    use **Save Scenes and Restart Editor**. Build failures retain the previously
    published descriptor and library.
-7. Select **Build Release** before a release export. Standard GDExtension export
+7. Select **Build Release for Export** before a release export. Standard GDExtension export
    handling includes the library selected by the project's export features.
+
+The panel groups the workflow into Toolchain, Create, and Edit and Build. The
+selected source path appears below the extension selector; **Open Source** opens
+it directly, and **Refresh** discovers extensions added outside the editor.
+Build controls require an extension and honor the running-game reload rules.
+A persistent status line reports configuration, compilation, load/restart, or
+failure with the next action. **Copy Output** copies the compiler log for reports.
+The first Debug build compiles the SDK and may take longer than later builds.
 
 The CMake executable defaults to `cmake` on PATH and can be changed in the panel.
 The editor also detects the standard Windows CMake installation, the macOS CMake
@@ -112,36 +120,37 @@ and [CMake downloads](https://cmake.org/download/).
 
 ## Validation
 
-`misc/scripts/egp_cpp_editor_smoke.gd` runs the actual editor panel in a disposable
-project. It checks scaffolding, compilation, shared SDK reuse by a second extension,
-custom-node registration, a deliberate compile failure with descriptor preservation,
-source-line navigation, saving edited source, rebuilding/reloading changed code,
-and debug/release library mappings. Run it with a locally built EGP editor:
+The disposable editor fixture exercises scaffolding, Debug/Release compilation,
+shared SDK reuse, custom-node registration, compiler failure recovery, source-line
+navigation, saving, and reloading changed code. Run it against your built editor:
 
 ```sh
-EGP --headless --editor --path <disposable project> --script <absolute path to egp_cpp_editor_smoke.gd>
+python misc/scripts/validate_egp_cpp_ui.py --engine <EGP editor>
 ```
 
-The test expects a new project without an existing `extensions/smoke` directory.
-Windows x64 panel validation passed with MSVC and CMake. The older editor-script
-harness reports RID/Object cleanup warnings at exit, so that harness does not
-establish leak-free teardown.
+Add `--capture-ui` when the editor includes a renderer. On Windows, the fixture
+starts its own hidden window and captures the ready panel, a deliberate compiler
+error, and the completed Release build. It does not inject input. Successful
+receipts require orderly editor shutdown without engine errors or leaked objects.
+Receipts, compiler output, and screenshots remain under `.build/egp-cpp-ui`.
 
-The built-in CLI was separately verified with bindings generated from the
-editor's actual 4.8 API. Installation detected the existing tools and verified
-compilation/linking; creation, Debug/Release builds, and four failure exit-code
-cases passed. A separately built Debug export template produced a game that
-loaded the extension and verified its C++ method. The positive CLI, export, and
-game checks completed without engine errors. The standalone validation editor
-disabled Mono, D3D12, and AccessKit; the Debug template included Mono. This does
-not establish full feature parity or performance qualification.
+`misc/scripts/validate_egp_cpp.py` independently checks CLI error exit codes and
+Debug/Release exported games using their matching templates. The **EGP C++ editor
+and exports** workflow runs these checks, the headless panel fixture, direct typed
+C++ API compilation, and engine networking fixtures on Windows x64, Linux x64,
+and macOS ARM64. The Mono Linux build separately compiles the same typed C# API
+surface against its freshly generated `GodotSharp.dll`. This direct assembly
+reference avoids accidentally validating an older package from a NuGet cache.
 
-`misc/scripts/validate_egp_cpp.py` checks the built-in CLI, error exit codes, and
-actual Debug/Release exports using separately built templates. The
-`EGP C++ editor and exports` workflow runs it on Windows x64, Linux x64, and
-macOS ARM64 and retains logs and timings. Its headless validation builds disable
-rendering backends, Mono, and AccessKit. Workflow results qualify the tested
-architecture and features only; adding a workflow does not establish a passing
-result. Release-template exports and Linux/macOS parity remain pending current
-workflow results. Positive checks reject unexpected engine errors as well as
-incorrect exit codes or missing expected output.
+To compile the networking API examples locally:
+
+```sh
+python misc/scripts/validate_egp_generated_api.py --cpp
+python misc/scripts/validate_egp_generated_api.py --managed-assembly bin/GodotSharp/Api/Debug/GodotSharp.dll
+```
+
+These compile probes cover Superposition resources and nodes, pushed capture,
+priority and interest settings, and snapshot interpolation. Runtime fixtures
+exercise replication, interpolation, deterministic physics replay, and failure
+paths separately. A successful compile receipt alone does not establish runtime
+performance or parity across platforms.

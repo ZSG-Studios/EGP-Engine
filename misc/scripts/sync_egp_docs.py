@@ -22,6 +22,9 @@ MANUALS = {
     "doc/egp_network_lab.md": "network_lab.md",
     "doc/egp_documentation.md": "documentation.md",
     "modules/egp_net/README.md": "networking_reference.md",
+    "modules/egp_net/SUPERPOSITION.md": "superposition.md",
+    "demos/box3d_arena/README.md": "physics_arena.md",
+    "demos/box3d_deterministic/README.md": "deterministic_demo.md",
 }
 SOURCE_URL = "https://github.com/ZSG-Studios/EGP/blob/"
 

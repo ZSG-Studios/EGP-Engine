@@ -17,6 +17,18 @@ func require(condition: bool, message: String) -> bool:
 		quit(1)
 	return condition
 
+func wait_for_filesystem() -> void:
+	var filesystem := EditorInterface.get_resource_filesystem()
+	# Plugins initialize inside the first scan, and EditorProgress pumps nested
+	# frames. A frame alone does not mean plugin/scan initialization has returned.
+	while filesystem.is_scanning():
+		await filesystem.filesystem_changed
+	# Give sources_changed and deferred layout/resource callbacks their boundary.
+	await process_frame
+	while filesystem.is_scanning():
+		await filesystem.filesystem_changed
+	await process_frame
+
 func finish_build() -> bool:
 	var deadline := Time.get_ticks_msec() + 900000
 	while panel.is_building():
@@ -24,23 +36,85 @@ func finish_build() -> bool:
 			require(false, "Native extension build timed out")
 			return false
 		await process_frame
+	await wait_for_filesystem()
 	return true
 
+func capture_ui(stage: String) -> void:
+	var output_dir := OS.get_environment("EGP_CPP_UI_CAPTURE")
+	if output_dir.is_empty():
+		return
+	# Disposable fixture only: embed the settings dialog in the hidden renderer
+	# window, so capture never creates a focused native popup.
+	var main_window := panel.get_tree().root
+	main_window.gui_embed_subwindows = true
+	main_window.size = Vector2i(1280, 1024)
+	var child: Node = panel
+	var settings_window: Window
+	while child.get_parent() != null:
+		var parent := child.get_parent()
+		if parent is TabContainer and child is Control:
+			parent.current_tab = parent.get_tab_idx_from_control(child)
+		if parent is Window:
+			settings_window = parent
+			break
+		child = parent
+	if not require(settings_window != null, "Settings window for capture was not found"):
+		return
+	settings_window.force_native = false
+	settings_window.popup_centered(Vector2i(1152, 900))
+	await RenderingServer.frame_post_draw
+	var image := main_window.get_texture().get_image()
+	if not require(image != null and not image.is_empty(), "C++ panel screenshot was empty"):
+		return
+	if not require(image.save_png(output_dir.path_join(stage + ".png")) == OK, "C++ panel screenshot could not be saved"):
+		return
+	print("EGP_CPP_UI_CAPTURED: " + stage)
+
 func run_test() -> void:
-	await process_frame
+	await wait_for_filesystem()
 	var panels := root.find_children("NativeExtensionEditor", "", true, false)
 	if not require(panels.size() == 1, "Built-in C++ editor panel was not found"):
 		return
 	panel = panels[0]
+	print("EGP_CPP_STAGE: empty and invalid-name workflow controls")
+	var create_button := panel.find_child("CreateExtension", true, false) as Button
+	var debug_button := panel.find_child("BuildDebug", true, false) as Button
+	var release_button := panel.find_child("BuildRelease", true, false) as Button
+	var name_input := panel.find_child("ExtensionName", true, false) as LineEdit
+	if not require(create_button != null and debug_button != null and release_button != null and name_input != null,
+			"Named C++ workflow controls were not found"):
+		return
+	if not require(create_button.disabled and debug_button.disabled and release_button.disabled,
+			"Empty project should not offer invalid create/build actions"):
+		return
+	name_input.text = "Invalid Name"
+	name_input.emit_signal("text_changed", name_input.text)
+	if not require(create_button.disabled, "Invalid extension name was accepted by UI"):
+		return
+	name_input.text = "valid_name"
+	name_input.emit_signal("text_changed", name_input.text)
+	if not require(not create_button.disabled, "Valid extension name did not enable creation"):
+		return
+	await capture_ui("01-ready")
 	print("EGP_CPP_STAGE: create and cold debug build")
 	panel.diagnostic_found.connect(func(path: String, line: int): diagnostics.append([path, line]))
 	if not require(panel.create_extension("smoke") == OK, "Extension scaffolding failed"):
 		return
+	await wait_for_filesystem()
+	if not require(not debug_button.disabled and not release_button.disabled
+			and panel.get_status().contains("Open Source"), "Created extension has no actionable next step"):
+		return
 	if not require(panel.build_extension("smoke", false) == OK, "Debug build did not start"):
+		return
+	if not require(debug_button.disabled and release_button.disabled and name_input.editable == false
+			and panel.get_status().contains("Configuring smoke"), "Busy operation did not report stage or lock conflicting controls"):
 		return
 	if not await finish_build():
 		return
 	if not require(panel.get_last_build_result() == 0, "Debug build failed"):
+		return
+	if not require(panel.get_status().contains("built and loaded") and not debug_button.disabled,
+			"Successful build did not restore controls and explain load result"):
 		return
 	if not require(ClassDB.class_exists("EGP_smoke_Node"), "Custom C++ node was not registered"):
 		return
@@ -51,6 +125,7 @@ func run_test() -> void:
 	print("EGP_CPP_STAGE: second extension and shared SDK cache")
 	if not require(panel.create_extension("second") == OK, "Second extension scaffolding failed"):
 		return
+	await wait_for_filesystem()
 	var selector = panel.find_children("*", "OptionButton", true, false)[0]
 	if not require(selector.get_item_text(selector.get_selected()) == "second", "New extension was not selected"):
 		return
@@ -71,8 +146,15 @@ func run_test() -> void:
 	file.close()
 	if not require(panel.build_extension("smoke", false) == OK, "Failed-build fixture did not start"):
 		return
+	if not require(selector.get_item_text(selector.get_selected()) == "smoke",
+			"Public build target did not update the selected extension/source path"):
+		return
 	if not await finish_build():
 		return
+	if not require(panel.get_status().contains("build failed") and panel.get_status().contains("fix the source")
+			and not debug_button.disabled, "Compile failure lacks persistent recovery guidance"):
+		return
+	await capture_ui("02-compile-error")
 	if not require(panel.get_last_build_result() != 0, "Invalid C++ unexpectedly compiled"):
 		return
 	if not require(FileAccess.get_file_as_string(descriptor) == before, "Failed build changed the published descriptor"):
@@ -114,5 +196,6 @@ func run_test() -> void:
 	if not require(config.load(descriptor) == OK and config.get_section_keys("libraries").size() == 2,
 			"Debug/release export mappings were not preserved"):
 		return
+	await capture_ui("03-release-ready")
 	print("EGP_CPP_EDITOR_SMOKE_PASSED")
 	quit(0)

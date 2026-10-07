@@ -23,6 +23,14 @@ import SCons.Tool.msvc
 _build_lock = threading.Lock()
 
 
+def directory_batch_key(action, env, target, source):
+    # SCons unions implicit dependencies across every source in an executor.
+    # A global batch therefore makes one private/generated header invalidate
+    # thousands of unrelated objects. Keep flags isolated by environment and
+    # limit that dependency union to a source directory.
+    return id(action), id(env), source[0].dir.abspath
+
+
 def bff_string(value):
     # BFF uses ^ to escape literal quotes, dollars and carets; backslashes are literal.
     return "'" + str(value).replace("^", "^^").replace("$", "^$").replace("'", "^'") + "'"
@@ -82,7 +90,9 @@ class CompileAction(SCons.Action.FunctionAction):
     def __init__(self, original, options):
         self.original = original
         self.options = options
-        super().__init__(self.compile, dict(strfunction=self.describe, batch_key=True, targets="$CHANGED_TARGETS"))
+        super().__init__(
+            self.compile, dict(strfunction=self.describe, batch_key=directory_batch_key, targets="$CHANGED_TARGETS")
+        )
 
     def get_presig(self, target, source, env, executor=None):
         # Retain the original command signature, including each module's flags.
@@ -128,7 +138,7 @@ class CompileAction(SCons.Action.FunctionAction):
             # Definitions such as mbedTLS's config header already contain MSVC
             # escapes. Re-escaping them with list2cmdline changes their value.
             options = " ".join(SCons.Subst.escape_list(args, env["ESCAPE"]))
-            options = options.replace("/Fo%2", '/Fo"%2"').replace("%1", '"%1"')
+            options = options.replace("/Fo%2", '/Fo"%2"').replace("%1", '"%1"')  # codespell:ignore fo
             # /Zi's shared compiler PDB is incompatible with remote compilation.
             if any(str(arg).lower() in ("/zi", "/clr", "/gl") or str(arg).lower().startswith("/yu") for arg in args):
                 raise SCons.Errors.UserError(
@@ -211,7 +221,7 @@ def configure(env):
                 "$SHCXXFLAGS $SHCCFLAGS" if shared else "$CXXFLAGS $CCFLAGS",
             ),
         ):
-            action = CompileAction(original, "/Fo%2 /c %1 " + flags + " $_CCCOMCOM")
+            action = CompileAction(original, "/Fo%2 /c %1 " + flags + " $_CCCOMCOM")  # codespell:ignore fo
             for suffix in suffixes:
                 builder.add_action(suffix, action)
     print(f"FASTBuild v1.20 enabled (workers: {env['fastbuild_workers']}, distribution: {env['fastbuild_dist']}).")
