@@ -1,70 +1,108 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="Superposition" inherits="Node" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" api_type="core">
-	<brief_description>Inspector configured, server authoritative gameplay property replication.</brief_description>
-	<description>Add this node under the gameplay target. Set [member session_path] to a configured EGPNet node, then select supported target properties using the Replicate checkboxes. The selections create [SuperpositionProperty] rules in [member config]. Matching server and client scenes share the configuration. An empty key uses the target's scene path; explicit keys must be unique for their entity kind in a session.
- States are quantized before change detection and transported using the native reliable entity lifecycle. Unchanged states do not generate updates. Late joining and interest re-entry receive the current baseline. This initial version is suitable for low rate gameplay values; high rate physical motion should use the independent unreliable snapshot stream with [EGPNetSnapshotInterpolator]. Property smoothing is cosmetic easing and does not implement physics prediction or rollback.
- Received envelopes are bounded to 4096 bytes and 32 typed properties, with objects disabled and whole schema validation before setters. Interest filtering is relevance optimization, not a confidentiality boundary: initial entity creation can precede observer filtering. Unspecified observers see the entity. Assign current observer positions explicitly; remove disconnected observers with [method clear_observer].</description>
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="Superposition" inherits="Node" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Inspector configured, server authoritative gameplay property replication.
+	</brief_description>
+	<description>
+		Add this node under the gameplay target. Set [member session_path] to a configured EGPNet node, then select supported target properties using the Replicate checkboxes. The selections create [SuperpositionProperty] rules in [member config]. Matching server and client scenes share the configuration. An empty key uses the target's scene path; explicit keys must be unique for their entity kind in a session.
+		States are quantized before change detection and transported using the native reliable entity lifecycle. Unchanged states do not generate updates. Late joining and interest re-entry receive the current baseline. This initial version is suitable for low rate gameplay values; high rate physical motion should use the independent unreliable snapshot stream with [EGPNetSnapshotInterpolator]. Property smoothing is cosmetic easing and does not implement physics prediction or rollback.
+		Received envelopes are bounded to 4096 bytes and 32 typed properties, with objects disabled and whole schema validation before setters. Interest filtering is relevance optimization, not a confidentiality boundary: initial entity creation can precede observer filtering. Unspecified observers see the entity. Assign current observer positions explicitly; remove disconnected observers with [method clear_observer].
+	</description>
 	<tutorials>
 	</tutorials>
 	<methods>
-		<method name="mark_dirty">
-			<return type="void"/>
-			<description>Notifies pushed capture that selected gameplay properties changed. Calls coalesce until the configured update interval. New entities and changed schemas always capture a complete baseline.</description>
-		</method>
-		<method name="set_session">
-			<return type="void"/>
-			<param index="0" name="session" type="EGPNetSession"/>
-			<description>Binds an already configured session. Retires a previously owned server entity before rebinding. Poll the session through your existing EGPNet node.</description>
-		</method>
-		<method name="get_session" qualifiers="const">
-			<return type="EGPNetSession"/>
-			<description>Returns the bound session.</description>
-		</method>
-		<method name="replicate_now">
-			<return type="int" enum="Error"/>
-			<description>Captures a server state or applies the client's latest native entity revision. Automatic processing calls this at the configured rate.</description>
+		<method name="apply_state">
+			<return type="int" enum="Error" />
+			<param index="0" name="bytes" type="PackedByteArray" />
+			<description>
+				Validates an envelope and applies the selected properties on a replica. Rejects calls when bound to a listening server. This method is not an input RPC.
+			</description>
 		</method>
 		<method name="capture_state">
-			<return type="PackedByteArray"/>
-			<description>Produces a bounded quantized protocol envelope or an empty array on validation failure.</description>
-		</method>
-		<method name="apply_state">
-			<return type="int" enum="Error"/>
-			<param index="0" name="bytes" type="PackedByteArray"/>
-			<description>Validates an envelope and applies the selected properties on a replica. Rejects calls when bound to a listening server. This method is not an input RPC.</description>
-		</method>
-		<method name="set_observer_position">
-			<return type="int" enum="Error"/>
-			<param index="0" name="peer_id" type="int"/>
-			<param index="1" name="position" type="Vector3"/>
-			<description>Sets a finite observer position for spatial interest. At most 64 observers are stored.</description>
+			<return type="PackedByteArray" />
+			<description>
+				Produces a bounded quantized protocol envelope or an empty array on validation failure.
+			</description>
 		</method>
 		<method name="clear_observer">
-			<return type="void"/>
-			<param index="0" name="peer_id" type="int"/>
-			<description>Removes the observer and restores unrestricted visibility when the peer is still connected.</description>
+			<return type="void" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Removes the observer and restores unrestricted visibility when the peer is still connected.
+			</description>
+		</method>
+		<method name="get_session" qualifiers="const">
+			<return type="EGPNetSession" />
+			<description>
+				Returns the bound session.
+			</description>
 		</method>
 		<method name="get_statistics" qualifiers="const">
-			<return type="Dictionary"/>
-			<description>Returns entity, captures, sent, dirty_skips, applied, rejected, last_error and state_bytes, push_skips and priority. Failures also emit [signal replication_error].</description>
+			<return type="Dictionary" />
+			<description>
+				Returns entity, captures, sent, dirty_skips, applied, rejected, last_error and state_bytes, push_skips and priority. Failures also emit [signal replication_error].
+			</description>
+		</method>
+		<method name="mark_dirty">
+			<return type="void" />
+			<description>
+				Notifies pushed capture that selected gameplay properties changed. Calls coalesce until the configured update interval. New entities and changed schemas always capture a complete baseline.
+			</description>
+		</method>
+		<method name="replicate_now">
+			<return type="int" enum="Error" />
+			<description>
+				Captures a server state or applies the client's latest native entity revision. Automatic processing calls this at the configured rate.
+			</description>
+		</method>
+		<method name="set_observer_position">
+			<return type="int" enum="Error" />
+			<param index="0" name="peer_id" type="int" />
+			<param index="1" name="position" type="Vector3" />
+			<description>
+				Sets a finite observer position for spatial interest. At most 64 observers are stored.
+			</description>
+		</method>
+		<method name="set_session">
+			<return type="void" />
+			<param index="0" name="session" type="EGPNetSession" />
+			<description>
+				Binds an already configured session. Retires a previously owned server entity before rebinding. Poll the session through your existing EGPNet node.
+			</description>
 		</method>
 	</methods>
 	<members>
-		<member name="enabled" type="bool" setter="set_enabled" getter="is_enabled" default="true">Enables automatic replication and smoothing.</member>
-		<member name="target_path" type="NodePath" setter="set_target_path" getter="get_target_path" default="NodePath(&quot;..&quot;)">Gameplay node whose selected properties replicate.</member>
-		<member name="session_path" type="NodePath" setter="set_session_path" getter="get_session_path" default="NodePath(&quot;&quot;)">Configured EGPNet node exposing its native session.</member>
-		<member name="config" type="SuperpositionConfig" setter="set_config" getter="get_config">Reusable property schema and scheduling policy.</member>
-		<member name="replication_key" type="String" setter="set_replication_key" getter="get_replication_key" default="&quot;&quot;">Stable server/client identity. Empty uses the target scene path. Duplicate explicit identities are rejected.</member>
-		<member name="entity_kind" type="int" setter="set_entity_kind" getter="get_entity_kind" default="32001">Native entity kind reserved by the game for this replication schema.</member>
+		<member name="config" type="SuperpositionConfig" setter="set_config" getter="get_config">
+			Reusable property schema and scheduling policy.
+		</member>
+		<member name="enabled" type="bool" setter="set_enabled" getter="is_enabled" default="true">
+			Enables automatic replication and smoothing.
+		</member>
+		<member name="entity_kind" type="int" setter="set_entity_kind" getter="get_entity_kind" default="32001">
+			Native entity kind reserved by the game for this replication schema.
+		</member>
+		<member name="replication_key" type="String" setter="set_replication_key" getter="get_replication_key" default="&quot;&quot;">
+			Stable server/client identity. Empty uses the target scene path. Duplicate explicit identities are rejected.
+		</member>
+		<member name="session_path" type="NodePath" setter="set_session_path" getter="get_session_path" default="NodePath(&quot;&quot;)">
+			Configured EGPNet node exposing its native session.
+		</member>
+		<member name="target_path" type="NodePath" setter="set_target_path" getter="get_target_path" default="NodePath(&quot;..&quot;)">
+			Gameplay node whose selected properties replicate.
+		</member>
 	</members>
 	<signals>
 		<signal name="replication_error">
-			<param index="0" name="error" type="int"/>
-			<param index="1" name="message" type="String"/>
-			<description>Observable validation, authority, transport or interest error.</description>
+			<param index="0" name="error" type="int" />
+			<param index="1" name="message" type="String" />
+			<description>
+				Observable validation, authority, transport or interest error.
+			</description>
 		</signal>
 		<signal name="state_applied">
-			<description>Emitted after a complete valid received state has been accepted.</description>
+			<description>
+				Emitted after a complete valid received state has been accepted.
+			</description>
 		</signal>
 	</signals>
 </class>
