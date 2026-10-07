@@ -178,17 +178,35 @@ struct UnusedBlock : yojimbo::BlockMessage {
 	bool Serialize(Stream &) { return true; }
 	YOJIMBO_VIRTUAL_SERIALIZE_FUNCTIONS();
 };
-YOJIMBO_MESSAGE_FACTORY_START(AttackFactory, 3);
+struct ForgedInline : yojimbo::Message {
+	uint64_t handle = 1, revision = 1, tick = 0, authority = UINT64_MAX;
+	int kind = 1, size = 1;
+	std::array<uint8_t, 128> data{};
+	template <typename Stream>
+	bool Serialize(Stream &stream) {
+		serialize_uint64(stream, handle);
+		serialize_uint64(stream, revision);
+		serialize_uint64(stream, tick);
+		serialize_uint64(stream, authority);
+		serialize_int(stream, kind, 0, 0x7fffffff);
+		serialize_int(stream, size, 0, 128);
+		serialize_bytes(stream, data.data(), size);
+		return true;
+	}
+	YOJIMBO_VIRTUAL_SERIALIZE_FUNCTIONS();
+};
+YOJIMBO_MESSAGE_FACTORY_START(AttackFactory, 4);
 YOJIMBO_DECLARE_MESSAGE_TYPE(0, ForgedMeta);
 YOJIMBO_DECLARE_MESSAGE_TYPE(1, UnusedBlock);
 YOJIMBO_DECLARE_MESSAGE_TYPE(2, UnusedBlock);
+YOJIMBO_DECLARE_MESSAGE_TYPE(3, ForgedInline);
 YOJIMBO_MESSAGE_FACTORY_FINISH();
 struct AttackAdapter : yojimbo::Adapter {
 	yojimbo::MessageFactory *CreateMessageFactory(yojimbo::Allocator &allocator) override {
 		return YOJIMBO_NEW(allocator, AttackFactory, allocator);
 	}
 };
-void unauthorized_wire() {
+void unauthorized_wire(int type = 0, int channel = 0) {
 	Options options;
 	options.messages_per_second = 32;
 	options.bytes_per_second = 8192;
@@ -217,9 +235,9 @@ void unauthorized_wire() {
 		attacker.AdvanceTime(clock());
 		attacker.ReceivePackets();
 		if (!sent && attacker.IsConnected()) {
-			auto *message = attacker.CreateMessage(0);
+			auto *message = attacker.CreateMessage(type);
 			check(message != nullptr, "forged message allocation");
-			attacker.SendMessage(0, message);
+			attacker.SendMessage(channel, message);
 			sent = true;
 		}
 		attacker.SendPackets();
@@ -227,6 +245,7 @@ void unauthorized_wire() {
 	}
 	std::cout << "wire_sent=" << sent << " wire_rejected=" << server.statistics().rejected_messages << " wire_peers=" << server.peers().size() << " attacker_state=" << attacker.GetClientState() << std::endl;
 	check(sent && server.statistics().rejected_messages == 1 && server.peers().empty(), "authenticated client replication metadata is rejected and peer removed");
+	check(server.entities().empty(), "unauthorized inline/control does not mutate server world");
 	attacker.Disconnect();
 	Session recovery(options);
 	token.clear();
@@ -244,11 +263,15 @@ void unauthorized_wire() {
 int main(int argc, char **argv) {
 	if (argc > 1 && std::string(argv[1]) == "--wire-only") {
 		unauthorized_wire();
+		unauthorized_wire(3, 0);
+		unauthorized_wire(3, 1);
 		return 0;
 	}
 	jitter_bursts();
 	bounded_delivery(false);
 	bounded_delivery(true);
 	unauthorized_wire();
-	std::cout << "EGP_RECEIVE_BUDGET_CHECKS=passed jitter_messages=128 reliable_messages=128 fragmented_messages=11 channels=4 application_channel=1 unauthorized_wire_rejections=1 recovery=1" << std::endl;
+	unauthorized_wire(3, 0);
+	unauthorized_wire(3, 1);
+	std::cout << "EGP_RECEIVE_BUDGET_CHECKS=passed jitter_messages=128 reliable_messages=128 fragmented_messages=11 channels=4 application_channel=1 unauthorized_wire_rejections=3 recovery=3" << std::endl;
 }

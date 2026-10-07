@@ -204,3 +204,23 @@ pass a matching template as `--engine` and the source editor as `--editor`.
 The validator exports a fresh isolated project and retains runtime/PCK hashes,
 logs and exact commands under the chosen `--output` directory. This is a bounded
 local test; production admission and backend revocation require separate evidence.
+
+## Wire compatibility and compact entity state
+
+Native networking wire version 2 sends entity states of up to 128 bytes as bounded
+inline messages. Larger states retain reliable block fragmentation and the existing
+4096-byte maximum. Tiny states previously paid a fragment acknowledgment round trip
+per entity; inline messages let Yojimbo pack several states into a packet. This
+addresses the observed fairness failures when polling at roughly 60 frames/second.
+The outgoing and incoming message/byte budgets, revision ordering, ownership checks
+and bounded in-flight state tickets still apply. This is automatic and does not
+introduce another game-facing API or configuration option.
+
+The wire identity is part of the session fingerprint. Updated clients reject tokens
+for a different wire, game or simulation fingerprint
+before starting transport. Released version 1 clients lack this preflight; a token
+does not attest which client implementation is using it. Deploy matching engine
+and native server builds together, and issue tokens for the supported client
+version through the game/backend admission service after an upgrade. Public native,
+GDScript, C# and C++ method signatures remain unchanged. This protocol change does
+not establish hot reload, WAN, rollback, scale or performance qualification.

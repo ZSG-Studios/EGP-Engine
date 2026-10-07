@@ -3450,3 +3450,44 @@ is required before attributing its original failure conclusively to this deadlin
 Final Windows Debug CTest: `egp_net_symmetric_fairness` passed in 20.39 seconds;
 `egp_net_abrupt_symmetric_fairness` passed in 29.41 seconds with a 60-second
 watchdog. Both passed on the final formatted source; total 49.85 seconds.
+
+### 2026-10-06 compact-state replication candidate
+
+The `745f2496d364eb4a3495abf949610ecda51e58b1` engine matrix completed
+20/20 successfully, including Mono, generated bindings, class docs, extension API,
+native C lookup, .NET tests, exports and conversion gates. Its hosted networking
+qualified Debug across three platforms. A separate local Windows Release suite
+failed three fairness profiles; a 16 ms pump isolated the tiny-state block-transport
+bottleneck without changing message budgets or deadlines.
+
+The candidate uses bounded inline messages for states up to 128 bytes, with large
+states still using the existing block path. The wire fingerprint moves to version
+2, with updated-client token preflight rejecting incompatible server identities.
+Released clients lack that preflight; matching client/server deployment and backend
+version-aware admission remain required. The isolated Release candidate passed
+11 profiles, including normal/symmetric/abrupt fairness at 2 ms and 16 ms, native
+checks, receive budgets, large-state load, interest, pressure and separate processes.
+Debug core/receive/frame-paced fairness and boundary/rejection probes also passed.
+Boundary probes verified exact payloads/revisions across 0, 1, 128, 129 and 4096
+bytes; authenticated client-forged inline/control traffic was rejected without world
+mutation and subsequent valid admission succeeded. Evidence is retained under
+`.build/combined-745f/native-release-diagnostic/`. These are isolated candidate
+checks; canonical formatted-source and hosted matching-engine qualification follow.
+
+Final formatted replication candidate passed all 14 Windows Release CTest profiles
+and 120 native checks. An additional admission probe reproduced a trusted token
+bypassing a differently configured client's game fingerprint. Client preflight now
+checks the pinned public token version/LE protocol identity before constructing a
+transport, leaving server authentication intact. Final Release core/encoding checks
+passed; permanent tests cover mismatched game/simulation fingerprints and old-wire
+server tokens. This rejects mismatched tokens in updated clients, and does not
+attest the implementation of already released clients on the server. Evidence:
+`.build/integration-inline-canonical-release/`,
+`.build/integration-inline-token-release-tests.log`, and the retained counterfactual
+`token-mismatch-baseline.log`. Hosted matching-engine qualification remains pending.
+
+Final Debug checks on the admission-preflight source passed 4/4 in 48.62 seconds: native core, receive budgets, frame-paced fairness and state encoding. Commands and logs: `.build/integration-inline-final-debug-{build,tests}.log`. The earlier 14/14 Release suite preceded the added token preflight; final Release core/encoding rechecks passed 2/2 in 9.74 seconds.
+
+Networking Actions now qualify both Debug and Release on Windows, Linux and macOS, with distinct artifacts per configuration. This ensures the optimized fairness failure is covered permanently rather than inferred from Debug-only success.
+
+Final full Windows Release qualification on the complete token-preflight source passed all 14/14 CTest profiles in 170.07 seconds and 120 native checks. Command: python misc/scripts/validate_egp_net.py --configuration Release --output .build/integration-inline-final-release. Its receipt records exact source SHA256 values and pinned vendor verification; logs and receipt are retained in that directory. Only documentation was updated after this run. Fresh hosted combined-engine/runtime qualification is still required.

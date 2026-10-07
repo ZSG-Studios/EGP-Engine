@@ -44,14 +44,26 @@ void check(bool good, const char *name) {
 	}
 }
 int main(int argc, char **argv) {
-	const bool abrupt = argc > 2 && std::string(argv[2]) == "--abrupt";
+	bool abrupt = false, symmetric = false, frame_paced = false;
+	for (int i = 1; i < argc; ++i) {
+		const std::string argument = argv[i];
+		if (argument == "--abrupt") {
+			abrupt = true;
+		} else if (argument == "--symmetric") {
+			symmetric = true;
+		} else if (argument == "--frame-paced") {
+			frame_paced = true;
+		} else {
+			check(false, "unknown fairness fixture option");
+		}
+	}
 	Options options;
 	options.max_players = 2;
 	options.max_entities = 64;
 	options.messages_per_second = 32;
 	options.bytes_per_second = 8192;
 	Options receiver = options;
-	receiver.messages_per_second = argc > 1 && std::string(argv[1]) == "--symmetric" ? 32 : 1000;
+	receiver.messages_per_second = symmetric ? 32 : 1000;
 	Session server(options), first(receiver), second(receiver);
 	std::array<Session *, 2> clients{ &first, &second };
 	std::array<int64_t, 2> owners{};
@@ -70,7 +82,7 @@ int main(int argc, char **argv) {
 			if (done()) {
 				return true;
 			}
-			std::this_thread::sleep_for(std::chrono::milliseconds(2));
+			std::this_thread::sleep_for(std::chrono::milliseconds(frame_paced ? 16 : 2));
 		} while (std::chrono::steady_clock::now() < end);
 		return false;
 	};
@@ -184,5 +196,5 @@ int main(int argc, char **argv) {
 	}
 	check(server.stop() == Result::Ok, "server cleanup");
 	check(server.entities().empty() && server.peers().empty(), "world and peers clear on stop");
-	std::cout << "EGP_FAIRNESS_CHECKS=passed entities=64 clients=2 reconnects=2 interest_cycles=2 messages_per_second=32 abrupt=" << abrupt << std::endl;
+	std::cout << "EGP_FAIRNESS_CHECKS=passed entities=64 clients=2 reconnects=2 interest_cycles=2 messages_per_second=32 abrupt=" << abrupt << " pump_ms=" << (frame_paced ? 16 : 2) << std::endl;
 }
