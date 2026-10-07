@@ -234,6 +234,19 @@ jobs:
           dotnet --info
           ./modules/mono/build_scripts/build_assemblies.py --godot-output-dir=./bin --godot-platform=linuxbsd --werror
 
+      - name: Compile typed Superposition and interpolation C# APIs
+        if: matrix.build-mono
+        run: python misc/scripts/validate_egp_generated_api.py --managed-assembly bin/GodotSharp/Api/Debug/GodotSharp.dll --output .build/generated-api-csharp
+
+      - name: Upload managed API qualification receipt
+        uses: actions/upload-artifact@v4
+        if: always() && matrix.build-mono
+        with:
+          name: generated-api-csharp-linux
+          path: |
+            .build/generated-api-csharp/**/receipt.json
+            .build/generated-api-csharp/**/*.log
+
       - name: Prepare artifact
         if: matrix.artifact
         run: |

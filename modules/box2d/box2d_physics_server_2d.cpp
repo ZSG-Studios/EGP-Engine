@@ -42,6 +42,7 @@
 #include "shapes/box2d_rectangle_shape_2d.h"
 #include "shapes/box2d_segment_shape_2d.h"
 #include "shapes/box2d_separation_ray_shape_2d.h"
+#include "shapes/box2d_world_boundary_shape_2d.h"
 
 namespace {
 constexpr char PHYSICS_SERVER_NAME[] = "Box2DPhysicsServer2D";
@@ -98,6 +99,9 @@ bool make_query_primitives(const Box2DShape2D *shape, const Transform2D &transfo
 			}
 			break;
 		}
+		case SHAPE_WORLD_BOUNDARY:
+			ERR_PRINT_ONCE("WorldBoundaryShape2D collision queries are not supported by Box2D. Use a supported finite query shape.");
+			return false;
 		default:
 			return false;
 	}
@@ -137,8 +141,10 @@ Box2DPhysicsServer2D *Box2DPhysicsServer2D::get_singleton() {
 // Shape API
 RID Box2DPhysicsServer2D::world_boundary_shape_create() {
 	std::lock_guard<std::recursive_mutex> guard(egp::box2d::get_simulation_mutex());
-	ERR_PRINT_ONCE("Box2D does not implement infinite world boundary shapes.");
-	return RID();
+	Box2DWorldBoundaryShape2D *shape = memnew(Box2DWorldBoundaryShape2D);
+	RID rid = shape_owner.make_rid(shape);
+	shape->set_rid(rid);
+	return rid;
 }
 
 RID Box2DPhysicsServer2D::separation_ray_shape_create() {

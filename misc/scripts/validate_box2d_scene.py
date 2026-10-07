@@ -33,6 +33,12 @@ def validate_result(exit_code, log, fixture_name, completion_marker="RESULT: PAS
             + ["Box2D: Convex polygon transformed points must be finite and inside native coordinate bounds."] * 2
             + ["Box2D: Failed to compute a valid convex hull; check polygon scale and noncollinear points."] * 3
         )
+    elif fixture_name == "world_boundary_unavailable.gd":
+        expected_errors = [
+            "WorldBoundaryShape2D collision is not supported by Box2D. Use finite SegmentShape2D/RectangleShape2D boundaries; no collision fixture was created.",
+            "WorldBoundaryShape2D cast queries are not supported by Box2D. Use a supported finite query shape.",
+            "WorldBoundaryShape2D overlap queries are not supported by Box2D. Use a supported finite query shape.",
+        ]
     errors = re.findall(r"^ERROR: (.*)$", log, re.M)
     passed = (
         exit_code == 0
@@ -93,6 +99,7 @@ def main():
         runs = [(fixture, 1, False) for fixture in fixtures] + [
             (source / "invalid_parameters.gd", 1, False),
             (source / "invalid_convex_input.gd", 1, False),
+            (source / "world_boundary_unavailable.gd", 1, False),
             (source / "native_determinism_test.gd", 4, False),
             (source / "backend_activation_test.gd", 1, True),
         ]

@@ -180,7 +180,7 @@ func spawn(kind: int, state: Dictionary = {}, authority_peer: int = -1) -> int:
 	var result: Variant = session.command("spawn", {"kind": kind, "state": data, "authority_peer": authority_peer})
 	if not result is Dictionary or result.get("error", FAILED) != OK:
 		return 0
-	_sync_entities()
+	_sync_entity(result.entity)
 	return result.entity
 
 func update_entity(entity: int, state: Dictionary) -> Error:
@@ -192,14 +192,16 @@ func update_entity(entity: int, state: Dictionary) -> Error:
 	if data.size() > MAX_STATE_BYTES:
 		return ERR_OUT_OF_MEMORY
 	var error: Error = session.command("update_entity", {"entity": entity, "state": data})
-	_sync_entities()
+	# Refresh the affected entity rather than copying the whole native world for
+	# every body. A frame updating N bodies must not perform N full table copies.
+	_sync_entity(entity)
 	return error
 
 func despawn(entity: int) -> Error:
 	if not is_server():
 		return ERR_UNAUTHORIZED
 	var error: Error = session.command("despawn", {"entity": entity})
-	_sync_entities()
+	_sync_entity(entity)
 	return error
 
 func get_entities() -> Array:
@@ -328,23 +330,37 @@ func _sync_entities() -> void:
 	for record in session.command("entities"):
 		var entity: int = record.entity
 		seen[entity] = true
-		var previous: Dictionary = _entities.get(entity, {})
-		if not previous.is_empty() and previous.revision == record.revision:
-			continue
-		var state: Variant = bytes_to_var(record.state) if not record.state.is_empty() else {}
-		if not state is Dictionary or not _valid_value(state):
-			continue
-		record.state = state
-		_entities[entity] = record
-		if previous.is_empty():
-			_create_node(record)
-			entity_spawned.emit(entity, record.kind, state.duplicate(true))
-		else:
-			entity_changed.emit(entity, state.duplicate(true))
-		_update_node(record)
+		_apply_entity_record(record)
 	for entity in _entities.keys():
 		if not seen.has(entity):
 			_remove_entity(entity)
+
+func _sync_entity(entity: int) -> void:
+	if session == null: return
+	var record: Variant = session.command("entity", {"entity": entity})
+	# Older compatible engines lack the optional single-entity command.
+	if not record is Dictionary:
+		_sync_entities()
+		return
+	if record.is_empty():
+		if _entities.has(entity): _remove_entity(entity)
+		return
+	_apply_entity_record(record)
+
+func _apply_entity_record(record: Dictionary) -> void:
+	var entity: int = record.entity
+	var previous: Dictionary = _entities.get(entity, {})
+	if not previous.is_empty() and previous.revision == record.revision: return
+	var state: Variant = bytes_to_var(record.state) if not record.state.is_empty() else {}
+	if not state is Dictionary or not _valid_value(state): return
+	record.state = state
+	_entities[entity] = record
+	if previous.is_empty():
+		_create_node(record)
+		entity_spawned.emit(entity, record.kind, state.duplicate(true))
+	else:
+		entity_changed.emit(entity, state.duplicate(true))
+	_update_node(record)
 
 func _has_peer(peer_id: int) -> bool:
 	for peer in get_peers():

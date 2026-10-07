@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="EGPNetSnapshotInterpolator" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Bounded native snapshot presentation for replicated 3D entities.
+	</brief_description>
+	<description>
+		Stores up to 32 snapshots for each of at most 1024 entities. Call [method submit] for accepted authoritative snapshots, [method advance] once per render frame, then [method sample] for visible entities. Playback never reverses or advances beyond the newest global snapshot during a network outage. Sparse entity updates use bounded velocity extrapolation; position and shortest-arc rotation corrections decay in presentation space while preserving transform scale. Position changes exceeding eight units clear the entity history as teleports. Methods are confined to the creating thread. Ticks must be between zero and 2^53 minus one. This component does not predict inputs, modify physics, or establish clock synchronization across peers.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="advance">
+			<return type="float" />
+			<param index="0" name="delta" type="float" />
+			<description>
+				Advances the monotonic presentation clock with bounded rate correction and returns its tick. Call once per render frame.
+			</description>
+		</method>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Clears all histories, clock state, and diagnostics for a fresh connection.
+			</description>
+		</method>
+		<method name="configure">
+			<return type="int" enum="Error" />
+			<param index="0" name="tick_rate" type="float" default="60.0" />
+			<param index="1" name="delay_seconds" type="float" default="0.2" />
+			<param index="2" name="max_extrapolation_seconds" type="float" default="0.1" />
+			<description>
+				Sets presentation timing and clears existing history. Rejects invalid or nonfinite values without changing the configuration.
+			</description>
+		</method>
+		<method name="get_statistics" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Returns render_tick, buffer_ticks, tracked_entities, interpolated_samples, extrapolated_samples, held_samples, corrections, teleports, priming_samples, clock_hold_frames, largest_correction_m, and largest_angular_correction_degrees. The entities dictionary provides per-entity interpolation, extrapolation, hold, priming, correction and largest-correction counters. Sample counters count entity render evaluations, not network packets.
+			</description>
+		</method>
+		<method name="remove">
+			<return type="void" />
+			<param index="0" name="entity" type="int" />
+			<description>
+				Removes an entity's history on despawn.
+			</description>
+		</method>
+		<method name="sample">
+			<return type="Transform3D" />
+			<param index="0" name="entity" type="int" />
+			<param index="1" name="delta" type="float" default="0.0" />
+			<description>
+				Samples an entity and decays its presentation correction with delta. Call once per visible entity per frame. Missing entities return identity.
+			</description>
+		</method>
+		<method name="submit">
+			<return type="bool" />
+			<param index="0" name="entity" type="int" />
+			<param index="1" name="tick" type="int" />
+			<param index="2" name="pose" type="Transform3D" />
+			<param index="3" name="velocity" type="Vector3" />
+			<description>
+				Accepts strictly increasing entity ticks and finite poses and velocities. Returns false for stale, invalid, or capacity-exceeding input. All entities must use the same authority tick timeline.
+			</description>
+		</method>
+	</methods>
+</class>

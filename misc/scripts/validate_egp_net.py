@@ -89,6 +89,7 @@ try:
             "egp_net_receive_budget_check",
             "egp_net_replication_load_check",
             "egp_net_state_encoding_check",
+            "egp_net_replication_policy_check",
             "yojimbo_test",
             "yojimbo_custom_packet_io_test",
         ],
@@ -127,6 +128,15 @@ try:
         if not receipt["gdscript"]["passed"]:
             raise RuntimeError("GDScript AIO fixture failed")
         text = run(
+            "cache", [engine, "--headless", "--path", project, "res://Cache.tscn", "--max-fps", "60"], timeout=20
+        )
+        match = re.search(r"EGP_NETWORK_CACHE (\{[^\n]+\})", text)
+        if not match:
+            raise RuntimeError("Entity cache fixture did not provide its success marker")
+        receipt["cache"] = json.loads(match.group(1))
+        if not receipt["cache"]["passed"] or receipt["cache"]["updates"] != 1024:
+            raise RuntimeError("Immediate single-entity cache refresh fixture failed")
+        text = run(
             "physics", [engine, "--headless", "--path", project, "res://Physics.tscn", "--max-fps", "60"], timeout=30
         )
         match = re.search(r"EGP_NETWORK_PHYSICS (\{[^\n]+\})", text)
@@ -155,6 +165,36 @@ try:
         receipt["prediction"] = json.loads(match.group(1))
         if not receipt["prediction"]["passed"]:
             raise RuntimeError("Prediction correction/replay fixture failed")
+        text = run(
+            "deterministic-replay",
+            [engine, "--headless", "--path", project, "res://DeterministicReplay.tscn", "--max-fps", "60"],
+            timeout=20,
+        )
+        match = re.search(r"EGP_NETWORK_DETERMINISTIC_REPLAY (\{[^\n]+\})", text)
+        if not match:
+            raise RuntimeError("Deterministic canonical-input replay fixture did not provide its success marker")
+        receipt["deterministic_replay"] = json.loads(match.group(1))
+        if not receipt["deterministic_replay"]["passed"]:
+            raise RuntimeError("Deterministic canonical-input replay fixture failed")
+        text = run(
+            "snapshot-interpolation",
+            [engine, "--headless", "--path", project, "res://SnapshotInterpolation.tscn", "--max-fps", "60"],
+            timeout=20,
+        )
+        if "SNAPSHOT_INTERPOLATION_PASS" not in text or "ERROR:" in text:
+            raise RuntimeError("Native snapshot interpolation fixture failed")
+        receipt["snapshot_interpolation"] = {"passed": True}
+        text = run(
+            "superposition",
+            [engine, "--headless", "--path", project, "res://Superposition.tscn", "--max-fps", "60"],
+            timeout=30,
+        )
+        match = re.search(r"EGP_SUPERPOSITION (\{[^\n]+\})", text)
+        if not match or "ERROR:" in text:
+            raise RuntimeError("Superposition property replication fixture failed")
+        receipt["superposition"] = json.loads(match.group(1))
+        if not receipt["superposition"]["passed"]:
+            raise RuntimeError("Superposition property replication fixture failed")
         text = run(
             "lifecycle",
             [engine, "--headless", "--path", project, "res://Lifecycle.tscn", "--max-fps", "60"],

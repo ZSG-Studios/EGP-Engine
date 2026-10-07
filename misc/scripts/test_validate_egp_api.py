@@ -29,7 +29,16 @@ class ExposureAuditTests(unittest.TestCase):
         self.headers = self.root / "sdk/gen/include/godot_cpp/classes"
         self.headers.mkdir(parents=True)
         includes = []
-        for name in ("PhysicsServer2D", "PhysicsServer3D", "EGPBox3DWorld", "EGPNetSession"):
+        for name in (
+            "PhysicsServer2D",
+            "PhysicsServer3D",
+            "EGPBox3DWorld",
+            "EGPNetSession",
+            "EGPNetSnapshotInterpolator",
+            "Superposition",
+            "SuperpositionConfig",
+            "SuperpositionProperty",
+        ):
             self.api["classes"].append({"name": name, "methods": [{"name": "configure", "is_virtual": False}]})
             self.reflection["classes"][name] = {"properties": [], "signals": []}
             path = generated / (name + ".cs")
@@ -231,7 +240,7 @@ class MethodDocumentationTests(unittest.TestCase):
             ('name="options"', 'name="arguments"', "argument"),
             ('type="Dictionary"', 'type="Array"', "argument"),
             ('index="1"', 'index="0"', "argument"),
-            ('default="Array[RID]([])"', 'default="[]"', "argument"),
+            ('default="Array[RID]([])"', 'default="[RID()]"', "argument"),
             ('default="{}"', "", "argument"),
             ("virtual required const", "virtual const", "required"),
             ("virtual required const", "required const", "virtual"),
@@ -267,6 +276,41 @@ class MethodDocumentationTests(unittest.TestCase):
         self.assertEqual(self.audit("<class><members /></class>", row), ([], 0))
         # Explicit method documentation still must have the correct signature.
         self.assertTrue(self.audit(self.xml.replace('enum="Error"', 'enum="Other"'), row)[0])
+
+    def test_official_empty_typed_array_default_and_type_are_checked(self):
+        self.assertEqual(self.audit(self.xml.replace('default="Array[RID]([])"', 'default="[]"')), ([], 1))
+        failures, _ = self.audit(
+            self.xml.replace('type="RID[]"', 'type="Object[]"').replace('default="Array[RID]([])"', 'default="[]"')
+        )
+        self.assertTrue(any("Incorrect documented argument" in failure for failure in failures))
+
+    def test_slash_accessor_requires_reflection_and_matching_member(self):
+        row = {
+            "name": "SliderJoint3D",
+            "methods": [
+                {"name": "get_enabled", "return_value": {"type": "bool"}},
+                {"name": "set_enabled", "arguments": [{"name": "value", "type": "bool"}]},
+            ],
+        }
+        reflected = {
+            "properties": [{"name": "motor/enabled", "type": 1}],
+            "verified_property_accessors": [
+                {"name": "motor/enabled", "getter": "get_enabled", "setter": "set_enabled"}
+            ],
+        }
+        self.path.write_text(
+            '<class><members><member name="motor/enabled" type="bool" getter="get_enabled" setter="set_enabled">Enables the motor.</member></members></class>'
+        )
+        self.assertEqual(audit_method_docs(row, self.path, reflected=reflected), ([], 0))
+        self.assertEqual(len(audit_method_docs(row, self.path)[0]), 2)
+        for damaged in (
+            {"properties": [], "verified_property_accessors": reflected["verified_property_accessors"]},
+            {
+                "properties": [{"name": "motor/enabled", "type": 3}],
+                "verified_property_accessors": reflected["verified_property_accessors"],
+            },
+        ):
+            self.assertEqual(len(audit_method_docs(row, self.path, reflected=damaged)[0]), 2)
 
     def test_signals_check_arguments_and_only_named_internal_signals_are_excluded(self):
         row = {

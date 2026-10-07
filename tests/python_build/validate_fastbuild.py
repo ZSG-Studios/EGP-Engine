@@ -26,11 +26,19 @@ def main():
     for directory in ("left", "right", "include files", "local module", "objects/left", "objects/right"):
         (fixture / directory).mkdir(parents=True, exist_ok=True)
     (fixture / "value.in").write_text("42", encoding="utf-8")
-    (fixture / "left/value.cpp").write_text('#include "generated.h"\nint left() { return VALUE; }\n', encoding="utf-8")
+    (fixture / "left/private.h").write_text("#define LEFT_PRIVATE_VALUE 0\n", encoding="utf-8")
+    (fixture / "left/value.cpp").write_text(
+        '#include "generated.h"\n#include "private.h"\nint left() { return VALUE + LEFT_PRIVATE_VALUE; }\n',
+        encoding="utf-8",
+    )
     (fixture / "right/value.cpp").write_text(
         '#include "generated.h"\nint right() { return VALUE; }\n', encoding="utf-8"
     )
     (fixture / "value.c").write_text("#include CONFIG_HEADER\nint c_value(void) { return VALUE; }\n", encoding="utf-8")
+    (fixture / "flags.cpp").write_text(
+        'static_assert(FLAVOR == EXPECTED_FLAVOR, "Compiler batch mixed environment flags");\n',
+        encoding="utf-8",
+    )
     (fixture / "main.cpp").write_text(
         '#include CONFIG_HEADER\n#include <cstdio>\nextern "C" int c_value(void);\n'
         'int left(); int right();\nint main() { std::printf("%d %d\\n", VALUE, FLAVOR); '
@@ -63,6 +71,8 @@ env.Replace(platform='windows', arch='x86_64', fastbuild_exe={str(root / ".build
     fastbuild_forceremote={args.remote!r}, CPPPATH=['include files'],
     CPPDEFINES=[('FLAVOR', int(ARGUMENTS.get('flavor', '7'))), ('CONFIG_HEADER', {header_define!r})], CCFLAGS=['/nologo', '/Z7', '/MT'])
 configure(env)
+env.Append(CPPDEFINES=[('EXPECTED_FLAVOR', int(ARGUMENTS.get('flavor', '7')))])
+other_env = env.Clone(CPPDEFINES=[('FLAVOR', 29), ('EXPECTED_FLAVOR', 29)])
 def generate(target, source, env):
     Path(str(target[0])).write_text('#define VALUE ' + Path(str(source[0])).read_text() + '\\n')
 header = env.Command('include files/generated.h', 'value.in', generate)
@@ -72,6 +82,8 @@ objects = [env.Object(target=target, source=source)[0] for target, source in [
     ('objects/value.fixture.obj', 'value.c'), ('objects/main.fixture.obj', 'main.cpp'),
     ('objects/value_8.fixture.obj', 'value.c')]]
 objects.append(SConscript('local module/SCsub', exports={{'env': env}}))
+objects.append(env.Object('objects/flags-base.fixture.obj', 'flags.cpp')[0])
+objects.append(other_env.Object('objects/flags-other.fixture.obj', 'flags.cpp')[0])
 env.Depends(objects, header)
 Default([env.Program('validation', objects[:4]), objects[4:]])
 """,
@@ -97,10 +109,20 @@ Default([env.Program('validation', objects[:4]), objects[4:]])
         assert "<REMOTE: " in cold_log, "No remote compilation evidence in the build output"
     assert subprocess.check_output([str(fixture / "validation.exe")], text=True).strip() == "42 7"
     outputs = sorted((fixture / "objects").rglob("*.obj"))
-    assert len(outputs) == 6, f"Expected six distinct objects, including variant and local module, got {outputs}"
+    assert len(outputs) == 8, (
+        f"Expected eight distinct objects, including variants, environment flags and local module, got {outputs}"
+    )
     previous = {file: file.stat().st_mtime_ns for file in outputs}
     build()
     assert previous == {file: file.stat().st_mtime_ns for file in outputs}, "No-op build recompiled objects"
+    # A private header must not leak into a different directory's implicit
+    # dependencies through the shared SCons compiler batch.
+    (fixture / "left/private.h").write_text("#define LEFT_PRIVATE_VALUE 0\n// Private header edit.\n", encoding="utf-8")
+    build()
+    assert all((file.stat().st_mtime_ns != previous[file]) == (file.parent.name == "left") for file in outputs), (
+        "A directory-private header rebuilt unrelated objects or missed its dependent object"
+    )
+    previous = {file: file.stat().st_mtime_ns for file in outputs}
     (fixture / "value.in").write_text("43", encoding="utf-8")
     build()
     assert all(file.stat().st_mtime_ns != previous[file] for file in outputs), (
@@ -122,7 +144,9 @@ Default([env.Program('validation', objects[:4]), objects[4:]])
     assert all(file.stat().st_mtime_ns == previous[file] for file in outputs if file.parent.name != "left"), (
         "Changing one source rebuilt unrelated objects"
     )
-    print("PASS: generated headers, C/C++, spaces, duplicate basenames, incremental builds, flags and failures.")
+    print(
+        "PASS: generated/private headers, isolated environment flags, C/C++, spaces, duplicate basenames, incremental builds and failures."
+    )
     return 0
 
 

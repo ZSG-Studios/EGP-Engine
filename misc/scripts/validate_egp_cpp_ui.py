@@ -15,6 +15,11 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=ROOT / ".build/egp-cpp-ui")
+    parser.add_argument(
+        "--capture-ui",
+        action="store_true",
+        help="Render the disposable editor hidden and capture embedded panel screenshots; no input injection",
+    )
     args = parser.parse_args()
     engine = args.engine.resolve()
     output = args.output.resolve() / str(time.time_ns())
@@ -61,9 +66,25 @@ def main():
         "scope": "Headless editor controls, build/diagnostics/reload and clean shutdown; no interactive graphics or running-game reload claim.",
     }
     with (output / "editor.log").open("w", encoding="utf-8") as log:
-        command = [str(engine), "--headless", "--editor", "--max-fps", "30", "--path", str(project)]
+        command = [str(engine), "--editor", "--max-fps", "30", "--path", str(project)]
+        if not args.capture_ui:
+            command.insert(1, "--headless")
+        else:
+            command.extend(["--rendering-method", "gl_compatibility"])
         launch_options = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
-        process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, **launch_options)
+        environment = os.environ.copy()
+        if args.capture_ui:
+            capture_dir = output / "screenshots"
+            capture_dir.mkdir()
+            environment["EGP_CPP_UI_CAPTURE"] = str(capture_dir)
+            if os.name == "nt":
+                startup_info = subprocess.STARTUPINFO()
+                startup_info.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+                startup_info.wShowWindow = subprocess.SW_HIDE
+                launch_options["startupinfo"] = startup_info
+        else:
+            environment.pop("EGP_CPP_UI_CAPTURE", None)
+        process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT, env=environment, **launch_options)
         try:
             receipt["exit_code"] = process.wait(timeout=900)
         except subprocess.TimeoutExpired:
@@ -80,6 +101,12 @@ def main():
         and "EGP_CPP_EDITOR_SMOKE_PASSED" in text
         and all(marker not in text for marker in ("ERROR:", "leaked", "Scan thread aborted"))
     )
+    if args.capture_ui:
+        receipt["screenshots"] = [str(path) for path in sorted((output / "screenshots").glob("*.png"))]
+        receipt["passed"] = receipt["passed"] and len(receipt["screenshots"]) == 3
+        receipt["scope"] = (
+            "Hidden renderer editor control/build/diagnostic/reload fixture with panel screenshots; no physical input or running-game reload claim."
+        )
     (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     print(f"{'PASS' if receipt['passed'] else 'FAIL'}: {output / 'receipt.json'}")
     return 0 if receipt["passed"] else 1

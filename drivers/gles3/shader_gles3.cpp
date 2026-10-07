@@ -793,8 +793,8 @@ void ShaderGLES3::initialize(const String &p_general_defines, int p_base_texture
 		ERR_FAIL_COND(d.is_null());
 		if (d->change_dir(name) != OK) {
 			Error err = d->make_dir(name);
-			ERR_FAIL_COND(err != OK);
-			d->change_dir(name);
+			ERR_FAIL_COND(err != OK && err != ERR_ALREADY_EXISTS);
+			ERR_FAIL_COND(d->change_dir(name) != OK);
 		}
 
 		//erase other versions?
@@ -803,7 +803,8 @@ void ShaderGLES3::initialize(const String &p_general_defines, int p_base_texture
 		//
 		if (d->change_dir(base_sha256) != OK) {
 			Error err = d->make_dir(base_sha256);
-			ERR_FAIL_COND(err != OK);
+			ERR_FAIL_COND(err != OK && err != ERR_ALREADY_EXISTS);
+			ERR_FAIL_COND(d->change_dir(base_sha256) != OK);
 		}
 		shader_cache_dir_valid = true;
 

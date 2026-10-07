@@ -25,6 +25,10 @@ runs:
       if: inputs.target == 'editor'
       shell: sh
       run: git submodule update --init --depth 1 thirdparty/godot-cpp
+    - name: Check editor SDK build routing
+      if: inputs.target == 'editor'
+      shell: sh
+      run: python misc/scripts/test_build_egp_cpp_editor.py
     - name: SCons Build
       shell: sh
       run: |
@@ -42,5 +46,9 @@ runs:
           export BUILD_NAME="gh"
         fi
 
-        scons platform=${{ inputs.platform }} target=${{ inputs.target }} ${{ inputs.scons-flags }} "cache_path=${{ inputs.scons-cache }}" redirect_build_objects=no
+        if [ "${{ inputs.target }}" = "editor" ]; then
+          python misc/scripts/build_egp_cpp_editor.py -- platform=${{ inputs.platform }} ${{ inputs.scons-flags }} "cache_path=${{ inputs.scons-cache }}" redirect_build_objects=no
+        else
+          scons platform=${{ inputs.platform }} target=${{ inputs.target }} ${{ inputs.scons-flags }} "cache_path=${{ inputs.scons-cache }}" redirect_build_objects=no
+        fi
         ls -l bin/

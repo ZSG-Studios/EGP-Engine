@@ -242,11 +242,105 @@
       ]
     },
     "RigidBody2D": {
-      "methods": ["_integrate_forces"],
+      "methods": [
+        "_integrate_forces"
+      ],
       "constants": []
     },
     "RigidBody3D": {
-      "methods": ["_integrate_forces"]
+      "methods": [
+        "_integrate_forces"
+      ]
+    },
+    "Superposition": {
+      "methods": [
+        "set_enabled",
+        "is_enabled",
+        "set_target_path",
+        "get_target_path",
+        "set_session_path",
+        "get_session_path",
+        "set_config",
+        "get_config",
+        "set_replication_key",
+        "get_replication_key",
+        "set_entity_kind",
+        "get_entity_kind",
+        "set_session",
+        "get_session",
+        "replicate_now",
+        "capture_state",
+        "apply_state",
+        "set_observer_position",
+        "clear_observer",
+        "get_statistics",
+        "mark_dirty"
+      ],
+      "properties": [
+        "enabled",
+        "target_path",
+        "session_path",
+        "config",
+        "replication_key",
+        "entity_kind"
+      ]
+    },
+    "SuperpositionConfig": {
+      "methods": [
+        "set_properties",
+        "get_properties",
+        "set_update_rate",
+        "get_update_rate",
+        "set_interest_radius",
+        "get_interest_radius",
+        "set_interest_hysteresis",
+        "get_interest_hysteresis",
+        "set_priority",
+        "get_priority",
+        "set_capture_mode",
+        "get_capture_mode"
+      ],
+      "properties": [
+        "properties",
+        "update_rate",
+        "interest_radius",
+        "interest_hysteresis",
+        "priority",
+        "capture_mode"
+      ]
+    },
+    "SuperpositionProperty": {
+      "methods": [
+        "set_enabled",
+        "is_enabled",
+        "set_property",
+        "get_property",
+        "set_value_type",
+        "get_value_type",
+        "set_quantization",
+        "get_quantization",
+        "set_smoothing",
+        "is_smoothing"
+      ],
+      "properties": [
+        "enabled",
+        "property",
+        "value_type",
+        "quantization",
+        "smoothing"
+      ]
+    },
+    "EGPNetSnapshotInterpolator": {
+      "methods": [
+        "configure",
+        "submit",
+        "advance",
+        "sample",
+        "get_statistics",
+        "remove",
+        "clear"
+      ],
+      "properties": []
     }
   },
   "removed": {
@@ -463,6 +557,28 @@
       "linear_limit/enabled": 1,
       "motor/enabled": 1,
       "spring/enabled": 1
+    }
+  },
+  "property_accessors": {
+    "HingeJoint3D": {
+      "spring/enabled": {
+        "getter": "is_spring_enabled",
+        "setter": "set_spring_enabled"
+      }
+    },
+    "SliderJoint3D": {
+      "linear_limit/enabled": {
+        "getter": "is_limit_enabled",
+        "setter": "set_limit_enabled"
+      },
+      "motor/enabled": {
+        "getter": "is_motor_enabled",
+        "setter": "set_motor_enabled"
+      },
+      "spring/enabled": {
+        "getter": "is_spring_enabled",
+        "setter": "set_spring_enabled"
+      }
     }
   }
 }

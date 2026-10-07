@@ -29,7 +29,16 @@ LEGACY_CLASSES = {
     "WebRTCDataChannelExtension",
     "EGPLiteSession",
 }
-REQUIRED_CLASSES = {"PhysicsServer2D", "PhysicsServer3D", "EGPBox3DWorld", "EGPNetSession"}
+REQUIRED_CLASSES = {
+    "PhysicsServer2D",
+    "PhysicsServer3D",
+    "EGPBox3DWorld",
+    "EGPNetSession",
+    "EGPNetSnapshotInterpolator",
+    "Superposition",
+    "SuperpositionConfig",
+    "SuperpositionProperty",
+}
 INTERNAL_SIGNALS = {("PhysicsServer2D", "_debug_changed"), ("PhysicsServer3D", "_debug_changed")}
 
 
@@ -64,7 +73,7 @@ def managed_classes(root):
 
 
 def in_scope(name):
-    return name.startswith(("Physics", "Box2D", "Box3D", "EGP")) or name in {
+    return name.startswith(("Physics", "Box2D", "Box3D", "EGP", "Superposition")) or name in {
         "Area2D",
         "Area3D",
         "RigidBody2D",
@@ -126,7 +135,7 @@ def documented_type(node):
     return kind
 
 
-def audit_method_docs(row, path, kind="method"):
+def audit_method_docs(row, path, kind="method", reflected=None):
     """Check public help signatures against a dump from the actual engine."""
     name = row["name"]
     methods = {
@@ -135,6 +144,29 @@ def audit_method_docs(row, path, kind="method"):
         if kind == "method" or (name, method["name"]) not in INTERNAL_SIGNALS
     }
     accessors = {prop.get(key) for prop in row.get("properties", []) for key in ("setter", "getter")}
+    # Slash-path properties are omitted by the extension API. Accept their
+    # accessor documentation only after an actual ClassDB behavior capture,
+    # and only when the official XML member declares the same mapping.
+    if kind == "method" and path and reflected:
+        members = {node.get("name"): node for node in ET.parse(path).findall("members/member")}
+        actual = {prop["name"]: prop for prop in reflected.get("properties", [])}
+        for prop in reflected.get("verified_property_accessors", []):
+            member = members.get(prop["name"])
+            getter = methods.get(prop.get("getter"), {})
+            setter = methods.get(prop.get("setter"), {})
+            if (
+                member is not None
+                and member.get("type") == "bool"
+                and actual.get(prop["name"], {}).get("type") == 1
+                and member.get("getter") == prop.get("getter")
+                and member.get("setter") == prop.get("setter")
+                and not getter.get("arguments")
+                and getter.get("return_value", {}).get("type") == "bool"
+                and len(setter.get("arguments", [])) == 1
+                and setter["arguments"][0]["type"] == "bool"
+                and setter.get("return_value", {}).get("type", "void") == "void"
+            ):
+                accessors.update((prop["getter"], prop["setter"]))
     required = methods.keys() - (accessors if kind == "method" else set())
     if path is None:
         return ([f"Missing {kind} documentation: {name}"] if required else []), len(required)
@@ -165,7 +197,7 @@ def audit_method_docs(row, path, kind="method"):
                 param.get("index") != str(index)
                 or param.get("name") != argument["name"]
                 or documented_type(param) != argument["type"]
-                or param.get("default") != argument.get("default_value")
+                or param.get("default") not in (argument.get("default_value"), documentation_default(argument))
             ):
                 failures.append(f"Incorrect documented argument: {identity}[{index}]; expected {argument}")
         qualifiers = set(node.get("qualifiers", "").split())
@@ -175,6 +207,16 @@ def audit_method_docs(row, path, kind="method"):
         if ("required" in qualifiers) != method.get("is_required", False):
             failures.append(f"Incorrect documented qualifier: {identity}; required")
     return failures, len(required)
+
+
+def documentation_default(argument):
+    # DocData::get_default_value_string intentionally removes Array typing.
+    # The parameter type is checked independently; no other defaults are relaxed.
+    value = argument.get("default_value")
+    kind = argument.get("type", "")
+    if kind.startswith("typedarray::") and value == "Array[" + kind.removeprefix("typedarray::") + "]([])":
+        return "[]"
+    return value
 
 
 def audit_compiled_descriptions(row, path, compiled):
@@ -304,7 +346,7 @@ def main():
                 receipt["compiled_documentation"].append({"class": name, "descriptions": count})
             if args.docs:
                 path = docs.get(name)
-                errors, count = audit_method_docs(row, path)
+                errors, count = audit_method_docs(row, path, reflected=reflected.get(name))
                 failures.extend(errors)
                 receipt["method_documentation"].append({
                     "class": name,

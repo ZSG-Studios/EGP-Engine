@@ -7,6 +7,7 @@ maintained by ZSG-Studios and based on upstream `master`.
 
 - Box2D and Box3D physics.
 - Yojimbo networking with GDScript, C# and C++ APIs.
+- Superposition property replication configured through the Inspector.
 - Built-in C++ extension tools and a bundled godot-cpp SDK.
 - FASTBuild support for local and distributed Windows builds.
 
@@ -52,6 +53,12 @@ foundation. EGP adds session lifecycle, entity replication, ownership, interest,
 traffic budgets and diagnostics. Higher-level helpers share the same codec,
 prediction and physics adapters across languages; low-level native session APIs
 can operate without those GDScript helpers.
+
+Superposition adds property selection to the Inspector: add the component beneath
+a gameplay node, point it at the network session and select the properties to
+replicate. It shares the native session's entity lifecycle and validation. Use
+the native snapshot interpolator for fast motion and Superposition for gameplay
+values. See the [Superposition guide](modules/egp_net/SUPERPOSITION.md).
 
 This is a deliberate API break: existing `Node.rpc`/`rpc_id`, multiplayer
 authority calls, `MultiplayerAPI`, scene replication nodes and legacy multiplayer
@@ -103,6 +110,9 @@ distributed builds. For other platforms, see Godot's
 - [Documentation fork](https://github.com/ZSG-Studios/EGP-docs) · [Website fork](https://github.com/ZSG-Studios/EGP-website)
 - [C++ extensions](doc/egp_cpp_extensions.md)
 - [Networking](modules/egp_net/README.md)
+- [Superposition replication](modules/egp_net/SUPERPOSITION.md)
+- [52-player physics arena](demos/box3d_arena/README.md)
+- [Deterministic prediction and replay demo](demos/box3d_deterministic/README.md)
 - [Network lab](doc/egp_network_lab.md)
 - [Box2D physics](doc/egp_box2d.md)
 - [Box3D physics](doc/egp_box3d.md)

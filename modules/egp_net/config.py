@@ -7,7 +7,13 @@ def configure(env):
 
 
 def get_doc_classes():
-    return ["EGPNetSession"]
+    return [
+        "EGPNetSession",
+        "EGPNetSnapshotInterpolator",
+        "Superposition",
+        "SuperpositionConfig",
+        "SuperpositionProperty",
+    ]
 
 
 def get_doc_path():

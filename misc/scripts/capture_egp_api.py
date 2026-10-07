@@ -61,6 +61,7 @@ def main():
                     "--",
                     "--api=" + str(api),
                     "--output=" + str(reflection),
+                    "--changes=" + str(ROOT / "misc/egp/api_contract.json"),
                 ],
             ),
         ]

@@ -420,7 +420,11 @@ void EditorLog::_add_log_line(LogMessage &p_message, bool p_replace_previous) {
 		case MSG_TYPE_ERROR: {
 			log->push_color(theme_cache.error_color);
 			Ref<Texture2D> icon = theme_cache.error_icon;
-			log->add_image(icon);
+			// Startup diagnostics can arrive before the deferred theme update.
+			// Keep their text visible without recursively reporting a null icon.
+			if (icon.is_valid()) {
+				log->add_image(icon);
+			}
 			log->push_bold();
 			log->add_text(U" ERROR: ");
 			log->pop(); // bold
@@ -429,7 +433,11 @@ void EditorLog::_add_log_line(LogMessage &p_message, bool p_replace_previous) {
 		case MSG_TYPE_WARNING: {
 			log->push_color(theme_cache.warning_color);
 			Ref<Texture2D> icon = theme_cache.warning_icon;
-			log->add_image(icon);
+			// Startup diagnostics can arrive before the deferred theme update.
+			// Keep their text visible without recursively reporting a null icon.
+			if (icon.is_valid()) {
+				log->add_image(icon);
+			}
 			log->push_bold();
 			log->add_text(U" WARNING: ");
 			log->pop(); // bold

@@ -1,0 +1,35 @@
+[gd_scene load_steps=7 format=3]
+
+[ext_resource type="Script" path="res://arena.gd" id="1"]
+
+[sub_resource type="SuperpositionProperty" id="TealScore"]
+property = &"teal_score"
+value_type = 2
+quantization = 0.0
+
+[sub_resource type="SuperpositionProperty" id="AmberScore"]
+property = &"amber_score"
+value_type = 2
+quantization = 0.0
+
+[sub_resource type="SuperpositionProperty" id="Pickups"]
+property = &"pickups_collected"
+value_type = 2
+quantization = 0.0
+
+[sub_resource type="SuperpositionProperty" id="Checkpoints"]
+property = &"checkpoint_restores"
+value_type = 2
+quantization = 0.0
+
+[sub_resource type="SuperpositionConfig" id="MatchState"]
+properties = Array[SuperpositionProperty]([SubResource("TealScore"), SubResource("AmberScore"), SubResource("Pickups"), SubResource("Checkpoints")])
+update_rate = 4.0
+
+[node name="Arena" type="Node3D"]
+script = ExtResource("1")
+
+[node name="MatchReplication" type="Superposition" parent="."]
+session_path = NodePath("../Network")
+replication_key = "arena-match-state-v1"
+config = SubResource("MatchState")

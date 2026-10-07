@@ -52,6 +52,12 @@ class NativeExtensionEditor : public VBoxContainer {
 	Button *restart_button = nullptr;
 	Button *check_button = nullptr;
 	Button *install_button = nullptr;
+	Button *refresh_button = nullptr;
+	Button *source_button = nullptr;
+	Button *copy_button = nullptr;
+	Label *status_label = nullptr;
+	Label *selection_label = nullptr;
+	bool busy = false;
 	RichTextLabel *output = nullptr;
 	String sdk_path;
 	String building_name;
@@ -84,6 +90,11 @@ class NativeExtensionEditor : public VBoxContainer {
 	void _drain_pipe(int p_index, bool p_final = false);
 	bool _start_process(const List<String> &p_arguments);
 	void _set_busy(bool p_busy);
+	void _update_controls();
+	void _set_status(const String &p_text, bool p_error = false);
+	void _tool_pressed(bool p_install);
+	void _open_source();
+	void _copy_output();
 	Error _publish_library();
 	String _find_cmake() const;
 	void _run_cli();
@@ -104,6 +115,7 @@ public:
 	Error install_tools();
 	bool is_building() const { return process_id != 0; }
 	int get_last_build_result() const { return last_build_result; }
+	String get_status() const;
 	NativeExtensionEditor();
 	~NativeExtensionEditor();
 };

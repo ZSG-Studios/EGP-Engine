@@ -292,3 +292,4 @@ SCsub                                         @godotengine/buildsystem
 /modules/egp_net/                              @ZSG-Studios
 /modules/box2d/                                @ZSG-Studios
 /modules/box3d/                                @ZSG-Studios
+/demos/                                       @ZSG-Studios

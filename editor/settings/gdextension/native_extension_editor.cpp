@@ -59,15 +59,21 @@
 #include "scene/gui/rich_text_label.h"
 #include "scene/main/scene_tree.h"
 #include "scene/resources/text_file.h"
+#include "servers/display/display_server.h"
 
 void NativeExtensionEditor::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("create_extension", "name"), &NativeExtensionEditor::create_extension);
 	ClassDB::bind_method(D_METHOD("build_extension", "name", "release"), &NativeExtensionEditor::build_extension, DEFVAL(false));
 	ClassDB::bind_method(D_METHOD("is_building"), &NativeExtensionEditor::is_building);
 	ClassDB::bind_method(D_METHOD("get_last_build_result"), &NativeExtensionEditor::get_last_build_result);
+	ClassDB::bind_method(D_METHOD("get_status"), &NativeExtensionEditor::get_status);
 	ClassDB::bind_method(D_METHOD("check_toolchain"), &NativeExtensionEditor::check_toolchain);
 	ClassDB::bind_method(D_METHOD("install_tools"), &NativeExtensionEditor::install_tools);
 	ADD_SIGNAL(MethodInfo("diagnostic_found", PropertyInfo(Variant::STRING, "path"), PropertyInfo(Variant::INT, "line")));
+}
+
+String NativeExtensionEditor::get_status() const {
+	return status_label->get_text();
 }
 
 String NativeExtensionEditor::_platform() const {
@@ -114,10 +120,19 @@ Error NativeExtensionEditor::_prepare_sdk() {
 }
 
 Error NativeExtensionEditor::create_extension(const String &p_name) {
-	ERR_FAIL_COND_V(process_id != 0, ERR_BUSY);
-	ERR_FAIL_COND_V(!p_name.is_valid_identifier() || p_name.length() > 64 || p_name != p_name.to_lower(), ERR_INVALID_PARAMETER);
+	if (process_id != 0) {
+		_set_status(TTR("Another C++ operation is running. Wait for it to finish before starting another."), true);
+		return ERR_BUSY;
+	}
+	if (!p_name.is_valid_identifier() || p_name.length() > 64 || p_name != p_name.to_lower()) {
+		_set_status(TTR("Use a lowercase C++ identifier up to 64 characters, such as player_movement."), true);
+		return ERR_INVALID_PARAMETER;
+	}
 	const String path = "res://extensions/" + p_name;
-	ERR_FAIL_COND_V(DirAccess::dir_exists_absolute(path), ERR_ALREADY_EXISTS);
+	if (DirAccess::dir_exists_absolute(path)) {
+		_set_status(TTR("That extension already exists. Select it below, or choose a new name."), true);
+		return ERR_ALREADY_EXISTS;
+	}
 	Error error = _prepare_sdk();
 	ERR_FAIL_COND_V(error != OK, error);
 	error = DirAccess::make_dir_recursive_absolute(path.path_join("src"));
@@ -143,6 +158,8 @@ Error NativeExtensionEditor::create_extension(const String &p_name) {
 			break;
 		}
 	}
+	_update_controls();
+	_set_status(vformat(TTR("Created %s. Open Source, then Build Debug to load your node."), p_name));
 	_scan_filesystem();
 	_append_line(vformat(TTR("Created %s. Build Debug to make its node available in the editor."), path));
 	return OK;
@@ -153,6 +170,7 @@ void NativeExtensionEditor::_refresh_extensions() {
 	extensions->clear();
 	Ref<DirAccess> directory = DirAccess::open("res://extensions");
 	if (directory.is_null()) {
+		_update_controls();
 		return;
 	}
 	directory->list_dir_begin();
@@ -165,30 +183,37 @@ void NativeExtensionEditor::_refresh_extensions() {
 		}
 	}
 	directory->list_dir_end();
+	_update_controls();
 }
 
 void NativeExtensionEditor::_create_pressed() {
 	const Error error = create_extension(extension_name->get_text().strip_edges());
 	if (error != OK) {
-		_append_line(vformat(TTR("Could not create extension (error %d). Use a new lowercase C++ identifier."), error));
+		_set_status(error == ERR_ALREADY_EXISTS ? TTR("That extension already exists. Select it below, or choose a new name.") : vformat(TTR("Could not create extension (error %d). Use a new lowercase C++ identifier and check project write permissions."), error), true);
 	}
 }
 
 void NativeExtensionEditor::_build_pressed(bool p_release) {
 	if (extensions->get_selected() < 0) {
-		_append_line(TTR("Create an extension first."));
+		_set_status(TTR("Create an extension first, or refresh the list after adding an extension to res://extensions."), true);
 		return;
 	}
 	const Error error = build_extension(extensions->get_item_text(extensions->get_selected()), p_release);
 	if (error != OK) {
-		_append_line(vformat(TTR("Could not start build (error %d). Running games require a Debug build and debug/hot_reload/enable_runtime enabled before launch. Check the CMake/toolchain path and any active build."), error));
+		_set_status(vformat(TTR("Could not start build (error %d). Stop the game, check the CMake path with Check Toolchain, and review output below."), error), true);
 	}
 }
 
 Error NativeExtensionEditor::build_extension(const String &p_name, bool p_release) {
 	ERR_FAIL_COND_V(process_id != 0, ERR_BUSY);
-	ERR_FAIL_COND_V_MSG(EditorRunBar::get_singleton() && EditorRunBar::get_singleton()->is_playing() && (p_release || !bool(GLOBAL_GET("debug/hot_reload/enable_runtime"))), ERR_BUSY, "Running-game C++ builds require Debug configuration and debug/hot_reload/enable_runtime enabled before launch.");
-	ERR_FAIL_COND_V(!p_name.is_valid_identifier() || !FileAccess::exists("res://extensions/" + p_name + "/CMakeLists.txt"), ERR_INVALID_PARAMETER);
+	if (EditorRunBar::get_singleton() && EditorRunBar::get_singleton()->is_playing() && (p_release || !bool(GLOBAL_GET("debug/hot_reload/enable_runtime")))) {
+		_set_status(TTR("Stop the game before rebuilding. Running-game reload requires Debug and debug/hot_reload/enable_runtime enabled before launch."), true);
+		return ERR_BUSY;
+	}
+	if (!p_name.is_valid_identifier() || !FileAccess::exists("res://extensions/" + p_name + "/CMakeLists.txt")) {
+		_set_status(vformat(TTR("Cannot build %s: its CMakeLists.txt was not found. Create the extension or refresh the list after restoring its files."), p_name), true);
+		return ERR_INVALID_PARAMETER;
+	}
 	Error error = _prepare_sdk();
 	ERR_FAIL_COND_V(error != OK, error);
 	operation = BUILD;
@@ -200,10 +225,19 @@ Error NativeExtensionEditor::build_extension(const String &p_name, bool p_releas
 	}
 	EditorSettings::get_singleton()->set_setting("native_extensions/cmake_path", cmake_executable);
 	building_name = p_name;
+	// Public/CLI builds must identify the same target as the selector and source link.
+	for (int i = 0; i < extensions->get_item_count(); i++) {
+		if (extensions->get_item_text(i) == p_name) {
+			extensions->select(i);
+			break;
+		}
+	}
+	_update_controls();
 	build_config = p_release ? "Release" : "Debug";
 	const String project_key = (ProjectSettings::get_singleton()->globalize_path("res://") + "/" + p_name).sha256_text().left(16);
 	build_path = EditorPaths::get_singleton()->get_cache_dir().path_join("egp_cpp/build").path_join(project_key).path_join(build_config.to_lower()).path_join(String(egp_cpp_sdk_hash).left(16));
 	output->clear();
+	_set_status(vformat(TTR("Configuring %s (%s). The first build compiles the bundled SDK; later builds reuse it."), p_name, build_config));
 	last_build_result = -1;
 	restart_button->hide();
 	configuring = true;
@@ -225,7 +259,7 @@ Error NativeExtensionEditor::build_extension(const String &p_name, bool p_releas
 bool NativeExtensionEditor::_start_process(const List<String> &p_arguments) {
 	Dictionary process = OS::get_singleton()->execute_with_pipe(process_executable, p_arguments, false);
 	if (!process.has("pid")) {
-		_append_line(vformat(TTR("Could not start %s. Install the toolchain or set a valid CMake executable path."), process_executable));
+		_set_status(vformat(TTR("Could not start %s. Set a valid CMake executable path or use Install Tools, then Check Toolchain."), process_executable), true);
 		last_build_result = -2;
 		_set_busy(false);
 		return false;
@@ -239,13 +273,63 @@ bool NativeExtensionEditor::_start_process(const List<String> &p_arguments) {
 }
 
 void NativeExtensionEditor::_set_busy(bool p_busy) {
-	check_button->set_disabled(p_busy);
-	install_button->set_disabled(p_busy);
-	create_button->set_disabled(p_busy);
-	debug_button->set_disabled(p_busy);
-	release_button->set_disabled(p_busy);
-	extensions->set_disabled(p_busy);
-	cmake_path->set_editable(!p_busy);
+	busy = p_busy;
+	_update_controls();
+}
+
+void NativeExtensionEditor::_update_controls() {
+	const bool selected = extensions->get_selected() >= 0;
+	const String name = extension_name->get_text().strip_edges();
+	const bool valid_name = name.is_valid_identifier() && name.length() <= 64 && name == name.to_lower();
+	const bool playing = EditorRunBar::get_singleton() && EditorRunBar::get_singleton()->is_playing();
+	const bool runtime_reload = bool(GLOBAL_GET("debug/hot_reload/enable_runtime"));
+	check_button->set_disabled(busy);
+	install_button->set_disabled(busy);
+	create_button->set_disabled(busy || !valid_name);
+	debug_button->set_disabled(busy || !selected || (playing && !runtime_reload));
+	release_button->set_disabled(busy || !selected || playing);
+	debug_button->set_tooltip_text(playing && !runtime_reload ? TTR("Stop the game first, or enable debug/hot_reload/enable_runtime before launching it.") : TTR("Save source changes, compile Debug and load or reload the node in the editor."));
+	release_button->set_tooltip_text(playing ? TTR("Stop the game before building Release.") : TTR("Build the optimized library for release exports. Debug loads it into the editor."));
+	extensions->set_disabled(busy || !selected);
+	refresh_button->set_disabled(busy);
+	source_button->set_disabled(busy || !selected);
+	extension_name->set_editable(!busy);
+	cmake_path->set_editable(!busy);
+	restart_button->set_disabled(busy);
+	selection_label->set_text(selected ? "res://extensions/" + extensions->get_item_text(extensions->get_selected()) + "/src/extension.cpp" : TTR("No C++ extensions yet. Create one above to get started."));
+	copy_button->set_disabled(output->get_parsed_text().is_empty());
+}
+
+void NativeExtensionEditor::_set_status(const String &p_text, bool p_error) {
+	status_label->set_text(p_text);
+	status_label->set_tooltip_text(p_text);
+	if (p_error) {
+		status_label->add_theme_color_override("font_color", get_theme_color(SNAME("error_color"), SNAME("Editor")));
+	} else {
+		status_label->remove_theme_color_override("font_color");
+	}
+	_append_line(p_text);
+}
+
+void NativeExtensionEditor::_tool_pressed(bool p_install) {
+	const Error error = p_install ? install_tools() : check_toolchain();
+	if (error != OK && last_build_result != -2) {
+		_set_status(vformat(TTR("Could not prepare bundled SDK (error %d). Check editor cache write permissions and available disk space."), error), true);
+	}
+}
+
+void NativeExtensionEditor::_open_source() {
+	if (extensions->get_selected() < 0) {
+		return;
+	}
+	Array location;
+	location.push_back(ProjectSettings::get_singleton()->globalize_path("res://extensions/" + extensions->get_item_text(extensions->get_selected()) + "/src/extension.cpp"));
+	location.push_back(1);
+	_diagnostic_clicked(location);
+}
+
+void NativeExtensionEditor::_copy_output() {
+	DisplayServer::get_singleton()->clipboard_set(output->get_parsed_text());
 }
 
 void NativeExtensionEditor::_append_line(const String &p_line) {
@@ -267,6 +351,7 @@ void NativeExtensionEditor::_append_line(const String &p_line) {
 		output->add_text(p_line);
 	}
 	output->add_text("\n");
+	copy_button->set_disabled(false);
 }
 
 void NativeExtensionEditor::_drain_pipe(int p_index, bool p_final) {
@@ -323,16 +408,19 @@ Error NativeExtensionEditor::_publish_library() {
 	if (build_config == "Debug") {
 		GDExtensionManager *manager = GDExtensionManager::get_singleton();
 		GDExtensionManager::LoadStatus status = manager->is_extension_loaded(descriptor) ? manager->reload_extension(descriptor) : manager->load_extension(descriptor);
-		if (status != GDExtensionManager::LOAD_STATUS_OK && status != GDExtensionManager::LOAD_STATUS_ALREADY_LOADED) {
+		if (status == GDExtensionManager::LOAD_STATUS_NEEDS_RESTART) {
 			restart_button->show();
-			_append_line(TTR("Library built. Restart the editor to finish loading the extension."));
+			_set_status(TTR("Build succeeded. This native class change needs a restart; save scenes and restart the editor to apply it."));
+		} else if (status != GDExtensionManager::LOAD_STATUS_OK && status != GDExtensionManager::LOAD_STATUS_ALREADY_LOADED) {
+			_set_status(vformat(TTR("%s compiled, but the extension failed to load (status %d). Review engine output for registration or dependency errors."), building_name, status), true);
+			return ERR_CANT_OPEN;
 		} else {
-			_append_line(TTR("Library built and loaded into the editor."));
+			_set_status(vformat(TTR("%s Debug built and loaded. Its node is available in Create Node."), building_name));
 			// The debugger applies this at an idle boundary in each running game.
 			EditorDebuggerNode::get_singleton()->reload_all_scripts();
 		}
 	} else {
-		_append_line(TTR("Release library built and registered for export."));
+		_set_status(vformat(TTR("%s Release built and registered for export."), building_name));
 	}
 	return OK;
 }
@@ -341,8 +429,8 @@ void NativeExtensionEditor::_notification(int p_what) {
 	if (p_what == NOTIFICATION_READY) {
 		callable_mp(this, &NativeExtensionEditor::_run_cli).call_deferred();
 	}
-	if (p_what == NOTIFICATION_READY || p_what == NOTIFICATION_WM_WINDOW_FOCUS_IN) {
-		if (process_id == 0) {
+	if (p_what == NOTIFICATION_READY || p_what == NOTIFICATION_WM_WINDOW_FOCUS_IN || p_what == NOTIFICATION_VISIBILITY_CHANGED) {
+		if (process_id == 0 && is_inside_tree()) {
 			_refresh_extensions();
 		}
 	}
@@ -368,6 +456,7 @@ void NativeExtensionEditor::_notification(int p_what) {
 	process_id = 0;
 	if (result == 0 && configuring) {
 		configuring = false;
+		_set_status(operation == CHECK ? TTR("Checking C++17 compilation and linking...") : vformat(TTR("Compiling %s (%s). Compiler diagnostics below link to source lines."), building_name, build_config));
 		List<String> arguments;
 		arguments.push_back("--build");
 		arguments.push_back(build_path);
@@ -389,15 +478,16 @@ void NativeExtensionEditor::_notification(int p_what) {
 		return;
 	}
 	if (result == 0 && operation == CHECK) {
+		_set_status(TTR("Toolchain ready: CMake, C++17 compiler and linker verified. Create or select an extension, then Build Debug."));
 		_append_line("EGP_CPP_TOOLCHAIN_READY: CMake, C++17 compiler and linker verified.");
 	} else if (result == 0) {
 		const Error error = _publish_library();
 		if (error != OK) {
 			last_build_result = -3;
-			_append_line(vformat(TTR("Build completed, but publishing failed (error %d)."), error));
+			_set_status(vformat(TTR("Compilation succeeded, but publishing or loading failed (error %d). Check project bin/ permissions, registration and dependencies in engine output before rebuilding."), error), true);
 		}
 	} else {
-		_append_line(vformat(TTR("Build failed (exit code %d). The previous published library is unchanged."), result));
+		_set_status(operation == BUILD ? vformat(TTR("%s %s build failed (exit code %d). Click the compiler error below, fix the source, then rebuild. The previous published library is unchanged."), building_name, build_config, result) : vformat(TTR("Toolchain %s failed (exit code %d). Review output below; check the CMake path and installed C++ compiler workload, then Check Toolchain again."), operation == INSTALL ? "installation" : "check", result), true);
 	}
 	_complete_operation();
 }
@@ -438,6 +528,7 @@ Error NativeExtensionEditor::check_toolchain() {
 	cmake_executable = process_executable;
 	build_path = EditorPaths::get_singleton()->get_cache_dir().path_join("egp_cpp/toolchain").path_join(String(egp_cpp_sdk_hash).left(16));
 	output->clear();
+	_set_status(vformat(TTR("Checking CMake and compiler using %s..."), process_executable));
 	List<String> arguments;
 	arguments.push_back("-S");
 	arguments.push_back(sdk_path.path_join("tools"));
@@ -471,7 +562,7 @@ Error NativeExtensionEditor::install_tools() {
 	process_executable = "/bin/sh";
 	arguments.push_back(sdk_path.path_join("tools/setup.sh"));
 #endif
-	_append_line(TTR("Installing missing CMake/compiler tools. Complete any system installer or administrator prompts."));
+	_set_status(TTR("Installing missing CMake/compiler tools. Complete any system installer or administrator prompts. Output remains visible below."));
 	return _start_process(arguments) ? OK : ERR_CANT_FORK;
 }
 
@@ -583,6 +674,7 @@ void NativeExtensionEditor::_diagnostic_clicked(const Variant &p_meta) {
 	if (file.is_null()) {
 		file.instantiate();
 		if (file->load_text(path) != OK) {
+			_set_status(vformat(TTR("Could not open source %s. Verify the file still exists; refresh the extension list."), path), true);
 			return;
 		}
 		file->set_file_path(path);
@@ -602,43 +694,89 @@ NativeExtensionEditor::NativeExtensionEditor() {
 	Label *title = memnew(Label(TTRC("C++ Extensions")));
 	title->set_theme_type_variation("HeaderSmall");
 	add_child(title);
-	Label *description = memnew(Label(TTRC("Create and build extensions with EGP's bundled C++ SDK.")));
+	Label *description = memnew(Label(TTRC("Use the bundled SDK to create native nodes. Check tools, create an extension, edit its source, then build.")));
+	description->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
 	add_child(description);
+	Label *tools_title = memnew(Label(TTRC("1. Toolchain")));
+	tools_title->set_theme_type_variation("HeaderSmall");
+	add_child(tools_title);
+	HBoxContainer *tool_row = memnew(HBoxContainer);
+	add_child(tool_row);
+	tool_row->add_child(memnew(Label(TTRC("CMake:"))));
+	cmake_path = memnew(LineEdit);
+	cmake_path->set_name("CMakePath");
+	cmake_path->set_h_size_flags(SIZE_EXPAND_FILL);
+	cmake_path->set_text(EDITOR_DEF("native_extensions/cmake_path", "cmake"));
+	cmake_path->set_tooltip_text(TTR("CMake executable or absolute path. Check Toolchain verifies C++17 compilation and linking. Python and SCons are not required."));
+	tool_row->add_child(cmake_path);
+	check_button = memnew(Button(TTRC("Check Toolchain")));
+	check_button->connect("pressed", callable_mp(this, &NativeExtensionEditor::_tool_pressed).bind(false));
+	tool_row->add_child(check_button);
+	install_button = memnew(Button(TTRC("Install Tools")));
+	install_button->set_tooltip_text(TTR("Install missing CMake/compiler tools. Your operating system may request administrator approval."));
+	install_button->connect("pressed", callable_mp(this, &NativeExtensionEditor::_tool_pressed).bind(true));
+	tool_row->add_child(install_button);
+	Label *create_title = memnew(Label(TTRC("2. Create an extension")));
+	create_title->set_theme_type_variation("HeaderSmall");
+	add_child(create_title);
 	HBoxContainer *create_row = memnew(HBoxContainer);
 	add_child(create_row);
 	extension_name = memnew(LineEdit);
+	extension_name->set_name("ExtensionName");
 	extension_name->set_placeholder("my_extension");
+	extension_name->set_tooltip_text(TTR("A new lowercase C++ identifier, up to 64 characters. Example: player_movement."));
 	extension_name->set_h_size_flags(SIZE_EXPAND_FILL);
 	create_row->add_child(extension_name);
 	create_button = memnew(Button(TTRC("Create Extension")));
+	create_button->set_name("CreateExtension");
 	create_button->connect("pressed", callable_mp(this, &NativeExtensionEditor::_create_pressed));
 	create_row->add_child(create_button);
+	Label *build_title = memnew(Label(TTRC("3. Edit and build")));
+	build_title->set_theme_type_variation("HeaderSmall");
+	add_child(build_title);
+	HBoxContainer *select_row = memnew(HBoxContainer);
+	add_child(select_row);
+	extensions = memnew(OptionButton);
+	extensions->set_name("ExtensionSelector");
+	extensions->set_h_size_flags(SIZE_EXPAND_FILL);
+	select_row->add_child(extensions);
+	refresh_button = memnew(Button(TTRC("Refresh")));
+	refresh_button->connect("pressed", callable_mp(this, &NativeExtensionEditor::_refresh_extensions));
+	select_row->add_child(refresh_button);
+	source_button = memnew(Button(TTRC("Open Source")));
+	source_button->set_name("OpenSource");
+	source_button->connect("pressed", callable_mp(this, &NativeExtensionEditor::_open_source));
+	select_row->add_child(source_button);
+	selection_label = memnew(Label);
+	selection_label->set_name("SelectedSource");
+	selection_label->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
+	add_child(selection_label);
 	HBoxContainer *build_row = memnew(HBoxContainer);
 	add_child(build_row);
-	extensions = memnew(OptionButton);
-	extensions->set_h_size_flags(SIZE_EXPAND_FILL);
-	build_row->add_child(extensions);
-	debug_button = memnew(Button(TTRC("Build Debug")));
+	debug_button = memnew(Button(TTRC("Build Debug and Load")));
+	debug_button->set_name("BuildDebug");
 	debug_button->connect("pressed", callable_mp(this, &NativeExtensionEditor::_build_pressed).bind(false));
 	build_row->add_child(debug_button);
-	release_button = memnew(Button(TTRC("Build Release")));
+	release_button = memnew(Button(TTRC("Build Release for Export")));
+	release_button->set_name("BuildRelease");
 	release_button->connect("pressed", callable_mp(this, &NativeExtensionEditor::_build_pressed).bind(true));
 	build_row->add_child(release_button);
-	HBoxContainer *tool_row = memnew(HBoxContainer);
-	add_child(tool_row);
-	tool_row->add_child(memnew(Label(TTRC("CMake executable:"))));
-	cmake_path = memnew(LineEdit);
-	cmake_path->set_h_size_flags(SIZE_EXPAND_FILL);
-	cmake_path->set_text(EDITOR_DEF("native_extensions/cmake_path", "cmake"));
-	tool_row->add_child(cmake_path);
-	check_button = memnew(Button(TTRC("Check Toolchain")));
-	check_button->connect("pressed", callable_mp(this, &NativeExtensionEditor::check_toolchain));
-	tool_row->add_child(check_button);
-	install_button = memnew(Button(TTRC("Install Tools")));
-	install_button->connect("pressed", callable_mp(this, &NativeExtensionEditor::install_tools));
-	tool_row->add_child(install_button);
+	status_label = memnew(Label(TTRC("Ready. Check Toolchain to verify CMake and a C++17 compiler.")));
+	status_label->set_name("BuildStatus");
+	status_label->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
+	add_child(status_label);
+	HBoxContainer *output_row = memnew(HBoxContainer);
+	add_child(output_row);
+	Label *output_title = memnew(Label(TTRC("Build output - click a compiler diagnostic to open its source line")));
+	output_title->set_h_size_flags(SIZE_EXPAND_FILL);
+	output_title->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
+	output_row->add_child(output_title);
+	copy_button = memnew(Button(TTRC("Copy Output")));
+	copy_button->connect("pressed", callable_mp(this, &NativeExtensionEditor::_copy_output));
+	output_row->add_child(copy_button);
 	output = memnew(RichTextLabel);
-	output->set_custom_minimum_size(Size2(0, 150 * EDSCALE));
+	output->set_custom_minimum_size(Size2(0, 180 * EDSCALE));
+	output->set_v_size_flags(SIZE_EXPAND_FILL);
 	output->set_scroll_follow(true);
 	output->set_selection_enabled(true);
 	output->connect("meta_clicked", callable_mp(this, &NativeExtensionEditor::_diagnostic_clicked));
@@ -647,6 +785,9 @@ NativeExtensionEditor::NativeExtensionEditor() {
 	restart_button->connect("pressed", callable_mp(this, &NativeExtensionEditor::_restart_pressed));
 	restart_button->hide();
 	add_child(restart_button);
+	extension_name->connect("text_changed", callable_mp(this, &NativeExtensionEditor::_update_controls).unbind(1));
+	extensions->connect("item_selected", callable_mp(this, &NativeExtensionEditor::_update_controls).unbind(1));
+	_update_controls();
 	set_process(false);
 }
 

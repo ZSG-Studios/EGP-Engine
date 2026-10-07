@@ -13,7 +13,7 @@ namespace GodotTools
 
         public override void _Notification(int what)
         {
-            if (what == Node.NotificationWMWindowFocusIn)
+            if (what == Node.NotificationWMWindowFocusIn && IsInsideTree())
             {
                 RestartTimer();
 
@@ -37,6 +37,9 @@ namespace GodotTools
         [UsedImplicitly]
         public void RestartTimer()
         {
+            if (_watchTimer == null || !GodotObject.IsInstanceValid(_watchTimer) || !_watchTimer.IsInsideTree())
+                return;
+
             _watchTimer.Stop();
             _watchTimer.Start();
         }

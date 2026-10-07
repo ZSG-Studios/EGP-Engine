@@ -3313,7 +3313,12 @@ Error Main::setup2(bool p_show_boot_logo) {
 		OS::get_singleton()->benchmark_begin_measure("Servers", "Input");
 
 		input = memnew(Input);
-		OS::get_singleton()->initialize_joypads();
+		if (cmdline_tool) {
+			// Metadata generation, imports and exports do not consume hardware input.
+			print_verbose("Command-line tool: skipping physical joypad initialization.");
+		} else {
+			OS::get_singleton()->initialize_joypads();
+		}
 
 		OS::get_singleton()->benchmark_end_measure("Servers", "Input");
 	}

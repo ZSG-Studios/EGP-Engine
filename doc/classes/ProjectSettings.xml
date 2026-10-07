@@ -2638,6 +2638,9 @@
 		<member name="physics/3d/run_on_separate_thread" type="bool" setter="" getter="" default="false">
 			If [code]true[/code], the 3D physics server runs on a separate thread, making better use of multi-core CPUs. If [code]false[/code], the 3D physics server runs on the main thread. Running the physics server on a separate thread can increase performance, but restricts API access to only physics process.
 		</member>
+		<member name="physics/box3d/audit_determinism" type="bool" setter="" getter="" default="false">
+			If [code]true[/code], newly configured [EGPBox3DWorld] instances run a separate native mirror solver and compare diagnostic hashes after commands, fixed steps, and trusted restores. Divergence fails closed with [constant @GlobalScope.ERR_INVALID_DATA]. This diagnostic doubles solver work and is disabled by default. Enable it before configuring a world.
+		</member>
 		<member name="physics/common/enable_object_picking" type="bool" setter="" getter="" default="true">
 			Enables [member Viewport.physics_object_picking] on the root viewport.
 		</member>

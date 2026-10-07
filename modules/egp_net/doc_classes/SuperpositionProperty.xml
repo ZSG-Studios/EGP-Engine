@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SuperpositionProperty" inherits="Resource" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		A typed, quantized gameplay property replication rule.
+	</brief_description>
+	<description>
+		Created automatically from a [Superposition] target's Replicate checkbox. The server and client must use identical enabled property order, names, types and quantization. Only bool, int, float, String and Vector3 are supported; objects, resources and arbitrary containers cannot replicate.
+	</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="enabled" type="bool" setter="set_enabled" getter="is_enabled" default="true">
+			Includes this property in the replication schema.
+		</member>
+		<member name="property" type="StringName" setter="set_property" getter="get_property" default="&amp;&quot;&quot;">
+			Existing property on the target node.
+		</member>
+		<member name="quantization" type="float" setter="set_quantization" getter="get_quantization" default="0.01">
+			Positive float/vector rounding interval. Zero preserves precision. Server change detection uses the quantized value.
+		</member>
+		<member name="smoothing" type="bool" setter="set_smoothing" getter="is_smoothing" default="false">
+			Cosmetic exponential easing for float and Vector3. Discrete values always apply immediately.
+		</member>
+		<member name="value_type" type="int" setter="set_value_type" getter="get_value_type" default="3">
+			Exact Variant type, selected in the Inspector. Defaults to float.
+		</member>
+	</members>
+</class>

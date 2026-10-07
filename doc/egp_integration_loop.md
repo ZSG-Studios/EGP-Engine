@@ -1,16 +1,14 @@
-# EGP integration and completion loop
+# EGP integration and qualification
 
-Full automated testing and the recurring integration loop are restored on
-2026-10-06 following the user's clarification: cancellation was intended to clear
-obsolete runs, not replace the pipeline with an old-binary replay. All original
-workflows and their qualified fixes are restored. New source runs supersede older
-runs of the same workflow/ref instead of waiting behind an obsolete build.
-Completion still requires combined-source and matching-binary runtime evidence.
+This checklist records acceptance criteria for the combined engine, generated APIs,
+editor tools and sample projects. Qualification uses matching source, native
+binaries, managed assemblies and extension SDKs. Each result is limited to the
+platform and workload recorded in its receipt.
 
-The loop owns the combined EGP result, including handoffs and unfinished work from
-other EGP chats and worktrees. Resume every 5 minutes and finish concrete acceptance
-items promptly. A check is complete only when its recorded evidence establishes the
-claimed behavior on the combined source and matching binaries.
+GitHub Actions runs the source build and test matrix. Local integration checks
+cover editor interaction and runtime workloads that need a rendered desktop.
+Passing focused checks does not establish complete platform parity or release
+readiness.
 
 ## Workflow and merge ownership
 
