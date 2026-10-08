@@ -37,7 +37,6 @@
 #ifdef SOWRAP_ENABLED
 #include "wayland/dynwrappers/wayland-client-core-so_wrap.h"
 #include "wayland/dynwrappers/wayland-cursor-so_wrap.h"
-#include "wayland/dynwrappers/wayland-egl-core-so_wrap.h"
 #include "xkbcommon-so_wrap.h"
 #else
 #include <wayland-client-core.h>
