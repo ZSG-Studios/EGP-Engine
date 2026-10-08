@@ -11,6 +11,7 @@ function main(compressor, zipper)
         {'license_literals','build/xmake/tests/license_literals.lua',marker='NATIVE_LICENSE_LITERAL_CHECKS=(%d+)'},
         {'shaders','tests/build/validate_builders.lua'},
         {'packages','tests/build/test_xmake_packages.lua',zipper},
+        {'pix_imports','tests/build/test_pix_imports.lua'},
         {'linking','tests/build/test_xmake_linking.lua'},
         {'link_dependencies','tests/build/test_xmake_link_dependencies.lua'},
         {'api_fence','tests/build/test_xmake_api_fence.lua'},

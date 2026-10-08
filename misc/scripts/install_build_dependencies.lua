@@ -1,5 +1,38 @@
 -- Install the same pinned native SDK artifacts used by EGP platform CI.
-function main(component, dryrun)
+function pix_dlltool(arch, lookup)
+    assert(arch == 'x64' or arch == 'ARM64', 'Unsupported WinPix architecture: ' .. tostring(arch))
+    if arch == 'ARM64' then
+        -- An x86 GNU dlltool cannot emit ARM64 COFF; generic GNU is intentionally excluded.
+        return lookup('aarch64-w64-mingw32-dlltool') or lookup('llvm-dlltool')
+    end
+    return lookup('x86_64-w64-mingw32-dlltool') or lookup('llvm-dlltool') or lookup('dlltool')
+end
+
+function generate_pix_imports(deps, lookup, run, required_arch)
+    run = run or os.vrunv
+    local gendef = lookup('x86_64-w64-mingw32-gendef') or lookup('gendef')
+    for _, arch in ipairs({'x64', 'ARM64'}) do
+        local directory = path.join(deps, 'pix/bin', arch)
+        assert(os.isfile(path.join(directory, 'WinPixEventRuntime.dll')) and os.isfile(path.join(directory, 'WinPixEventRuntime.lib')), 'Pinned WinPix package is missing its native ' .. arch .. ' DLL/import library')
+        local dlltool = pix_dlltool(arch, lookup)
+        assert(arch ~= required_arch or (gendef and dlltool), 'MinGW D3D12 requires WinPix ' .. arch .. ' GNU import-library conversion: install gendef and an architecture-compatible dlltool')
+        if gendef and dlltool then
+            local succeeded, failure = true, nil
+            try {function ()
+                run(gendef.program, {path.join(directory, 'WinPixEventRuntime.dll')}, {curdir=directory})
+                run(dlltool.program, {'-m', arch == 'x64' and 'i386:x86-64' or 'arm64', '--no-leading-underscore', '-d', path.join(directory, 'WinPixEventRuntime.def'), '-D', 'WinPixEventRuntime.dll', '-l', path.join(directory, 'libWinPixEventRuntime.a')})
+            end, catch {function (errors) succeeded, failure = false, errors end}}
+            if not succeeded then
+                local message = 'WinPix ' .. arch .. ' GNU import-library conversion failed: ' .. tostring(failure)
+                if arch == required_arch then raise(message) end
+                print(message .. '; preserving the installed native MSVC import library.')
+            end
+        else
+            print('WinPix ' .. arch .. ': native MSVC import library installed; GNU conversion unavailable (requires gendef and an architecture-compatible dlltool).')
+        end
+    end
+end
+function main(component, dryrun, compiler)
     import('net.http')
     import('utils.archive')
     import('core.base.json')
@@ -44,15 +77,9 @@ function main(component, dryrun)
             install('https://www.nuget.org/api/v2/package/WinPixEventRuntime/1.0.240308001',path.join(deps,'pix'))
             install('https://www.nuget.org/api/v2/package/Microsoft.Direct3D.D3D12/1.618.5',path.join(deps,'agility_sdk'))
             import('lib.detect.find_tool')
-            local gendef = find_tool('x86_64-w64-mingw32-gendef') or find_tool('gendef')
-            local dlltool = find_tool('x86_64-w64-mingw32-dlltool') or find_tool('dlltool')
-            if dryrun ~= 'dry-run' and gendef and dlltool then
-                for _, arch in ipairs({'x64','ARM64'}) do
-                    local directory = path.join(deps,'pix/bin',arch)
-                    os.vrunv(gendef.program,{path.join(directory,'WinPixEventRuntime.dll')},{curdir=directory})
-                    os.vrunv(dlltool.program,{'--machine',arch=='x64' and 'i386:x86-64' or 'arm64','--no-leading-underscore','-d',path.join(directory,'WinPixEventRuntime.def'),'-D','WinPixEventRuntime.dll','-l',path.join(directory,'libWinPixEventRuntime.a')})
-                end
-            end
+            compiler = compiler or 'msvc'
+            assert(compiler == 'msvc' or compiler == 'clang' or compiler == 'gcc' or compiler == 'mingw', 'Unknown Windows SDK compiler: ' .. tostring(compiler))
+            if dryrun ~= 'dry-run' then generate_pix_imports(deps, find_tool, nil, (compiler == 'gcc' or compiler == 'mingw') and 'x64' or nil) end
         end
     elseif component == 'swappy' then
         install('https://github.com/godotengine/godot-swappy/releases/download/from-source-2025-01-31/godot-swappy.zip',path.join(root,'thirdparty/swappy-frame-pacing'))
