@@ -241,7 +241,18 @@ def main():
         start = time.monotonic()
         log = output / (name + ".log")
         with log.open("w", encoding="utf-8") as stream:
-            child = subprocess.Popen(command, cwd=project, stdout=stream, stderr=subprocess.STDOUT, **options)
+            child = subprocess.Popen(
+                command,
+                cwd=extension if name in ("configure", "build") else project,
+                env=dict(
+                    os.environ,
+                    XMAKE_CONFIGDIR=str(output / "xmake-config"),
+                    XMAKE_GLOBALDIR=str(output / "xmake-global"),
+                ),
+                stdout=stream,
+                stderr=subprocess.STDOUT,
+                **options,
+            )
             try:
                 code = child.wait(timeout)
             except subprocess.TimeoutExpired:
@@ -289,22 +300,27 @@ def main():
             '[configuration]\nentry_symbol="ownership_init"\ncompatibility_minimum="4.8"\nreloadable=true\n[libraries]\nwindows.debug.x86_64="res://bin/ownership1.dll"\n',
             encoding="utf-8",
         )
+        xmake = os.environ.get("XMAKE") or shutil.which("xmake") or "xmake"
         run(
             "configure",
             [
-                "cmake",
-                "-S",
+                xmake,
+                "f",
+                "-y",
+                "-P",
                 extension,
-                "-B",
+                "-o",
                 output / "build",
-                f"-DEGP_CPP_SDK={args.sdk.resolve()}",
-                f"-DEGP_CPP_LIBRARY={args.sdk_library.resolve()}",
-                f"-DEGP_NET_INCLUDE={extension}",
-                f"-DEGP_FIXTURE_BIN={project / 'bin'}",
+                "-m",
+                "debug",
+                f"--egp_cpp_sdk={args.sdk.resolve()}",
+                f"--egp_cpp_library={args.sdk_library.resolve()}",
+                f"--egp_net_include={extension}",
+                f"--egp_fixture_bin={project / 'bin'}",
             ],
             120,
         )
-        run("build", ["cmake", "--build", output / "build", "--config", "Debug", "--parallel", "3"], 300)
+        run("build", [xmake, "-P", extension, "-b", "-j", "3"], 300)
         receipt["libraries_sha256"] = {p.name: digest(p) for p in (project / "bin").glob("*.dll")}
         if args.native_recovery:
             (project / "bin/ownership-invalid.dll").write_bytes(b"Deliberately invalid isolated ownership fixture DLL")

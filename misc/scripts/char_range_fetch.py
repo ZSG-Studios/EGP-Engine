@@ -14,7 +14,7 @@ from urllib.request import urlopen
 if __name__ == "__main__":
     sys.path.insert(1, os.path.join(os.path.dirname(__file__), "../../"))
 
-from methods import generate_copyright_header
+from misc.utility.copyright import generate_copyright_header
 
 URL: Final[str] = "https://www.unicode.org/Public/17.0.0/ucd/DerivedCoreProperties.txt"
 

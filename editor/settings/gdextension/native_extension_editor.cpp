@@ -87,8 +87,19 @@ String NativeExtensionEditor::_suffix() const {
 
 Error NativeExtensionEditor::_prepare_sdk() {
 	sdk_path = EditorPaths::get_singleton()->get_cache_dir().path_join("egp_cpp/sdk").path_join(String(egp_cpp_sdk_hash).left(16));
-	if (FileAccess::exists(sdk_path.path_join(".complete"))) {
+	const String marker_path = sdk_path.path_join(".complete");
+	bool complete = FileAccess::exists(marker_path) && FileAccess::get_file_as_string(marker_path) == egp_cpp_sdk_hash;
+	const char *required_files[] = { "sdk.json", "xmake.lua", "gen/include/gdextension_interface.h", "gen/include/godot_cpp/classes/node.hpp", "tools/run_project.lua", "tools/xmake.lua", "templates/xmake.lua.in", "templates/extension.cpp.in", "templates/extension.gdextension.in" };
+	for (const char *required : required_files) {
+		complete = complete && FileAccess::exists(sdk_path.path_join(required));
+	}
+	if (complete) {
 		return OK;
+	}
+	// A partial extraction must never inherit a stale successful completion marker.
+	if (FileAccess::exists(marker_path)) {
+		const Error remove_error = DirAccess::remove_absolute(marker_path);
+		ERR_FAIL_COND_V(remove_error != OK, remove_error);
 	}
 	Vector<uint8_t> archive;
 	archive.resize(egp_cpp_sdk_size);
@@ -113,9 +124,11 @@ Error NativeExtensionEditor::_prepare_sdk() {
 		ERR_FAIL_COND_V(!file->store_buffer(archive.ptr() + offset, data_size), ERR_FILE_CANT_WRITE);
 		offset += data_size;
 	}
-	Ref<FileAccess> marker = FileAccess::open(sdk_path.path_join(".complete"), FileAccess::WRITE);
+	Ref<FileAccess> marker = FileAccess::open(marker_path, FileAccess::WRITE);
 	ERR_FAIL_COND_V(marker.is_null(), ERR_FILE_CANT_WRITE);
-	marker->store_string(egp_cpp_sdk_hash);
+	ERR_FAIL_COND_V(!marker->store_string(egp_cpp_sdk_hash), ERR_FILE_CANT_WRITE);
+	marker->flush();
+	ERR_FAIL_COND_V(marker->get_error() != OK, ERR_FILE_CANT_WRITE);
 	return OK;
 }
 
@@ -137,8 +150,8 @@ Error NativeExtensionEditor::create_extension(const String &p_name) {
 	ERR_FAIL_COND_V(error != OK, error);
 	error = DirAccess::make_dir_recursive_absolute(path.path_join("src"));
 	ERR_FAIL_COND_V(error != OK, error);
-	const char *templates[] = { "CMakeLists.txt.in", "extension.cpp.in", "extension.gdextension.in" };
-	const String targets[] = { "CMakeLists.txt", "src/extension.cpp", p_name + ".gdextension.in" };
+	const char *templates[] = { "xmake.lua.in", "extension.cpp.in", "extension.gdextension.in" };
+	const String targets[] = { "xmake.lua", "src/extension.cpp", p_name + ".gdextension.in" };
 	for (int i = 0; i < 3; i++) {
 		Ref<FileAccess> source = FileAccess::open(sdk_path.path_join("templates").path_join(templates[i]), FileAccess::READ, &error);
 		ERR_FAIL_COND_V(source.is_null(), error);
@@ -200,7 +213,7 @@ void NativeExtensionEditor::_build_pressed(bool p_release) {
 	}
 	const Error error = build_extension(extensions->get_item_text(extensions->get_selected()), p_release);
 	if (error != OK) {
-		_set_status(vformat(TTR("Could not start build (error %d). Stop the game, check the CMake path with Check Toolchain, and review output below."), error), true);
+		_set_status(vformat(TTR("Could not start build (error %d). Stop the game, check the xmake path with Check Toolchain, and review output below."), error), true);
 	}
 }
 
@@ -210,20 +223,20 @@ Error NativeExtensionEditor::build_extension(const String &p_name, bool p_releas
 		_set_status(TTR("Stop the game before rebuilding. Running-game reload requires Debug and debug/hot_reload/enable_runtime enabled before launch."), true);
 		return ERR_BUSY;
 	}
-	if (!p_name.is_valid_identifier() || !FileAccess::exists("res://extensions/" + p_name + "/CMakeLists.txt")) {
-		_set_status(vformat(TTR("Cannot build %s: its CMakeLists.txt was not found. Create the extension or refresh the list after restoring its files."), p_name), true);
+	if (!p_name.is_valid_identifier() || !FileAccess::exists("res://extensions/" + p_name + "/xmake.lua")) {
+		_set_status(vformat(TTR("Cannot build %s: its xmake.lua was not found. Create the extension or refresh the list after restoring its files."), p_name), true);
 		return ERR_INVALID_PARAMETER;
 	}
 	Error error = _prepare_sdk();
 	ERR_FAIL_COND_V(error != OK, error);
 	operation = BUILD;
-	cmake_executable = _find_cmake();
-	process_executable = cmake_executable;
+	xmake_executable = _find_xmake();
+	process_executable = xmake_executable;
 	ScriptEditor::get_singleton()->save_all_scripts();
-	if (cmake_executable.is_empty()) {
-		cmake_executable = "cmake";
+	if (xmake_executable.is_empty()) {
+		xmake_executable = "xmake";
 	}
-	EditorSettings::get_singleton()->set_setting("native_extensions/cmake_path", cmake_executable);
+	EditorSettings::get_singleton()->set_setting("native_extensions/xmake_path", xmake_executable);
 	building_name = p_name;
 	// Public/CLI builds must identify the same target as the selector and source link.
 	for (int i = 0; i < extensions->get_item_count(); i++) {
@@ -242,24 +255,35 @@ Error NativeExtensionEditor::build_extension(const String &p_name, bool p_releas
 	restart_button->hide();
 	configuring = true;
 	List<String> arguments;
-	arguments.push_back("-S");
-	arguments.push_back(ProjectSettings::get_singleton()->globalize_path("res://extensions/" + p_name));
-	arguments.push_back("-B");
+	build_project_path = ProjectSettings::get_singleton()->globalize_path("res://extensions/" + p_name);
+	arguments.push_back("f");
+	arguments.push_back("-y");
+	arguments.push_back("-P");
+	arguments.push_back(build_project_path);
+	arguments.push_back("-o");
 	arguments.push_back(build_path);
-	arguments.push_back("-DEGP_CPP_SDK=" + sdk_path);
-	arguments.push_back("-DEGP_CPP_CACHE=" + EditorPaths::get_singleton()->get_cache_dir().path_join("egp_cpp/lib").path_join(String(egp_cpp_sdk_hash).left(16)));
-	arguments.push_back("-DCMAKE_BUILD_TYPE=" + build_config);
-#ifdef WINDOWS_ENABLED
-	arguments.push_back("-A");
-	arguments.push_back(Engine::get_singleton()->get_architecture_name() == "arm64" ? "ARM64" : (sizeof(void *) == 8 ? "x64" : "Win32"));
-#endif
+	arguments.push_back("-p");
+	arguments.push_back(_platform() == "macos" ? "macosx" : (_platform() == "linux" ? "linux" : _platform()));
+	arguments.push_back("-a");
+	arguments.push_back(Engine::get_singleton()->get_architecture_name() == "x86_64" ? "x64" : (Engine::get_singleton()->get_architecture_name() == "x86_32" ? "x86" : Engine::get_singleton()->get_architecture_name()));
+	arguments.push_back("-m");
+	arguments.push_back(build_config.to_lower());
+	arguments.push_back("--egp_cpp_sdk=" + sdk_path);
+	arguments.push_back("--egp_cpp_cache=" + EditorPaths::get_singleton()->get_cache_dir().path_join("egp_cpp/lib").path_join(String(egp_cpp_sdk_hash).left(16)));
 	return _start_process(arguments) ? OK : ERR_CANT_FORK;
 }
 
 bool NativeExtensionEditor::_start_process(const List<String> &p_arguments) {
-	Dictionary process = OS::get_singleton()->execute_with_pipe(process_executable, p_arguments, false);
+	List<String> arguments(p_arguments);
+	if (operation != INSTALL) {
+		arguments.push_front(build_path.path_join("config"));
+		arguments.push_front(build_project_path);
+		arguments.push_front(sdk_path.path_join("tools/run_project.lua"));
+		arguments.push_front("lua");
+	}
+	Dictionary process = OS::get_singleton()->execute_with_pipe(process_executable, arguments, false);
 	if (!process.has("pid")) {
-		_set_status(vformat(TTR("Could not start %s. Set a valid CMake executable path or use Install Tools, then Check Toolchain."), process_executable), true);
+		_set_status(vformat(TTR("Could not start %s. Set a valid xmake executable path or use Install Tools, then Check Toolchain."), process_executable), true);
 		last_build_result = -2;
 		_set_busy(false);
 		return false;
@@ -294,7 +318,7 @@ void NativeExtensionEditor::_update_controls() {
 	refresh_button->set_disabled(busy);
 	source_button->set_disabled(busy || !selected);
 	extension_name->set_editable(!busy);
-	cmake_path->set_editable(!busy);
+	xmake_path->set_editable(!busy);
 	restart_button->set_disabled(busy);
 	selection_label->set_text(selected ? "res://extensions/" + extensions->get_item_text(extensions->get_selected()) + "/src/extension.cpp" : TTR("No C++ extensions yet. Create one above to get started."));
 	copy_button->set_disabled(output->get_parsed_text().is_empty());
@@ -333,22 +357,27 @@ void NativeExtensionEditor::_copy_output() {
 }
 
 void NativeExtensionEditor::_append_line(const String &p_line) {
+	// Pipes can retain terminal colors and hyperlinks. Strip their complete
+	// control sequences before displaying or parsing compiler diagnostics.
+	RegEx terminal_sequences;
+	terminal_sequences.compile("\\x1b(?:\\[[0-?]*[ -/]*[@-~]|\\][^\\x07\\x1b]*(?:\\x07|\\x1b\\\\|$))");
+	const String line = terminal_sequences.sub(p_line, "", true);
 	if (cli) {
-		print_line(p_line);
+		print_line(line);
 	}
 	RegEx diagnostic;
 	diagnostic.compile("^(.+\\.(?:cpp|hpp|h|c))(?:(?:\\((\\d+)(?:,\\d+)?\\))|(?::(\\d+)(?::\\d+)?))\\s*:");
-	Ref<RegExMatch> match = diagnostic.search(p_line);
+	Ref<RegExMatch> match = diagnostic.search(line);
 	if (match.is_valid()) {
 		Array location;
 		location.push_back(match->get_string(1).strip_edges());
 		location.push_back((match->get_string(2).is_empty() ? match->get_string(3) : match->get_string(2)).to_int());
 		emit_signal(SNAME("diagnostic_found"), location[0], location[1]);
 		output->push_meta(location);
-		output->add_text(p_line);
+		output->add_text(line);
 		output->pop();
 	} else {
-		output->add_text(p_line);
+		output->add_text(line);
 	}
 	output->add_text("\n");
 	copy_button->set_disabled(false);
@@ -387,24 +416,74 @@ void NativeExtensionEditor::_drain_pipe(int p_index, bool p_final) {
 Error NativeExtensionEditor::_publish_library() {
 	const String base = building_name + "." + _platform() + "." + build_config.to_lower() + "." + Engine::get_singleton()->get_architecture_name();
 	const String library = "res://extensions/" + building_name + "/bin/" + base + _suffix();
-	ERR_FAIL_COND_V(!FileAccess::exists(library), ERR_FILE_NOT_FOUND);
+	if (!FileAccess::exists(library)) {
+		_set_status(vformat(TTR("Build completed without the expected library: %s. Check the extension target output path."), library), true);
+		return ERR_FILE_NOT_FOUND;
+	}
 	// Publish immutable copies so a loaded Windows DLL never blocks the next build.
 	const String published = library.trim_suffix(_suffix()) + "_" + FileAccess::get_sha256(library).left(16) + _suffix();
 	Ref<DirAccess> directory = DirAccess::create(DirAccess::ACCESS_RESOURCES);
 	Error error = OK;
 	if (!FileAccess::exists(published)) {
 		error = directory->copy(library, published);
-		ERR_FAIL_COND_V(error != OK, error);
+		if (error != OK) {
+			_set_status(vformat(TTR("Could not publish %s (error %d). Check bin/ write permissions; the previous descriptor is unchanged."), published, error), true);
+			return error;
+		}
 	}
 	const String descriptor = "res://extensions/" + building_name + "/" + building_name + ".gdextension";
+	const String transaction = "-" + itos(OS::get_singleton()->get_process_id());
+	const String candidate = descriptor + ".pending" + transaction;
+	const String backup = descriptor + ".previous" + transaction;
+	if (FileAccess::exists(candidate) || directory->dir_exists(candidate) || FileAccess::exists(backup) || directory->dir_exists(backup)) {
+		_set_status(vformat(TTR("Descriptor transaction files already exist for %s. Review .pending/.previous files before retrying; the previous descriptor is unchanged."), building_name), true);
+		return ERR_ALREADY_EXISTS;
+	}
+	const bool had_previous = FileAccess::exists(descriptor);
 	Ref<ConfigFile> config;
 	config.instantiate();
-	error = config->load(FileAccess::exists(descriptor) ? descriptor : descriptor + ".in");
-	ERR_FAIL_COND_V(error != OK, error);
-	config->set_value("libraries", _platform() + "." + build_config.to_lower() + "." + Engine::get_singleton()->get_architecture_name(), published);
-	error = config->save(descriptor);
-	ERR_FAIL_COND_V(error != OK, error);
-	_scan_filesystem();
+	error = config->load(had_previous ? descriptor : descriptor + ".in");
+	if (error != OK) {
+		_set_status(vformat(TTR("Could not read the descriptor for %s (error %d). Fix its configuration before rebuilding."), building_name, error), true);
+		return error;
+	}
+	const String feature = _platform() + "." + build_config.to_lower() + "." + Engine::get_singleton()->get_architecture_name();
+	config->set_value("libraries", feature, published);
+	error = config->save(candidate);
+	Ref<ConfigFile> verified;
+	verified.instantiate();
+	if (error == OK) {
+		error = verified->load(candidate);
+		if (error == OK && String(verified->get_value("libraries", feature, String())) != published) {
+			error = ERR_FILE_CORRUPT;
+		}
+	}
+	if (error != OK) {
+		directory->remove(candidate);
+		_set_status(vformat(TTR("Could not save the new descriptor for %s (error %d). Check project write permissions; the previous descriptor is unchanged."), building_name, error), true);
+		return error;
+	}
+	if (had_previous) {
+		error = directory->rename(descriptor, backup);
+		if (error != OK) {
+			directory->remove(candidate);
+			_set_status(vformat(TTR("Could not preserve the previous descriptor for %s (error %d). Close programs locking it, then retry."), building_name, error), true);
+			return error;
+		}
+	}
+	auto restore_descriptor = [&]() -> Error {
+		if (had_previous) {
+			return directory->rename(backup, descriptor);
+		}
+		return FileAccess::exists(descriptor) ? directory->remove(descriptor) : OK;
+	};
+	error = directory->rename(candidate, descriptor);
+	if (error != OK) {
+		const Error restore_error = restore_descriptor();
+		directory->remove(candidate);
+		_set_status(restore_error == OK ? vformat(TTR("Could not publish the new descriptor for %s (error %d). The previous descriptor was restored; check file permissions."), building_name, error) : vformat(TTR("Descriptor publication and restoration failed for %s. Recover the previous descriptor from %s before retrying."), building_name, backup), true);
+		return error;
+	}
 	if (build_config == "Debug") {
 		GDExtensionManager *manager = GDExtensionManager::get_singleton();
 		GDExtensionManager::LoadStatus status = manager->is_extension_loaded(descriptor) ? manager->reload_extension(descriptor) : manager->load_extension(descriptor);
@@ -412,7 +491,10 @@ Error NativeExtensionEditor::_publish_library() {
 			restart_button->show();
 			_set_status(TTR("Build succeeded. This native class change needs a restart; save scenes and restart the editor to apply it."));
 		} else if (status != GDExtensionManager::LOAD_STATUS_OK && status != GDExtensionManager::LOAD_STATUS_ALREADY_LOADED) {
-			_set_status(vformat(TTR("%s compiled, but the extension failed to load (status %d). Review engine output for registration or dependency errors."), building_name, status), true);
+			const Error restore_error = restore_descriptor();
+			_scan_filesystem();
+			restart_button->show();
+			_set_status(restore_error == OK ? vformat(TTR("%s compiled but failed to load (status %d). The previous descriptor was restored. Review registration/dependency errors and restart the editor before retrying."), building_name, status) : vformat(TTR("%s failed to load (status %d), and descriptor restoration failed. Recover %s and restart the editor."), building_name, status, backup), true);
 			return ERR_CANT_OPEN;
 		} else {
 			_set_status(vformat(TTR("%s Debug built and loaded. Its node is available in Create Node."), building_name));
@@ -422,6 +504,10 @@ Error NativeExtensionEditor::_publish_library() {
 	} else {
 		_set_status(vformat(TTR("%s Release built and registered for export."), building_name));
 	}
+	if (had_previous && directory->remove(backup) != OK) {
+		_append_line(vformat(TTR("Build succeeded, but descriptor backup cleanup failed: %s. Review this file before the next build."), backup));
+	}
+	_scan_filesystem();
 	return OK;
 }
 
@@ -458,12 +544,12 @@ void NativeExtensionEditor::_notification(int p_what) {
 		configuring = false;
 		_set_status(operation == CHECK ? TTR("Checking C++17 compilation and linking...") : vformat(TTR("Compiling %s (%s). Compiler diagnostics below link to source lines."), building_name, build_config));
 		List<String> arguments;
-		arguments.push_back("--build");
-		arguments.push_back(build_path);
-		arguments.push_back("--config");
-		arguments.push_back(build_config);
-		arguments.push_back("--parallel");
+		arguments.push_back("-P");
+		arguments.push_back(build_project_path);
+		arguments.push_back("-b");
+		arguments.push_back("-j");
 		arguments.push_back(itos(MAX(1, OS::get_singleton()->get_processor_count() - 1)));
+		arguments.push_back(operation == CHECK ? "toolchain-check" : "extension");
 		if (!_start_process(arguments)) {
 			_complete_operation();
 		}
@@ -478,42 +564,53 @@ void NativeExtensionEditor::_notification(int p_what) {
 		return;
 	}
 	if (result == 0 && operation == CHECK) {
-		_set_status(TTR("Toolchain ready: CMake, C++17 compiler and linker verified. Create or select an extension, then Build Debug."));
-		_append_line("EGP_CPP_TOOLCHAIN_READY: CMake, C++17 compiler and linker verified.");
+		_set_status(TTR("Toolchain ready: xmake, C++17 compiler and linker verified. Create or select an extension, then Build Debug."));
+		_append_line("EGP_CPP_TOOLCHAIN_READY: xmake, C++17 compiler and linker verified.");
 	} else if (result == 0) {
 		const Error error = _publish_library();
 		if (error != OK) {
 			last_build_result = -3;
-			_set_status(vformat(TTR("Compilation succeeded, but publishing or loading failed (error %d). Check project bin/ permissions, registration and dependencies in engine output before rebuilding."), error), true);
+			// _publish_library retains the precise failed stage and recovery action.
+			_append_line(get_status());
 		}
 	} else {
-		_set_status(operation == BUILD ? vformat(TTR("%s %s build failed (exit code %d). Click the compiler error below, fix the source, then rebuild. The previous published library is unchanged."), building_name, build_config, result) : vformat(TTR("Toolchain %s failed (exit code %d). Review output below; check the CMake path and installed C++ compiler workload, then Check Toolchain again."), operation == INSTALL ? "installation" : "check", result), true);
+		_set_status(operation == BUILD ? vformat(TTR("%s %s build failed (exit code %d). Click the compiler error below, fix the source, then rebuild. The previous published library is unchanged."), building_name, build_config, result) : vformat(TTR("Toolchain %s failed (exit code %d). Review output below; check the xmake path and installed C++ compiler workload, then Check Toolchain again."), operation == INSTALL ? "installation" : "check", result), true);
 	}
 	_complete_operation();
 }
 
-String NativeExtensionEditor::_find_cmake() const {
-	const String configured = cmake_path->get_text().strip_edges();
-	if (!configured.is_empty() && configured != "cmake") {
+String NativeExtensionEditor::_find_xmake() const {
+	const String configured = xmake_path->get_text().strip_edges();
+	if (!configured.is_empty() && configured != "xmake") {
 		return configured;
 	}
+	const String override = OS::get_singleton()->get_environment("XMAKE").strip_edges();
+	if (!override.is_empty()) {
+		return override;
+	}
 #ifdef WINDOWS_ENABLED
-	const String installed = OS::get_singleton()->get_environment("ProgramFiles").path_join("CMake/bin/cmake.exe");
+	const String installed = OS::get_singleton()->get_environment("LOCALAPPDATA").path_join("xmake/xmake.exe");
 	if (FileAccess::exists(installed)) {
 		return installed;
 	}
 #elif defined(MACOS_ENABLED)
-	if (FileAccess::exists("/Applications/CMake.app/Contents/bin/cmake")) {
-		return "/Applications/CMake.app/Contents/bin/cmake";
+	const String pinned = OS::get_singleton()->get_environment("HOME").path_join(".local/bin/xmake");
+	if (FileAccess::exists(pinned)) {
+		return pinned;
 	}
-	if (FileAccess::exists("/opt/homebrew/bin/cmake")) {
-		return "/opt/homebrew/bin/cmake";
+	if (FileAccess::exists("/opt/homebrew/bin/xmake")) {
+		return "/opt/homebrew/bin/xmake";
 	}
-	if (FileAccess::exists("/usr/local/bin/cmake")) {
-		return "/usr/local/bin/cmake";
+	if (FileAccess::exists("/usr/local/bin/xmake")) {
+		return "/usr/local/bin/xmake";
+	}
+#else
+	const String pinned = OS::get_singleton()->get_environment("HOME").path_join(".local/bin/xmake");
+	if (FileAccess::exists(pinned)) {
+		return pinned;
 	}
 #endif
-	return "cmake";
+	return "xmake";
 }
 
 Error NativeExtensionEditor::check_toolchain() {
@@ -524,21 +621,21 @@ Error NativeExtensionEditor::check_toolchain() {
 	configuring = true;
 	last_build_result = -1;
 	build_config = "Debug";
-	process_executable = _find_cmake();
-	cmake_executable = process_executable;
+	process_executable = _find_xmake();
+	xmake_executable = process_executable;
 	build_path = EditorPaths::get_singleton()->get_cache_dir().path_join("egp_cpp/toolchain").path_join(String(egp_cpp_sdk_hash).left(16));
 	output->clear();
-	_set_status(vformat(TTR("Checking CMake and compiler using %s..."), process_executable));
+	_set_status(vformat(TTR("Checking xmake and compiler using %s..."), process_executable));
 	List<String> arguments;
-	arguments.push_back("-S");
-	arguments.push_back(sdk_path.path_join("tools"));
-	arguments.push_back("-B");
+	build_project_path = sdk_path.path_join("tools");
+	arguments.push_back("f");
+	arguments.push_back("-y");
+	arguments.push_back("-P");
+	arguments.push_back(build_project_path);
+	arguments.push_back("-o");
 	arguments.push_back(build_path);
-	arguments.push_back("-DCMAKE_BUILD_TYPE=Debug");
-#ifdef WINDOWS_ENABLED
-	arguments.push_back("-A");
-	arguments.push_back(Engine::get_singleton()->get_architecture_name() == "arm64" ? "ARM64" : (sizeof(void *) == 8 ? "x64" : "Win32"));
-#endif
+	arguments.push_back("-m");
+	arguments.push_back("debug");
 	return _start_process(arguments) ? OK : ERR_CANT_FORK;
 }
 
@@ -562,7 +659,7 @@ Error NativeExtensionEditor::install_tools() {
 	process_executable = "/bin/sh";
 	arguments.push_back(sdk_path.path_join("tools/setup.sh"));
 #endif
-	_set_status(TTR("Installing missing CMake/compiler tools. Complete any system installer or administrator prompts. Output remains visible below."));
+	_set_status(TTR("Installing missing xmake/compiler tools. Complete any system installer or administrator prompts. Output remains visible below."));
 	return _start_process(arguments) ? OK : ERR_CANT_FORK;
 }
 
@@ -602,9 +699,9 @@ void NativeExtensionEditor::_next_cli() {
 		const String command = cli_commands[cli_index++];
 		Error error = OK;
 		if (command == "--cpp-help") {
-			print_line("EGP --headless --editor --path PROJECT -- [--cpp-cmake=PATH] [--cpp-install] [--cpp-check] [--cpp-create=NAME] [--cpp-build=NAME:debug|release]");
-		} else if (command.begins_with("--cpp-cmake=")) {
-			cmake_path->set_text(command.trim_prefix("--cpp-cmake="));
+			print_line("EGP --headless --editor --path PROJECT -- [--cpp-xmake=PATH] [--cpp-install] [--cpp-check] [--cpp-create=NAME] [--cpp-build=NAME:debug|release]");
+		} else if (command.begins_with("--cpp-xmake=")) {
+			xmake_path->set_text(command.trim_prefix("--cpp-xmake="));
 		} else if (command == "--cpp-check") {
 			error = check_toolchain();
 		} else if (command == "--cpp-install") {
@@ -702,18 +799,18 @@ NativeExtensionEditor::NativeExtensionEditor() {
 	add_child(tools_title);
 	HBoxContainer *tool_row = memnew(HBoxContainer);
 	add_child(tool_row);
-	tool_row->add_child(memnew(Label(TTRC("CMake:"))));
-	cmake_path = memnew(LineEdit);
-	cmake_path->set_name("CMakePath");
-	cmake_path->set_h_size_flags(SIZE_EXPAND_FILL);
-	cmake_path->set_text(EDITOR_DEF("native_extensions/cmake_path", "cmake"));
-	cmake_path->set_tooltip_text(TTR("CMake executable or absolute path. Check Toolchain verifies C++17 compilation and linking. Python and SCons are not required."));
-	tool_row->add_child(cmake_path);
+	tool_row->add_child(memnew(Label(TTRC("xmake:"))));
+	xmake_path = memnew(LineEdit);
+	xmake_path->set_name("xmakePath");
+	xmake_path->set_h_size_flags(SIZE_EXPAND_FILL);
+	xmake_path->set_text(EDITOR_DEF("native_extensions/xmake_path", "xmake"));
+	xmake_path->set_tooltip_text(TTR("xmake executable or absolute path. Check Toolchain verifies C++17 compilation and linking. The bundled bindings require no download or separate generator setup."));
+	tool_row->add_child(xmake_path);
 	check_button = memnew(Button(TTRC("Check Toolchain")));
 	check_button->connect("pressed", callable_mp(this, &NativeExtensionEditor::_tool_pressed).bind(false));
 	tool_row->add_child(check_button);
 	install_button = memnew(Button(TTRC("Install Tools")));
-	install_button->set_tooltip_text(TTR("Install missing CMake/compiler tools. Your operating system may request administrator approval."));
+	install_button->set_tooltip_text(TTR("Install missing xmake/compiler tools. Your operating system may request administrator approval."));
 	install_button->connect("pressed", callable_mp(this, &NativeExtensionEditor::_tool_pressed).bind(true));
 	tool_row->add_child(install_button);
 	Label *create_title = memnew(Label(TTRC("2. Create an extension")));
@@ -761,7 +858,7 @@ NativeExtensionEditor::NativeExtensionEditor() {
 	release_button->set_name("BuildRelease");
 	release_button->connect("pressed", callable_mp(this, &NativeExtensionEditor::_build_pressed).bind(true));
 	build_row->add_child(release_button);
-	status_label = memnew(Label(TTRC("Ready. Check Toolchain to verify CMake and a C++17 compiler.")));
+	status_label = memnew(Label(TTRC("Ready. Check Toolchain to verify xmake and a C++17 compiler.")));
 	status_label->set_name("BuildStatus");
 	status_label->set_autowrap_mode(TextServer::AUTOWRAP_WORD_SMART);
 	add_child(status_label);
@@ -794,7 +891,7 @@ NativeExtensionEditor::NativeExtensionEditor() {
 NativeExtensionEditor::~NativeExtensionEditor() {
 	if (process_id != 0) {
 #ifdef WINDOWS_ENABLED
-		// CMake launches MSBuild/compiler children. Terminate this build's tree on editor shutdown.
+		// xmake launches compiler and linker children. Terminate this build's tree on editor shutdown.
 		const String taskkill = OS::get_singleton()->get_environment("SystemRoot").path_join("System32/taskkill.exe");
 		if (FileAccess::exists(taskkill)) {
 			List<String> arguments;

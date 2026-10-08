@@ -37,7 +37,7 @@
 
 namespace {
 bool supported(int t) {
-	return t == Variant::BOOL || t == Variant::INT || t == Variant::FLOAT || t == Variant::VECTOR3 || t == Variant::STRING;
+	return t == Variant::BOOL || t == Variant::INT || t == Variant::FLOAT || t == Variant::VECTOR2 || t == Variant::VECTOR3 || t == Variant::COLOR || t == Variant::STRING;
 }
 } //namespace
 void SuperpositionProperty::_bind_methods() {
@@ -47,7 +47,7 @@ void SuperpositionProperty::_bind_methods() {
 	ADD_PROPERTY(PropertyInfo(t, n, h, v), #s, #g)
 	SP_BIND("enabled", set_enabled, is_enabled, Variant::BOOL, PROPERTY_HINT_NONE, "");
 	SP_BIND("property", set_property, get_property, Variant::STRING_NAME, PROPERTY_HINT_NONE, "");
-	SP_BIND("value_type", set_value_type, get_value_type, Variant::INT, PROPERTY_HINT_ENUM, "Boolean:1,Integer:2,Float:3,String:4,Vector3:9");
+	SP_BIND("value_type", set_value_type, get_value_type, Variant::INT, PROPERTY_HINT_ENUM, "Boolean:1,Integer:2,Float:3,String:4,Vector2:5,Vector3:9,Color:20");
 	SP_BIND("quantization", set_quantization, get_quantization, Variant::FLOAT, PROPERTY_HINT_RANGE, "0,100,0.001,or_greater");
 	SP_BIND("smoothing", set_smoothing, is_smoothing, Variant::BOOL, PROPERTY_HINT_NONE, "");
 #undef SP_BIND
@@ -71,7 +71,80 @@ void SuperpositionConfig::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_capture_mode", "value"), &SuperpositionConfig::set_capture_mode);
 	ClassDB::bind_method(D_METHOD("get_capture_mode"), &SuperpositionConfig::get_capture_mode);
 	ADD_PROPERTY(PropertyInfo(Variant::INT, "capture_mode", PROPERTY_HINT_ENUM, "Automatic,Pushed"), "set_capture_mode", "get_capture_mode");
+	ClassDB::bind_method(D_METHOD("set_delta_replication", "value"), &SuperpositionConfig::set_delta_replication);
+	ClassDB::bind_method(D_METHOD("is_delta_replication"), &SuperpositionConfig::is_delta_replication);
+	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "delta_replication"), "set_delta_replication", "is_delta_replication");
 }
+Array Superposition::configuration_signature() const {
+	Array signature;
+	if (config.is_null()) {
+		return signature;
+	}
+	auto rules = config->get_properties();
+	signature.push_back(rules.size());
+	for (int i = 0; i < MIN(rules.size(), 33); ++i) {
+		Ref<SuperpositionProperty> rule = rules[i];
+		Array row;
+		if (rule.is_valid()) {
+			row.push_back(rule->get_property());
+			row.push_back(rule->get_value_type());
+			row.push_back(rule->get_quantization());
+			row.push_back(rule->is_enabled());
+			row.push_back(rule->is_smoothing());
+		}
+		signature.push_back(row);
+	}
+	return signature;
+}
+class Superposition::CallbackScope {
+	const Superposition *owner;
+	ObjectID self_id, target_id;
+	uint64_t generation;
+	Ref<SuperpositionConfig> configuration;
+	Ref<EGPNetSession> active_session;
+	Array signature;
+	String state;
+	bool schema_only, acquired;
+
+public:
+	CallbackScope(const Superposition *p_owner, bool p_schema = false) : owner(p_owner), schema_only(p_schema) {
+		self_id = owner->get_instance_id();
+		Node *node = owner->target();
+		if (node) {
+			target_id = node->get_instance_id();
+		}
+		generation = owner->binding_generation;
+		configuration = owner->config;
+		active_session = owner->session;
+		signature = owner->configuration_signature();
+		state = active_session.is_valid() ? active_session->get_state() : String();
+		bool &flag = schema_only ? owner->schema_busy : owner->property_busy;
+		acquired = !flag;
+		if (acquired) {
+			flag = true;
+		}
+	}
+	bool entered() const { return acquired; }
+	bool alive() const { return ObjectDB::get_instance(self_id) == owner; }
+	bool valid() const {
+		if (!alive()) {
+			return false;
+		}
+		if (owner->is_queued_for_deletion() || !owner->is_inside_tree() || owner->binding_generation != generation || owner->config != configuration || owner->session != active_session || owner->configuration_signature() != signature || (active_session.is_valid() && active_session->get_state() != state)) {
+			return false;
+		}
+		Node *node = Object::cast_to<Node>(ObjectDB::get_instance(target_id));
+		if (!target_id.is_valid()) {
+			return owner->target() == nullptr;
+		}
+		return node && !node->is_queued_for_deletion() && node->is_inside_tree() && owner->target() == node;
+	}
+	~CallbackScope() {
+		if (acquired && ObjectDB::get_instance(self_id) == owner) {
+			(schema_only ? owner->schema_busy : owner->property_busy) = false;
+		}
+	}
+};
 Node *Superposition::target() const {
 	return is_inside_tree() ? get_node_or_null(target_path) : nullptr;
 }
@@ -79,11 +152,22 @@ String Superposition::effective_key() const {
 	return replication_key.is_empty() && target() ? String(target()->get_path()) : replication_key;
 }
 void Superposition::reset_binding() {
+	const ObjectID self_id = get_instance_id();
+	++binding_generation;
 	Ref<EGPNetSession> active = session;
-	set_session(Ref<EGPNetSession>());
-	set_session(active);
+	bind_session(Ref<EGPNetSession>());
+	if (ObjectDB::get_instance(self_id) != this) {
+		return;
+	}
+	bind_session(active);
 }
 void Superposition::set_session(const Ref<EGPNetSession> &v) {
+	// Explicit assignment wins even when it names the currently discovered ref.
+	manual_session = v.is_valid();
+	bind_session(v);
+}
+void Superposition::bind_session(const Ref<EGPNetSession> &v) {
+	const ObjectID self_id = get_instance_id();
 	if (session == v) {
 		return;
 	}
@@ -93,8 +177,12 @@ void Superposition::set_session(const Ref<EGPNetSession> &v) {
 		Error e = Error(int(session->command("despawn", args)));
 		if (e != OK && e != ERR_DOES_NOT_EXIST) {
 			fail(e, "Could not retire previous session's entity.");
+			if (ObjectDB::get_instance(self_id) != this) {
+				return;
+			}
 		}
 	}
+	++binding_generation;
 	session = v;
 	entity = 0;
 	owns_entity = false;
@@ -103,6 +191,7 @@ void Superposition::set_session(const Ref<EGPNetSession> &v) {
 	desired.clear();
 	dirty = true;
 	applied_priority = 0;
+	delta_policy_initialized = false;
 	visibility.clear();
 }
 Error Superposition::fail(Error p_error, const String &p_text) {
@@ -112,6 +201,10 @@ Error Superposition::fail(Error p_error, const String &p_text) {
 	return p_error;
 }
 Error Superposition::schema(Array &r_rules) const {
+	CallbackScope callbacks(this, true);
+	if (!callbacks.entered()) {
+		return ERR_BUSY;
+	}
 	if (config.is_null() || !target()) {
 		return ERR_UNCONFIGURED;
 	}
@@ -133,6 +226,9 @@ Error Superposition::schema(Array &r_rules) const {
 		}
 		bool valid = false;
 		Variant current = target()->get(rule->get_property(), &valid);
+		if (!callbacks.valid()) {
+			return ERR_UNAVAILABLE;
+		}
 		if (!valid || current.get_type() != rule->get_value_type()) {
 			return ERR_INVALID_PARAMETER;
 		}
@@ -159,14 +255,34 @@ Error Superposition::normalize(const Ref<SuperpositionProperty> &rule, const Var
 			return ERR_INVALID_DATA;
 		}
 		out = q > 0 ? v.snapped(Vector3(q, q, q)) : v;
+	} else if (value.get_type() == Variant::VECTOR2) {
+		Vector2 v = value;
+		if (!v.is_finite() || Math::abs(v.x) > 1e12 || Math::abs(v.y) > 1e12) {
+			return ERR_INVALID_DATA;
+		}
+		out = q > 0 ? v.snapped(Vector2(q, q)) : v;
+	} else if (value.get_type() == Variant::COLOR) {
+		Color c = value;
+		if (!Math::is_finite(c.r) || !Math::is_finite(c.g) || !Math::is_finite(c.b) || !Math::is_finite(c.a) || Math::abs(c.r) > 1e6 || Math::abs(c.g) > 1e6 || Math::abs(c.b) > 1e6 || Math::abs(c.a) > 1e6) {
+			return ERR_INVALID_DATA;
+		}
+		// Color components are float32; preserve the same grid on both sides.
+		out = q > 0 ? Color(Math::snapped(double(c.r), q), Math::snapped(double(c.g), q), Math::snapped(double(c.b), q), Math::snapped(double(c.a), q)) : c;
 	} else if (value.get_type() == Variant::STRING && String(value).utf8().length() > 256) {
 		return ERR_INVALID_DATA;
 	}
 	return OK;
 }
 PackedByteArray Superposition::capture_state() {
+	CallbackScope callbacks(this);
+	if (!callbacks.entered()) {
+		return PackedByteArray();
+	}
 	Array rules;
 	Error e = schema(rules);
+	if (!callbacks.valid()) {
+		return PackedByteArray();
+	}
 	if (e != OK) {
 		fail(e, "Invalid target or Superposition schema (1-32 typed properties required).");
 		return PackedByteArray();
@@ -175,7 +291,11 @@ PackedByteArray Superposition::capture_state() {
 	for (int i = 0; i < rules.size(); i++) {
 		Ref<SuperpositionProperty> rule = rules[i];
 		Variant value;
-		if (normalize(rule, target()->get(rule->get_property()), value) != OK) {
+		Variant current = target()->get(rule->get_property());
+		if (!callbacks.valid()) {
+			return PackedByteArray();
+		}
+		if (normalize(rule, current, value) != OK) {
 			fail(ERR_INVALID_DATA, "Non-finite, oversized or incorrectly typed replicated property.");
 			return PackedByteArray();
 		}
@@ -204,6 +324,10 @@ PackedByteArray Superposition::capture_state() {
 	return bytes;
 }
 Error Superposition::apply_state(const PackedByteArray &bytes) {
+	CallbackScope callbacks(this);
+	if (!callbacks.entered()) {
+		return ERR_BUSY;
+	}
 	// Application is a server-to-client operation. Never let a client command alter server state.
 	if (session.is_valid() && session->get_state() == "Listening") {
 		return fail(ERR_UNAUTHORIZED, "Server rejects incoming Superposition property state.");
@@ -217,7 +341,11 @@ Error Superposition::apply_state(const PackedByteArray &bytes) {
 		return fail(ERR_INVALID_DATA, "Malformed Superposition envelope.");
 	}
 	Array envelope = decoded, rules;
-	if (schema(rules) != OK || envelope.size() != 3 || envelope[0].get_type() != Variant::INT || int64_t(envelope[0]) != 1 || envelope[1].get_type() != Variant::STRING || String(envelope[1]) != effective_key() || envelope[2].get_type() != Variant::ARRAY) {
+	Error schema_error = schema(rules);
+	if (!callbacks.valid()) {
+		return ERR_UNAVAILABLE;
+	}
+	if (schema_error != OK || envelope.size() != 3 || envelope[0].get_type() != Variant::INT || int64_t(envelope[0]) != 1 || envelope[1].get_type() != Variant::STRING || String(envelope[1]) != effective_key() || envelope[2].get_type() != Variant::ARRAY) {
 		return fail(ERR_INVALID_DATA, "Superposition protocol/key/schema mismatch.");
 	}
 	Array rows = envelope[2], normalized;
@@ -231,7 +359,7 @@ Error Superposition::apply_state(const PackedByteArray &bytes) {
 		Array row = rows[i];
 		Ref<SuperpositionProperty> rule = rules[i];
 		Variant value;
-		if (row.size() != 4 || row[0].get_type() != Variant::STRING || String(row[0]) != String(rule->get_property()) || row[1].get_type() != Variant::INT || int(row[1]) != rule->get_value_type() || row[2].get_type() != Variant::FLOAT || double(row[2]) != rule->get_quantization() || normalize(rule, row[3], value) != OK || value != row[3]) {
+		if (row.size() != 4 || row[0].get_type() != Variant::STRING || String(row[0]) != String(rule->get_property()) || row[1].get_type() != Variant::INT || int64_t(row[1]) != int64_t(rule->get_value_type()) || row[2].get_type() != Variant::FLOAT || double(row[2]) != rule->get_quantization() || normalize(rule, row[3], value) != OK || value != row[3]) {
 			return fail(ERR_INVALID_DATA, "Superposition type, quantization or property schema mismatch.");
 		}
 		normalized.push_back(value);
@@ -245,8 +373,11 @@ Error Superposition::apply_state(const PackedByteArray &bytes) {
 	}
 	for (int i = 0; i < rules.size(); i++) {
 		Ref<SuperpositionProperty> rule = rules[i];
-		if (!rule->is_smoothing() || (rule->get_value_type() != Variant::FLOAT && rule->get_value_type() != Variant::VECTOR3)) {
+		if (!rule->is_smoothing() || (rule->get_value_type() != Variant::FLOAT && rule->get_value_type() != Variant::VECTOR2 && rule->get_value_type() != Variant::VECTOR3 && rule->get_value_type() != Variant::COLOR)) {
 			target()->set(rule->get_property(), normalized[i]);
+			if (!callbacks.valid()) {
+				return ERR_UNAVAILABLE;
+			}
 		}
 	}
 	applied++;
@@ -276,6 +407,10 @@ void Superposition::clear_observer(int64_t peer) {
 	visibility.erase(peer);
 }
 Error Superposition::replicate_now() {
+	if (property_busy || schema_busy) {
+		return ERR_BUSY;
+	}
+	const ObjectID self_id = get_instance_id();
 	if (config.is_null() || !target()) {
 		return fail(ERR_UNCONFIGURED, "Configure a gameplay target and property schema.");
 	}
@@ -326,6 +461,7 @@ Error Superposition::replicate_now() {
 			if (!identity_matches) {
 				entity = 0;
 				applied_priority = 0;
+				delta_policy_initialized = false;
 				dirty = true;
 				owns_entity = false;
 				visibility.clear();
@@ -333,7 +469,14 @@ Error Superposition::replicate_now() {
 			}
 		}
 		const bool capture = entity == 0 || dirty || config.is_null() || config->get_capture_mode() == 0;
+		const uint64_t captured_generation = binding_generation;
 		PackedByteArray bytes = capture ? capture_state() : last_payload;
+		if (ObjectDB::get_instance(self_id) != this) {
+			return ERR_UNAVAILABLE;
+		}
+		if (binding_generation != captured_generation) {
+			return ERR_UNAVAILABLE;
+		}
 		if (!capture) {
 			++push_skips;
 		}
@@ -387,6 +530,17 @@ Error Superposition::replicate_now() {
 			skipped++;
 		}
 		dirty = false;
+		if (!delta_policy_initialized || applied_delta_replication != config->is_delta_replication()) {
+			Dictionary args;
+			args["entity"] = entity;
+			args["enabled"] = config->is_delta_replication();
+			Error e = Error(int(session->command("set_entity_delta_replication", args)));
+			if (e != OK) {
+				return fail(e, "Native delta replication policy rejected.");
+			}
+			applied_delta_replication = config->is_delta_replication();
+			delta_policy_initialized = true;
+		}
 		if (applied_priority != config->get_priority()) {
 			Dictionary args;
 			args["entity"] = entity;
@@ -480,7 +634,14 @@ Error Superposition::replicate_now() {
 					last_revision = -1;
 					desired.clear();
 				} else if (int64_t(row["revision"]) != last_revision) {
+					const uint64_t applied_generation = binding_generation;
 					Error e = apply_state(row["state"]);
+					if (ObjectDB::get_instance(self_id) != this) {
+						return ERR_UNAVAILABLE;
+					}
+					if (binding_generation != applied_generation) {
+						return ERR_UNAVAILABLE;
+					}
 					if (e != OK) {
 						return e;
 					}
@@ -497,11 +658,19 @@ Error Superposition::replicate_now() {
 	return OK;
 }
 void Superposition::smooth(double delta) {
+	CallbackScope callbacks(this);
+	if (!callbacks.entered()) {
+		return;
+	}
 	if (desired.is_empty() || !target() || (session.is_valid() && session->get_state() != "Connected")) {
 		return;
 	}
 	Array rules;
-	if (schema(rules) != OK || desired.size() != rules.size()) {
+	Error schema_error = schema(rules);
+	if (!callbacks.valid()) {
+		return;
+	}
+	if (schema_error != OK || desired.size() != rules.size()) {
 		return;
 	}
 	for (int i = 0; i < rules.size(); i++) {
@@ -518,28 +687,82 @@ void Superposition::smooth(double delta) {
 		if (!rule->is_smoothing()) {
 			continue;
 		}
+		Variant current = target()->get(rule->get_property());
+		if (!callbacks.valid()) {
+			return;
+		}
+		Variant checked;
+		if (normalize(rule, current, checked) != OK) {
+			return;
+		}
+		Variant next;
 		if (rule->get_value_type() == Variant::FLOAT) {
-			target()->set(rule->get_property(), Math::lerp(double(target()->get(rule->get_property())), double(desired[i]), weight));
+			next = Math::lerp(double(current), double(desired[i]), weight);
 		} else if (rule->get_value_type() == Variant::VECTOR3) {
-			target()->set(rule->get_property(), Vector3(target()->get(rule->get_property())).lerp(desired[i], weight));
+			next = Vector3(current).lerp(desired[i], weight);
+		} else if (rule->get_value_type() == Variant::VECTOR2) {
+			next = Vector2(current).lerp(desired[i], weight);
+		} else if (rule->get_value_type() == Variant::COLOR) {
+			next = Color(current).lerp(desired[i], weight);
+		} else {
+			continue;
+		}
+		target()->set(rule->get_property(), next);
+		if (!callbacks.valid()) {
+			return;
 		}
 	}
 }
+Node *Superposition::session_provider() const {
+	if (!session_path.is_empty()) {
+		Node *provider = get_node_or_null(session_path);
+		return provider && !Object::cast_to<Superposition>(provider) ? provider : nullptr;
+	}
+	for (Node *ancestor = get_parent(); ancestor; ancestor = ancestor->get_parent()) {
+		if (!Object::cast_to<Superposition>(ancestor) && ancestor->has_method("get_session")) {
+			return ancestor;
+		}
+	}
+	return nullptr;
+}
 void Superposition::_notification(int what) {
+	const ObjectID self_id = get_instance_id();
 	if (what == NOTIFICATION_READY) {
 		set_process(true);
 		notify_property_list_changed();
 	} else if (what == NOTIFICATION_PROCESS && enabled && !Engine::get_singleton()->is_editor_hint()) {
-		if (!session_path.is_empty()) {
-			Node *provider = get_node_or_null(session_path);
+		Node *provider = session_provider();
+		if (!manual_session && (provider || !session_path.is_empty())) {
 			if (provider) {
-				set_session(provider->get("session"));
+				const uint64_t provider_generation = binding_generation;
+				const ObjectID provider_id = provider->get_instance_id();
+				Variant discovered = provider->has_method("get_session") && !Object::cast_to<Superposition>(provider) ? provider->call("get_session") : provider->get("session");
+				if (ObjectDB::get_instance(self_id) != this) {
+					return;
+				}
+				if (!is_inside_tree() || is_queued_for_deletion() || ObjectDB::get_instance(provider_id) != provider || session_provider() != provider || manual_session || binding_generation != provider_generation) {
+					return;
+				}
+				bind_session(discovered);
 			} else {
-				set_session(Ref<EGPNetSession>());
+				bind_session(Ref<EGPNetSession>());
 			}
 		}
+		if (ObjectDB::get_instance(self_id) != this) {
+			return;
+		}
+		if (!is_inside_tree() || is_queued_for_deletion()) {
+			return;
+		}
 		double delta = get_process_delta_time();
+		const uint64_t presentation_generation = binding_generation;
 		smooth(delta);
+		if (ObjectDB::get_instance(self_id) != this) {
+			return;
+		}
+		if (binding_generation != presentation_generation) {
+			return;
+		}
 		elapsed += delta;
 		if (config.is_valid() && elapsed >= 1.0 / MAX(1.0, config->get_update_rate())) {
 			elapsed = 0;
@@ -554,6 +777,7 @@ void Superposition::_notification(int what) {
 	}
 }
 bool Superposition::_set(const StringName &name, const Variant &value) {
+	const ObjectID self_id = get_instance_id();
 	String s = name;
 	if (!s.begins_with("replicate/")) {
 		return false;
@@ -562,17 +786,30 @@ bool Superposition::_set(const StringName &name, const Variant &value) {
 	if (config.is_null()) {
 		config.instantiate();
 	}
-	auto rules = config->get_properties();
+	Ref<SuperpositionConfig> active_config = config;
+	auto rules = active_config->get_properties();
 	for (int i = 0; i < rules.size(); i++) {
 		Ref<SuperpositionProperty> rule = rules[i];
 		if (rule.is_valid() && rule->get_property() == property) {
 			if (!bool(value)) {
 				rules.remove_at(i);
-				config->set_properties(rules);
+				active_config->set_properties(rules);
 			} else {
 				rule->set_enabled(true);
 			}
+			if (ObjectDB::get_instance(self_id) != this) {
+				return true;
+			}
+			if (ObjectDB::get_instance(self_id) != this) {
+				return true;
+			}
 			notify_property_list_changed();
+			if (ObjectDB::get_instance(self_id) != this) {
+				return true;
+			}
+			if (ObjectDB::get_instance(self_id) != this) {
+				return true;
+			}
 			update_configuration_warnings();
 			return true;
 		}
@@ -581,10 +818,24 @@ bool Superposition::_set(const StringName &name, const Variant &value) {
 		Ref<SuperpositionProperty> rule;
 		rule.instantiate();
 		rule->set_property(property);
-		rule->set_value_type(target()->get(property).get_type());
+		CallbackScope callbacks(this);
+		if (!callbacks.entered()) {
+			return false;
+		}
+		Variant current = target()->get(property);
+		if (!callbacks.valid()) {
+			return false;
+		}
+		rule->set_value_type(current.get_type());
 		rules.push_back(rule);
-		config->set_properties(rules);
+		active_config->set_properties(rules);
+		if (ObjectDB::get_instance(self_id) != this) {
+			return true;
+		}
 		notify_property_list_changed();
+		if (ObjectDB::get_instance(self_id) != this) {
+			return true;
+		}
 		update_configuration_warnings();
 	}
 	return true;
@@ -622,7 +873,11 @@ void Superposition::_get_property_list(List<PropertyInfo> *list) const {
 		return;
 	}
 	List<PropertyInfo> properties;
+	const ObjectID self_id = get_instance_id();
 	target()->get_property_list(&properties);
+	if (ObjectDB::get_instance(self_id) != this) {
+		return;
+	}
 	for (const PropertyInfo &property : properties) {
 		if (supported(property.type) && (property.usage & (PROPERTY_USAGE_STORAGE | PROPERTY_USAGE_EDITOR)) && !(property.usage & PROPERTY_USAGE_READ_ONLY) && String(property.name).find("/") < 0) {
 			list->push_back(PropertyInfo(Variant::BOOL, "replicate/" + String(property.name), PROPERTY_HINT_NONE, "", PROPERTY_USAGE_EDITOR));
@@ -635,11 +890,16 @@ PackedStringArray Superposition::get_configuration_warnings() const {
 		warnings.push_back("Choose a Target node. Supported properties appear as Replicate checkboxes.");
 	}
 	Array rules;
-	if (schema(rules) != OK) {
-		warnings.push_back("Select 1-32 supported target properties and use matching server/client configuration.");
+	const ObjectID self_id = get_instance_id();
+	Error schema_error = schema(rules);
+	if (ObjectDB::get_instance(self_id) != this) {
+		return warnings;
 	}
-	if (session_path.is_empty() && session.is_null()) {
-		warnings.push_back("Set Session Path to your configured EGPNet node, or call set_session().");
+	if (schema_error != OK) {
+		warnings.push_back("Select 1-32 Boolean, Integer, Float, String, Vector2, Vector3 or Color properties and use matching server/client configuration.");
+	}
+	if (!session_provider() && session.is_null()) {
+		warnings.push_back("Place this node below a SuperpositionWorld, choose a Session Path providing get_session() or a session property, or call set_session().");
 	}
 	return warnings;
 }
@@ -651,6 +911,7 @@ Dictionary Superposition::get_statistics() const {
 	stats["dirty_skips"] = int64_t(skipped);
 	stats["push_skips"] = int64_t(push_skips);
 	stats["priority"] = applied_priority;
+	stats["delta_replication"] = delta_policy_initialized && applied_delta_replication;
 	stats["applied"] = int64_t(applied);
 	stats["rejected"] = int64_t(rejected);
 	stats["last_error"] = last_error;

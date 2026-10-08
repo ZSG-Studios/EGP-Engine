@@ -13,7 +13,6 @@ from typing import Any, TextIO
 
 sys.path.insert(0, root_directory := os.path.join(os.path.dirname(os.path.abspath(__file__)), "../../"))
 
-import version
 from misc.utility.color import Ansi, force_stderr_color, force_stdout_color
 
 # $DOCS_URL/path/to/page.html(#fragment-tag)
@@ -917,8 +916,10 @@ def translate(string: str) -> str:
 
 
 def get_git_branch() -> str:
-    if hasattr(version, "docs") and version.docs != "latest":
-        return version.docs
+    with open(os.path.join(root_directory, "version.lua"), encoding="utf-8") as source:
+        branch = re.search(r'docs_branch\s*=\s*"([^"]+)"', source.read())
+    if branch and branch.group(1) != "latest":
+        return branch.group(1)
 
     return "master"
 

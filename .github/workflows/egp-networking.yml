@@ -1,9 +1,9 @@
 name: EGP networking
 on:
   push:
-    paths: ["modules/egp_net/**", "thirdparty/yojimbo/**", "misc/scripts/validate_egp_net.py", ".github/workflows/egp-networking.yml"]
+    paths: ["modules/egp_net/**", "thirdparty/yojimbo/**", "misc/scripts/validate_egp_net.py", ".github/workflows/egp-networking.yml", "xmake.lua", "build/xmake/**", "misc/xmake/**", "misc/scripts/egp_xmake.py", "misc/scripts/test_egp_xmake_qualification.py"]
   pull_request:
-    paths: ["modules/egp_net/**", "thirdparty/yojimbo/**", "misc/scripts/validate_egp_net.py", ".github/workflows/egp-networking.yml"]
+    paths: ["modules/egp_net/**", "thirdparty/yojimbo/**", "misc/scripts/validate_egp_net.py", ".github/workflows/egp-networking.yml", "xmake.lua", "build/xmake/**", "misc/xmake/**", "misc/scripts/egp_xmake.py", "misc/scripts/test_egp_xmake_qualification.py"]
 concurrency:
   group: egp-networking-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
@@ -20,6 +20,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
+      - uses: ./.github/actions/godot-deps
       - run: python misc/scripts/validate_egp_net.py --configuration ${{ matrix.configuration }}
       - uses: actions/upload-artifact@v4
         if: always()

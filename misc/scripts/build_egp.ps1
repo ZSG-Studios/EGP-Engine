@@ -1,91 +1,54 @@
 [CmdletBinding()]
 param(
-    [ValidateSet('editor', 'template_debug', 'template_release', 'all')]
-    [string]$Target = 'editor',
-    [string]$Workers = $(if ($env:FASTBUILD_WORKERS) { $env:FASTBUILD_WORKERS } else { '10.77.64.1' }),
-    [ValidateRange(1, 256)]
-    [int]$Jobs = [Environment]::ProcessorCount,
+    [ValidateSet('editor', 'template_debug', 'template_release', 'all')][string]$Target = 'editor',
+    [ValidateSet('windows', 'linuxbsd', 'macos', 'android', 'ios', 'visionos', 'web')][string]$Platform = 'windows',
+    [string]$Arch = 'x86_64',
+    [ValidateRange(1, 256)][int]$Jobs = [Environment]::ProcessorCount,
     [switch]$Setup,
-    [switch]$CheckWorker,
-    [switch]$Local,
-    [switch]$DistVerbose,
-    [switch]$ForceRemote,
     [switch]$SkipManaged,
-    [string[]]$SConsArgs = @()
+    [string[]]$XmakeArgs = @()
 )
-
 $ErrorActionPreference = 'Stop'
 $projectRoot = [IO.Path]::GetFullPath((Join-Path $PSScriptRoot '../..'))
-$toolDir = Join-Path $projectRoot '.build/fastbuild/tool'
-$fbuild = Join-Path $toolDir 'FBuild.exe'
-$python = Join-Path $projectRoot '.build/venv/Scripts/python.exe'
+$toolRoot = Join-Path $projectRoot '.build/xmake'
+$tool = @((Join-Path $toolRoot 'xmake/xmake.exe'), (Join-Path $toolRoot 'xmake.exe')) | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+if (-not $tool) {
+    $installed = Get-Command xmake -ErrorAction SilentlyContinue
+    if ($installed) { $tool = $installed.Source }
+}
+if (-not $tool -and $Setup) {
+    if ($env:PROCESSOR_ARCHITECTURE -ne 'AMD64') { throw 'Automatic bootstrap supports Windows x64; install xmake 3.1.1 for this host manually.' }
+    New-Item -ItemType Directory -Force -Path $toolRoot | Out-Null
+    $tool = Join-Path $toolRoot 'xmake.exe'
+    $download = Join-Path $toolRoot 'xmake-download.exe'
+    Invoke-WebRequest 'https://github.com/xmake-io/xmake/releases/download/v3.1.1/xmake-bundle-v3.1.1.win64.exe' -OutFile $download
+    if ((Get-FileHash -LiteralPath $download -Algorithm SHA256).Hash -ne '5DE3D5167A8B5E8AD95AF2FBA9AB5A62A626D7E789350D0AFFC33AF450C4A9AD') { throw 'Pinned xmake download checksum mismatch.' }
+    Move-Item -LiteralPath $download -Destination $tool
+}
+if (-not $tool) { throw 'Run build_egp.ps1 -Setup or install xmake 3.1.1.' }
+$version = & $tool --version
+if ($LASTEXITCODE -ne 0 -or ($version -join "`n") -notmatch 'xmake v3\.1\.1') { throw 'EGP requires xmake 3.1.1.' }
+if ($Setup) { Write-Host "xmake 3.1.1 ready: $tool"; return }
+$previousXmake = $env:XMAKE_EXE
 Push-Location $projectRoot
 try {
-    if (-not (Test-Path -LiteralPath $fbuild)) {
-        New-Item -ItemType Directory -Force -Path $toolDir | Out-Null
-        $archive = Join-Path $projectRoot '.build/fastbuild/FASTBuild-Windows-x64-v1.20.zip'
-        Invoke-WebRequest 'https://www.fastbuild.org/downloads/v1.20/FASTBuild-Windows-x64-v1.20.zip' -OutFile $archive
-        Expand-Archive -LiteralPath $archive -DestinationPath $toolDir -Force
-    }
-    $version = & $fbuild -version
-    if ($LASTEXITCODE -ne 0 -or $version -notmatch 'FASTBuild v1\.20 ') {
-        throw 'EGP requires FASTBuild v1.20 to match the worker.'
-    }
-    if (-not (Test-Path -LiteralPath $python)) {
-        & python -m venv .build/venv
-        if ($LASTEXITCODE -ne 0) { throw 'Could not create the build Python environment.' }
-    }
-    & $python -c 'import SCons; assert tuple(map(int, SCons.__version__.split("."))) >= (4, 10, 1)'
-    if ($LASTEXITCODE -ne 0) {
-        & $python -m pip install 'scons==4.11.1'
-        if ($LASTEXITCODE -ne 0) { throw 'Could not install SCons.' }
-    }
-    if ($CheckWorker -or $ForceRemote) {
-        foreach ($worker in $Workers.Split(';', [StringSplitOptions]::RemoveEmptyEntries)) {
-            $client = [Net.Sockets.TcpClient]::new()
-            try {
-                $connection = $client.ConnectAsync($worker.Trim(), 31264)
-                if (-not $connection.Wait(5000) -or -not $client.Connected) {
-                    throw "FASTBuild worker $worker`:31264 is unreachable. Check the WireGuard tunnel."
-                }
-                Write-Host "FASTBuild worker $worker`:31264 is reachable."
-            } finally { $client.Dispose() }
+    $env:XMAKE_EXE = $tool
+    $targets = if ($Target -eq 'all') { @('editor', 'template_debug', 'template_release') } else { @($Target) }
+    foreach ($buildTarget in $targets) {
+        $options = @("arch=$Arch", 'module_mono_enabled=yes', 'angle=no', 'accesskit=no', 'd3d12=no')
+        if ($buildTarget -eq 'editor') { $options += 'dev_build=yes' }
+        $options += $XmakeArgs
+        $optionJson = ConvertTo-Json -InputObject @($options) -Compress
+        $resultRoot = Join-Path $projectRoot '.build/xmake-invocation'
+        New-Item -ItemType Directory -Force -Path $resultRoot | Out-Null
+        $resultPath = Join-Path $resultRoot ([Guid]::NewGuid().ToString() + '.json')
+        & $tool lua (Join-Path $PSScriptRoot 'build_egp.lua') $Platform $buildTarget $Jobs (Join-Path $projectRoot '.build/xmake-cache') $optionJson 'build' $resultPath
+        if ($LASTEXITCODE -ne 0) { throw "EGP $buildTarget xmake build failed (exit $LASTEXITCODE)." }
+        if (-not (Test-Path -LiteralPath $resultPath -PathType Leaf)) { throw 'Native build result receipt is missing.' }
+        $result = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
+        if ($result.platform -ne $Platform -or $result.target -ne $buildTarget -or -not (Test-Path -LiteralPath $result.editor -PathType Leaf)) { throw 'Native build result disagrees with the requested target or output.' }
+        if ($buildTarget -eq 'editor' -and -not $SkipManaged -and $result.mono -eq $true) {
+            & (Join-Path $PSScriptRoot 'build_egp_managed.ps1') -Editor $result.editor -Platform $result.platform -Precision $result.precision -NoDeprecated:($result.deprecated -eq $false)
         }
     }
-    if ($Setup) {
-        Write-Host "FASTBuild v1.20 ready: $fbuild"
-        return
-    }
-    if ($ForceRemote -and $Local) { throw 'ForceRemote and Local cannot be combined.' }
-    if ($Target -eq 'all') {
-        foreach ($buildTarget in @('editor', 'template_debug', 'template_release')) {
-            $targetParameters = @{}
-            foreach ($parameterName in $PSBoundParameters.Keys) {
-                if ($parameterName -ne 'Target') { $targetParameters[$parameterName] = $PSBoundParameters[$parameterName] }
-            }
-            $targetParameters['Target'] = $buildTarget
-            & $PSCommandPath @targetParameters
-        }
-        [IO.File]::WriteAllText((Join-Path $projectRoot '.build/fastbuild/entry-all.stamp'), [DateTime]::UtcNow.ToString('O'))
-        return
-    }
-    $buildArgs = @(
-        '-m', 'SCons', '-j', "$Jobs", 'platform=windows', 'arch=x86_64', "target=$Target",
-        'module_mono_enabled=yes', 'angle=no', 'accesskit=no', 'd3d12=no', 'fastbuild=yes', "fastbuild_exe=$fbuild",
-        "fastbuild_workers=$Workers", "fastbuild_dist=$(-not $Local)",
-        "fastbuild_distverbose=$([bool]$DistVerbose)", "fastbuild_forceremote=$([bool]$ForceRemote)"
-    ) + $SConsArgs
-    if ($Target -eq 'editor') {
-        # Embed bindings for the engine's actual API, including native fork modules.
-        $editorArgs = @($buildArgs | Select-Object -Skip 2 | Where-Object { $_ -notlike 'target=*' })
-        & $python (Join-Path $PSScriptRoot 'build_egp_cpp_editor.py') -- @editorArgs
-    } else {
-        & $python @buildArgs
-    }
-    if ($LASTEXITCODE -ne 0) { throw "EGP $Target build failed (exit $LASTEXITCODE)." }
-    if ($Target -eq 'editor' -and -not $SkipManaged) {
-        & (Join-Path $PSScriptRoot 'build_egp_managed.ps1')
-    }
-    $stamp = Join-Path $projectRoot ".build/fastbuild/entry-$Target.stamp"
-    [IO.File]::WriteAllText($stamp, [DateTime]::UtcNow.ToString('O'))
-} finally { Pop-Location }
+} finally { $env:XMAKE_EXE = $previousXmake; Pop-Location }

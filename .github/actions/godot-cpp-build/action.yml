@@ -1,46 +1,34 @@
-name: Build godot-cpp
-description: Build godot-cpp with the provided options.
-
+name: Build godot-cpp fixture
+description: Compile the upstream extension fixture against EGP's generated SDK using native xmake.
 inputs:
   bin:
-    description: Path to the Godot binary.
+    description: Path to the EGP editor.
     required: true
-    type: string
-  scons-flags:
-    description: Additional SCons flags.
-    type: string
-  scons-cache:
-    description: The SCons cache path.
-    default: ${{ github.workspace }}/.scons_cache/
-    type: string
   godot-cpp-branch:
-    description: The godot-cpp branch.
+    description: Upstream fixture branch.
     default: master
-    type: string
-
 runs:
   using: composite
   steps:
-    - name: Checkout
+    - name: Checkout upstream fixture
       uses: actions/checkout@v7
       with:
-        submodules: recursive
         repository: godotengine/godot-cpp
         ref: ${{ inputs.godot-cpp-branch }}
         path: godot-cpp
-
-    - name: Extract API
-      shell: sh
-      run: ${{ inputs.bin }} --headless --dump-gdextension-interface --dump-extension-api
-
-    - name: Prepare EGP test fixture
-      shell: sh
-      run: |
-        git -C ./godot-cpp apply --check "${{ github.workspace }}/.github/actions/godot-cpp-build/egp-test.patch"
-        git -C ./godot-cpp apply "${{ github.workspace }}/.github/actions/godot-cpp-build/egp-test.patch"
-
-    - name: SCons Build
-      shell: sh
+    - name: Extract matching API and SDK
+      shell: bash
       env:
-        SCONS_CACHE: ${{ inputs.scons-cache }}
-      run: scons --directory=./godot-cpp/test "gdextension_dir=${{ github.workspace }}" ${{ inputs.scons-flags }}
+        EGP_EDITOR: ${{ inputs.bin }}
+      run: |
+        "$EGP_EDITOR" --headless --dump-gdextension-interface --dump-extension-api
+        xmake lua misc/scripts/extract_egp_cpp_sdk.lua --api "${{ github.workspace }}/extension_api.json" --output "${{ github.workspace }}/.build/upstream-cpp-sdk"
+    - name: Prepare EGP test fixture
+      shell: bash
+      run: |
+        git -C godot-cpp apply --check "${{ github.workspace }}/.github/actions/godot-cpp-build/egp-test.patch"
+        git -C godot-cpp apply "${{ github.workspace }}/.github/actions/godot-cpp-build/egp-test.patch"
+    - name: Build extension with xmake
+      shell: bash
+      run: |
+        xmake lua misc/scripts/build_egp_cpp_extension.lua --project "${{ github.workspace }}/godot-cpp/test" --sdk "${{ github.workspace }}/.build/upstream-cpp-sdk" --build-dir "${{ github.workspace }}/.build/upstream-cpp-extension" --output-dir "${{ github.workspace }}/godot-cpp/test/project/bin" --name libgdexample.linux.template_debug.x86_64 --sources 'src/**.cpp' --mode debug --platform linux --arch x86_64 --doc-classes "${{ github.workspace }}/godot-cpp/test/doc_classes" --compressor "${{ github.workspace }}/.build/xmake-host-tools/linux-x86_64/bin/egp_compress"

@@ -1,7 +1,7 @@
 extends SceneTree
 
 # Run in a disposable project using: EGP --headless --editor --path <project> --script <this file>
-# A compiler and CMake must be available. The bindings are extracted from the editor itself.
+# A compiler and xmake must be available. The bindings are extracted from the editor itself.
 var panel: Node
 var diagnostics: Array = []
 
@@ -70,12 +70,61 @@ func capture_ui(stage: String) -> void:
 		return
 	print("EGP_CPP_UI_CAPTURED: " + stage)
 
+func finish_fixture() -> void:
+	quit(0)
+
+func verify_cache_recovery() -> bool:
+	var isolated_root := OS.get_environment("EGP_CPP_UI_CACHE_ROOT").replace("\\", "/")
+	if isolated_root.is_empty():
+		print("EGP_CPP_CACHE_RECOVERY_SKIPPED: editor cache isolation unavailable")
+		return true
+	var cache_path := EditorInterface.get_editor_paths().get_cache_dir().replace("\\", "/")
+	if not require(cache_path.begins_with(isolated_root + "/"), "Recovery fixture cache is not isolated"):
+		return false
+	var sdk_root := cache_path.path_join("egp_cpp/sdk")
+	var folders := DirAccess.get_directories_at(sdk_root)
+	if not require(folders.size() == 1, "Isolated SDK extraction was not found"):
+		return false
+	var sdk := sdk_root.path_join(folders[0])
+	var marker_path := sdk.path_join(".complete")
+	var expected_hash := FileAccess.get_file_as_string(marker_path)
+	if not require(expected_hash.length() == 64, "SDK completion marker is not a SHA-256 identity"):
+		return false
+	var marker := FileAccess.open(marker_path, FileAccess.WRITE)
+	marker.store_string("wrong SDK identity")
+	marker.close()
+	if not require(panel.create_extension("cache_marker") == OK, "SDK with a mismatched marker did not recover"):
+		return false
+	await wait_for_filesystem()
+	if not require(FileAccess.get_file_as_string(marker_path) == expected_hash, "SDK completion identity was not restored"):
+		return false
+	var required_path := sdk.path_join("tools/run_project.lua")
+	var original := FileAccess.get_file_as_string(required_path)
+	if not require(DirAccess.remove_absolute(required_path) == OK, "Could not induce isolated incomplete SDK cache"):
+		return false
+	if not require(panel.create_extension("cache_required") == OK, "SDK with a missing required file did not recover"):
+		return false
+	await wait_for_filesystem()
+	if not require(FileAccess.get_file_as_string(required_path) == original, "Required SDK file was not restored"):
+		return false
+	print("EGP_CPP_CACHE_RECOVERY_PASSED")
+	return true
+
 func run_test() -> void:
 	await wait_for_filesystem()
 	var panels := root.find_children("NativeExtensionEditor", "", true, false)
 	if not require(panels.size() == 1, "Built-in C++ editor panel was not found"):
 		return
 	panel = panels[0]
+	if OS.get_environment("EGP_CPP_UI_CACHE_ONLY") == "1":
+		if not require(panel.create_extension("cache_initial") == OK, "Isolated cache fixture scaffolding failed"):
+			return
+		await wait_for_filesystem()
+		if not await verify_cache_recovery():
+			return
+		print("EGP_CPP_CACHE_ONLY_PASSED")
+		finish_fixture()
+		return
 	print("EGP_CPP_STAGE: empty and invalid-name workflow controls")
 	var create_button := panel.find_child("CreateExtension", true, false) as Button
 	var debug_button := panel.find_child("BuildDebug", true, false) as Button
@@ -136,13 +185,18 @@ func run_test() -> void:
 	if not require(panel.get_last_build_result() == 0 and ClassDB.class_exists("EGP_second_Node"),
 			"Second extension failed to reuse the SDK library and register its node"):
 		return
+	var cache_output := panel.find_children("*", "RichTextLabel", true, false)
+	if not require(cache_output.size() == 1
+			and not cache_output[0].get_parsed_text().contains("<godot-cpp> compiling"),
+			"A second native project rebuilt the shared SDK instead of using its archive"):
+		return
 	var descriptor := "res://extensions/smoke/smoke.gdextension"
 	print("EGP_CPP_STAGE: deliberate compile failure and diagnostic navigation")
 	var before := FileAccess.get_file_as_string(descriptor)
 	var source_path := "res://extensions/smoke/src/extension.cpp"
 	var source := FileAccess.get_file_as_string(source_path)
 	var file := FileAccess.open(source_path, FileAccess.WRITE)
-	file.store_string(source + "\n#error EGP deliberate diagnostic fixture\n")
+	file.store_string(source + "\n#pragma message(\"\\033]8;;https://example.invalid\\aEGP terminal link fixture\\033]8;;\\a\")\n#error EGP deliberate diagnostic fixture\n")
 	file.close()
 	if not require(panel.build_extension("smoke", false) == OK, "Failed-build fixture did not start"):
 		return
@@ -162,6 +216,11 @@ func run_test() -> void:
 	var logs := panel.find_children("*", "RichTextLabel", true, false)
 	if not require(logs.size() == 1 and logs[0].get_parsed_text().contains("EGP deliberate diagnostic fixture"),
 			"Compiler diagnostics were not captured by the editor panel"):
+		return
+	var compiler_output: String = logs[0].get_parsed_text()
+	if not require(not compiler_output.contains(String.chr(27)) and not compiler_output.contains("[0m")
+			and not compiler_output.contains("]8;;https://example.invalid")
+			and compiler_output.contains("EGP terminal link fixture"), "Terminal escapes obscured compiler diagnostics"):
 		return
 	if not require(not diagnostics.is_empty() and str(diagnostics[-1][0]).ends_with("extension.cpp"),
 			"Compiler source location was not parsed"):
@@ -185,6 +244,27 @@ func run_test() -> void:
 	if not require(node.get_message() == "Hello after rebuild!", "Reload kept the old C++ implementation"):
 		return
 	node.free()
+	print("EGP_CPP_STAGE: descriptor publication failure preserves previous build")
+	var previous_descriptor := FileAccess.get_file_as_string(descriptor)
+	var pending_path := descriptor + ".pending-" + str(OS.get_process_id())
+	if not require(DirAccess.make_dir_absolute(pending_path) == OK, "Could not induce a descriptor publication conflict"):
+		return
+	if not require(panel.build_extension("smoke", false) == OK, "Descriptor conflict build did not start"):
+		return
+	if not await finish_build():
+		return
+	if not require(panel.get_last_build_result() != 0 and panel.get_status().contains("Descriptor transaction")
+			and panel.get_status().contains("previous descriptor is unchanged"), "Publication error lost its precise recovery guidance"):
+		return
+	if not require(FileAccess.get_file_as_string(descriptor) == previous_descriptor, "Publication failure changed the last working descriptor"):
+		return
+	node = ClassDB.instantiate("EGP_smoke_Node")
+	if not require(node.get_message() == "Hello after rebuild!", "Publication failure changed the loaded working extension"):
+		return
+	node.free()
+	if not require(DirAccess.remove_absolute(pending_path) == OK, "Could not remove fixture transaction conflict"):
+		return
+	print("EGP_CPP_DESCRIPTOR_FAILURE_PASSED")
 	print("EGP_CPP_STAGE: release build and export mappings")
 	if not require(panel.build_extension("smoke", true) == OK, "Release build did not start"):
 		return
@@ -198,4 +278,4 @@ func run_test() -> void:
 		return
 	await capture_ui("03-release-ready")
 	print("EGP_CPP_EDITOR_SMOKE_PASSED")
-	quit(0)
+	finish_fixture()

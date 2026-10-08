@@ -5,13 +5,14 @@ import hashlib
 import json
 import os
 import subprocess
+import sys
 import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
-def main():
+def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, required=True)
     parser.add_argument("--output", type=Path, default=ROOT / ".build/egp-cpp-ui")
@@ -20,7 +21,10 @@ def main():
         action="store_true",
         help="Render the disposable editor hidden and capture embedded panel screenshots; no input injection",
     )
-    args = parser.parse_args()
+    parser.add_argument("--cache-recovery-only", action="store_true", help=argparse.SUPPRESS)
+    args = parser.parse_args(argv)
+    if args.cache_recovery_only and not (os.name == "nt" or sys.platform.startswith("linux")):
+        parser.error("Cache recovery requires verified Windows/Linux editor-state isolation")
     engine = args.engine.resolve()
     output = args.output.resolve() / str(time.time_ns())
     output.mkdir(parents=True)
@@ -73,6 +77,24 @@ def main():
             command.extend(["--rendering-method", "gl_compatibility"])
         launch_options = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
         environment = os.environ.copy()
+        environment["EGP_CPP_UI_CACHE_ONLY"] = "1" if args.cache_recovery_only else "0"
+        # Recovery tests may damage only this disposable editor's SDK extraction.
+        # macOS system paths ignore XDG variables; its cache remains untouched.
+        isolated_cache = args.cache_recovery_only and (os.name == "nt" or sys.platform.startswith("linux"))
+        receipt["cache_recovery_required"] = isolated_cache
+        if isolated_cache:
+            cache_root = output / "editor-state"
+            cache_root.mkdir()
+            environment["EGP_CPP_UI_CACHE_ROOT"] = str(cache_root)
+            if os.name == "nt":
+                environment["LOCALAPPDATA"] = str(cache_root / "local")
+                environment["APPDATA"] = str(cache_root / "roaming")
+            else:
+                environment["XDG_CACHE_HOME"] = str(cache_root / "cache")
+                environment["XDG_CONFIG_HOME"] = str(cache_root / "config")
+                environment["XDG_DATA_HOME"] = str(cache_root / "data")
+        else:
+            environment.pop("EGP_CPP_UI_CACHE_ROOT", None)
         if args.capture_ui:
             capture_dir = output / "screenshots"
             capture_dir.mkdir()
@@ -98,15 +120,31 @@ def main():
     receipt["passed"] = (
         receipt["exit_code"] == 0
         and not receipt.get("timed_out")
-        and "EGP_CPP_EDITOR_SMOKE_PASSED" in text
+        and (
+            "EGP_CPP_CACHE_ONLY_PASSED" in text
+            if args.cache_recovery_only
+            else "EGP_CPP_EDITOR_SMOKE_PASSED" in text and "EGP_CPP_DESCRIPTOR_FAILURE_PASSED" in text
+        )
+        and (not receipt["cache_recovery_required"] or "EGP_CPP_CACHE_RECOVERY_PASSED" in text)
         and all(marker not in text for marker in ("ERROR:", "leaked", "Scan thread aborted"))
     )
+    if args.cache_recovery_only:
+        receipt["scope"] = (
+            "Isolated SDK extraction recovery for invalid identity and missing required files; no compiler or reload."
+        )
     if args.capture_ui:
         receipt["screenshots"] = [str(path) for path in sorted((output / "screenshots").glob("*.png"))]
         receipt["passed"] = receipt["passed"] and len(receipt["screenshots"]) == 3
         receipt["scope"] = (
             "Hidden renderer editor control/build/diagnostic/reload fixture with panel screenshots; no physical input or running-game reload claim."
         )
+    if receipt["passed"] and not args.cache_recovery_only and (os.name == "nt" or sys.platform.startswith("linux")):
+        # Run cache damage separately: the regular UI reuses the existing compiled
+        # SDK cache, while this isolated editor exercises extraction without builds.
+        cache_output = output / "cache-recovery"
+        cache_result = main(["--engine", str(engine), "--output", str(cache_output), "--cache-recovery-only"])
+        receipt["cache_recovery_receipts"] = [str(path) for path in cache_output.glob("*/receipt.json")]
+        receipt["passed"] = cache_result == 0
     (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     print(f"{'PASS' if receipt['passed'] else 'FAIL'}: {output / 'receipt.json'}")
     return 0 if receipt["passed"] else 1

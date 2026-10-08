@@ -1,9 +1,9 @@
 # Determines if build actions should occur after static checks are ran. Broadly speaking, these
-#  files changing would result in SCons rebuilding the engine, or are otherwise pertinent to the
+#  files changing would result in xmake rebuilding the engine, or are otherwise pertinent to the
 #  buildsystem itself.
 sources:
   - .github/{actions/*,workflows}/*.yml
-  - "**/{SConstruct,SCsub,*.py}"
+  - "**/*.{lua,py}"
   - "**/*.{h,hpp,hh,hxx,c,cpp,cc,cxx,m,mm,inc,glsl}"
   - core/extension/gdextension_interface.json
   - misc/extension_api_validation/**
@@ -18,6 +18,8 @@ sources:
 clangd:
   - "**/*.{h,hpp,hxx,hh,c,cpp,cxx,cc}"
   - "!**/thirdparty/**"
+  # Host packaging tools are compiled by their isolated native xmake project.
+  - "!build/xmake/tools/**"
   # GDExtension sources use the exact generated SDK and their dedicated compile probes.
   - "!misc/egp/generated_api/cpp/**"
   - "!modules/egp_net/samples/trilingual/extension/**"

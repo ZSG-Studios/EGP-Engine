@@ -61,9 +61,10 @@ int main() {
 		return false;
 	};
 	check(server.listen(0, "127.0.0.1") == Result::Ok, "listen");
-	for (auto *client : clients) {
-		check(client->connect_loopback("127.0.0.1", server.statistics().local_port) == Result::Ok, "native client admission");
-	}
+	check(first.connect_loopback("127.0.0.1", server.statistics().local_port) == Result::Ok, "first native client admission");
+	check(until([&] { return first.state() == "Connected" && server.peers().size() == 1; }), "first peer identity established");
+	const int64_t constrained = server.peers()[0].id;
+	check(second.connect_loopback("127.0.0.1", server.statistics().local_port) == Result::Ok, "second native client admission");
 	check(until([&] { return first.state() == "Connected" && second.state() == "Connected"; }), "native baselines");
 	std::array<uint64_t, 4> handles{};
 	for (auto &handle : handles) {
@@ -72,10 +73,10 @@ int main() {
 	check(until([&] { return first.entities().size() == 4 && second.entities().size() == 4; }), "initial membership");
 	auto peers = server.peers();
 	check(peers.size() == 2, "independent peers");
-	// Explicit identities are not needed: first fixture peer receives the constrained budget.
-	int64_t constrained = peers[0].id;
+	// Capture identity before the second admission; priority delivery rates may tie across peers.
+	const int64_t generous_peer = peers[0].id == constrained ? peers[1].id : peers[0].id;
 	check(server.set_peer_replication_budget(constrained, 1024) == Result::Ok, "per-peer byte update budget");
-	check(server.set_peer_replication_budget(peers[1].id, 8192) == Result::Ok, "independent larger update budget");
+	check(server.set_peer_replication_budget(generous_peer, 8192) == Result::Ok, "independent larger update budget");
 	check(server.set_replication_priority(handles[0], 8) == Result::Ok, "higher priority gameplay state");
 	check(server.set_replication_priority(handles[0], 0) == Result::Invalid && server.set_replication_priority(handles[0], 17) == Result::Invalid, "priority range validated");
 	check(first.set_replication_priority(handles[0], 2) == Result::Unauthorized && first.set_peer_replication_budget(0, 1) == Result::Unauthorized, "clients cannot configure server admission");
@@ -108,7 +109,7 @@ int main() {
 		return std::chrono::steady_clock::now() - started > std::chrono::seconds(4);
 	},
 			4500);
-	auto limited = server.replication_statistics(constrained), generous = server.replication_statistics(peers[1].id);
+	auto limited = server.replication_statistics(constrained), generous = server.replication_statistics(generous_peer);
 	check(limited && generous && limited->budget_deferrals > 0, "budget deferrals observable");
 	check(limited->sent_bytes <= 4160 + 1024 * 5 && generous->sent_bytes > limited->sent_bytes * 2, "independent peer envelope byte budgets");
 	// Peer callback order is normally first→second but resolve the constrained receive counters from traffic.

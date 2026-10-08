@@ -93,6 +93,45 @@ func _ready() -> void:
 	buffer.submit(1, 131, Transform3D(Basis(teleport_rotation), Vector3(20, 0, 0)), Vector3.ZERO)
 	check(buffer.sample(1).basis.get_rotation_quaternion().angle_to(teleport_rotation) < 0.001, "Teleport clears angular correction")
 	buffer.clear()
+	# Explicit epochs distinguish short teleports from high-speed sparse motion.
+	buffer.configure(60, 0.2, 0.1)
+	check(buffer.submit(1, 100, Transform3D.IDENTITY, Vector3(6, 0, 0), 7, Vector3(0, PI, 0)), "Explicit epoch initializes")
+	buffer.submit(2, 130, Transform3D.IDENTITY, Vector3.ZERO, 0)
+	for frame in 60: buffer.advance(1.0 / 60.0)
+	var angular_pose: Transform3D = buffer.sample(1)
+	check(angular_pose.basis.get_rotation_quaternion().angle_to(Quaternion(Vector3.UP, PI * 0.1)) < 0.001, "World-space angular extrapolation is capped at100ms")
+	check(buffer.submit(1, 131, Transform3D(Basis(Vector3.RIGHT, 0.4), Vector3(1, 0, 0)), Vector3.ZERO, 8), "Short explicit reset accepted")
+	var reset_pose: Transform3D = buffer.sample(1)
+	check(reset_pose.origin.is_equal_approx(Vector3(1, 0, 0)) and reset_pose.basis.get_rotation_quaternion().angle_to(Quaternion(Vector3.RIGHT, 0.4)) < 0.001, "Short reset clears position and angular history immediately")
+	check(not buffer.submit(1, 140, Transform3D.IDENTITY, Vector3.ZERO, 7), "Newer tick with stale epoch cannot revert reset")
+	check(not buffer.submit(1, 132, Transform3D.IDENTITY, Vector3.ZERO), "Legacy packet cannot downgrade explicit epoch")
+	check(not buffer.submit(1, 130, Transform3D.IDENTITY, Vector3.ZERO, 9), "Reordered older timestamp rejected even with newer epoch")
+	check(buffer.submit(1, 132, Transform3D(Basis.IDENTITY, Vector3(20, 0, 0)), Vector3.ZERO, 8), "Large ordinary explicit-epoch movement accepted")
+	check(buffer.get_statistics().epoch_resets == 1 and buffer.get_statistics().teleports == 1, "Large ordinary move is not falsely classified as teleport")
+	check(buffer.get_statistics().rejected_epochs == 2, "Stale epoch rejection diagnosed")
+	check(not buffer.submit(1, 133, Transform3D.IDENTITY, Vector3.ZERO, 8, Vector3(INF,0,0)), "Invalid angular velocity rejected")
+	# Adaptive buffering learns sparse interest cadence without moving time backward.
+	var fixed: RefCounted = ClassDB.instantiate("EGPNetSnapshotInterpolator")
+	var adaptive: RefCounted = ClassDB.instantiate("EGPNetSnapshotInterpolator")
+	fixed.configure(60, 0.2, 0.1)
+	adaptive.configure(60, 0.2, 0.1, 0.4)
+	var previous_adaptive: float = -INF
+	for tick in range(1, 1201):
+		for timeline in [fixed, adaptive]:
+			if tick % 3 == 0: timeline.submit(2, tick, Transform3D.IDENTITY, Vector3.ZERO, 0)
+			# Two missing updates + distant interest: deterministic24tick cadence.
+			if tick % 24 == 0: timeline.submit(1, tick, Transform3D(Basis.IDENTITY, Vector3(tick / 60.0, 0, 0)), Vector3.RIGHT, 0)
+			var timeline_tick: float = timeline.advance(1.0 / 60.0)
+			if timeline == adaptive and tick >= 3:
+				check(timeline_tick >= previous_adaptive, "Adaptive playback remains monotonic under sparse arrivals")
+				previous_adaptive = timeline_tick
+			if tick >= 24: timeline.sample(1, 1.0 / 60.0)
+	var fixed_stats: Dictionary = fixed.get_statistics().entities[1]
+	var adaptive_stats: Dictionary = adaptive.get_statistics().entities[1]
+	check(adaptive_stats.held_moving_samples < fixed_stats.held_moving_samples, "Adaptive cadence buffer measurably reduces moving-prop holds")
+	check(adaptive.get_statistics().target_delay_seconds <= 0.4, "Adaptive delay is bounded")
+	print("SNAPSHOT_ADAPTIVE_METRICS " + JSON.stringify({"fixed_held":fixed_stats.held_moving_samples,"adaptive_held":adaptive_stats.held_moving_samples,"target_delay_seconds":adaptive.get_statistics().target_delay_seconds}))
+	buffer.clear()
 	for entity in range(1, 1025): buffer.submit(entity, 10, Transform3D.IDENTITY, Vector3.ZERO)
 	check(buffer.get_statistics().tracked_entities == 1024, "Track capacity")
 	check(not buffer.submit(1025, 10, Transform3D.IDENTITY, Vector3.ZERO), "Reject capacity overflow")

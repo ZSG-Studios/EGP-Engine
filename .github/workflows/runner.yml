@@ -20,6 +20,11 @@ jobs:
 
   # Second stage: Run all the builds and some of the tests.
 
+  xmake-contract:
+    name: Native xmake contracts
+    needs: static-checks
+    uses: ./.github/workflows/xmake_contract.yml
+
   android-build:
     name: 🤖 Android
     needs: static-checks
@@ -33,6 +38,12 @@ jobs:
     needs: static-checks
     if: needs.static-checks.outputs.sources-changed == 'true' || github.event_name != 'pull_request'
     uses: ./.github/workflows/ios_builds.yml
+
+  visionos-build:
+    name: visionOS
+    needs: static-checks
+    if: needs.static-checks.outputs.sources-changed == 'true' || github.event_name != 'pull_request'
+    uses: ./.github/workflows/visionos_builds.yml
 
   linux-build:
     name: 🐧 Linux

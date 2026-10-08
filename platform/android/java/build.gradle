@@ -3,6 +3,7 @@ plugins {
 }
 
 apply from: 'app/config.gradle'
+apply from: 'scripts/native-build.gradle'
 apply from: 'scripts/publish-root.gradle'
 
 ext {
@@ -35,7 +36,7 @@ ext {
     // Used by gradle to specify which architecture to build for by default when running
     // `./gradlew build` (this command is usually used by Android Studio).
     // If building manually on the command line, it's recommended to use the
-    // `./gradlew generateGodotTemplates` build command instead after running the `scons` command(s).
+    // `./gradlew generateGodotTemplates` build command instead after building native libraries with xmake.
     // The {selectedAbis} values must be from the {supportedAbis} values.
     selectedAbis = ["arm64"]
 
@@ -45,10 +46,6 @@ ext {
 
     // Used by the editor module to set abiFilters.
     detectedAbis = []
-}
-
-def getSconsTaskName(String flavor, String buildType, String abi) {
-    return "compileGodotNativeLibs" + flavor.capitalize() + buildType.capitalize() + abi.capitalize()
 }
 
 /**
@@ -68,10 +65,10 @@ task zipGradleBuild(type: Zip) {
 }
 
 /**
- * Returns true if the scons build tasks responsible for generating the Godot native shared
+ * Returns true if the native build tasks responsible for generating the Godot native shared
  * libraries should be excluded.
  */
-def excludeSconsBuildTasks() {
+def excludeNativeBuildTasks() {
     return !isAndroidStudio() && !project.hasProperty("generateNativeLibs")
 }
 
@@ -79,15 +76,15 @@ def excludeSconsBuildTasks() {
  * Generates the list of build tasks that should be excluded from the build process.\
  */
 def templateExcludedBuildTask() {
-    // We exclude these gradle tasks so we can run the scons command manually.
+    // Native libraries may already have been built by the xmake graph.
     def excludedTasks = []
-    if (excludeSconsBuildTasks()) {
+    if (excludeNativeBuildTasks()) {
         logger.info("Excluding Android studio build tasks")
         for (String flavor : supportedFlavors) {
             String[] supportedBuildTypes = supportedFlavorsBuildTypes[flavor]
             for (String buildType : supportedBuildTypes) {
                 for (String abi : selectedAbis) {
-                    excludedTasks += ":lib:" + getSconsTaskName(flavor, buildType, abi)
+                    excludedTasks += ":lib:" + getNativeTaskName(flavor, buildType, abi)
                 }
             }
         }
@@ -119,8 +116,8 @@ def generateBuildTasks(String flavor = "template", String edition = "standard", 
     def buildTasks = []
 
     // Only build the binary files for which we have native shared libraries unless we intend
-    // to run the scons build tasks.
-    boolean excludeSconsBuildTasks = excludeSconsBuildTasks()
+    // to run the native build tasks.
+    boolean excludeNativeBuildTasks = excludeNativeBuildTasks()
     boolean isTemplate = flavor == "template"
     String libsDir = isTemplate ? "lib/libs/" : "lib/libs/tools/"
     def validAbis = ["arm64-v8a", "armeabi-v7a", "x86_64", "x86"]
@@ -137,7 +134,7 @@ def generateBuildTasks(String flavor = "template", String edition = "standard", 
 
         String targetSuffix = target
 
-        if (!excludeSconsBuildTasks || (targetLibs != null
+        if (!excludeNativeBuildTasks || (targetLibs != null
             && targetLibs.isDirectory()
             && targetLibs.listFiles() != null
             && targetLibs.listFiles().length > 0)) {
@@ -228,7 +225,7 @@ def generateBuildTasks(String flavor = "template", String edition = "standard", 
  * Generate the Godot Editor binaries for Android devices.
  *
  * Note: Unless the 'generateNativeLibs` argument is specified, the Godot 'tools' shared libraries
- * must have been generated (via scons) prior to running this gradle task.
+ * must have been generated (via xmake) prior to running this gradle task.
  * The task will only build the binaries for which the shared libraries is available.
  */
 task generateGodotEditor {
@@ -240,7 +237,7 @@ task generateGodotEditor {
  * Generate the Godot Editor binaries for HorizonOS devices.
  *
  * Note: Unless the 'generateNativeLibs` argument is specified, the Godot 'tools' shared libraries
- * must have been generated (via scons) prior to running this gradle task.
+ * must have been generated (via xmake) prior to running this gradle task.
  * The task will only build the binaries for which the shared libraries is available.
  */
 task generateGodotHorizonOSEditor {
@@ -252,7 +249,7 @@ task generateGodotHorizonOSEditor {
  * Generate the Godot Editor binaries for PicoOS devices.
  *
  * Note: Unless the 'generateNativeLibs` argument is specified, the Godot 'tools' shared libraries
- * must have been generated (via scons) prior to running this gradle task.
+ * must have been generated (via xmake) prior to running this gradle task.
  * The task will only build the binaries for which the shared libraries is available.
  */
 task generateGodotPicoOSEditor {

@@ -57,6 +57,8 @@ enum { MetaType,
 	StateType,
 	DataType,
 	InlineStateType,
+	DeltaStateType,
+	InlineDeltaStateType,
 	MessageTypes };
 constexpr int MaxInlineStateBytes = 128;
 enum { BeginBaseline,
@@ -113,6 +115,30 @@ struct InlineState : yojimbo::Message {
 	}
 	YOJIMBO_VIRTUAL_SERIALIZE_FUNCTIONS();
 };
+struct DeltaState : State {
+	uint64_t base_revision = 0;
+	template <typename Stream>
+	bool Serialize(Stream &stream) {
+		if (!State::Serialize(stream)) {
+			return false;
+		}
+		serialize_uint64(stream, base_revision);
+		return true;
+	}
+	YOJIMBO_VIRTUAL_SERIALIZE_FUNCTIONS();
+};
+struct InlineDeltaState : InlineState {
+	uint64_t base_revision = 0;
+	template <typename Stream>
+	bool Serialize(Stream &stream) {
+		if (!InlineState::Serialize(stream)) {
+			return false;
+		}
+		serialize_uint64(stream, base_revision);
+		return true;
+	}
+	YOJIMBO_VIRTUAL_SERIALIZE_FUNCTIONS();
+};
 struct Data : yojimbo::BlockMessage {
 	int application = 0, user_channel = 0, delivery = 2;
 	template <typename Stream>
@@ -129,13 +155,77 @@ YOJIMBO_DECLARE_MESSAGE_TYPE(MetaType, Meta);
 YOJIMBO_DECLARE_MESSAGE_TYPE(StateType, State);
 YOJIMBO_DECLARE_MESSAGE_TYPE(DataType, Data);
 YOJIMBO_DECLARE_MESSAGE_TYPE(InlineStateType, InlineState);
+YOJIMBO_DECLARE_MESSAGE_TYPE(DeltaStateType, DeltaState);
+YOJIMBO_DECLARE_MESSAGE_TYPE(InlineDeltaStateType, InlineDeltaState);
 YOJIMBO_MESSAGE_FACTORY_FINISH();
 bool loopback(const std::string &address) {
 	return address == "127.0.0.1" || address == "::1";
 }
+std::vector<uint8_t> state_delta(const std::vector<uint8_t> &base, const std::vector<uint8_t> &state) {
+	if (base.size() != state.size() || state.empty()) {
+		return {};
+	}
+	std::vector<uint8_t> patch;
+	auto word = [&](size_t v) {
+		patch.push_back(uint8_t(v));
+		patch.push_back(uint8_t(v >> 8));
+	};
+	word(state.size());
+	word(0);
+	size_t runs = 0;
+	for (size_t i = 0; i < state.size();) {
+		if (base[i] == state[i]) {
+			++i;
+			continue;
+		}
+		const size_t start = i;
+		while (i < state.size() && base[i] != state[i]) {
+			++i;
+		}
+		word(start);
+		word(i - start);
+		patch.insert(patch.end(), state.begin() + start, state.begin() + i);
+		++runs;
+		if (patch.size() + 8 >= state.size()) {
+			return {};
+		}
+	}
+	if (runs == 0) {
+		return {};
+	}
+	patch[2] = uint8_t(runs);
+	patch[3] = uint8_t(runs >> 8);
+	return patch;
+}
+bool restore_delta(const std::vector<uint8_t> &base, const std::vector<uint8_t> &patch, std::vector<uint8_t> &out) {
+	if (patch.size() < 4) {
+		return false;
+	}
+	auto word = [&](size_t offset) { return size_t(patch[offset]) | (size_t(patch[offset + 1]) << 8); };
+	const size_t size = word(0), runs = word(2);
+	if (size != base.size() || size > Session::MaxStateBytes || runs == 0 || runs > size) {
+		return false;
+	}
+	out = base;
+	size_t offset = 4, previous_end = 0;
+	for (size_t i = 0; i < runs; i++) {
+		if (offset + 4 > patch.size()) {
+			return false;
+		}
+		const size_t start = word(offset), length = word(offset + 2);
+		offset += 4;
+		if (length == 0 || start < previous_end || start + length > size || offset + length > patch.size()) {
+			return false;
+		}
+		std::copy(patch.begin() + offset, patch.begin() + offset + length, out.begin() + start);
+		offset += length;
+		previous_end = start + length;
+	}
+	return offset == patch.size();
+}
 uint64_t protocol_hash(const Options &o) {
 	uint64_t hash = 14695981039346656037ULL;
-	const std::string text = "egp-native-wire-2-inline-state-128|yojimbo-272153a|state-4096|" + o.game_protocol + "|" +
+	const std::string text = "egp-native-wire-3-ack-delta|yojimbo-272153a|state-4096|" + o.game_protocol + "|" +
 			o.simulation_fingerprint + "|" + std::to_string(o.tick_rate);
 	for (unsigned char byte : text) {
 		hash ^= byte;
@@ -160,12 +250,13 @@ struct Session::Impl : yojimbo::Adapter {
 	uint64_t peer_generation = 0, entity_generation = 0;
 	std::map<uint64_t, Entity> entity_map;
 	std::map<uint64_t, int> replication_priorities;
+	std::set<uint64_t> delta_entities;
 	struct Incoming {
 		int type = -1, action = -1, user_channel = 0, delivery = 2, application = 0;
-		uint64_t handle = 0, tick = 0;
+		uint64_t handle = 0, tick = 0, base_revision = 0;
 		Entity entity;
 		std::vector<uint8_t> payload;
-		size_t charge() const { return payload.size() + ((type == StateType || type == InlineStateType) ? 64 : 32); }
+		size_t charge() const { return payload.size() + ((type == DeltaStateType || type == InlineDeltaStateType) ? 72 : ((type == StateType || type == InlineStateType) ? 64 : 32)); }
 	};
 	struct Link {
 		int64_t handle = 0;
@@ -173,6 +264,22 @@ struct Session::Impl : yojimbo::Adapter {
 		uint64_t last_entity_sent = 0;
 		std::map<uint64_t, uint64_t> revisions;
 		std::map<uint64_t, std::weak_ptr<uint8_t>> in_flight_states;
+		struct Snapshot {
+			uint64_t revision = 0;
+			std::vector<uint8_t> state;
+			int kind = 0;
+			int64_t authority = -1;
+		};
+		std::map<uint64_t, Snapshot> acknowledged, awaiting_ack;
+		void clear_snapshots(uint64_t entity_handle) {
+			for (auto *snapshots : { &acknowledged, &awaiting_ack }) {
+				auto it = snapshots->find(entity_handle);
+				if (it != snapshots->end()) {
+					replication.baseline_bytes -= it->second.state.size();
+					snapshots->erase(it);
+				}
+			}
+		}
 		std::set<uint64_t> hidden;
 		std::map<uint64_t, double> last_finish, queued_base;
 		double virtual_finish = 0;
@@ -302,6 +409,7 @@ struct Session::Impl : yojimbo::Adapter {
 		links.clear();
 		entity_map.clear();
 		replication_priorities.clear();
+		delta_entities.clear();
 		client_link = Link();
 		client_connected = false;
 		accumulator = 0;
@@ -393,6 +501,7 @@ struct Session::Impl : yojimbo::Adapter {
 						break;
 					}
 					link.in_flight_states.erase(it->first);
+					link.clear_snapshots(it->first);
 					link.last_finish.erase(it->first);
 					link.queued_base.erase(it->first);
 					it = link.revisions.erase(it);
@@ -411,6 +520,19 @@ struct Session::Impl : yojimbo::Adapter {
 				link.complete = true;
 			}
 			const double current_time = now();
+			for (auto it = link.awaiting_ack.begin(); it != link.awaiting_ack.end();) {
+				auto ticket = link.in_flight_states.find(it->first);
+				if (ticket != link.in_flight_states.end() && !ticket->second.expired()) {
+					++it;
+					continue;
+				}
+				auto old = link.acknowledged.find(it->first);
+				if (old != link.acknowledged.end()) {
+					link.replication.baseline_bytes -= old->second.state.size();
+				}
+				link.acknowledged[it->first] = std::move(it->second);
+				it = link.awaiting_ack.erase(it);
+			}
 			if (link.replication.bytes_per_second > 0) {
 				const double capacity = std::max(MaxStateBytes + 64, link.replication.bytes_per_second);
 				link.replication.available_bytes = std::min(capacity, link.replication.available_bytes + std::max(0.0, current_time - link.replication_time) * link.replication.bytes_per_second);
@@ -420,6 +542,9 @@ struct Session::Impl : yojimbo::Adapter {
 				const Entity *entity;
 				double finish;
 				bool baseline;
+				std::vector<uint8_t> patch;
+				size_t charge;
+				uint64_t base_revision;
 			};
 			std::vector<Candidate> candidates;
 			auto next = entity_map.upper_bound(link.last_entity_sent);
@@ -440,6 +565,14 @@ struct Session::Impl : yojimbo::Adapter {
 					continue;
 				}
 				const bool baseline = revision == link.revisions.end();
+				std::vector<uint8_t> patch;
+				uint64_t base_revision = 0;
+				auto acknowledged = link.acknowledged.find(entity.handle);
+				if (!baseline && delta_entities.count(entity.handle) && acknowledged != link.acknowledged.end() && acknowledged->second.kind == entity.kind && acknowledged->second.authority == entity.authority_peer) {
+					patch = state_delta(acknowledged->second.state, entity.state);
+					base_revision = acknowledged->second.revision;
+				}
+				const size_t charge = patch.empty() ? entity.state.size() + 64 : patch.size() + 72;
 				double finish = 0;
 				if (!baseline && !replication_priorities.empty()) {
 					auto base = link.queued_base.find(entity.handle);
@@ -448,21 +581,23 @@ struct Session::Impl : yojimbo::Adapter {
 					}
 					const auto policy = replication_priorities.find(entity.handle);
 					const int priority = policy == replication_priorities.end() ? 1 : policy->second;
-					finish = base->second + double(entity.state.size() + 64) / priority;
+					finish = base->second + double(charge) / priority;
 				}
-				candidates.push_back({ &entity, finish, baseline });
+				candidates.push_back({ &entity, finish, baseline, std::move(patch), charge, base_revision });
 			}
 			if (!replication_priorities.empty() || link.replication.bytes_per_second > 0) {
 				std::stable_sort(candidates.begin(), candidates.end(), [](const Candidate &a, const Candidate &b) { return a.baseline != b.baseline ? a.baseline : a.finish < b.finish; });
 			}
 			for (const Candidate &candidate : candidates) {
 				const Entity &entity = *candidate.entity;
-				const size_t charge = entity.state.size() + 64;
+				const auto &patch = candidate.patch;
+				const bool delta = !patch.empty();
+				const size_t charge = candidate.charge;
 				if (!candidate.baseline && link.replication.bytes_per_second > 0 && link.replication.available_bytes < charge) {
 					++link.replication.budget_deferrals;
 					break;
 				}
-				if (!room(slot, 0, entity.state.size() + 64)) {
+				if (!room(slot, 0, charge)) {
 					break;
 				}
 				auto fill = [&](auto *message) {
@@ -473,8 +608,40 @@ struct Session::Impl : yojimbo::Adapter {
 					message->kind = entity.kind;
 					message->in_flight = std::make_shared<uint8_t>(0);
 					link.in_flight_states[entity.handle] = message->in_flight;
+					if (delta_entities.count(entity.handle)) {
+						if (link.replication.baseline_bytes + entity.state.size() <= MaxDeltaBaselineBytesPerPeer) {
+							link.awaiting_ack[entity.handle] = { entity.revision, entity.state, entity.kind, entity.authority_peer };
+							link.replication.baseline_bytes += entity.state.size();
+						} else {
+							// Without retaining this pending revision, the old baseline
+							// would cease to match the receiver after this message's ACK.
+							link.clear_snapshots(entity.handle);
+						}
+					}
 				};
-				if (entity.state.size() <= MaxInlineStateBytes) {
+				if (delta && patch.size() <= MaxInlineStateBytes) {
+					auto *m = static_cast<InlineDeltaState *>(create(slot, InlineDeltaStateType));
+					if (!m) {
+						break;
+					}
+					m->base_revision = candidate.base_revision;
+					fill(m);
+					m->size = int(patch.size());
+					std::copy(patch.begin(), patch.end(), m->data.begin());
+					queue(slot, 0, m, charge);
+				} else if (delta) {
+					auto *m = static_cast<DeltaState *>(create(slot, DeltaStateType));
+					if (!m) {
+						break;
+					}
+					m->base_revision = candidate.base_revision;
+					if (!attach(slot, m, patch)) {
+						release(slot, m);
+						break;
+					}
+					fill(m);
+					queue(slot, 0, m, charge);
+				} else if (entity.state.size() <= MaxInlineStateBytes) {
 					auto *m = static_cast<InlineState *>(create(slot, InlineStateType));
 					if (!m) {
 						break;
@@ -496,6 +663,12 @@ struct Session::Impl : yojimbo::Adapter {
 					queue(slot, 0, m, entity.state.size() + 64);
 				}
 				link.revisions[entity.handle] = entity.revision;
+				if (!delta) {
+					++link.replication.full_state_updates;
+				} else {
+					++link.replication.delta_updates;
+					link.replication.delta_bytes_saved += entity.state.size() + 64 - charge;
+				}
 				if (!candidate.baseline) {
 					++link.replication.sent_updates;
 					link.replication.sent_bytes += charge;
@@ -548,7 +721,7 @@ struct Session::Impl : yojimbo::Adapter {
 			handle = m->handle;
 			tick = m->tick;
 			good = !server && channel == 0;
-		} else if (type == StateType) {
+		} else if (type == StateType || type == DeltaStateType) {
 			const auto *m = static_cast<State *>(message);
 			entity.handle = m->handle;
 			entity.revision = m->revision;
@@ -556,7 +729,11 @@ struct Session::Impl : yojimbo::Adapter {
 			entity.authority_peer = int64_t(m->authority);
 			entity.kind = m->kind;
 			good = !server && channel == 0 && entity.handle > 0 && entity.handle <= 0x7fffffffffffffffULL && entity.revision > 0;
-		} else if (type == InlineStateType) {
+			if (type == DeltaStateType) {
+				incoming.base_revision = static_cast<DeltaState *>(message)->base_revision;
+				good = good && incoming.base_revision > 0 && incoming.base_revision < entity.revision;
+			}
+		} else if (type == InlineStateType || type == InlineDeltaStateType) {
 			const auto *m = static_cast<InlineState *>(message);
 			entity.handle = m->handle;
 			entity.revision = m->revision;
@@ -564,6 +741,10 @@ struct Session::Impl : yojimbo::Adapter {
 			entity.authority_peer = int64_t(m->authority);
 			entity.kind = m->kind;
 			good = !server && channel == 0 && entity.handle > 0 && entity.handle <= 0x7fffffffffffffffULL && entity.revision > 0 && m->size >= 0 && m->size <= MaxInlineStateBytes;
+			if (type == InlineDeltaStateType) {
+				incoming.base_revision = static_cast<InlineDeltaState *>(message)->base_revision;
+				good = good && incoming.base_revision > 0 && incoming.base_revision < entity.revision;
+			}
 			if (good) {
 				payload.assign(m->data.begin(), m->data.begin() + m->size);
 			}
@@ -576,7 +757,7 @@ struct Session::Impl : yojimbo::Adapter {
 		} else {
 			good = false;
 		}
-		if (type == StateType || type == DataType) {
+		if (type == StateType || type == DeltaStateType || type == DataType) {
 			const auto *m = static_cast<yojimbo::BlockMessage *>(message);
 			const int max = delivery == 4 ? MaxUnreliableBytes : MaxReliableBytes;
 			const int size = m->GetBlockSize();
@@ -650,14 +831,21 @@ struct Session::Impl : yojimbo::Adapter {
 			} else {
 				entity_map.erase(handle);
 			}
-		} else if (type == StateType || type == InlineStateType) {
+		} else if (type == StateType || type == InlineStateType || type == DeltaStateType || type == InlineDeltaStateType) {
 			if (!entity_map.count(entity.handle) && entity_map.size() >= size_t(options.max_entities)) {
 				reject(slot);
 				return false;
 			}
 			stats.server_tick = std::max(stats.server_tick, entity.tick);
-			entity.state = std::move(payload);
 			auto old = entity_map.find(entity.handle);
+			if (type == DeltaStateType || type == InlineDeltaStateType) {
+				if (old == entity_map.end() || old->second.revision != incoming.base_revision || old->second.kind != entity.kind || old->second.authority_peer != entity.authority_peer || !restore_delta(old->second.state, payload, entity.state)) {
+					reject(slot);
+					return false;
+				}
+			} else {
+				entity.state = std::move(payload);
+			}
 			if (old == entity_map.end() || old->second.revision < entity.revision) {
 				entity_map[entity.handle] = std::move(entity);
 			}
@@ -1076,7 +1264,9 @@ Result Session::despawn(uint64_t handle) {
 		return Result::NotFound;
 	}
 	impl->replication_priorities.erase(handle);
+	impl->delta_entities.erase(handle);
 	for (auto &link : impl->links) {
+		link.second.clear_snapshots(handle);
 		link.second.last_finish.erase(handle);
 		link.second.queued_base.erase(handle);
 		link.second.hidden.erase(handle);
@@ -1121,6 +1311,28 @@ Result Session::set_replication_priority(uint64_t handle, int priority) {
 		p.replication_priorities.erase(handle);
 	} else {
 		p.replication_priorities[handle] = priority;
+	}
+	return Result::Ok;
+}
+Result Session::set_entity_delta_replication(uint64_t handle, bool enabled) {
+	std::lock_guard<std::recursive_mutex> guard(library_mutex);
+	auto &p = *impl;
+	if (!p.on_owner()) {
+		return Result::Busy;
+	}
+	if (!p.server) {
+		return Result::Unauthorized;
+	}
+	if (!p.entity_map.count(handle)) {
+		return Result::NotFound;
+	}
+	if (enabled) {
+		p.delta_entities.insert(handle);
+	} else {
+		p.delta_entities.erase(handle);
+		for (auto &link : p.links) {
+			link.second.clear_snapshots(handle);
+		}
 	}
 	return Result::Ok;
 }

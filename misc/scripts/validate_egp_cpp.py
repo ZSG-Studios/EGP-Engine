@@ -94,7 +94,7 @@ func _ready():
     run("cli-build-release", cli + ["--cpp-build=smoke:release"], marker="EGP_CPP_CLI_PASSED")
     run("cli-invalid-option", cli + ["--cpp-unknown"], expected=1)
     run("cli-invalid-build-config", cli + ["--cpp-build=smoke:invalid"], expected=1)
-    run("cli-missing-cmake", cli + ["--cpp-cmake=/egp/does/not/exist/cmake", "--cpp-check"], expected=1)
+    run("cli-missing-xmake", cli + ["--cpp-xmake=/egp/does/not/exist/xmake", "--cpp-check"], expected=1)
     run("cli-duplicate-create", cli + ["--cpp-create=smoke"], expected=1)
     run(
         "native-game",

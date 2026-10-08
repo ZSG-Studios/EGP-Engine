@@ -277,6 +277,12 @@ func _send_envelope(peer: int, message: StringName, arguments: Array) -> Error:
 func _on_message(peer: int, data: PackedByteArray) -> void:
 	if _blocked_peers.has(peer):
 		return
+	# Native scene/RPC components validate and dispatch their own bounded envelopes.
+	# Leave these namespaced frames to their subscribers on application_received.
+	if data.size() >= 8 and data.size() <= MAX_MESSAGE_BYTES:
+		var native_prefix := data.slice(0, 8).get_string_from_ascii()
+		if native_prefix == "EGPRPC01" or (native_prefix == "EGPSPS01" and data.size() <= 512):
+			return
 	# Preflight the fixed envelope before decoding; malformed clients are quarantined.
 	if data.size() < 24 or data.size() > MAX_MESSAGE_BYTES or data.decode_u32(0) != TYPE_ARRAY or data.decode_u32(4) != 2 or data.decode_u32(8) != TYPE_STRING:
 		_bad_envelope(peer)
@@ -351,6 +357,9 @@ func _apply_entity_record(record: Dictionary) -> void:
 	var entity: int = record.entity
 	var previous: Dictionary = _entities.get(entity, {})
 	if not previous.is_empty() and previous.revision == record.revision: return
+	var payload: PackedByteArray = record.state
+	if payload.size() >= 8 and payload.size() <= MAX_STATE_BYTES and payload.slice(0, 8).get_string_from_ascii() == "EGPSPS01":
+		return # SuperpositionSpawner owns native prefab manifests.
 	var state: Variant = bytes_to_var(record.state) if not record.state.is_empty() else {}
 	if not state is Dictionary or not _valid_value(state): return
 	record.state = state

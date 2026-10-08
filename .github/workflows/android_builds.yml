@@ -10,7 +10,7 @@ on:
 # Global Settings
 # EGP physics backends currently require a single-precision desktop target.
 env:
-  SCONS_FLAGS: >-
+  XMAKE_FLAGS: >-
     dev_mode=yes
     module_text_server_fb_enabled=yes
     disable_physics_2d=yes
@@ -31,13 +31,13 @@ jobs:
             cache-name: android-template-arm32
             target: template_debug
             instrumented_tests: false
-            scons-flags: arch=arm32
+            xmake-flags: arch=arm32
 
           - name: Template arm64 (target=template_debug, arch=arm64)
             cache-name: android-template-arm64
             target: template_debug
             instrumented_tests: true
-            scons-flags: arch=arm64
+            xmake-flags: arch=arm64
 
     steps:
       - name: Checkout
@@ -51,20 +51,43 @@ jobs:
           distribution: temurin
           java-version: 17
 
+      - name: Verify native Gradle routing without legacy build tools
+        shell: bash
+        run: |
+          cd platform/android/java
+          ./gradlew --version
+          GRADLE_VERSION="$(sed -n 's/.*gradle-\([0-9.]*\)-bin.zip/\1/p' gradle/wrapper/gradle-wrapper.properties)"
+          GROOVY_JAR="$(find "${GRADLE_USER_HOME:-$HOME/.gradle}/wrapper/dists" -path "*/gradle-$GRADLE_VERSION/lib/groovy-[0-9]*.jar" -print -quit)"
+          test -n "$GROOVY_JAR"
+          java -cp "$GROOVY_JAR" groovy.ui.GroovyMain "$GITHUB_WORKSPACE/tests/build/test_android_xmake.groovy" "$GITHUB_WORKSPACE"
+
+      - name: Install the Gradle-pinned Android NDK
+        shell: sh
+        run: |
+          NDK_VERSION="$(awk -F "'" '/^[[:space:]]*ndkVersion[[:space:]]*:/ { print $2; exit }' platform/android/java/app/config.gradle)"
+          test -n "$NDK_VERSION"
+          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          NDK_ROOT="$SDK_ROOT/ndk/$NDK_VERSION"
+          if [ ! -x "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" ]; then
+            sdkmanager --sdk_root="$SDK_ROOT" "ndk;$NDK_VERSION"
+          fi
+          test -x "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          printf 'ANDROID_NDK_ROOT=%s\nANDROID_NDK_HOME=%s\n' "$NDK_ROOT" "$NDK_ROOT" >> "$GITHUB_ENV"
+
       - name: Restore Godot build cache
         uses: ./.github/actions/godot-cache-restore
         with:
           cache-name: ${{ matrix.cache-name }}
         continue-on-error: true
 
-      - name: Setup Python and SCons
+      - name: Setup native xmake
         uses: ./.github/actions/godot-deps
 
       - name: Download pre-built AccessKit
         shell: sh
         id: accesskit-sdk
         run: |
-          if python ./misc/scripts/install_accesskit.py; then
+          if xmake lua misc/scripts/install_build_dependencies.lua accesskit; then
             echo "ACCESSKIT_ENABLED=yes" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::AccessKit SDK installation failed, building without AccessKit support."
@@ -75,7 +98,7 @@ jobs:
         shell: sh
         id: swappy_sdk
         run: |
-          if python ./misc/scripts/install_swappy_android.py; then
+          if xmake lua misc/scripts/install_build_dependencies.lua swappy; then
             echo "SWAPPY_ENABLED=yes" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::Swappy installation failed, building without Swappy support."
@@ -86,7 +109,7 @@ jobs:
         shell: sh
         id: perfetto_sdk
         run: |
-          if python ./misc/scripts/install_perfetto.py; then
+          if xmake lua misc/scripts/install_build_dependencies.lua perfetto; then
             echo "PROFILER_ENABLED=perfetto" >> "$GITHUB_OUTPUT"
           else
             echo "::warning::Perfetto installation failed, building without Perfetto support."
@@ -96,7 +119,7 @@ jobs:
       - name: Compilation
         uses: ./.github/actions/godot-build
         with:
-          scons-flags: ${{ env.SCONS_FLAGS }} ${{ matrix.scons-flags }} profiler=${{ steps.perfetto_sdk.outputs.PROFILER_ENABLED }} swappy=${{ steps.swappy_sdk.outputs.SWAPPY_ENABLED }} accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED }}
+          xmake-flags: ${{ env.XMAKE_FLAGS }} ${{ matrix.xmake-flags }} profiler=${{ steps.perfetto_sdk.outputs.PROFILER_ENABLED || 'none' }} swappy=${{ steps.swappy_sdk.outputs.SWAPPY_ENABLED || 'no' }} accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED || 'no' }}
           platform: android
           target: ${{ matrix.target }}
 

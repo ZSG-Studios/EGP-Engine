@@ -33,6 +33,10 @@
 #include "egp_net_session.h"
 #include "egp_net_snapshot_interpolator.h"
 #include "superposition.h"
+#include "superposition_prediction.h"
+#include "superposition_rpc.h"
+#include "superposition_spawner.h"
+#include "superposition_world.h"
 
 #include "core/object/class_db.h"
 void initialize_egp_net_module(ModuleInitializationLevel p_level) {
@@ -41,6 +45,12 @@ void initialize_egp_net_module(ModuleInitializationLevel p_level) {
 		GDREGISTER_CLASS(SuperpositionProperty);
 		GDREGISTER_CLASS(SuperpositionConfig);
 		GDREGISTER_CLASS(Superposition);
+		GDREGISTER_CLASS(SuperpositionWorld);
+		GDREGISTER_CLASS(SuperpositionPrediction);
+		GDREGISTER_CLASS(SuperpositionScene);
+		GDREGISTER_CLASS(SuperpositionSpawner);
+		GDREGISTER_CLASS(SuperpositionRPCMethod);
+		GDREGISTER_CLASS(SuperpositionRPC);
 		GDREGISTER_CLASS(EGPNetSnapshotInterpolator);
 	}
 }

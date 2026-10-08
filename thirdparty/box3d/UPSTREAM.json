@@ -26,7 +26,6 @@
     "src/broad_phase.c": "b628a1b1a8bdab1ac48b9d719627f2d4453334c33823be432a7112e743d09948",
     "src/broad_phase.h": "4fd7c21a70ef28dd84877ee87e080429d78c7fd315719b2155715aa097deda81",
     "src/capsule.c": "c9076404f327f87f65f06b2370629e395b0b2cd0d351a6f82a9afff669c79114",
-    "src/CMakeLists.txt": "78e3a16ffc70d4b5f24d5a9ade4acdae9dab3dfe53e6458bc6cd165c27b94c47",
     "src/compound.c": "9d4bbe293ef62209c284f84e6bad34162d1a9bf5e2e7f292eeda2b1cbfbe461f",
     "src/compound.h": "9f6ef9132628c0a1e9ee9db58a2738557983bb7127ed74e85bb33a3dcca17819",
     "src/constraint_graph.c": "8fa336c973cc6df95331e224a66e32aae6aa0207b0720e54bc356f285ffc9dde",
@@ -111,7 +110,6 @@
     "src/wide8.c": "e13bfec993601448ac284d8a3e1d14d496a20b354161c14c036dd20716c47b2a",
     "src/world_snapshot.c": "abbc2df827879cdd1f329c6f9e8675411ee96c66aaa819e499363910cc06676c",
     "src/world_snapshot.h": "a1ae501b8afb39c4e790dcc36e62a449e8c2f291563d2b707d3f960ec3133627",
-    "test/CMakeLists.txt": "929e6505a0372a76c75d2e9c676b556eb39c4e887e35b11bca709f1fe2a272de",
     "test/main.c": "8c1509fbb6c859e78844e6527c96d5493f8a0540853135e6b64d72a06f268860",
     "test/test_allocator.c": "d8534bb9c4acbf9bf2424f9daf74bc38e46365d24740973f19dbe138bd7e76b6",
     "test/test_bitset.c": "47c03127c6bd6fb0e86a57ad29ba0ae3b2ec8dee1e5796146f5c766208096642",
@@ -144,7 +142,6 @@
     "test/test_world.c": "599cbd5e40ac5efa65cd566f343fdce0faf8550b0886daa7aaa15e4e5587967d",
     "shared/benchmarks.c": "62040cde039f8422634a95be934a756e21a7c3dd6c3b532123405ab98d005eb9",
     "shared/benchmarks.h": "55cd89ae8ad68b4c7c859b0407325458eeffd448fdac0f5bb5c0f4fc3b3f036b",
-    "shared/CMakeLists.txt": "128d24746e8930963d6d722b855f0b36100d12dbefe1d70573c7f07c0e2b09be",
     "shared/determinism.c": "773b56c34337afbd7a77589e581bb004384309e544bf2b8321bf54afabea960f",
     "shared/determinism.h": "03184f2d7a0563ea52649d641242d4c1993195ecdc4dee06fe1fd05b5390c5b4",
     "shared/human.c": "e6cef8596845225f51342a492131d97ef7bdb34f7900640e1c0b46557569ab13",
@@ -157,7 +154,6 @@
     "shared/stability.h": "eec46a79534f4830e0aa14faabc585f10b90badad6a61c5af1a01be1e618884d",
     "shared/utils.c": "30da5fe0507d8926ba328e8b2b391d892bd1b81e4a72ca959c9b395fcee402a1",
     "shared/utils.h": "db681ccf57b6fa40ea5021bf9c47dda4667135afa360ae4ed56a062f5470416f",
-    "CMakeLists.txt": "b7cebacab24572651191298cf49c3e79f08e19231719df7a5f4a0b95dd995a4c",
     "LICENSE": "da5e31a26bf3cfd5ba5c96d6823e480128c81e76c107ef9d3ee5d94789184b90"
   },
   "egp_patches": [
@@ -174,10 +170,6 @@
         "include/box3d/types.h": {
           "upstream_sha256": "825f0747ad024875a8f70344097ac871bc5aa8816e8bbf879d3d439fdeb19d5e",
           "patched_sha256": "fbe5fe7aafd950e52c4dfcc489d15e0ec06bb6795dc1b94e641b670be7ae8b82"
-        },
-        "src/CMakeLists.txt": {
-          "upstream_sha256": "78e3a16ffc70d4b5f24d5a9ade4acdae9dab3dfe53e6458bc6cd165c27b94c47",
-          "patched_sha256": "1cddea5d344ded75281a0510d020ac2b252e796490a3eee0b1f3b702860c1cf3"
         },
         "src/joint.c": {
           "upstream_sha256": "7ba2f12e489722f108d628b2530822f6c60c61e4646c8e954ad5670fcbef67ac",
@@ -209,5 +201,24 @@
         }
       }
     }
-  ]
+  ],
+  "excluded_upstream_files": {
+    "src/CMakeLists.txt": {
+      "upstream_sha256": "78e3a16ffc70d4b5f24d5a9ade4acdae9dab3dfe53e6458bc6cd165c27b94c47",
+      "reason": "Upstream build definition removed; EGP builds the retained sources with native xmake recipes.",
+      "egp_patched_sha256": "1cddea5d344ded75281a0510d020ac2b252e796490a3eee0b1f3b702860c1cf3"
+    },
+    "test/CMakeLists.txt": {
+      "upstream_sha256": "929e6505a0372a76c75d2e9c676b556eb39c4e887e35b11bca709f1fe2a272de",
+      "reason": "Upstream build definition removed; EGP builds the retained sources with native xmake recipes."
+    },
+    "shared/CMakeLists.txt": {
+      "upstream_sha256": "128d24746e8930963d6d722b855f0b36100d12dbefe1d70573c7f07c0e2b09be",
+      "reason": "Upstream build definition removed; EGP builds the retained sources with native xmake recipes."
+    },
+    "CMakeLists.txt": {
+      "upstream_sha256": "b7cebacab24572651191298cf49c3e79f08e19231719df7a5f4a0b95dd995a4c",
+      "reason": "Upstream build definition removed; EGP builds the retained sources with native xmake recipes."
+    }
+  }
 }

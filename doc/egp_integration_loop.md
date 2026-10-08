@@ -1,3 +1,5 @@
+> Historical integration and qualification receipts. Commands below describe their recorded revisions. For current builds, use [the native xmake guide](egp_xmake.md).
+
 # EGP integration and qualification
 
 This checklist records acceptance criteria for the combined engine, generated APIs,

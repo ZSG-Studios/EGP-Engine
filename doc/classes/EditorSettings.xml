@@ -1005,7 +1005,7 @@
 		<member name="interface/editor/appearance/show_update_spinner" type="int" setter="" getter="">
 			If enabled, displays an icon in the top-right corner of the editor that spins when the editor redraws a frame. This can be used to diagnose situations where the engine is constantly redrawing, which should be avoided as this increases CPU and GPU utilization for no good reason. To further troubleshoot these situations, start the editor with the [code]--debug-canvas-item-redraw[/code] [url=$DOCS_URL/tutorials/editor/command_line_tutorial.html]command line argument[/url].
 			Consider enabling this if you are developing editor plugins to ensure they only make the editor redraw when required.
-			The default [b]Auto[/b] value will only enable this if the editor was compiled with the [code]dev_build=yes[/code] SCons option (the default is [code]dev_build=no[/code]).
+			The default [b]Auto[/b] value will only enable this if the editor was compiled with the [code]dev_build=yes[/code] build option (the default is [code]dev_build=no[/code]).
 			[b]Note:[/b] If [member interface/editor/display/update_continuously] is [code]true[/code], the spinner icon displays in red.
 			[b]Note:[/b] If the editor was started with the [code]--debug-canvas-item-redraw[/code] [url=$DOCS_URL/tutorials/editor/command_line_tutorial.html]command line argument[/url], the update spinner will [i]never[/i] display regardless of this setting's value. This is to avoid confusion with what would cause redrawing in real world scenarios.
 		</member>
@@ -1033,7 +1033,7 @@
 		</member>
 		<member name="interface/editor/behavior/show_internal_errors_in_toast_notifications" type="int" setter="" getter="">
 			If enabled, displays internal engine errors in toast notifications (toggleable by clicking the "bell" icon at the bottom of the editor). No matter the value of this setting, non-internal engine errors will always be visible in toast notifications.
-			The default [b]Auto[/b] value will only enable this if the editor was compiled with the [code]dev_build=yes[/code] SCons option (the default is [code]dev_build=no[/code]).
+			The default [b]Auto[/b] value will only enable this if the editor was compiled with the [code]dev_build=yes[/code] build option (the default is [code]dev_build=no[/code]).
 		</member>
 		<member name="interface/editor/display/keep_screen_on" type="bool" setter="" getter="">
 			If [code]true[/code], keeps the screen on (even in case of inactivity), so the screensaver does not take over. Works on desktop and mobile platforms.

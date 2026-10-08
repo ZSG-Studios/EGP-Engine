@@ -2,9 +2,9 @@ name: EGP C++ editor and exports
 on:
   push:
     branches: [master]
-    paths: ["core/extension/**", "drivers/windows/file_access_windows_pipe.*", "editor/editor_node.*", "editor/doc/editor_help.*", "editor/settings/gdextension/**", "misc/scripts/*egp_cpp*", "misc/scripts/*egp_generated_api*", "misc/scripts/*egp_net*", "misc/egp/generated_api/**", "misc/egp/api_contract.json", "modules/egp_net/**", "tests/networking/**", ".github/workflows/egp-cpp.yml", ".gitmodules", "thirdparty/godot-cpp"]
+    paths: ["core/extension/**", "drivers/windows/file_access_windows_pipe.*", "editor/editor_node.*", "editor/doc/editor_help.*", "editor/settings/gdextension/**", "misc/scripts/*egp_cpp*", "misc/scripts/*egp_generated_api*", "misc/scripts/*egp_net*", "misc/egp/generated_api/**", "misc/egp/api_contract.json", "modules/egp_net/**", "tests/networking/**", ".github/workflows/egp-cpp.yml", ".gitmodules", "thirdparty/godot-cpp/**", "xmake.lua", "build/xmake/**", "misc/scripts/build_egp.lua"]
   pull_request:
-    paths: ["core/extension/**", "drivers/windows/file_access_windows_pipe.*", "editor/editor_node.*", "editor/doc/editor_help.*", "editor/settings/gdextension/**", "misc/scripts/*egp_cpp*", "misc/scripts/*egp_generated_api*", "misc/scripts/*egp_net*", "misc/egp/generated_api/**", "misc/egp/api_contract.json", "modules/egp_net/**", "tests/networking/**", ".github/workflows/egp-cpp.yml", ".gitmodules", "thirdparty/godot-cpp"]
+    paths: ["core/extension/**", "drivers/windows/file_access_windows_pipe.*", "editor/editor_node.*", "editor/doc/editor_help.*", "editor/settings/gdextension/**", "misc/scripts/*egp_cpp*", "misc/scripts/*egp_generated_api*", "misc/scripts/*egp_net*", "misc/egp/generated_api/**", "misc/egp/api_contract.json", "modules/egp_net/**", "tests/networking/**", ".github/workflows/egp-cpp.yml", ".gitmodules", "thirdparty/godot-cpp/**", "xmake.lua", "build/xmake/**", "misc/scripts/build_egp.lua"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -48,19 +48,22 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      - run: python -m pip install scons==4.11.1
+      - uses: ./.github/actions/godot-deps
       - name: Build headless validation editor and production templates
         shell: bash
         run: |
           FLAGS="platform=${{ matrix.platform }} arch=${{ matrix.arch }} debug_symbols=no angle=no accesskit=no vulkan=no opengl3=no module_mono_enabled=no ${{ matrix.flags }}"
-          python misc/scripts/build_egp_cpp_editor.py -- -j4 $FLAGS dev_build=yes
-          python -m SCons -j4 $FLAGS target=template_debug
-          python -m SCons -j4 $FLAGS target=template_release
+          xmake lua misc/scripts/build_egp.lua "${{ matrix.platform }}" editor 4 .build/xmake-cache "$FLAGS dev_build=yes"
+          xmake lua misc/scripts/build_egp.lua "${{ matrix.platform }}" template_debug 4 .build/xmake-cache "$FLAGS"
+          xmake lua misc/scripts/build_egp.lua "${{ matrix.platform }}" template_release 4 .build/xmake-cache "$FLAGS"
       - run: python misc/scripts/test_egp_cpp_sdk.py
+      - name: Validate Windows SDK builds from deeply nested projects
+        if: runner.os == 'Windows'
+        run: python misc/scripts/validate_egp_cpp_sdk_paths.py --engine ${{ matrix.editor }} --output .build/sdk-object-paths-ci --jobs 4
       - name: Validate CLI and exported games
         run: python misc/scripts/validate_egp_cpp.py --editor ${{ matrix.editor }} --debug-template ${{ matrix.debug }} --release-template ${{ matrix.release }}
       - name: Compile typed Superposition and interpolation C++ APIs
-        run: python misc/scripts/validate_egp_generated_api.py --cpp --output .build/generated-api-cpp
+        run: python misc/scripts/validate_egp_generated_api.py --engine ${{ matrix.editor }} --cpp --output .build/generated-api-cpp
       - name: Validate engine networking, replication, interpolation and physics replay
         run: python misc/scripts/validate_egp_net.py --engine ${{ matrix.editor }} --output .build/engine-networking
       - name: Validate C++ editor workflow and actionable compiler diagnostics
@@ -77,3 +80,5 @@ jobs:
             .build/engine-networking/**
             .build/cpp-ui-ci/**/receipt.json
             .build/cpp-ui-ci/**/editor.log
+            .build/sdk-object-paths-ci/**/receipt.json
+            .build/sdk-object-paths-ci/**/*.log

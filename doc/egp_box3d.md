@@ -98,7 +98,7 @@ CI configuration is not evidence that those machines have passed.
 For an editor that includes the module:
 
 ```powershell
-.build/venv/Scripts/python.exe -m SCons platform=windows target=editor module_box3d_enabled=yes module_mono_enabled=yes accesskit=no d3d12=no angle=no
+xmake lua misc/scripts/build_egp.lua windows editor 8 .build/xmake-cache "module_box3d_enabled=yes module_mono_enabled=yes accesskit=no d3d12=no angle=no"
 bin/godot.windows.editor.x86_64.mono.console.exe --headless --path tests/physics/box3d/godot --script res://smoke.gd
 ```
 

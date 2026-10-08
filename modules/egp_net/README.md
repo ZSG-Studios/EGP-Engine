@@ -5,6 +5,16 @@ commit `272153a10f32135bb44bb60e7467072baf48f762`, includes netcode,
 reliable, serialize, TLSF and a minimal libsodium subset. The engine builds
 these sources directly. Mono is optional and no networking assembly is required.
 
+For a scene-first workflow, start with [Superposition](SUPERPOSITION.md):
+**SuperpositionWorld** owns the configured session, **SuperpositionSpawner**
+instantiates allowlisted scenes, **Superposition** replicates checked properties,
+and **SuperpositionRPC** dispatches explicitly permitted typed calls. These are
+native engine classes exposed directly in all three generated language APIs.
+Optional acknowledged byte-patch deltas reduce changed-state payloads; native
+**SuperpositionPrediction** provides bounded complete-world canonical-input replay.
+The game still supplies account authentication/token delivery, input authorization
+and the full deterministic genesis/input contract.
+
 Build the desktop engine with `profile=misc/egp/egp_net_profile.py`.
 Install the helpers into an existing game:
 
@@ -19,14 +29,15 @@ The native profile remains usable for games that use only GDScript and C++.
 
 | Layer | GDScript | C# | C++ |
 | --- | --- | --- | --- |
+| Inspector session/spawns/properties/RPC and native replay | `SuperpositionWorld`, `SuperpositionSpawner`, `Superposition`, `SuperpositionRPC`, `SuperpositionPrediction` | Matching generated `Godot` classes | Matching generated `godot` classes |
 | Native session, tokens, raw channels, opaque replication | `EGPNetSession` | `EGP.Networking.NetSession` | `egp::networking::Session`; standalone `egp::net::Session` |
 | AIO messages, state validation, entities, ownership, interest and scene factories | `EGPNet` | `EGP.Networking.NetNode` | `egp::networking::Net` |
 | Prediction, correction and bounded replay | `EGPNetPrediction` | `NetPrediction` | `Prediction` |
 | Explicit Box3D server clock adapter | `EGPNetBox3D` | `NetBox3D` | `Box3D` |
 | Optional 2D/3D presentation interpolation | `EGPNetEntity2D/3D` | `NetEntity2D/3D` | `EntityPresentation2D/3D` |
 
-C# sources live in `csharp/`; the C++ extension façade is the header
-`cpp/egp_net.hpp`. Both high-level façades execute the shared GDScript codec,
+C# sources live in `csharp/`; the C++ extension faÃƒÂ§ade is the header
+`cpp/egp_net.hpp`. Both high-level faÃƒÂ§ades execute the shared GDScript codec,
 prediction and physics adapters. All three languages therefore use the same
 envelope validation and wire format. The low-level session APIs do not need
 GDScript. C++ extension authors include the installed header and link the
@@ -246,6 +257,15 @@ valid envelopes still waiting for budget.
 
 `EGPNetDeterministicReplay` adds canonical-input reconciliation without receiving solver snapshots from the network. Configure it with local `capture`, `restore`, `simulate(tick, input, replay)` and `state_hash` callbacks; call `predict(tick, input)` for local steps and `accept(frames)` for contiguous authoritative `{tick, input, hash}` frames. Corrections restore a locally captured solver snapshot and replay the complete predicted world, verifying each acknowledged tick against the server's diagnostic hash. Its defaults cap pending history at 128 ticks, each snapshot at 1 MiB and total history at 32 MiB. History pressure refuses new predictions; hash or callback failures emit `resync_required` and disable prediction. The game must supply identical genesis, simulation profile, complete tick inputs, bounded delivery and a fresh-session policy when replay history expires. This helper is currently GDScript.
 
+Native `SuperpositionPrediction` exposes the same complete-world capture,
+restore, simulate and hash model directly to GDScript, C# and C++.
+`EGPNetBox3DPrediction` adds an Inspector adapter for explicit Box3D worlds and
+native World/session routing. Game hooks queue authorized input commands and the
+adapter owns the fixed step; canonical authority frames cover all influences on
+the predicted world. Body-specific presentation does not make rollback local to
+one body. Rebinding requires a trusted local synchronization/reset policy. See
+[Superposition prediction](SUPERPOSITION.md#motion-and-complete-world-prediction).
+
 The [deterministic networking demo](../../demos/box3d_deterministic/README.md) wires this helper to native Yojimbo transport and full-world Box3D physics on an independent server and two clients. `DeterministicReplay.tscn` qualifies collision-world replay, stale windows, malformed batches, history bounds and hash mismatch rejection in the engine qualification script. Matching simulation fingerprints alone do not establish cross-platform determinism.
 
 For dedicated servers, listen hosts, visible local clients, impairment and bounded
@@ -254,11 +274,12 @@ Restart recovery in that fixture explicitly restores an application checkpoint a
 obtains fresh admission tokens. Production persistence and authentication belong to
 the game/backend.
 
-Field-delta compression, game-level prediction/input acknowledgment integration, lag-compensated hit tests,
-scene-level Box2D/Box3D rollback fidelity, production authentication, bandwidth
-scaling and platform qualification remain required before a full competitive
-game or AAA readiness claim. Historical LiteNet qualification does not qualify
-this replacement.
+Superposition adds optional acknowledged byte-run deltas, allowlisted native
+scene spawning/RPC and a native complete-world prediction journal. These do not
+supply a game's complete canonical-input/genesis contract, account service,
+lag-compensated hit tests, arbitrary scene-world rollback, persistence or scale.
+Production game readiness requires its own platform, recovery and performance
+qualification.
 
 Validate the native suite with:
 
@@ -287,19 +308,19 @@ Configuration defaults and principal limits:
 
 | Option | Default | Contract |
 | --- | --- | --- |
-| `tick_rate` | 60 | 1–240; equal at both endpoints |
-| `max_players` | 32 | 1–64 with this pinned Yojimbo version |
-| `max_entities` | 1024 | 1–4096 live entities |
+| `tick_rate` | 60 | 1Ã¢â‚¬â€œ240; equal at both endpoints |
+| `max_players` | 32 | 1Ã¢â‚¬â€œ64 with this pinned Yojimbo version |
+| `max_entities` | 1024 | 1Ã¢â‚¬â€œ4096 live entities |
 | `game_protocol` | `egp-game-v1` | Nonempty string, up to 256 UTF-8 bytes |
 | `simulation_fingerprint` | `script-state-v1` | Nonempty string, up to 256 UTF-8 bytes; use the configured Box3D fingerprint for physics |
 | `messages_per_second` | 1000 | At least 32, incoming/outgoing per-peer budget |
 | `bytes_per_second` | 4194304 | At least 8192, incoming/outgoing per-peer budget |
-| `timeout_seconds` | 5 | Connection timeout, 1–60 seconds |
-| `token_lifetime_seconds` | 30 | Admission token expiry, 1–120 seconds |
+| `timeout_seconds` | 5 | Connection timeout, 1Ã¢â‚¬â€œ60 seconds |
+| `token_lifetime_seconds` | 30 | Admission token expiry, 1Ã¢â‚¬â€œ120 seconds |
 | `private_key` | Generated | Optional server-only 32-byte `PackedByteArray` |
 | `allow_insecure_loopback` | false | Explicit development-only direct connection |
-| `simulated_loss` | 0 | Packet loss percentage, 0–100 |
-| `simulated_latency_ms`, `simulated_jitter_ms` | 0 | Each 0–5000 ms, development network simulation |
+| `simulated_loss` | 0 | Packet loss percentage, 0Ã¢â‚¬â€œ100 |
+| `simulated_latency_ms`, `simulated_jitter_ms` | 0 | Each 0Ã¢â‚¬â€œ5000 ms, development network simulation |
 
 Poll automatically through the helper's Node processing, or set `auto_poll=false`
 and call `poll()` once from your main-thread loop. Connect `diagnostic` to your
@@ -356,7 +377,7 @@ For custom codecs, instantiate `EGPNetSession` and call `command()` directly:
 | `despawn` | `entity` | Error |
 | `set_visible` | `entity`, `peer`, `visible` | Error |
 | `disconnect` | `peer` | Error |
-| `send_packet` | `peer`, raw `payload`, `channel` (0–3), `delivery` (2 or 4) | Error |
+| `send_packet` | `peer`, raw `payload`, `channel` (0Ã¢â‚¬â€œ3), `delivery` (2 or 4) | Error |
 
 Native `send_application()` is the helper's named-message lane. Use the same
 envelope codec if mixing it with `EGPNet`, or use raw packet channels for your
@@ -402,7 +423,7 @@ entity to its stable body ID. Numeric entities belong to their issuing session.
 This ownership transfer does not implement automatic client physics rollback or
 restore arbitrary application event closures.
 
-### Explicit C++ owner handoff
+## Explicit C++ owner handoff
 
 C++ `egp::networking::Net` and `Box3D` support `detach_for_reload()` and static
 `resume_after_reload(Dictionary &, Error * = nullptr)`. Before a compatible DLL

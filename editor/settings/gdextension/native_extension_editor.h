@@ -44,7 +44,7 @@ class NativeExtensionEditor : public VBoxContainer {
 	GDCLASS(NativeExtensionEditor, VBoxContainer);
 
 	LineEdit *extension_name = nullptr;
-	LineEdit *cmake_path = nullptr;
+	LineEdit *xmake_path = nullptr;
 	OptionButton *extensions = nullptr;
 	Button *create_button = nullptr;
 	Button *debug_button = nullptr;
@@ -62,8 +62,9 @@ class NativeExtensionEditor : public VBoxContainer {
 	String sdk_path;
 	String building_name;
 	String build_path;
+	String build_project_path;
 	String build_config;
-	String cmake_executable;
+	String xmake_executable;
 	Ref<FileAccess> pipes[2];
 	Vector<uint8_t> pending_output[2];
 	int64_t process_id = 0;
@@ -96,7 +97,7 @@ class NativeExtensionEditor : public VBoxContainer {
 	void _open_source();
 	void _copy_output();
 	Error _publish_library();
-	String _find_cmake() const;
+	String _find_xmake() const;
 	void _run_cli();
 	void _next_cli();
 	void _complete_operation();

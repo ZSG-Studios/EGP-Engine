@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SuperpositionPrediction" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Bounded native deterministic input prediction and authoritative reconciliation.
+	</brief_description>
+	<description>
+		Records complete local simulation state through capture, restore, simulate and state-hash callbacks. Predict contiguous inputs locally, then accept authoritative input/hash frames. Corrections restore only a snapshot captured locally and replay the complete affected world. Solver snapshots are never imported from a network peer. Matching genesis, deterministic profiles and complete world input are game contracts. The Inspector Box3D prediction adapter delegates its replay history to this native class. GDScript, C# and C++ use the same journal and bounds.
+		History is limited to 512 pending ticks, 1 MiB per snapshot and 64 MiB total. Hash mismatch or callback failure disables prediction and emits resync_required. Reset captures a fresh trusted local baseline with a monotonic epoch. These methods belong to the creating thread and reject recursive calls. Presentation effects must be suppressed during replay.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="accept">
+			<return type="int" enum="Error" />
+			<param index="0" name="frames" type="Array" />
+			<param index="1" name="epoch" type="int" default="-1" />
+			<description>
+				Validates an ordered batch of authoritative dictionaries with exact tick ([int]), input ([PackedByteArray], at most 4096 bytes) and hash (16-character hexadecimal [String]) fields. Fresh ticks must be contiguous after the last acknowledgment; older duplicates are ignored. [param epoch] must match the configured epoch, or -1 to omit that check. Changed inputs restore a trusted locally captured state and replay all affected pending ticks with replay=true. Matching hashes advance the acknowledged baseline and release history. A hash or callback failure clears history, disables prediction and emits [signal resync_required]; recover from a trusted local baseline, not a peer-supplied solver snapshot.
+			</description>
+		</method>
+		<method name="configure">
+			<return type="int" enum="Error" />
+			<param index="0" name="capture" type="Callable" />
+			<param index="1" name="restore" type="Callable" />
+			<param index="2" name="simulate" type="Callable" />
+			<param index="3" name="state_hash" type="Callable" />
+			<param index="4" name="initial_tick" type="int" default="0" />
+			<param index="5" name="max_ticks" type="int" default="128" />
+			<param index="6" name="max_state_bytes" type="int" default="1048576" />
+			<param index="7" name="max_bytes" type="int" default="33554432" />
+			<param index="8" name="epoch" type="int" default="0" />
+			<description>
+				Installs four trusted local callbacks and captures the initial baseline. capture() returns a nonempty [PackedByteArray]; restore(state) returns [constant OK]; simulate(tick, input, replay) returns [constant OK]; state_hash() returns a 16-character hexadecimal [String]. Set [param max_ticks] from 1 to 512, [param max_state_bytes] from 1 to 1048576, and [param max_bytes] up to 67108864 and at least one maximum state. Inputs, snapshots and the baseline count toward the history byte budget. [param initial_tick] and [param epoch] are nonnegative exact integers no greater than 2^53 minus one. Reconfiguration while ready returns [constant ERR_ALREADY_IN_USE]. All callbacks run synchronously on the creating thread; recursive journal calls return [constant ERR_BUSY].
+			</description>
+		</method>
+		<method name="get_acknowledged_hash" qualifiers="const">
+			<return type="String" />
+			<description>
+				Returns the verified hash of the current acknowledged baseline.
+			</description>
+		</method>
+		<method name="get_acknowledged_tick" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the latest contiguous tick whose local state hash matched authoritative input/hash frames.
+			</description>
+		</method>
+		<method name="get_history_bytes" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns bytes retained for the baseline, pending state snapshots and input payloads. Excludes container and allocator overhead.
+			</description>
+		</method>
+		<method name="get_pending_ticks" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the number of locally journaled ticks still awaiting authoritative acknowledgment.
+			</description>
+		</method>
+		<method name="get_statistics" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Returns readiness, epoch, current and acknowledged ticks, pending tick and history byte counts, correction/replay counters, hash failures and the last error. Read on the creating thread.
+			</description>
+		</method>
+		<method name="get_tick" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the latest locally simulated tick, including unacknowledged predictions.
+			</description>
+		</method>
+		<method name="predict">
+			<return type="int" enum="Error" />
+			<param index="0" name="tick" type="int" />
+			<param index="1" name="input" type="PackedByteArray" />
+			<description>
+				Simulates the next contiguous [param tick] with a local input of at most 4096 bytes and journals its complete resulting state and hash. Returns [constant ERR_BUSY] before invoking game code if tick or byte capacity is insufficient. During ordinary prediction, simulate receives replay=false. Prediction does not send network input automatically.
+			</description>
+		</method>
+		<method name="reset">
+			<return type="int" enum="Error" />
+			<param index="0" name="epoch" type="int" />
+			<param index="1" name="initial_tick" type="int" default="0" />
+			<description>
+				Captures a new trusted local baseline after the caller restores its complete simulation world. [param epoch] must strictly increase; [param initial_tick] sets the new starting tick. Clears pending inputs and enables prediction only if capture and hash validation succeed. Epoch changes prevent old input batches from being accepted when the caller supplies the epoch to [method accept].
+			</description>
+		</method>
+	</methods>
+	<signals>
+		<signal name="corrected">
+			<param index="0" name="first_tick" type="int" />
+			<param index="1" name="replayed_ticks" type="int" />
+			<description>
+				Emitted after a successful reconciliation changed predicted input and replayed the local world. Suppress sound, particles, UI rewards and other non-idempotent effects during replay=true callbacks.
+			</description>
+		</signal>
+		<signal name="resync_required">
+			<param index="0" name="error" type="int" />
+			<description>
+				Emitted after a callback, captured-state or authoritative-hash failure disables prediction and clears history. Restore a trusted complete local baseline, then [method reset] with a higher epoch before predicting again.
+			</description>
+		</signal>
+	</signals>
+</class>

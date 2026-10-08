@@ -3,7 +3,7 @@ ext.versions = [
     compileSdk         : 36,
     // Also update:
     // - 'editor/export/android_sdk_manager.h#DEFAULT_MIN_SDK_VERSION'
-    // - 'platform/android/detect.py#get_min_target_api()'
+    // - 'build/xmake/platforms/init.lua' Android minimum API
     minSdk             : 24,
     // Also update 'editor/export/android_sdk_manager.h#DEFAULT_TARGET_SDK_VERSION'.
     targetSdk          : 36,
@@ -16,7 +16,7 @@ ext.versions = [
     javaVersion        : JavaVersion.VERSION_17,
     // Also update:
     // - 'editor/export/android_sdk_manager.cpp#ANDROID_NDK_PACKAGES[ndk]'
-    // - 'platform/android/detect.py#get_ndk_version()'
+    // - 'build/xmake/platforms/init.lua' Android NDK revision
     ndkVersion         : '29.0.14206865',
     splashscreenVersion: '1.0.1',
     // 'openxrLoaderVersion' should be set to XR_CURRENT_API_VERSION, see 'thirdparty/openxr'
@@ -99,29 +99,32 @@ ext.getGodotLibraryVersionName = { ->
 }
 
 ext.generateGodotLibraryVersion = { List<String> requiredKeys ->
-    // Attempt to read the version from the `version.py` file.
+    // Read the declarative fields from the native Lua version metadata.
     String libraryVersionName = ""
     int libraryVersionCode = 0
 
-    File versionFile = new File("../../../version.py")
+    File versionFile = new File("../../../version.lua")
     if (versionFile.isFile()) {
         def map = [:]
 
-        List<String> lines = versionFile.readLines()
-        for (String line in lines) {
-            String[] keyValue = line.split("=")
-            String key = keyValue[0].trim()
-            String value = keyValue[1].trim().replaceAll("\"", "")
-
-            if (requiredKeys.contains(key)) {
+        def fields = [:]
+        def matcher = versionFile.text =~ /([A-Za-z_]+)\s*=\s*("[^"\r\n]*"|[0-9]+)/
+        matcher.each { match ->
+            fields[match[1]] = match[2].replaceAll("\"", "")
+        }
+        List<String> missingKeys = []
+        for (String key in requiredKeys) {
+            if (fields.containsKey(key)) {
+                String value = fields[key]
                 if (!value.isEmpty()) {
                     map[key] = value
                 }
-                requiredKeys.remove(key)
+            } else {
+                missingKeys.add(key)
             }
         }
 
-        if (requiredKeys.empty) {
+        if (missingKeys.empty) {
             libraryVersionName = map.values().join(".")
             try {
                 if (map.containsKey("status")) {

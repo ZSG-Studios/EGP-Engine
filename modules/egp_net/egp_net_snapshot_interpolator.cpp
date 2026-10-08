@@ -33,8 +33,8 @@
 #include "core/object/class_db.h"
 
 void EGPNetSnapshotInterpolator::_bind_methods() {
-	ClassDB::bind_method(D_METHOD("configure", "tick_rate", "delay_seconds", "max_extrapolation_seconds"), &EGPNetSnapshotInterpolator::configure, DEFVAL(60.0), DEFVAL(0.2), DEFVAL(0.1));
-	ClassDB::bind_method(D_METHOD("submit", "entity", "tick", "pose", "velocity"), &EGPNetSnapshotInterpolator::submit);
+	ClassDB::bind_method(D_METHOD("configure", "tick_rate", "delay_seconds", "max_extrapolation_seconds", "max_adaptive_delay_seconds"), &EGPNetSnapshotInterpolator::configure, DEFVAL(60.0), DEFVAL(0.2), DEFVAL(0.1), DEFVAL(0.0));
+	ClassDB::bind_method(D_METHOD("submit", "entity", "tick", "pose", "velocity", "discontinuity_epoch", "angular_velocity"), &EGPNetSnapshotInterpolator::submit, DEFVAL(-1), DEFVAL(Vector3()));
 	ClassDB::bind_method(D_METHOD("advance", "delta"), &EGPNetSnapshotInterpolator::advance);
 	ClassDB::bind_method(D_METHOD("sample", "entity", "delta"), &EGPNetSnapshotInterpolator::sample, DEFVAL(0.0));
 	ClassDB::bind_method(D_METHOD("get_statistics"), &EGPNetSnapshotInterpolator::get_statistics);
@@ -42,13 +42,15 @@ void EGPNetSnapshotInterpolator::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("clear"), &EGPNetSnapshotInterpolator::clear);
 }
 
-Error EGPNetSnapshotInterpolator::configure(double p_tick_rate, double p_delay_seconds, double p_max_extrapolation_seconds) {
+Error EGPNetSnapshotInterpolator::configure(double p_tick_rate, double p_delay_seconds, double p_max_extrapolation_seconds, double p_max_adaptive_delay_seconds) {
 	ERR_FAIL_COND_V(Thread::get_caller_id() != owner_thread, ERR_BUSY);
-	if (!Math::is_finite(p_tick_rate) || !Math::is_finite(p_delay_seconds) || !Math::is_finite(p_max_extrapolation_seconds) || p_tick_rate < 1 || p_tick_rate > 1000 || p_delay_seconds < 0 || p_delay_seconds > 2 || p_max_extrapolation_seconds < 0 || p_max_extrapolation_seconds > 0.5) {
+	if (!Math::is_finite(p_tick_rate) || !Math::is_finite(p_delay_seconds) || !Math::is_finite(p_max_extrapolation_seconds) || p_tick_rate < 1 || p_tick_rate > 1000 || p_delay_seconds < 0 || p_delay_seconds > 2 || p_max_extrapolation_seconds < 0 || p_max_extrapolation_seconds > 0.5 || !Math::is_finite(p_max_adaptive_delay_seconds) || p_max_adaptive_delay_seconds < 0 || p_max_adaptive_delay_seconds > 2 || (p_max_adaptive_delay_seconds > 0 && p_max_adaptive_delay_seconds < p_delay_seconds)) {
 		return ERR_INVALID_PARAMETER;
 	}
 	tick_rate = p_tick_rate;
-	delay_ticks = p_delay_seconds * tick_rate;
+	base_delay_ticks = p_delay_seconds * tick_rate;
+	max_delay_ticks = p_max_adaptive_delay_seconds > 0 ? p_max_adaptive_delay_seconds * tick_rate : base_delay_ticks;
+	delay_ticks = base_delay_ticks;
 	extrapolation_ticks = p_max_extrapolation_seconds * tick_rate;
 	clear();
 	return OK;
@@ -67,13 +69,20 @@ Transform3D EGPNetSnapshotInterpolator::evaluate(const Track &p_track, double p_
 	}
 	const Snapshot &latest = samples.back();
 	Transform3D result = latest.pose;
-	result.origin += latest.velocity * (CLAMP(p_tick - latest.tick, 0.0, extrapolation_ticks) / tick_rate);
+	double duration = CLAMP(p_tick - latest.tick, 0.0, extrapolation_ticks) / tick_rate;
+	result.origin += latest.velocity * duration;
+	double angular_speed = latest.angular_velocity.length();
+	if (angular_speed > 0.000001 && duration > 0) {
+		// Box3D angular velocity is world-space radians/second. Left multiply
+		// the basis so nonuniform scale is preserved independently of rotation.
+		result.basis = Basis(Quaternion(latest.angular_velocity / angular_speed, angular_speed * duration)) * result.basis;
+	}
 	return result;
 }
 
-bool EGPNetSnapshotInterpolator::submit(int64_t p_entity, int64_t p_tick, const Transform3D &p_pose, const Vector3 &p_velocity) {
+bool EGPNetSnapshotInterpolator::submit(int64_t p_entity, int64_t p_tick, const Transform3D &p_pose, const Vector3 &p_velocity, int64_t p_discontinuity_epoch, const Vector3 &p_angular_velocity) {
 	ERR_FAIL_COND_V(Thread::get_caller_id() != owner_thread, false);
-	if (p_entity <= 0 || p_tick < 0 || p_tick > 9007199254740991LL || !p_pose.is_finite() || !p_velocity.is_finite()) {
+	if (p_entity <= 0 || p_tick < 0 || p_tick > 9007199254740991LL || !p_pose.is_finite() || !p_velocity.is_finite() || !p_angular_velocity.is_finite() || p_angular_velocity.length_squared() > 1000000.0 || p_discontinuity_epoch < -1 || p_discontinuity_epoch > 9007199254740991LL) {
 		return false;
 	}
 	auto found = tracks.find(p_entity);
@@ -81,22 +90,37 @@ bool EGPNetSnapshotInterpolator::submit(int64_t p_entity, int64_t p_tick, const 
 		return false;
 	}
 	Track &track = tracks[p_entity];
+	if (track.epoch >= 0 && p_discontinuity_epoch < track.epoch) {
+		++rejected_epochs;
+		return false;
+	}
+	bool explicit_reset = !track.samples.empty() && p_discontinuity_epoch > track.epoch;
 	if (!track.samples.empty() && p_tick <= track.samples.back().tick) {
 		return false;
+	}
+	if (!track.samples.empty() && !explicit_reset && max_delay_ticks > base_delay_ticks) {
+		// Cadence measures authoritative sample spacing, not network RTT. A
+		// bounded extra margin absorbs sparse interest/loss without clock jumps.
+		cadence_peak_ticks = MAX(cadence_peak_ticks, MIN(double(p_tick - track.samples.back().tick), max_delay_ticks));
 	}
 	bool was_extrapolating = !track.samples.empty() && clock > track.samples.back().tick;
 	Transform3D before;
 	if (!track.samples.empty()) {
 		before = evaluate(track, clock);
-		if (track.samples.back().pose.origin.distance_to(p_pose.origin) > 8.0) {
+		if (explicit_reset || (p_discontinuity_epoch == -1 && track.samples.back().pose.origin.distance_to(p_pose.origin) > 8.0)) {
 			track.samples.clear();
 			track.correction = Vector3();
 			track.rotation_correction = Quaternion();
 			was_extrapolating = false;
 			++teleports;
+			if (explicit_reset) {
+				++epoch_resets;
+				++track.epoch_resets;
+			}
 		}
 	}
-	track.samples.push_back({ p_tick, p_pose, p_velocity });
+	track.epoch = p_discontinuity_epoch;
+	track.samples.push_back({ p_tick, p_pose, p_velocity, p_angular_velocity });
 	while (track.samples.size() > 32) {
 		track.samples.pop_front();
 	}
@@ -145,6 +169,8 @@ double EGPNetSnapshotInterpolator::advance(double p_delta) {
 	// wall clock outrun authority indefinitely. Rate correction is bounded.
 	double delta = MIN(p_delta, 0.25);
 	since_arrival += delta;
+	cadence_peak_ticks = MAX(0.0, cadence_peak_ticks - delta * tick_rate * 0.05);
+	delay_ticks = CLAMP(cadence_peak_ticks + 3.0, base_delay_ticks, max_delay_ticks);
 	double desired = newest_tick + MIN(since_arrival * tick_rate, 3.0) - delay_ticks;
 	double speed = CLAMP(1.0 + (desired - clock) * 0.025, 0.9, 1.1);
 	double previous = clock;
@@ -172,6 +198,11 @@ Transform3D EGPNetSnapshotInterpolator::sample(int64_t p_entity, double p_delta)
 	} else if (age > extrapolation_ticks) {
 		++held;
 		++track.held;
+		if (track.samples.back().velocity.length_squared() > 0.000001 || track.samples.back().angular_velocity.length_squared() > 0.000001) {
+			++track.held_moving;
+		} else {
+			++track.held_stationary;
+		}
 	} else if (age > 0) {
 		++extrapolated;
 		++track.extrapolated;
@@ -195,12 +226,16 @@ Dictionary EGPNetSnapshotInterpolator::get_statistics() const {
 	Dictionary result;
 	result["render_tick"] = clock;
 	result["buffer_ticks"] = newest_tick - clock;
+	result["target_delay_seconds"] = delay_ticks / tick_rate;
+	result["adaptive_buffering"] = max_delay_ticks > base_delay_ticks;
 	result["tracked_entities"] = int64_t(tracks.size());
 	result["interpolated_samples"] = interpolated;
 	result["extrapolated_samples"] = extrapolated;
 	result["held_samples"] = held;
 	result["corrections"] = corrections;
 	result["teleports"] = teleports;
+	result["epoch_resets"] = epoch_resets;
+	result["rejected_epochs"] = rejected_epochs;
 	result["priming_samples"] = priming;
 	result["clock_hold_frames"] = clock_holds;
 	result["largest_correction_m"] = largest_correction;
@@ -212,6 +247,10 @@ Dictionary EGPNetSnapshotInterpolator::get_statistics() const {
 		stats["interpolated_samples"] = track.interpolated;
 		stats["extrapolated_samples"] = track.extrapolated;
 		stats["held_samples"] = track.held;
+		stats["held_moving_samples"] = track.held_moving;
+		stats["held_stationary_samples"] = track.held_stationary;
+		stats["discontinuity_epoch"] = track.epoch;
+		stats["epoch_resets"] = track.epoch_resets;
 		stats["priming_samples"] = track.priming;
 		stats["corrections"] = track.corrections;
 		stats["largest_correction_m"] = track.largest_correction;
@@ -230,7 +269,9 @@ void EGPNetSnapshotInterpolator::clear() {
 	ERR_FAIL_COND(Thread::get_caller_id() != owner_thread);
 	tracks.clear();
 	started = false;
-	clock = newest_tick = since_arrival = 0;
+	clock = newest_tick = since_arrival = cadence_peak_ticks = 0;
+	delay_ticks = base_delay_ticks;
 	interpolated = extrapolated = held = corrections = teleports = priming = clock_holds = 0;
+	epoch_resets = rejected_epochs = 0;
 	largest_correction = largest_angular_correction = 0;
 }

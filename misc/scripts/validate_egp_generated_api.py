@@ -16,33 +16,95 @@ ROOT = Path(__file__).resolve().parents[2]
 PROBES = ROOT / "misc/egp/generated_api"
 
 
-def extract_sdk(output):
-    """Verify and unpack the exact archive compiled into the validation editor."""
-    header = (ROOT / "editor/settings/gdextension/native_extension_sdk.gen.h").read_text()
-    expected = re.search(r'egp_cpp_sdk_hash = "([0-9a-f]+)"', header).group(1)
-    payload = header.split("egp_cpp_sdk_data[] = {", 1)[1].split("}", 1)[0]
-    archive = zlib.decompress(bytes(int(value) for value in re.findall(r"\d+", payload)))
-    if hashlib.sha256(archive).hexdigest() != expected:
-        raise RuntimeError("Bundled SDK archive hash mismatch")
-    output.mkdir(parents=True)
-    offset = 0
-    while offset < len(archive):
-        name_size, data_size = struct.unpack_from("<II", archive, offset)
-        offset += 8
-        name = archive[offset : offset + name_size].decode("utf-8")
-        offset += name_size
-        target = (output / name).resolve()
-        if not target.is_relative_to(output.resolve()) or offset + data_size > len(archive):
-            raise RuntimeError("Invalid bundled SDK archive entry")
-        target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_bytes(archive[offset : offset + data_size])
-        offset += data_size
-    (output / ".complete").write_text(expected + "\n")
-    return expected
+def extract_sdk(output, engine, api_sha256, sdk_header=None):
+    """Unpack a native-build SDK proven present in the selected final editor."""
+    binary = (
+        engine.with_name(engine.name.removesuffix(".console.exe") + ".exe")
+        if engine.name.endswith(".console.exe")
+        else engine
+    )
+    compiled_bytes = binary.read_bytes()
+    binary_hash = hashlib.sha256(compiled_bytes).hexdigest()
+    if sdk_header:
+        candidates = [sdk_header.resolve()]
+    else:
+        candidates = [
+            stamp.parent.parent / "generated/editor/settings/gdextension/native_extension_sdk.gen.h"
+            for stamp in (ROOT / ".build").glob("**/engine-api/sdk-stamp.json")
+        ]
+    for candidate in candidates:
+        # Accept native graph output only, never historical source-tree headers.
+        if not candidate.is_file() or len(candidate.parents) < 5 or candidate.parents[3].name != "generated":
+            continue
+        stamp_path = candidate.parents[4] / "engine-api/sdk-stamp.json"
+        if not stamp_path.is_file():
+            continue
+        stamp = json.loads(stamp_path.read_text())
+        header_bytes = candidate.read_bytes()
+        if stamp.get("api_hash") != api_sha256 or stamp.get("header_hash") != hashlib.sha256(header_bytes).hexdigest():
+            continue
+        header = header_bytes.decode("utf-8")
+        hash_match = re.search(r'egp_cpp_sdk_hash = "([0-9a-f]{64})"', header)
+        payload_match = re.search(r"egp_cpp_sdk_data\[\] = \{([^}]*)\}", header)
+        if not hash_match or not payload_match:
+            raise RuntimeError("Invalid native-build SDK header: " + str(candidate))
+        expected = hash_match.group(1)
+        payload_text = payload_match.group(1)
+        payload = bytes(int(value) for value in re.findall(r"\d+", payload_text))
+        if not payload or payload not in compiled_bytes:
+            continue
+        archive = zlib.decompress(payload)
+        if hashlib.sha256(archive).hexdigest() != expected:
+            raise RuntimeError("Compiled SDK archive hash mismatch")
+        output.mkdir(parents=True)
+        offset = 0
+        files = {}
+        while offset < len(archive):
+            if offset + 8 > len(archive):
+                raise RuntimeError("Truncated SDK archive entry")
+            name_size, data_size = struct.unpack_from("<II", archive, offset)
+            offset += 8
+            if offset + name_size + data_size > len(archive):
+                raise RuntimeError("Truncated SDK archive payload")
+            name = archive[offset : offset + name_size].decode("utf-8")
+            offset += name_size
+            target = (output / name).resolve()
+            if not target.is_relative_to(output.resolve()) or name in files:
+                raise RuntimeError("Invalid or duplicate SDK archive entry")
+            files[name] = archive[offset : offset + data_size]
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(files[name])
+            offset += data_size
+        if "sdk.json" not in files:
+            raise RuntimeError("Compiled SDK metadata is missing")
+        metadata = json.loads(files["sdk.json"])
+        fingerprint = b"".join(
+            name.encode() + hashlib.sha256(files[name]).digest() for name in sorted(files) if name != "sdk.json"
+        )
+        if metadata.get("api_sha256") != api_sha256 or metadata.get("build_system") != "xmake":
+            raise RuntimeError("Compiled SDK does not match the final editor's API/native build contract")
+        if metadata.get("source_sha256") != hashlib.sha256(fingerprint).hexdigest():
+            raise RuntimeError("Compiled SDK source fingerprint mismatch")
+        (output / ".complete").write_text(expected)
+        return {
+            "sdk_archive_sha256": expected,
+            "sdk_header": str(candidate),
+            "sdk_header_sha256": hashlib.sha256(header_bytes).hexdigest(),
+            "sdk_stamp": str(stamp_path),
+            "compiled_binary": str(binary),
+            "compiled_binary_sha256": binary_hash,
+        }
+    raise RuntimeError("No native-build SDK header matches both the final editor payload and freshly captured API")
 
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--engine", type=Path, help="Final editor used to capture and qualify its exact API/embedded SDK"
+    )
+    parser.add_argument(
+        "--sdk-header", type=Path, help="Explicit native graph generated SDK header (requires matching SDK stamp)"
+    )
     parser.add_argument("--cpp", action="store_true", help="Compile against the current bundled editor SDK")
     parser.add_argument("--sdk", type=Path, help="Use an already extracted SDK")
     parser.add_argument(
@@ -52,6 +114,8 @@ def main():
     args = parser.parse_args()
     if not (args.cpp or args.sdk or args.managed_assembly):
         parser.error("Select --cpp, --sdk, and/or --managed-assembly")
+    if args.cpp and not args.sdk and not args.engine:
+        parser.error("Automatic bundled SDK qualification requires --engine pointing to the final editor")
     output = args.output.resolve() / str(time.time_ns())
     output.mkdir(parents=True)
     receipt = {
@@ -65,7 +129,12 @@ def main():
         with path.open("w", encoding="utf-8") as log:
             result = subprocess.run(
                 command,
-                cwd=ROOT,
+                cwd=PROBES / "cpp" if label.startswith("cpp-") else ROOT,
+                env=dict(
+                    os.environ,
+                    XMAKE_CONFIGDIR=str(output / "xmake-config"),
+                    XMAKE_GLOBALDIR=str(output / "xmake-global"),
+                ),
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 timeout=300,
@@ -76,6 +145,28 @@ def main():
             raise RuntimeError(label + " failed: " + str(path))
 
     try:
+        api_sha256 = None
+        if args.engine:
+            engine = args.engine.resolve()
+            receipt["engine"] = str(engine)
+            receipt["engine_sha256"] = hashlib.sha256(engine.read_bytes()).hexdigest()
+            api_output = output / "engine-api"
+            api_output.mkdir()
+            with (api_output / "capture.log").open("w", encoding="utf-8") as log:
+                capture = subprocess.run(
+                    [str(engine), "--headless", "--dump-extension-api"],
+                    cwd=api_output,
+                    stdout=log,
+                    stderr=subprocess.STDOUT,
+                    timeout=120,
+                    **({"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}),
+                )
+            text = (api_output / "capture.log").read_text(encoding="utf-8", errors="replace")
+            if capture.returncode or "ERROR:" in text:
+                raise RuntimeError("Final editor API capture failed: " + str(api_output / "capture.log"))
+            api_sha256 = hashlib.sha256((api_output / "extension_api.json").read_bytes()).hexdigest()
+            receipt["api_sha256"] = api_sha256
+            receipt["api_path"] = str(api_output / "extension_api.json")
         if args.managed_assembly:
             assembly = args.managed_assembly.resolve()
             receipt["assembly_sha256"] = hashlib.sha256(assembly.read_bytes()).hexdigest()
@@ -95,24 +186,49 @@ def main():
         if args.cpp or args.sdk:
             sdk = args.sdk.resolve() if args.sdk else output / "sdk"
             if not args.sdk:
-                receipt["sdk_archive_sha256"] = extract_sdk(sdk)
+                receipt.update(extract_sdk(sdk, engine, api_sha256, args.sdk_header))
             receipt["sdk_metadata"] = json.loads((sdk / "sdk.json").read_text())
+            if api_sha256 and receipt["sdk_metadata"]["api_sha256"] != api_sha256:
+                raise RuntimeError("SDK metadata does not match the selected final editor API")
             for name in (
                 "superposition",
                 "superposition_config",
                 "superposition_property",
+                "superposition_world",
+                "superposition_prediction",
+                "superposition_scene",
+                "superposition_spawner",
+                "superposition_rpc_method",
+                "superposition_rpc",
                 "egp_net_snapshot_interpolator",
             ):
                 if not (sdk / "gen/include/godot_cpp/classes" / (name + ".hpp")).is_file():
                     raise RuntimeError("Matching SDK header missing: " + name)
-            cmake = shutil.which("cmake") or "cmake"
-            command = [cmake, "-S", str(PROBES / "cpp"), "-B", str(output / "native"), "-DEGP_CPP_SDK=" + str(sdk)]
-            if os.name == "nt":
-                command.extend(["-A", "x64"])
-            run("cpp-configure", command)
-            run("cpp-build", [cmake, "--build", str(output / "native"), "--config", "Debug", "--parallel", "2"])
+            xmake = os.environ.get("XMAKE") or shutil.which("xmake") or "xmake"
+            run(
+                "cpp-configure",
+                [
+                    xmake,
+                    "f",
+                    "-y",
+                    "-P",
+                    str(PROBES / "cpp"),
+                    "--builddir=" + str(output / "native"),
+                    "--mode=debug",
+                    "--egp_cpp_sdk=" + str(sdk),
+                ],
+            )
+            run("cpp-build", [xmake, "-P", str(PROBES / "cpp"), "-b", "-j", "2", "api-probe"])
+        if args.engine and hashlib.sha256(engine.read_bytes()).hexdigest() != receipt["engine_sha256"]:
+            raise RuntimeError("Editor changed during typed API qualification")
+        if (
+            receipt.get("compiled_binary")
+            and hashlib.sha256(Path(receipt["compiled_binary"]).read_bytes()).hexdigest()
+            != receipt["compiled_binary_sha256"]
+        ):
+            raise RuntimeError("Compiled editor changed during typed API qualification")
         receipt["passed"] = True
-    except (OSError, ValueError, RuntimeError, subprocess.TimeoutExpired) as error:
+    except (OSError, ValueError, RuntimeError, zlib.error, subprocess.TimeoutExpired) as error:
         receipt["error"] = str(error)
     (output / "receipt.json").write_text(json.dumps(receipt, indent=2) + "\n", encoding="utf-8")
     print(("PASS" if receipt["passed"] else "FAIL") + ": " + str(output / "receipt.json"))

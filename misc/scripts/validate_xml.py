@@ -10,10 +10,9 @@ import xmlschema  # Third-party module. Automatically installed in associated pr
 
 sys.path.insert(0, "./")
 
-try:
-    from methods import print_error
-except ImportError:
-    raise SystemExit(f"Utility script {__file__} must be run from repository root!")
+
+def print_error(message):
+    print(message, file=sys.stderr)
 
 
 def main():

@@ -1,35 +1,15 @@
-name: Setup Python and SCons
-description: Setup Python, install the pip version of SCons.
-
-inputs:
-  python-version:
-    description: The Python version to use.
-    default: 3.x
-  python-arch:
-    description: The Python architecture.
-    default: x64
-  scons-version:
-    description: The SCons version to use.
-    default: 4.11.1
-
+name: Setup native xmake
+description: Install the pinned native xmake build tool and compiler feedback.
 runs:
   using: composite
   steps:
-    - name: Set up Python 3.x
-      uses: actions/setup-python@v7
+    - uses: ilammy/msvc-dev-cmd@v1
+      if: runner.os == 'Windows'
+    - uses: xmake-io/github-action-setup-xmake@v1
       with:
-        # Semantic version range syntax or exact version of a Python version.
-        python-version: ${{ inputs.python-version }}
-        # Optional - x64 or x86 architecture, defaults to x64.
-        architecture: ${{ inputs.python-arch }}
-
-    - name: Setup SCons
+        xmake-version: '3.1.1'
+    - name: Check tools and compiler feedback
       shell: bash
       run: |
-        python -c "import sys; print(sys.version)"
-        python -m pip install scons==${{ inputs.scons-version }}
-        scons --version
-
-    - name: Setup problem matchers
-      shell: bash
-      run: echo ::add-matcher::misc/utility/problem-matchers.json
+        xmake --version
+        echo ::add-matcher::misc/utility/problem-matchers.json

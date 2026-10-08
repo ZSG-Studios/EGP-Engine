@@ -1,12 +1,14 @@
 #!/usr/bin/env python3
 """Check separate Godot processes with a test-only trusted token handoff."""
+
 import argparse
 import json
-from pathlib import Path
+import os
 import re
 import subprocess
 import tempfile
 import time
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser(description=__doc__)
@@ -20,7 +22,7 @@ if args.project:
     base += ["--path", str(args.project.resolve())]
 base += ["--", "--fixture=processes"]
 results = {}
-children = []
+children: list[subprocess.Popen[bytes]] = []
 logs = []
 output = ROOT / ".build/egp-net-processes" / str(time.time_ns())
 output.mkdir(parents=True)
@@ -38,8 +40,15 @@ try:
         log = (output / (role + ".log")).open("w", encoding="utf-8")
         logs.append(log)
         language_args = ["--language=" + args.client_language] if role == "client" and args.client_language else []
-        children.append(subprocess.Popen(base + ["--role=" + role, "--admission=" + str(admission)] + language_args,
-                                        cwd=engine.parent, stdout=log, stderr=subprocess.STDOUT))
+        children.append(
+            subprocess.Popen(
+                base + ["--role=" + role, "--admission=" + str(admission)] + language_args,
+                cwd=engine.parent,
+                stdout=log,
+                stderr=subprocess.STDOUT,
+                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+            )
+        )
     for role, child in zip(["server", "client"], children):
         code = child.wait(timeout=15)
         logs[["server", "client"].index(role)].close()

@@ -25,6 +25,7 @@ quantization = 0.0
 [sub_resource type="SuperpositionConfig" id="MatchState"]
 properties = Array[SuperpositionProperty]([SubResource("TealScore"), SubResource("AmberScore"), SubResource("Pickups"), SubResource("Checkpoints")])
 update_rate = 4.0
+delta_replication = true
 
 [node name="Arena" type="Node3D"]
 script = ExtResource("1")

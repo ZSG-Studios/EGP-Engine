@@ -1,0 +1,55 @@
+-- Post-link package qualification; uses synthetic binaries and actual shipped web assets.
+function main(zipper)
+    local package=import('build.xmake.platforms.package',{rootdir=os.curdir()})
+    local root=os.curdir()
+    local output=path.join(root,'.build/xmake-package-tests')
+    os.mkdir(output)
+    local program=path.join(output,'godot.web.template_debug.wasm32.js')
+    io.writefile(program,'var Godot = {};\n')
+    io.writefile(program:gsub('%.js$','.wasm'),'\0asm\1\0\0\0',{encoding='binary'})
+    local context={root=root,bin_dir=output,targetfile=program,options={platform='web',target='template_debug',threads=false},zip_executable=assert(zipper)}
+    package.finish(context)
+    assert(os.isfile((program:gsub('%.js$','.zip'))),'Template ZIP missing')
+    local wrapped=assert(io.readfile((program:gsub('%.js$','.wrapped.js'))))
+    assert(wrapped:find('var Godot = {};',1,true),'Native Emscripten runtime missing')
+    assert(wrapped:find('const Engine =',1,true),'Godot engine wrapper missing')
+    assert(not wrapped:find('___GODOT_THREADS_ENABLED',1,true),'Thread placeholder unresolved')
+    local editor=path.join(output,'godot.web.editor.wasm32.js')
+    io.writefile(editor,'var Godot = {};\n')
+    io.writefile(editor:gsub('%.js$','.wasm'),'\0asm\1\0\0\0',{encoding='binary'})
+    context.targetfile=editor; context.options.target='editor'; context.options.threads=true; context.build_version='4.6.dev.test'
+    package.finish(context)
+    local stage=path.join(output,'.web_zip','godot.web.editor.wasm32')
+    local html=assert(io.readfile(path.join(stage,'godot.editor.html')))
+    assert(not html:find('___GODOT_',1,true),'Editor HTML placeholders unresolved')
+    assert(html:find('godot.editor.wasm',1,true),'Editor wasm preloader metadata absent')
+    assert(os.isfile(path.join(stage,'inter-regular.woff2')),'Shipped editor font missing')
+    local android=path.join(output,'android-project')
+    local ndk=path.join(output,'android-ndk')
+    local stl=path.join(ndk,'toolchains/llvm/prebuilt',os.host()=='windows' and 'windows-x86_64' or os.host()=='macosx' and 'darwin-x86_64' or 'linux-x86_64','sysroot/usr/lib/aarch64-linux-android/libc++_shared.so')
+    os.mkdir(path.directory(stl)); io.writefile(stl,'synthetic-stl')
+    local library=path.join(output,'android.so'); io.writefile(library,'synthetic-engine')
+    package.finish({root=android,bin_dir=output,targetfile=library,options={platform='android',target='editor',arch='arm64',ndk=ndk},zip_executable=zipper})
+    local staged=path.join(android,'platform/android/java/lib/libs/tools/debug/arm64-v8a')
+    assert(io.readfile(path.join(staged,'libgodot_android.so'))=='synthetic-engine','Android engine JNI staging')
+    assert(io.readfile(path.join(staged,'libc++_shared.so'))=='synthetic-stl','Matching shared libc++ staging')
+    for _, platform in ipairs({'ios','visionos'}) do
+        local archive=path.join(output,platform .. '.a')
+        io.writefile(archive,'platform-archive')
+        local called=false
+        package.finish({root=root,bin_dir=output,targetfile=archive,options={platform=platform},archives={'engine-core.a','engine-scene.a'},run=function(program,args)
+            assert(program=='xcrun' and args[1]=='libtool' and args[2]=='-static','Apple static merger must use native libtool')
+            assert(args[5]==archive and args[6]=='engine-core.a' and args[7]=='engine-scene.a','Apple merger must include platform and every engine archive')
+            io.writefile(args[4],'complete-engine-archive'); called=true
+        end})
+        assert(called and io.readfile(archive)=='complete-engine-archive','Merged Apple archive must replace platform-only artifact')
+    end
+    local msvc=path.join(output,'static-engine.lib'); io.writefile(msvc,'platform-object')
+    local called=false
+    package.finish({root=root,bin_dir=output,targetfile=msvc,options={platform='windows',library_type='static_library'},archives={'engine-core.lib'},archive_tool='lib.exe',run=function(program,args)
+        assert(program=='lib.exe' and args[1]=='/NOLOGO' and args[3]==msvc and args[4]=='engine-core.lib','MSVC static export must combine dependency archives')
+        io.writefile(args[2]:sub(6),'complete-engine'); called=true
+    end})
+    assert(called and io.readfile(msvc)=='complete-engine','MSVC static engine must replace the platform-only artifact')
+    print('XMAKE_PLATFORM_PACKAGES_PASS 16')
+end

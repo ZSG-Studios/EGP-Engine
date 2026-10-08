@@ -91,62 +91,24 @@ android {
             throw new GradleException("Invalid build type: $buildType")
         }
 
-        boolean debugBuild = buildType == "debug"
-        boolean debugSymbols = debugBuild
-        boolean runTests = debugBuild
-        boolean storeRelease = buildType == "release"
-        boolean productionBuild = storeRelease
-
-        def sconsTarget = flavorName
-        if (sconsTarget == "template") {
-            // Tests are not supported on template builds
-            runTests = false
-
+        def nativeTarget = flavorName
+        if (nativeTarget == "template") {
             //noinspection GroovyFallthrough
             switch (buildType) {
                 case "release":
-                    sconsTarget += "_release"
+                    nativeTarget += "_release"
                     break
                 case "debug":
                 default:
-                    sconsTarget += "_debug"
+                    nativeTarget += "_debug"
                     break
             }
         }
 
         // Update the name of the generated library
-        def outputSuffix = "${sconsTarget}"
+        def outputSuffix = "${nativeTarget}"
         variant.outputs.all { output ->
             output.outputFileName = "godot-lib.${outputSuffix}.aar"
-        }
-
-        // Find scons' executable path
-        File sconsExecutableFile = null
-        def sconsName = "scons"
-        def sconsExts = (org.gradle.internal.os.OperatingSystem.current().isWindows()
-            ? [".bat", ".cmd", ".ps1", ".exe"]
-            : [""])
-        logger.debug("Looking for $sconsName executable path")
-        for (ext in sconsExts) {
-            String sconsNameExt = sconsName + ext
-            logger.debug("Checking $sconsNameExt")
-            sconsExecutableFile = org.gradle.internal.os.OperatingSystem.current().findInPath(sconsNameExt)
-            if (sconsExecutableFile != null) {
-                // We're done!
-                break
-            }
-            // Check all the options in path
-            List<File> allOptions = org.gradle.internal.os.OperatingSystem.current().findAllInPath(sconsNameExt)
-            if (!allOptions.isEmpty()) {
-                // Pick the first option and we're done!
-                sconsExecutableFile = allOptions.get(0)
-                break
-            }
-        }
-        if (sconsExecutableFile == null) {
-            throw new GradleException("Unable to find executable path for the '$sconsName' command.")
-        } else {
-            logger.debug("Found executable path for $sconsName: ${sconsExecutableFile.absolutePath}")
         }
 
         for (String selectedAbi : selectedAbis) {
@@ -155,10 +117,16 @@ android {
             }
 
             // Creating gradle task to generate the native libraries for the selected abi.
-            def taskName = getSconsTaskName(flavorName, buildType, selectedAbi)
+            String nativeAbi = selectedAbi
+            def taskName = rootProject.getNativeTaskName(flavorName, buildType, nativeAbi)
             tasks.create(name: taskName, type: Exec) {
-                executable sconsExecutableFile.absolutePath
-                args "--directory=${pathToRootDir}", "platform=android", "store_release=${storeRelease}", "production=${productionBuild}", "dev_mode=${debugBuild}", "dev_build=${debugBuild}", "debug_symbols=${debugSymbols}", "tests=${runTests}", "target=${sconsTarget}", "arch=${selectedAbi}", "-j" + Runtime.runtime.availableProcessors()
+                workingDir file(pathToRootDir)
+                // Resolve the tool only when native compilation is requested. Prebuilt
+                // library packaging must configure without a compiler on PATH.
+                doFirst {
+                    String xmake = project.findProperty("xmakeExecutable") ?: System.getenv("XMAKE") ?: System.getenv("XMAKE_EXE") ?: "xmake"
+                    commandLine rootProject.getGodotNativeBuildCommand(flavorName, buildType, nativeAbi, file(pathToRootDir), xmake)
+                }
             }
 
             // Schedule the tasks so the generated libs are present before the aar file is packaged.

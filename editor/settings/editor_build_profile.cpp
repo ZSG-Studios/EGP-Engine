@@ -52,7 +52,7 @@
 #include "modules/modules_enabled.gen.h" // IWYU pragma: keep. For mono.
 
 const char *EditorBuildProfile::build_option_identifiers[BUILD_OPTION_MAX] = {
-	// This maps to SCons build options.
+	// This maps to native xmake engine options.
 	"disable_2d",
 	"disable_3d",
 	"disable_navigation_2d",
@@ -85,7 +85,7 @@ const char *EditorBuildProfile::build_option_identifiers[BUILD_OPTION_MAX] = {
 };
 
 const bool EditorBuildProfile::build_option_disabled_by_default[BUILD_OPTION_MAX] = {
-	// This maps to SCons build options.
+	// This maps to native xmake engine options.
 	false, // 2D
 	false, // 3D
 	false, // NAVIGATION_2D
@@ -118,7 +118,7 @@ const bool EditorBuildProfile::build_option_disabled_by_default[BUILD_OPTION_MAX
 };
 
 const bool EditorBuildProfile::build_option_disable_values[BUILD_OPTION_MAX] = {
-	// This maps to SCons build options.
+	// This maps to native xmake engine options.
 	true, // 2D
 	true, // 3D
 	true, // NAVIGATION_2D
@@ -731,7 +731,6 @@ EditorBuildProfile::EditorBuildProfile() {
 		{ "physics/3d/physics_engine", { "DEFAULT", PhysicsServer3DManager::BOX3D_PHYSICS_NAME } },
 	};
 	build_option_settings.insert(BUILD_OPTION_PHYSICS_BOX3D, settings_phy_box3d);
-
 
 	HashMap<String, LocalVector<Variant>> settings_msdfgen = {
 		{ "gui/theme/default_font_multichannel_signed_distance_field", { true } },

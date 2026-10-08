@@ -9,7 +9,7 @@ maintained by ZSG-Studios and based on upstream `master`.
 - Yojimbo networking with GDScript, C# and C++ APIs.
 - Superposition property replication configured through the Inspector.
 - Built-in C++ extension tools and a bundled godot-cpp SDK.
-- FASTBuild support for local and distributed Windows builds.
+- Native xmake builds with platform toolchains and incremental dependencies.
 
 ## What EGP replaces, and why
 
@@ -80,10 +80,10 @@ C# remains supported through Mono, with opt-in runtime reload and explicit state
 handoff. Reload compatibility and recovery have limits documented in the
 [runtime reload contract](doc/egp_api_contract.md#runtime-reload).
 
-FASTBuild supplements SCons with local/distributed C/C++ compilation on Windows.
-SCons still owns generation, dependencies and linking; Godot's .NET build scripts
-build the managed assemblies. These changes simplify development workflows;
-they do not replace Godot's extension ABI or establish a runtime performance gain.
+xmake owns native source generation, compilation, library creation and linking.
+Native Lua generates engine source and embedded data; .NET/MSBuild compiles matching
+managed assemblies after the native editor has generated its glue. The bundled
+C++ SDK and extension projects also use xmake.
 
 The [integration checklist](doc/egp_integration_loop.md) records the current
 combined-engine evidence and remaining acceptance work. EGP is under active
@@ -97,12 +97,11 @@ then run from the repository root:
 
 ```powershell
 .\misc\scripts\build_egp.ps1 -Setup
-.\misc\scripts\build_egp.ps1 -Local -Target editor
+.\misc\scripts\build_egp.ps1 -Target editor
 ```
 
-See the [FASTBuild guide](doc/egp_fastbuild.md) for export templates and
-distributed builds. For other platforms, see Godot's
-[compilation instructions](https://docs.godotengine.org/en/latest/engine_details/development/compiling).
+See the [xmake build guide](doc/egp_xmake.md) for editor/template variants,
+platform SDK requirements, compiler choices and current qualification scope.
 
 ## Documentation
 
@@ -117,7 +116,7 @@ distributed builds. For other platforms, see Godot's
 - [Box2D physics](doc/egp_box2d.md)
 - [Box3D physics](doc/egp_box3d.md)
 - [API and runtime reload contracts](doc/egp_api_contract.md)
-- [FASTBuild](doc/egp_fastbuild.md)
+- [xmake builds](doc/egp_xmake.md)
 - [Godot documentation](https://docs.godotengine.org)
 
 ## Contributing

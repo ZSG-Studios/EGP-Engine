@@ -284,6 +284,13 @@ Variant EGPNetSession::command(const StringName &p_operation, const Dictionary &
 		}
 		return error(session->set_replication_priority(int64_t(entity), int(priority)));
 	}
+	if (p_operation == "set_entity_delta_replication") {
+		const Variant entity = args.get("entity", 0), enabled = args.get("enabled", false);
+		if (entity.get_type() != Variant::INT || int64_t(entity) < 1 || enabled.get_type() != Variant::BOOL) {
+			return ERR_INVALID_PARAMETER;
+		}
+		return error(session->set_entity_delta_replication(int64_t(entity), bool(enabled)));
+	}
 	if (p_operation == "set_peer_replication_budget") {
 		const Variant peer = args.get("peer", -1), budget = args.get("bytes_per_second", 0);
 		if (peer.get_type() != Variant::INT || budget.get_type() != Variant::INT || int64_t(budget) < 0 || int64_t(budget) > INT32_MAX) {
@@ -300,6 +307,10 @@ Variant EGPNetSession::command(const StringName &p_operation, const Dictionary &
 			out["sent_updates"] = int64_t(stats->sent_updates);
 			out["sent_bytes"] = int64_t(stats->sent_bytes);
 			out["budget_deferrals"] = int64_t(stats->budget_deferrals);
+			out["delta_updates"] = int64_t(stats->delta_updates);
+			out["delta_bytes_saved"] = int64_t(stats->delta_bytes_saved);
+			out["full_state_updates"] = int64_t(stats->full_state_updates);
+			out["baseline_bytes"] = int64_t(stats->baseline_bytes);
 		}
 		return out;
 	}

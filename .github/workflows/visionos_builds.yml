@@ -5,7 +5,7 @@ on:
 
 # Global Settings
 env:
-  SCONS_FLAGS: >-
+  XMAKE_FLAGS: >-
     dev_mode=yes
     module_text_server_fb_enabled=yes
     debug_symbols=no
@@ -27,13 +27,13 @@ jobs:
         uses: ./.github/actions/godot-cache-restore
         continue-on-error: true
 
-      - name: Setup Python and SCons
+      - name: Setup native xmake
         uses: ./.github/actions/godot-deps
 
       - name: Compilation (arm64)
         uses: ./.github/actions/godot-build
         with:
-          scons-flags: ${{ env.SCONS_FLAGS }}
+          xmake-flags: ${{ env.XMAKE_FLAGS }}
           platform: visionos
           target: template_release
 

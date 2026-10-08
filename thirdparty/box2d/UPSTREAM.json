@@ -2,7 +2,6 @@
   "repository": "https://github.com/erincatto/box2d",
   "commit": "56edae79f2949d86142b03450d5d60f63bcf5a6f",
   "sha256_lf": {
-    "CMakeLists.txt": "b7864ef2115d4affd0ce853175ed676502bc21c99540c41a28e83f1eaa5b4afa",
     "LICENSE": "68a3e676d7e94093b102d5cba0d4e04af812040d6f230c3db67a6664574e43d2",
     "src/aabb.c": "83f7c1360b7302b288688bd862bf1892066ed3db6419e4358e5dd39b6d661562",
     "src/aabb.h": "78f707b5627195966f98adc7bc8c6ade86c42f20e7ad4d779683661ac6946da9",
@@ -16,7 +15,6 @@
     "src/box2d.natvis": "f7ecf221cd6513de83a10f7fe1fbc326678ff12a473bc5e22aa15a0fcf7c6961",
     "src/broad_phase.c": "9589d501a3531c5876d6c0ee377757b388984bc8ddb315ae17964ff8cc27aad8",
     "src/broad_phase.h": "45460bbf5d33f0fef7d96f2b323bcdba0a5c9e51a9aa1732e73864a78e605c9b",
-    "src/CMakeLists.txt": "9f1e72b329dcc4f9447620c322eda7ac5d18050a89428b9dec3bcaf8e892d40f",
     "src/constraint_graph.c": "aab6cb1e348016926876d0ba3d0255acbcc5079c44cf00984a25a879cf4a137c",
     "src/constraint_graph.h": "2fddbdf20c8f40c0e644025fff36cb049ddf614b50ccaea809688c15a9b00955",
     "src/contact.c": "faf87595be8bef2604ad36c0372f879fd788af43a38022acf3a8b8d07a50f846",
@@ -71,7 +69,6 @@
     "src/wheel_joint.c": "6c3596cb8b2767ad497dafcaf55275b84ebe3d0a3a5160e9ef2287966bf0c93e",
     "src/world_snapshot.c": "ac976c5ce01b76040d310d2f741daf90de2d18829d56a3f8e4c5b62ba3ce9f87",
     "src/world_snapshot.h": "71d8c9fe04ff36be1b7f83226eb1be864e9444da3ffec5615ab1428f3361c183",
-    "test/CMakeLists.txt": "1313d9ec4b70501613825b2bd129c935784251779fba1ec4643dba59ffe97a8d",
     "test/main.c": "48ac899ee541a40427f064b5aea88ce2ef9e27801cf23b3fc6140aa386f32b9e",
     "test/test_bitset.c": "a8405a4e48843287cbb47fef8cf35b460f3f31cd2ff0db1d2e42eb5c5d99158b",
     "test/test_collision.c": "98261e38b514ce9b8dc9947c3892cb7309dd33a9bb3ea3dd90dc2772aa280dd3",
@@ -98,12 +95,29 @@
     "include/box2d/types.h": "722fef1c827c0408a4af937368f92e9078f6c0bfff6acd5b085e8f59b92282c3",
     "shared/benchmarks.c": "1e49f2f5739be4cf7eb108015a05e301849c27ea044c9f832944f6c069cb435d",
     "shared/benchmarks.h": "08003f7c30de55b6dc102184a581f6e2072d6abde6b116fdf0288056a7a2c83f",
-    "shared/CMakeLists.txt": "3c604ceddbb394453079ad5d04b749104b2b53c9f510c2e2697c9ac9c5f69b71",
     "shared/determinism.c": "5b4dc2ab9a1295e815816b3d55659591a9956cb8378b02364029b128c38c8f95",
     "shared/determinism.h": "20dfac3f659350337e509f6892bae2cd9068b2d44895012397c9fb549b3804b4",
     "shared/human.c": "0ac864af31915ae2e138fdb97959aea8d2701cdbb9fb346f144b28aed8e60885",
     "shared/human.h": "edf3fbd7a5e06ab1adc6daec3213200c6900abce0ce5004e5c9a089767429447",
     "shared/utils.c": "eb3794bbe2d9412e7c423c898e5fc5372ace360b81b455ee7d0df9cbf75f89f0",
     "shared/utils.h": "9fd604fe818f1d9cc3a2f9063f64d549473f82c6b75db7cb47e6029fbe027a3a"
+  },
+  "excluded_upstream_files": {
+    "CMakeLists.txt": {
+      "upstream_sha256": "b7864ef2115d4affd0ce853175ed676502bc21c99540c41a28e83f1eaa5b4afa",
+      "reason": "Upstream build definition removed; EGP builds the retained sources with native xmake recipes."
+    },
+    "src/CMakeLists.txt": {
+      "upstream_sha256": "9f1e72b329dcc4f9447620c322eda7ac5d18050a89428b9dec3bcaf8e892d40f",
+      "reason": "Upstream build definition removed; EGP builds the retained sources with native xmake recipes."
+    },
+    "test/CMakeLists.txt": {
+      "upstream_sha256": "1313d9ec4b70501613825b2bd129c935784251779fba1ec4643dba59ffe97a8d",
+      "reason": "Upstream build definition removed; EGP builds the retained sources with native xmake recipes."
+    },
+    "shared/CMakeLists.txt": {
+      "upstream_sha256": "3c604ceddbb394453079ad5d04b749104b2b53c9f510c2e2697c9ac9c5f69b71",
+      "reason": "Upstream build definition removed; EGP builds the retained sources with native xmake recipes."
+    }
   }
 }

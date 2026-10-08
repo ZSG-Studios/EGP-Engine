@@ -1,9 +1,11 @@
 """Reject changed content and non-text normalization in vendored source checks."""
 
 import hashlib
+import tempfile
 import unittest
+from pathlib import Path
 
-from egp_vendor_manifest import normalization_pins, pinned_digest_match
+from egp_vendor_manifest import normalization_pins, pinned_digest_match, verify_excluded_files
 
 
 def digest(data):
@@ -11,6 +13,28 @@ def digest(data):
 
 
 class PinnedVendorDigestTests(unittest.TestCase):
+    def test_explicit_build_omissions_preserve_pins_and_reject_reintroduction(self):
+        with tempfile.TemporaryDirectory() as directory:
+            vendor = Path(directory)
+            entry = {"upstream_sha256": digest(b"upstream build"), "reason": "native xmake replacement"}
+            manifest = {"files": {}, "excluded_upstream_files": {"CMakeLists.txt": entry}}
+            verify_excluded_files(vendor, manifest)
+            (vendor / "CMakeLists.txt").write_bytes(b"upstream build")
+            with self.assertRaises(ValueError):
+                verify_excluded_files(vendor, manifest)
+            (vendor / "CMakeLists.txt").unlink()
+            for name in ("../CMakeLists.txt", "src/vendor.c"):
+                with self.assertRaises(ValueError):
+                    verify_excluded_files(vendor, {"files": {}, "excluded_upstream_files": {name: entry}})
+            with self.assertRaises(ValueError):
+                verify_excluded_files(
+                    vendor,
+                    {
+                        "files": {"CMakeLists.txt": entry["upstream_sha256"]},
+                        "excluded_upstream_files": {"CMakeLists.txt": entry},
+                    },
+                )
+
     def test_exact_bytes_including_binary_are_accepted(self):
         for data in (b"", b"abc", b"a\0b\xff\r\n", b"a\nb\r\n", b"lone\rreturn"):
             with self.subTest(data=data):

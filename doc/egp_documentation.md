@@ -7,7 +7,7 @@ EGP maintains two forks of Godot's official publishing projects:
 
 The documentation describes EGP's Box2D/Box3D physics, Yojimbo transport,
 GDScript/C#/C++ networking helpers, C++ extension editor, runtime reload, and
-FASTBuild workflow. Inherited multiplayer and Jolt instructions are replaced
+xmake workflow. Inherited multiplayer and Jolt instructions are replaced
 with migration guidance. Upstream credit and licenses remain intact.
 
 ## Update the manual and class reference

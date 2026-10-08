@@ -2844,7 +2844,7 @@
 			- [code]opengl3[/code], OpenGL 3.3 on desktop platforms, OpenGL ES 3.0 on mobile platforms, WebGL 2.0 on web.
 			- [code]opengl3_angle[/code], OpenGL ES 3.0 using the ANGLE compatibility layer, supported on macOS (over native OpenGL) and Windows (over Direct3D 11).
 			- [code]opengl3_es[/code], OpenGL ES 3.0 on Linux/BSD.
-			[b]Note:[/b] The availability of these options depends on whether the engine was compiled with support for them (determined by SCons options [code]opengl3[/code] and [code]angle_libs[/code]).
+			[b]Note:[/b] The availability of these options depends on whether the engine was compiled with support for them (determined by build options [code]opengl3[/code] and [code]angle_libs[/code]).
 			[b]Note:[/b] The actual rendering driver may be automatically changed by the engine as a result of a fallback, or a user-specified command line argument. To get the actual rendering driver that is used at runtime, use [method RenderingServer.get_current_rendering_driver_name] instead of reading this project setting's value.
 		</member>
 		<member name="rendering/gl_compatibility/driver.android" type="String" setter="" getter="" default="&quot;opengl3&quot;">
@@ -3174,7 +3174,7 @@
 			- [code]metal[/code], Metal (supported on Apple Silicon Macs and iOS).
 			- [code]vulkan[/code], Vulkan (supported on all desktop and mobile platforms).
 			- [code]d3d12[/code], Direct3D 12 (supported on Windows).
-			[b]Note:[/b] The availability of these options depends on whether the engine was compiled with support for them (determined by SCons options [code]vulkan[/code], [code]metal[/code], and [code]d3d12[/code]).
+			[b]Note:[/b] The availability of these options depends on whether the engine was compiled with support for them (determined by build options [code]vulkan[/code], [code]metal[/code], and [code]d3d12[/code]).
 			[b]Note:[/b] If a given platform has no registered drivers, it can fall back to the Compatibility renderer (OpenGL 3) if [member rendering/rendering_device/fallback_to_opengl3] is enabled. This fallback happens automatically for the Web platform regardless of that property.
 			[b]Note:[/b] The actual rendering driver may be automatically changed by the engine as a result of a fallback, or a user-specified command line argument. To get the actual rendering driver that is used at runtime, use [method RenderingServer.get_current_rendering_driver_name] instead of reading this project setting's value.
 		</member>

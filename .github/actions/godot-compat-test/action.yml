@@ -27,7 +27,9 @@ runs:
 
     - name: Build minimal GDExtension
       shell: sh
-      run: scons --directory=./tests/compatibility_test
+      run: |
+        xmake f -y -P tests/compatibility_test -m debug
+        xmake -P tests/compatibility_test -b compatibility_test
 
     - name: Download reference GDExtension API JSON and try to load it
       shell: sh

@@ -142,10 +142,39 @@ def main():
         help="Also build the Release extension and verify a relocated Mono release game",
     )
     parser.add_argument("--output", type=Path)
+    parser.add_argument(
+        "--distcc",
+        action="store_true",
+        help="Connect native extension builds using private configured xmake distcc hosts",
+    )
     args = parser.parse_args()
     engine, sdk, packages = args.engine.resolve(), args.sdk.resolve(), args.packages.resolve()
     output = (args.output or ROOT / ".build/egp-net-languages" / str(time.time_ns())).resolve()
     output.mkdir(parents=True, exist_ok=True)
+    private_config = None
+    if args.distcc:
+        private_root = Path(os.environ["LOCALAPPDATA"]) / ".xmake" if os.name == "nt" else Path.home() / ".xmake"
+        private_config = private_root / "egp-private-configs" / hashlib.sha256(str(output).encode()).hexdigest()[:20]
+        private_config.mkdir(parents=True, exist_ok=True)
+        if os.name == "nt":
+            account = f"{os.environ['USERDOMAIN']}\\{os.environ['USERNAME']}"
+            secured = subprocess.run(
+                [
+                    "icacls",
+                    str(private_config),
+                    "/inheritance:r",
+                    "/grant:r",
+                    f"{account}:(OI)(CI)F",
+                    "*S-1-5-18:(OI)(CI)F",
+                ],
+                capture_output=True,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
+                timeout=30,
+            )
+            if secured.returncode:
+                raise RuntimeError("Unable to restrict private distributed-build configuration permissions")
+        else:
+            private_config.chmod(0o700)
     project = output / "project"
     shutil.copytree(
         ROOT / "modules/egp_net/samples/trilingual",
@@ -192,11 +221,19 @@ def main():
     def run(label, command, timeout, marker=None, cwd=None):
         start = time.monotonic()
         logfile = output / (label + ".log")
-        with logfile.open("w") as log:
+        private_native = private_config is not None and label.startswith("cpp-")
+        raw_logfile = private_config / (label + ".log") if private_native else logfile
+        with raw_logfile.open("w") as log:
             process = subprocess.Popen(
                 [str(x) for x in command],
                 cwd=cwd or project,
-                env=env,
+                env=dict(
+                    env,
+                    XMAKE_CONFIGDIR=str(
+                        (private_config or output) / ("xmake-release-config" if "release" in label else "xmake-config")
+                    ),
+                    XMAKE_GLOBALDIR=env.get("XMAKE_GLOBALDIR") or str(output / "xmake-global"),
+                ),
                 stdout=log,
                 stderr=subprocess.STDOUT,
                 creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
@@ -210,12 +247,24 @@ def main():
                     process.kill()
                 process.wait()
                 code = -1
-        text = logfile.read_text(errors="replace")
+        text = raw_logfile.read_text(errors="replace")
         passed = (
             code == 0
             and (marker is None or marker in text)
             and not any(failure in text for failure in ("SCRIPT ERROR:", "ERROR:", "EGP_TRILINGUAL_FAILED"))
         )
+        if private_native:
+            # Connection diagnostics may contain private service identity. Keep
+            # only the result; credentials remain in the caller's global config.
+            receipt.setdefault("distcc", {})[label] = {
+                "connected": code == 0 if "distcc-connect" in label else None,
+                "distributed_candidate_entries": len(re.findall(r"compiling\.distc", text)),
+                "local_fallback_entries": text.count("fallback to the local compiler"),
+                "private_diagnostics_retained": True,
+                "scope": "Candidate scheduling does not independently prove successful remote execution",
+            }
+            text = "Private distributed-build diagnostics suppressed.\n"
+            logfile.write_text(text)
         checks.append({
             "name": label,
             "passed": passed,
@@ -259,19 +308,35 @@ def main():
             ],
             30,
         )
+        xmake = os.environ.get("XMAKE") or shutil.which("xmake") or "xmake"
         command = [
-            "cmake",
-            "-S",
+            xmake,
+            "f",
+            "-y",
+            "-P",
             project / "extension",
-            "-B",
+            "-o",
             output / "cpp-build",
-            f"-DEGP_CPP_SDK={sdk}",
-            "-DCMAKE_BUILD_TYPE=Debug",
+            "-m",
+            "debug",
+            f"--egp_cpp_sdk={sdk}",
         ]
         if args.sdk_library:
-            command.append(f"-DEGP_CPP_LIBRARY={args.sdk_library.resolve()}")
-        run("cpp-configure", command, 120)
-        run("cpp-build", ["cmake", "--build", output / "cpp-build", "--config", "Debug", "--parallel", "4"], 600)
+            command.append(f"--egp_cpp_library={args.sdk_library.resolve()}")
+        run("cpp-configure", command, 120, cwd=project / "extension")
+        if args.distcc:
+            run(
+                "cpp-distcc-connect",
+                [xmake, "service", "-P", project / "extension", "--connect", "--distcc"],
+                30,
+                cwd=project / "extension",
+            )
+        run(
+            "cpp-build",
+            [xmake, "-P", project / "extension", "-b", *(["-v"] if args.distcc else []), "-j", "4", "extension"],
+            600,
+            cwd=project / "extension",
+        )
         run("csharp-build", ["dotnet", "build", project / "NetInterop.csproj", "--nologo", "-v", "minimal"], 300)
         run("cold-import", [engine, "--headless", "--editor", "--path", project, "--import", "--max-fps", "30"], 120)
         run("interop", [engine, "--headless", "--path", project, "--max-fps", "60"], 40, "EGP_TRILINGUAL_PASSED")
@@ -309,21 +374,32 @@ def main():
             )
         if args.release_template:
             command = [
-                "cmake",
-                "-S",
+                xmake,
+                "f",
+                "-y",
+                "-P",
                 project / "extension",
-                "-B",
+                "-o",
                 output / "cpp-build-release",
-                f"-DEGP_CPP_SDK={sdk}",
-                "-DCMAKE_BUILD_TYPE=Release",
+                "-m",
+                "release",
+                f"--egp_cpp_sdk={sdk}",
             ]
             if args.release_sdk_library:
-                command.append(f"-DEGP_CPP_LIBRARY={args.release_sdk_library.resolve()}")
-            run("cpp-configure-release", command, 120)
+                command.append(f"--egp_cpp_library={args.release_sdk_library.resolve()}")
+            run("cpp-configure-release", command, 120, cwd=project / "extension")
+            if args.distcc:
+                run(
+                    "cpp-distcc-connect-release",
+                    [xmake, "service", "-P", project / "extension", "--connect", "--distcc"],
+                    30,
+                    cwd=project / "extension",
+                )
             run(
                 "cpp-build-release",
-                ["cmake", "--build", output / "cpp-build-release", "--config", "Release", "--parallel", "4"],
+                [xmake, "-P", project / "extension", "-b", *(["-v"] if args.distcc else []), "-j", "4", "extension"],
                 600,
+                cwd=project / "extension",
             )
             receipt["release_extension_sha256"] = digest(project / "extension/bin/netinterop.release.dll")
         for configuration, candidate in [("debug", args.template), ("release", args.release_template)]:

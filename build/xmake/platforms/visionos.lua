@@ -1,0 +1,35 @@
+-- Xmake has no built-in visionOS platform. Configure Apple's real SDK/compiler.
+-- Include this file from the root graph before selecting egp-visionos.
+toolchain("egp-visionos")
+    set_kind("standalone")
+    set_description("Apple visionOS clang toolchain (Xcode xros SDK)")
+    on_check(function (toolchain)
+        import("lib.detect.find_tool")
+        local xcrun = find_tool("xcrun")
+        assert(xcrun, "visionOS requires Xcode and xcrun on macOS")
+        local sdk = toolchain:config("simulator") and "xrsimulator" or "xros"
+        local sdkroot = os.iorunv(xcrun.program, {"--sdk", sdk, "--show-sdk-path"}):trim()
+        assert(os.isdir(sdkroot), "Xcode does not contain the requested visionOS SDK: " .. sdk)
+        toolchain:config_set("egp_sdkroot", sdkroot)
+        toolchain:config_set("egp_clang", os.iorunv(xcrun.program, {"--sdk", sdk, "--find", "clang"}):trim())
+        toolchain:config_set("egp_clangxx", os.iorunv(xcrun.program, {"--sdk", sdk, "--find", "clang++"}):trim())
+        toolchain:config_set("egp_ar", os.iorunv(xcrun.program, {"--sdk", sdk, "--find", "ar"}):trim())
+        toolchain:save()
+        return true
+    end)
+    on_load(function (toolchain)
+        assert(toolchain:arch() == "arm64" or (toolchain:arch() == "x86_64" and toolchain:config("simulator")), "visionOS device requires arm64; x86_64 is simulator-only")
+        toolchain:set("toolset", "cc", toolchain:config("egp_clang"))
+        toolchain:set("toolset", "cxx", toolchain:config("egp_clangxx"))
+        toolchain:set("toolset", "mm", toolchain:config("egp_clang"))
+        toolchain:set("toolset", "mxx", toolchain:config("egp_clangxx"))
+        toolchain:set("toolset", "ld", toolchain:config("egp_clangxx"))
+        toolchain:set("toolset", "sh", toolchain:config("egp_clangxx"))
+        toolchain:set("toolset", "ar", toolchain:config("egp_ar"))
+        local triple = toolchain:arch() .. (toolchain:config("simulator") and "-apple-xros26.0-simulator" or "-apple-xros26.0")
+        for _, key in ipairs({"cxflags", "mxflags", "ldflags", "shflags"}) do
+            toolchain:add(key, "-target", triple, "-isysroot", toolchain:config("egp_sdkroot"))
+        end
+        toolchain:add("arflags", "-cr")
+    end)
+toolchain_end()

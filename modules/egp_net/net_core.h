@@ -70,6 +70,8 @@ struct ReplicationStatistics {
 	int bytes_per_second = 0;
 	double available_bytes = 0;
 	uint64_t sent_updates = 0, sent_bytes = 0, budget_deferrals = 0;
+	uint64_t delta_updates = 0, delta_bytes_saved = 0, full_state_updates = 0;
+	size_t baseline_bytes = 0;
 };
 struct Peer {
 	int64_t id;
@@ -88,6 +90,7 @@ class Session {
 
 public:
 	static constexpr int MaxStateBytes = 4096, MaxReliableBytes = 4096, MaxUnreliableBytes = 900;
+	static constexpr size_t MaxDeltaBaselineBytesPerPeer = 1024 * 1024;
 	explicit Session(const Options &options = Options());
 	~Session();
 	Session(const Session &) = delete;
@@ -106,6 +109,7 @@ public:
 	Result despawn(uint64_t handle);
 	Result set_visible(uint64_t handle, int64_t peer, bool visible);
 	Result set_replication_priority(uint64_t handle, int priority);
+	Result set_entity_delta_replication(uint64_t handle, bool enabled);
 	Result set_peer_replication_budget(int64_t peer, int bytes_per_second);
 	std::optional<ReplicationStatistics> replication_statistics(int64_t peer) const;
 	std::map<uint64_t, Entity> entities() const;

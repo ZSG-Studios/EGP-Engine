@@ -10,10 +10,13 @@ import sys
 
 sys.path.insert(0, "./")
 
-try:
-    from methods import print_error, print_info
-except ImportError:
-    raise SystemExit(f"Utility script {__file__} must be run from repository root!")
+
+def print_error(message):
+    print(message, file=sys.stderr)
+
+
+def print_info(message):
+    print(message)
 
 
 def glob_to_regex(glob: str) -> re.Pattern[str]:

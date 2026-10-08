@@ -195,11 +195,13 @@ struct ForgedInline : yojimbo::Message {
 	}
 	YOJIMBO_VIRTUAL_SERIALIZE_FUNCTIONS();
 };
-YOJIMBO_MESSAGE_FACTORY_START(AttackFactory, 4);
+YOJIMBO_MESSAGE_FACTORY_START(AttackFactory, 6);
 YOJIMBO_DECLARE_MESSAGE_TYPE(0, ForgedMeta);
 YOJIMBO_DECLARE_MESSAGE_TYPE(1, UnusedBlock);
 YOJIMBO_DECLARE_MESSAGE_TYPE(2, UnusedBlock);
 YOJIMBO_DECLARE_MESSAGE_TYPE(3, ForgedInline);
+YOJIMBO_DECLARE_MESSAGE_TYPE(4, UnusedBlock);
+YOJIMBO_DECLARE_MESSAGE_TYPE(5, ForgedInline);
 YOJIMBO_MESSAGE_FACTORY_FINISH();
 struct AttackAdapter : yojimbo::Adapter {
 	yojimbo::MessageFactory *CreateMessageFactory(yojimbo::Allocator &allocator) override {

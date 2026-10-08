@@ -39,6 +39,9 @@ jobs:
           skip_initial_fetch: true
           files_yaml_from_source_file: .github/changed_files.yml
 
+      - name: Install pinned native xmake for generator checks
+        uses: ./.github/actions/godot-deps
+
       - name: Style checks via prek
         uses: j178/prek-action@v3.0.0
         env:

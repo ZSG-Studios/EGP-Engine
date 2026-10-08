@@ -1,0 +1,18 @@
+function select(options, host, arch, available)
+    options=options or {}
+    host,arch=host or os.host(),arch or os.arch()
+    local enabled=import('init',{rootdir=os.scriptdir()}).enabled
+    local native=(host=='windows' and options.platform=='windows') or ((host=='linux' or host=='bsd') and options.platform=='linuxbsd')
+    if native and host=='windows' then
+        if enabled(options.use_mingw) then return {plat='mingw',arch=arch,toolchain='mingw'} end
+        return {plat=host,arch=arch,toolchain=enabled(options.use_llvm) and 'clang-cl' or 'msvc'}
+    end
+    if native then return {plat=host,arch=arch,toolchain=enabled(options.use_llvm) and 'clang' or host=='bsd' and 'clang' or 'gcc'} end
+    if not available then
+        import('lib.detect.find_tool')
+        available=function(name) return find_tool(name)~=nil end
+    end
+    if host=='windows' and available('g++') then return {plat='mingw',arch=arch,toolchain='mingw'} end
+    if host=='linux' and not available('g++') and available('clang++') then return {plat=host,arch=arch,toolchain='clang'} end
+    return {plat=host,arch=arch,toolchain=assert(({windows='msvc',linux='gcc',macosx='xcode',bsd='clang'})[host],'Unsupported native code-generation host')}
+end

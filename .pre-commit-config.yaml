@@ -15,7 +15,6 @@ repos:
     hooks:
       - id: check-executables-have-shebangs
       - id: check-shebang-scripts-are-executable
-        exclude: (SConstruct|SCsub)$ # SCons files use shebangs for syntax highlighting only.
 
   - repo: https://github.com/pre-commit/mirrors-clang-format
     rev: v22.1.5
@@ -57,11 +56,11 @@ repos:
     hooks:
       - id: ruff-check
         args: [--color=always]
-        files: (\.py|SConstruct|SCsub)$
+        files: \.py$
         types_or: [text]
       - id: ruff-format
         args: [--color=always]
-        files: (\.py|SConstruct|SCsub)$
+        files: \.py$
         types_or: [text]
 
   - repo: https://github.com/pre-commit/mirrors-mypy
@@ -104,10 +103,10 @@ repos:
 
       - id: validate-builders
         name: validate-builders
-        language: python
-        entry: python tests/python_build/validate_builders.py
+        language: system
+        entry: xmake lua tests/build/validate_builders.lua
         pass_filenames: false
-        files: ^(gles3|glsl)_builders\.py$
+        files: ^build/xmake/generators/(shaders|glsl_templates|gles3_templates|util|support)\.lua$
 
       - id: validate-xml
         name: validate-xml

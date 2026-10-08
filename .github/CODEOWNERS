@@ -284,8 +284,7 @@
 
 /*.*                                          @godotengine/buildsystem
 *.py                                          @godotengine/buildsystem
-SConstruct                                    @godotengine/buildsystem
-SCsub                                         @godotengine/buildsystem
+*.lua                                         @godotengine/buildsystem
 
 # EGP fork integrations
 
@@ -293,3 +292,4 @@ SCsub                                         @godotengine/buildsystem
 /modules/box2d/                                @ZSG-Studios
 /modules/box3d/                                @ZSG-Studios
 /demos/                                       @ZSG-Studios
+/build/xmake/                                 @ZSG-Studios

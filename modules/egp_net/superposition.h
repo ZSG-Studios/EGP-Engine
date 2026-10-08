@@ -82,6 +82,7 @@ class SuperpositionConfig : public Resource {
 	double interest_hysteresis = 2.0;
 	int priority = 1;
 	int capture_mode = 0;
+	bool delta_replication = false;
 
 protected:
 	static void _bind_methods();
@@ -117,6 +118,11 @@ public:
 	}
 	int get_capture_mode() const { return capture_mode; }
 	double get_interest_radius() const { return interest_radius; }
+	void set_delta_replication(bool v) {
+		delta_replication = v;
+		emit_changed();
+	}
+	bool is_delta_replication() const { return delta_replication; }
 };
 class Superposition : public Node {
 	GDCLASS(Superposition, Node);
@@ -125,6 +131,11 @@ class Superposition : public Node {
 	NodePath session_path;
 	Ref<SuperpositionConfig> config;
 	Ref<EGPNetSession> session;
+	bool manual_session = false;
+	mutable bool property_busy = false, schema_busy = false;
+	uint64_t binding_generation = 0;
+	class CallbackScope;
+	Array configuration_signature() const;
 	String replication_key;
 	int entity_kind = 32001;
 	int64_t entity = 0;
@@ -132,6 +143,8 @@ class Superposition : public Node {
 	bool owns_entity = false;
 	bool dirty = true;
 	int applied_priority = 0;
+	bool delta_policy_initialized = false;
+	bool applied_delta_replication = false;
 	uint64_t push_skips = 0;
 	double elapsed = 0.0;
 	PackedByteArray last_payload;
@@ -143,8 +156,10 @@ class Superposition : public Node {
 	uint64_t captures = 0, sent = 0, skipped = 0, applied = 0, rejected = 0;
 	String last_error;
 	Node *target() const;
+	Node *session_provider() const;
 	String effective_key() const;
 	void reset_binding();
+	void bind_session(const Ref<EGPNetSession> &p_session);
 	Error fail(Error p_error, const String &p_text);
 	Error normalize(const Ref<SuperpositionProperty> &p_rule, const Variant &p_value, Variant &r_value) const;
 	Error schema(Array &r_rules) const;
@@ -161,41 +176,67 @@ public:
 	void set_enabled(bool v) { enabled = v; }
 	bool is_enabled() const { return enabled; }
 	void set_target_path(const NodePath &v) {
+		const ObjectID self_id = get_instance_id();
 		if (target_path != v) {
 			reset_binding();
+			if (ObjectDB::get_instance(self_id) != this) {
+				return;
+			}
 		}
 		target_path = v;
 		notify_property_list_changed();
+		if (ObjectDB::get_instance(self_id) != this) {
+			return;
+		}
 		update_configuration_warnings();
 	}
 	NodePath get_target_path() const { return target_path; }
 	void set_session_path(const NodePath &v) {
+		const ObjectID self_id = get_instance_id();
 		if (session_path != v) {
 			set_session(Ref<EGPNetSession>());
+			if (ObjectDB::get_instance(self_id) != this) {
+				return;
+			}
 		}
 		session_path = v;
 		update_configuration_warnings();
 	}
 	NodePath get_session_path() const { return session_path; }
 	void set_config(const Ref<SuperpositionConfig> &v) {
+		const ObjectID self_id = get_instance_id();
 		if (config != v) {
 			reset_binding();
+			if (ObjectDB::get_instance(self_id) != this) {
+				return;
+			}
 		}
 		config = v;
 		notify_property_list_changed();
+		if (ObjectDB::get_instance(self_id) != this) {
+			return;
+		}
 		update_configuration_warnings();
 	}
 	Ref<SuperpositionConfig> get_config() const { return config; }
 	void set_replication_key(const String &v) {
+		const ObjectID self_id = get_instance_id();
 		if (replication_key != v) {
 			reset_binding();
+			if (ObjectDB::get_instance(self_id) != this) {
+				return;
+			}
 		}
 		replication_key = v;
 	}
 	String get_replication_key() const { return replication_key; }
 	void set_entity_kind(int v) {
+		const ObjectID self_id = get_instance_id();
 		if (entity_kind != v) {
 			reset_binding();
+			if (ObjectDB::get_instance(self_id) != this) {
+				return;
+			}
 		}
 		entity_kind = v;
 	}

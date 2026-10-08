@@ -12,6 +12,7 @@ var duration := 0.0
 var elapsed := 0.0
 var bot := true
 var entities: Dictionary = {}
+var pose_epochs: Dictionary = {}
 var visuals: Dictionary = {}
 var visual_kinds: Dictionary = {}
 var targets: Dictionary = {}
@@ -115,7 +116,7 @@ func _ready() -> void:
 	if pose_interpolator == null:
 		fail("Native snapshot interpolation backend unavailable")
 		return
-	pose_interpolator.configure(60.0, 0.2, 0.1)
+	pose_interpolator.configure(60.0, 0.2, 0.1, 0.4)
 	for arg in OS.get_cmdline_user_args():
 		if arg.begins_with("--role="): role = arg.trim_prefix("--role=")
 		elif arg.begins_with("--player="): player = int(arg.trim_prefix("--player="))
@@ -140,7 +141,7 @@ func _ready() -> void:
 	net.name = "Network"
 	net.auto_poll = false
 	add_child(net)
-	if net.configure({"game_protocol": "egp-box3d-arena-v3", "simulation_fingerprint": world.get_simulation_fingerprint(), "tick_rate": 60, "max_players": 64, "max_entities": 512, "simulated_latency_ms": latency_ms, "simulated_jitter_ms": jitter_ms, "simulated_loss": loss_percent}) != OK:
+	if net.configure({"game_protocol": "egp-box3d-arena-v4", "simulation_fingerprint": world.get_simulation_fingerprint(), "tick_rate": 60, "max_players": 64, "max_entities": 512, "simulated_latency_ms": latency_ms, "simulated_jitter_ms": jitter_ms, "simulated_loss": loss_percent}) != OK:
 		fail("Network configuration failed")
 		return
 	net.diagnostic.connect(record_native_diagnostic)
@@ -295,6 +296,7 @@ func left(peer: int) -> void:
 		checkpoint = PackedByteArray()
 		jump_ticks.erase(entity)
 		entities.erase(entity)
+		pose_epochs.erase(entity)
 		net.despawn(entity)
 	print("ARENA_PEER_LEFT %d" % peer)
 
@@ -358,6 +360,7 @@ func simulate(tick: int, server: bool) -> void:
 			fail("Trusted checkpoint restore failed")
 			return
 		checkpoint_restores += 1
+		for entity in entities: pose_epochs[entity] = int(pose_epochs.get(entity, 0)) + 1
 		last_reset_msec = Time.get_ticks_msec()
 		print("ARENA_CHECKPOINT_RESTORED %d" % world.get_tick())
 		reset_requested = false
@@ -378,6 +381,7 @@ func simulate(tick: int, server: bool) -> void:
 			sequence += 1
 			var safe := Vector3((int(entities[entity]) % 7 - 3) * 1.2, 3, 0)
 			world.queue_body_state(entities[entity], sequence, safe, Quaternion.IDENTITY, Vector3.ZERO, Vector3.ZERO)
+			pose_epochs[entity] = int(pose_epochs.get(entity, 0)) + 1
 			rescued_bodies += 1
 	update_ai(tick)
 	for entity in controls:
@@ -587,6 +591,18 @@ func report() -> void:
 	if role == "client":
 		var presentation: Dictionary = pose_interpolator.get_statistics()
 		data.owned_presentation = presentation.entities.get(owned, {})
+		var classes: Dictionary = {}
+		for entity in presentation.entities:
+			var kind: int = int(visual_kinds.get(entity, 0))
+			var group := "players" if kind >= 100 else ("ai" if kind in [20, 21, 22, 23] else ("mechanisms" if kind in [40, 41] else "props"))
+			var stats: Dictionary = presentation.entities[entity]
+			if not classes.has(group): classes[group] = {"held_moving": 0, "held_stationary": 0, "interpolated": 0, "extrapolated": 0, "epoch_resets": 0}
+			classes[group].held_moving += int(stats.held_moving_samples)
+			classes[group].held_stationary += int(stats.held_stationary_samples)
+			classes[group].interpolated += int(stats.interpolated_samples)
+			classes[group].extrapolated += int(stats.extrapolated_samples)
+			classes[group].epoch_resets += int(stats.epoch_resets)
+		data.presentation_classes = classes
 		presentation.erase("entities")
 		data.presentation = presentation
 	var sorted_physics := physics_times.duplicate()
@@ -681,6 +697,7 @@ func remove_visual(entity: int) -> void:
 	targets.erase(entity)
 	pose_history.erase(entity)
 	pose_interpolator.remove(entity)
+	pose_epochs.erase(entity)
 	fast_ticks.erase(entity)
 	if owned == entity: owned = 0
 
@@ -910,14 +927,15 @@ func broadcast_poses(tick: int) -> void:
 		states[entity] = world.get_body_state(entities[entity])
 		var body: Dictionary = states[entity]
 		var row := PackedByteArray()
-		row.resize(28)
+		row.resize(38)
 		row.encode_u32(0, entity)
 		row.encode_u32(4, 20 + int(ai[entity].state) if ai.has(entity) else net.get_entity(entity).kind)
+		row.encode_u32(8, int(pose_epochs.get(entity, 0)))
 		var data: PackedFloat32Array = pose(body.position, body.rotation)
-		data.append_array(PackedFloat32Array([body.linear_velocity.x, body.linear_velocity.y, body.linear_velocity.z]))
-		for field in range(10):
+		data.append_array(PackedFloat32Array([body.linear_velocity.x, body.linear_velocity.y, body.linear_velocity.z, body.angular_velocity.x, body.angular_velocity.y, body.angular_velocity.z]))
+		for field in range(13):
 			var scale_value := 32767.0 if field in [3, 4, 5, 6] else 100.0
-			row.encode_s16(8 + field * 2, clampi(roundi(data[field] * scale_value), -32767, 32767))
+			row.encode_s16(12 + field * 2, clampi(roundi(data[field] * scale_value), -32767, 32767))
 		encoded[entity] = row
 	for peer in net.get_peers():
 		var owner: int = peer_entities.get(peer.peer_id, 0)
@@ -941,11 +959,11 @@ func broadcast_poses(tick: int) -> void:
 		var distant_budget := maxi(0, 62 - handles.size())
 		for index in range(mini(distant_budget, distant.size())): handles.append(distant[(cursor + index) % distant.size()])
 		if not distant.is_empty(): peer_pose_cursors[peer.peer_id] = (cursor + distant_budget) % distant.size()
-		for start in range(0, handles.size(), 31):
-			var count := mini(31, handles.size() - start)
+		for start in range(0, handles.size(), 23):
+			var count := mini(23, handles.size() - start)
 			var packet := PackedByteArray()
 			packet.resize(16)
-			packet.encode_u32(0, 0x504f5333)
+			packet.encode_u32(0, 0x504f5334)
 			packet.encode_u64(4, tick)
 			packet.encode_u32(12, count)
 			for index in range(count): packet.append_array(encoded[handles[start + index]])
@@ -966,32 +984,35 @@ func receive_poses(peer: int, packet: PackedByteArray, channel: int, delivery: i
 				if p.is_finite(): pulse_visual(p)
 			return
 	if peer != 0 or channel != 2 or delivery != Net.Delivery.UNRELIABLE or packet.size() < 16: return
-	if packet.decode_u32(0) != 0x504f5333: return
+	if packet.decode_u32(0) != 0x504f5334: return
 	var tick := packet.decode_u64(4)
 	var count := packet.decode_u32(12)
-	if count < 1 or count > 31 or packet.size() != 16 + count * 28: return
+	if count < 1 or count > 23 or packet.size() != 16 + count * 38: return
 	if tick > newest_pose_tick:
 		newest_pose_tick = tick
 		newest_pose_msec = Time.get_ticks_msec()
 	for index in range(count):
-		var offset := 16 + index * 28
+		var offset := 16 + index * 38
 		var entity := packet.decode_u32(offset)
 		if not visuals.has(entity) or tick <= int(fast_ticks.get(entity, 0)): continue
 		var kind := packet.decode_u32(offset + 4)
-		var p := Vector3(packet.decode_s16(offset + 8), packet.decode_s16(offset + 10), packet.decode_s16(offset + 12)) / 100.0
-		var q := Quaternion(packet.decode_s16(offset + 14) / 32767.0, packet.decode_s16(offset + 16) / 32767.0, packet.decode_s16(offset + 18) / 32767.0, packet.decode_s16(offset + 20) / 32767.0)
-		var v := Vector3(packet.decode_s16(offset + 22), packet.decode_s16(offset + 24), packet.decode_s16(offset + 26)) / 100.0
-		if not p.is_finite() or not q.is_finite() or not v.is_finite() or q.length_squared() < 0.1: continue
+		var epoch := packet.decode_u32(offset + 8)
+		var p := Vector3(packet.decode_s16(offset + 12), packet.decode_s16(offset + 14), packet.decode_s16(offset + 16)) / 100.0
+		var q := Quaternion(packet.decode_s16(offset + 18) / 32767.0, packet.decode_s16(offset + 20) / 32767.0, packet.decode_s16(offset + 22) / 32767.0, packet.decode_s16(offset + 24) / 32767.0)
+		var v := Vector3(packet.decode_s16(offset + 26), packet.decode_s16(offset + 28), packet.decode_s16(offset + 30)) / 100.0
+		var angular := Vector3(packet.decode_s16(offset + 32), packet.decode_s16(offset + 34), packet.decode_s16(offset + 36)) / 100.0
+		if not p.is_finite() or not q.is_finite() or not v.is_finite() or not angular.is_finite() or q.length_squared() < 0.1: continue
 		q = q.normalized()
 		var history: Array = pose_history.get(entity, [])
-		if not history.is_empty() and history.back().pose.origin.distance_to(p) > 8:
+		if not pose_interpolator.submit(entity, tick, Transform3D(Basis(q), p), v, epoch, angular): continue
+		if pose_epochs.has(entity) and epoch > int(pose_epochs[entity]):
 			history.clear()
-			# Deliberate checkpoint/respawn teleport, never interpolate through the floor.
+			# Explicit reset epoch marks checkpoint/rescue, even for short relocations.
 			visuals[entity].transform = Transform3D(Basis(q), p)
 		history.append({"tick": tick, "pose": Transform3D(Basis(q), p), "velocity": v})
 		while history.size() > 16: history.pop_front()
 		pose_history[entity] = history
-		pose_interpolator.submit(entity, tick, Transform3D(Basis(q), p), v)
+		pose_epochs[entity] = epoch
 		fast_ticks[entity] = tick
 		fast_updates += 1
 		if entity == owned:
@@ -1030,6 +1051,7 @@ func begin_recovery(reason: String) -> void:
 	net.close()
 	pose_history.clear()
 	pose_interpolator.clear()
+	pose_epochs.clear()
 	outgoing_actions.clear()
 	fast_ticks.clear()
 	owned = 0
@@ -1060,7 +1082,7 @@ func try_recovery() -> void:
 	var token := FileAccess.get_file_as_bytes(response)
 	if token.size() != 2048: return
 	DirAccess.remove_absolute(response)
-	var options := {"game_protocol": "egp-box3d-arena-v3", "simulation_fingerprint": world.get_simulation_fingerprint(), "tick_rate": 60, "max_players": 64, "max_entities": 512, "simulated_latency_ms": latency_ms, "simulated_jitter_ms": jitter_ms, "simulated_loss": loss_percent}
+	var options := {"game_protocol": "egp-box3d-arena-v4", "simulation_fingerprint": world.get_simulation_fingerprint(), "tick_rate": 60, "max_players": 64, "max_entities": 512, "simulated_latency_ms": latency_ms, "simulated_jitter_ms": jitter_ms, "simulated_loss": loss_percent}
 	if net.configure(options) != OK or net.join_token(1000 + player, token, bind_ip) != OK:
 		begin_recovery("fresh admission rejected")
 		return

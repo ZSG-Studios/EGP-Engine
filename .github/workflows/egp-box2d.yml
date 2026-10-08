@@ -1,9 +1,9 @@
 name: EGP pinned Box2D
 on:
   push:
-    paths: ["thirdparty/box2d/**", "modules/box2d/**", "misc/scripts/validate_box2d.py", ".github/workflows/egp-box2d.yml"]
+    paths: ["thirdparty/box2d/**", "modules/box2d/**", "misc/scripts/validate_box2d.py", ".github/workflows/egp-box2d.yml", "xmake.lua", "build/xmake/**", "misc/xmake/**", "misc/scripts/egp_xmake.py", "misc/scripts/test_egp_xmake_qualification.py", "tests/physics/box2d/**"]
   pull_request:
-    paths: ["thirdparty/box2d/**", "modules/box2d/**", "misc/scripts/validate_box2d.py", ".github/workflows/egp-box2d.yml"]
+    paths: ["thirdparty/box2d/**", "modules/box2d/**", "misc/scripts/validate_box2d.py", ".github/workflows/egp-box2d.yml", "xmake.lua", "build/xmake/**", "misc/xmake/**", "misc/scripts/egp_xmake.py", "misc/scripts/test_egp_xmake_qualification.py", "tests/physics/box2d/**"]
   workflow_dispatch:
 concurrency:
   group: egp-box2d-${{ github.head_ref || github.ref_name }}
@@ -21,6 +21,7 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.12"
+      - uses: ./.github/actions/godot-deps
       - run: python misc/scripts/validate_box2d.py --configuration ${{ matrix.configuration }}
       - uses: actions/upload-artifact@v4
         if: always()

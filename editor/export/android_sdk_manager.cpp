@@ -60,7 +60,6 @@ static const char *ANDROID_SDK_PACKAGES[] = {
 // Android NDK packages.
 static const char *ANDROID_NDK_PACKAGES[] = {
 	"ndk/29.0.14206865", // Should match the value in 'platform/android/java/app/config.gradle#ndkVersion'.
-	"cmake/3.22.1",
 	nullptr
 };
 

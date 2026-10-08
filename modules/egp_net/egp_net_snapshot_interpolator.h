@@ -44,9 +44,12 @@ class EGPNetSnapshotInterpolator : public RefCounted {
 		int64_t tick;
 		Transform3D pose;
 		Vector3 velocity;
+		Vector3 angular_velocity;
 	};
 	struct Track {
 		std::deque<Snapshot> samples;
+		int64_t epoch = -1;
+		int64_t held_moving = 0, held_stationary = 0, epoch_resets = 0;
 		Vector3 correction;
 		Quaternion rotation_correction;
 		int64_t interpolated = 0, extrapolated = 0, held = 0, priming = 0, corrections = 0;
@@ -57,12 +60,14 @@ class EGPNetSnapshotInterpolator : public RefCounted {
 	std::map<int64_t, Track> tracks;
 	double tick_rate = 60.0;
 	double delay_ticks = 12.0;
+	double base_delay_ticks = 12.0, max_delay_ticks = 12.0, cadence_peak_ticks = 0.0;
 	double extrapolation_ticks = 6.0;
 	double clock = 0.0;
 	double newest_tick = 0.0;
 	double since_arrival = 0.0;
 	bool started = false;
 	int64_t interpolated = 0, extrapolated = 0, held = 0, corrections = 0, teleports = 0, priming = 0, clock_holds = 0;
+	int64_t epoch_resets = 0, rejected_epochs = 0;
 	double largest_correction = 0.0;
 	double largest_angular_correction = 0.0;
 	Transform3D evaluate(const Track &p_track, double p_tick) const;
@@ -71,8 +76,8 @@ protected:
 	static void _bind_methods();
 
 public:
-	Error configure(double p_tick_rate = 60.0, double p_delay_seconds = 0.2, double p_max_extrapolation_seconds = 0.1);
-	bool submit(int64_t p_entity, int64_t p_tick, const Transform3D &p_pose, const Vector3 &p_velocity);
+	Error configure(double p_tick_rate = 60.0, double p_delay_seconds = 0.2, double p_max_extrapolation_seconds = 0.1, double p_max_adaptive_delay_seconds = 0.0);
+	bool submit(int64_t p_entity, int64_t p_tick, const Transform3D &p_pose, const Vector3 &p_velocity, int64_t p_discontinuity_epoch = -1, const Vector3 &p_angular_velocity = Vector3());
 	double advance(double p_delta);
 	Transform3D sample(int64_t p_entity, double p_delta = 0.0);
 	Dictionary get_statistics() const;

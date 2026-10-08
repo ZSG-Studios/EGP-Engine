@@ -1,23 +1,37 @@
 $ErrorActionPreference = 'Stop'
-# Existing Visual Studio installations are reused, including Community editions.
-$cmake = Get-Command cmake -ErrorAction SilentlyContinue
-$cmakeInstalled = $cmake -or (Test-Path "$env:ProgramFiles/CMake/bin/cmake.exe")
+# Install the exact official bundle from the SDK digest lock. Compiler/SDK
+# readiness is checked separately by the C++17 consumer compile/link probe.
+$lock = Get-Content -LiteralPath (Join-Path $PSScriptRoot 'xmake.lock.json') -Raw | ConvertFrom-Json
+$artifact = $lock.artifacts.'windows-x64'
+if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') {
+    throw 'This SDK bootstrap locks the x64 Windows host tool. Use a qualified host tool profile for ARM64.'
+}
+$toolDirectory = Join-Path $env:LOCALAPPDATA 'xmake'
+$tool = Join-Path $toolDirectory 'xmake.exe'
+$verified = (Test-Path -LiteralPath $tool) -and ((Get-FileHash -LiteralPath $tool -Algorithm SHA256).Hash.ToLowerInvariant() -eq $artifact.sha256)
+if (-not $verified) {
+    New-Item -ItemType Directory -Path $toolDirectory -Force | Out-Null
+    $temporary = Join-Path $toolDirectory ('xmake-' + [guid]::NewGuid().ToString() + '.download')
+    try {
+        Invoke-WebRequest -Uri $artifact.url -OutFile $temporary -UseBasicParsing
+        if ((Get-FileHash -LiteralPath $temporary -Algorithm SHA256).Hash.ToLowerInvariant() -ne $artifact.sha256) {
+            throw 'Official xmake bundle digest does not match the SDK lock.'
+        }
+        Move-Item -LiteralPath $temporary -Destination $tool -Force
+    } finally {
+        if (Test-Path -LiteralPath $temporary) { Remove-Item -LiteralPath $temporary }
+    }
+}
 $vswhere = "${env:ProgramFiles(x86)}/Microsoft Visual Studio/Installer/vswhere.exe"
 $compilerInstalled = $false
-if (Test-Path $vswhere) {
+if (Test-Path -LiteralPath $vswhere) {
     $compilerInstalled = [bool](& $vswhere -products '*' -latest -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath)
 }
-if ($cmakeInstalled -and $compilerInstalled) { Write-Output 'CMake and the Visual Studio C++ toolchain are installed.'; exit 0 }
-if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
-    Write-Error 'Install Microsoft App Installer (winget), or install CMake and the Visual Studio Desktop development with C++ workload. Then select Check Toolchain.'
-    exit 1
-}
-if (-not $cmakeInstalled) {
-    & winget install --id Kitware.CMake --exact --source winget --accept-package-agreements --accept-source-agreements --disable-interactivity
-    if ($LASTEXITCODE -ne 0) { exit 1 }
-}
 if (-not $compilerInstalled) {
+    if (-not (Get-Command winget -ErrorAction SilentlyContinue)) {
+        throw 'Install the Visual Studio Desktop development with C++ workload, then select Check Toolchain.'
+    }
     & winget install --id Microsoft.VisualStudio.BuildTools --exact --source winget --accept-package-agreements --accept-source-agreements --override '--passive --wait --norestart --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended'
     if ($LASTEXITCODE -notin @(0, 3010)) { exit 1 }
 }
-Write-Output 'Tool installation completed. Check Toolchain verifies the compiler and linker; restart Windows if the installer requests it.'
+Write-Output 'Pinned xmake 3.1.1 bundle verified. Check Toolchain compiles and links the C++17 consumer probe; export qualification remains separate.'

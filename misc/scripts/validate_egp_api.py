@@ -38,6 +38,12 @@ REQUIRED_CLASSES = {
     "Superposition",
     "SuperpositionConfig",
     "SuperpositionProperty",
+    "SuperpositionWorld",
+    "SuperpositionPrediction",
+    "SuperpositionScene",
+    "SuperpositionSpawner",
+    "SuperpositionRPCMethod",
+    "SuperpositionRPC",
 }
 INTERNAL_SIGNALS = {("PhysicsServer2D", "_debug_changed"), ("PhysicsServer3D", "_debug_changed")}
 

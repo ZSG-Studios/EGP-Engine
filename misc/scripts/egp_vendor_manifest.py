@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import hashlib
 import re
+from pathlib import Path
 from typing import Any
 
 
@@ -55,3 +56,22 @@ def pinned_digest_match(
             "normalized_lf_sha256": normalized_lf_expected,
         }
     return None
+
+
+def verify_excluded_files(vendor: Path, manifest: dict[str, Any]) -> None:
+    """Retain upstream provenance for intentionally omitted build definitions."""
+    active = manifest.get("files", manifest.get("sha256_lf", {}))
+    for relative, entry in manifest.get("excluded_upstream_files", {}).items():
+        path = (vendor / relative).resolve()
+        if (
+            not path.is_relative_to(vendor.resolve())
+            or relative in active
+            or path.exists()
+            or not relative.endswith(("CMakeLists.txt", ".cmake", ".cmake.in"))
+            or not entry.get("reason")
+            or re.fullmatch(r"[0-9a-f]{64}", entry.get("upstream_sha256", "")) is None
+        ):
+            raise ValueError("Invalid or reintroduced upstream build exclusion: " + relative)
+        for key in ("normalized_lf_sha256", "egp_patched_sha256"):
+            if key in entry and re.fullmatch(r"[0-9a-f]{64}", entry[key]) is None:
+                raise ValueError("Invalid excluded upstream digest: " + relative)

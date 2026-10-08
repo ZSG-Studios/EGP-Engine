@@ -12,11 +12,6 @@
     "BUILDING.md": "e06cb29781a5dc2f012e7a83325221c3c975ebcd7395fd0b5be204dd27fb57f5",
     "CLAUDE.md": "283d1d6b24011fb12a74d194a8dd69df239855355e15142c63994c95cb21def6",
     "client.cpp": "f34183e8ac33a621a970c3703495a4ff2b2f42f9b69f69a24321984878ab23ae",
-    "cmake/PrintVersion.cmake": "87fe00401e45bae1b09ab686cf75b017099a9081e6e79ecd78033676bfdab68d",
-    "cmake/YojimboConfig.cmake.in": "300e5c6652e981d3fe66bbd7c0f762b87d1c20c9fb25f1c17e79a045ffd18047",
-    "cmake/YojimboDependencies.cmake": "93296849b94a0d0c5306cc74b557d338860d3a288eec4b9519294a5e5eca7993",
-    "cmake/YojimboSystemDeps.cmake": "fe5872b6fc39a76452d9c1986fe8b80ae7fa5bba8ffef8276f988bc386e9f5d6",
-    "CMakeLists.txt": "1372f61e79cd589f0fbcb50e1d5e5df527f5207d79b0660ce1d792972bee0da0",
     "CONTRIBUTING.md": "e702c525735d0f81f557c67a484856e5bb1e2fa31cd55cab387e6b7c96a27b4a",
     "custom_packet_io_test.cpp": "fc4168b12022c53038ad1e0efccbbf7575c8a81abf7ddf2a0e7dbccfb286ada8",
     "dependencies.manifest": "1730ce258b332bbbd8c4276d1b5a32d1e0735dcf76a70de2a3f933e3df03a937",
@@ -98,11 +93,6 @@
       "BUILDING.md": "b6d7902bf04471faf90acbd19371f81aa3728aaffd2d4f1dc471eded47ccdc14",
       "CLAUDE.md": "60fc81b5920a2eaf53b5497463309868ec8a55b70f76edb50acdb070bd61621b",
       "client.cpp": "6d2d31c24fd953b3acb999ac6964dbe2fe2d22dbc0228c4b929e043a7d264e99",
-      "cmake/PrintVersion.cmake": "f5df2dc32ec362c51f4dddabcdc938ceae6a8dc18d2f3f7d3fc5aa2de716fc88",
-      "cmake/YojimboConfig.cmake.in": "3e5a9f70453cc9e3ee9479e48edb9815e682432308f821074f148d3745ce39f2",
-      "cmake/YojimboDependencies.cmake": "d593b7df847e186fa1882c7364a2409ce73868db7a49f8db56dd0a0e5ac02dcd",
-      "cmake/YojimboSystemDeps.cmake": "997e4f96760532763e51a39aa1c05fa86486bbe0e9cb3e4e64148d8bc2185034",
-      "CMakeLists.txt": "2567fcba1e18eee1b6badfed624f2f13a32d391fee07f0464ce0d6989ce17917",
       "CONTRIBUTING.md": "110afedc100c6dac0da5b78eb787efcf5e11597d9a37e73055dccd42ef44a596",
       "custom_packet_io_test.cpp": "b7f44ef2b8f8340362a3bfad68afc0e8166645ac758cb459198c576e87ecde88",
       "dependencies.manifest": "d83633f8434dbe5bb7e913b6a207846ed9dd8e0f2d26193ca1015191b3ce97cf",
@@ -174,6 +164,33 @@
       "tlsf/tlsf.c": "1fced456e605054cacf1ec073d3b656d434efce3e6f9205de64f6d3453fd06b9",
       "tlsf/tlsf.h": "af5674205aab667ccf958bd22240949eed957118a18b408ca8961ab0d1874a00",
       "USAGE.md": "6f6e38146e4af434711a9a7e201728a7bede07456edc7c6e9059ee9d02747640"
+    }
+  },
+  "excluded_upstream_files": {
+    "cmake/PrintVersion.cmake": {
+      "upstream_sha256": "87fe00401e45bae1b09ab686cf75b017099a9081e6e79ecd78033676bfdab68d",
+      "reason": "Upstream build definition removed; EGP builds the retained sources with native xmake recipes.",
+      "normalized_lf_sha256": "f5df2dc32ec362c51f4dddabcdc938ceae6a8dc18d2f3f7d3fc5aa2de716fc88"
+    },
+    "cmake/YojimboConfig.cmake.in": {
+      "upstream_sha256": "300e5c6652e981d3fe66bbd7c0f762b87d1c20c9fb25f1c17e79a045ffd18047",
+      "reason": "Upstream build definition removed; EGP builds the retained sources with native xmake recipes.",
+      "normalized_lf_sha256": "3e5a9f70453cc9e3ee9479e48edb9815e682432308f821074f148d3745ce39f2"
+    },
+    "cmake/YojimboDependencies.cmake": {
+      "upstream_sha256": "93296849b94a0d0c5306cc74b557d338860d3a288eec4b9519294a5e5eca7993",
+      "reason": "Upstream build definition removed; EGP builds the retained sources with native xmake recipes.",
+      "normalized_lf_sha256": "d593b7df847e186fa1882c7364a2409ce73868db7a49f8db56dd0a0e5ac02dcd"
+    },
+    "cmake/YojimboSystemDeps.cmake": {
+      "upstream_sha256": "fe5872b6fc39a76452d9c1986fe8b80ae7fa5bba8ffef8276f988bc386e9f5d6",
+      "reason": "Upstream build definition removed; EGP builds the retained sources with native xmake recipes.",
+      "normalized_lf_sha256": "997e4f96760532763e51a39aa1c05fa86486bbe0e9cb3e4e64148d8bc2185034"
+    },
+    "CMakeLists.txt": {
+      "upstream_sha256": "1372f61e79cd589f0fbcb50e1d5e5df527f5207d79b0660ce1d792972bee0da0",
+      "reason": "Upstream build definition removed; EGP builds the retained sources with native xmake recipes.",
+      "normalized_lf_sha256": "2567fcba1e18eee1b6badfed624f2f13a32d391fee07f0464ce0d6989ce17917"
     }
   }
 }

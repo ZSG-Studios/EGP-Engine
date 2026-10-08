@@ -16,13 +16,13 @@
 			Existing property on the target node.
 		</member>
 		<member name="quantization" type="float" setter="set_quantization" getter="get_quantization" default="0.01">
-			Positive float/vector rounding interval. Zero preserves precision. Server change detection uses the quantized value.
+			Numeric rounding interval applied to float, Vector2, Vector3 and Color components before dirty detection. Zero preserves component precision; a positive interval must lie from 1e-9 to 1e6. The normalized result must remain finite and within type bounds. Strings and discrete values are not rounded.
 		</member>
 		<member name="smoothing" type="bool" setter="set_smoothing" getter="is_smoothing" default="false">
-			Cosmetic exponential easing for float and Vector3. Discrete values always apply immediately.
+			Cosmetic exponential easing for float, Vector2, Vector3 and Color values. Boolean, integer and String values apply immediately. This affects presentation properties, not authoritative physics or deterministic replay.
 		</member>
 		<member name="value_type" type="int" setter="set_value_type" getter="get_value_type" default="3">
-			Exact Variant type, selected in the Inspector. Defaults to float.
+			Exact supported Variant type of the target property: Boolean, integer, float, String, Vector2, Vector3 or Color. Replicate checkboxes infer this automatically. Both peers must use the same type; numeric coercion is not performed.
 		</member>
 	</members>
 </class>

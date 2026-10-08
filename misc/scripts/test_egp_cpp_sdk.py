@@ -1,32 +1,29 @@
-"""Regression check for SDK packaging inside Godot's shared Python build environment."""
+"""Verify native Lua SDK packaging and cache publication."""
 
 import hashlib
-import importlib.util
 import json
+import os
 import shutil
-import struct
 import subprocess
-import sys
 import tempfile
-import types
 import unittest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
-SPEC = importlib.util.spec_from_file_location(
-    "native_extension_sdk", ROOT / "editor/settings/gdextension/native_extension_sdk.py"
-)
-assert SPEC is not None and SPEC.loader is not None
-SDK = importlib.util.module_from_spec(SPEC)
-SPEC.loader.exec_module(SDK)
 
 
 class BundledSDKTest(unittest.TestCase):
+    def require_xmake(self):
+        xmake = os.environ.get("XMAKE") or shutil.which("xmake")
+        if not xmake:
+            if os.environ.get("CI"):
+                self.fail("Native SDK verification requires xmake on CI")
+            self.skipTest("xmake is required for native SDK verification")
+        return xmake
+
     def test_concurrent_cache_publication(self):
-        cmake = shutil.which("cmake")
-        if not cmake:
-            self.skipTest("CMake is required for the publication concurrency check")
-        publisher = ROOT / "editor/settings/gdextension/cpp_sdk/tools/publish_cache.cmake"
+        xmake = self.require_xmake()
+        publisher = ROOT / "editor/settings/gdextension/cpp_sdk/tools/publish_cache.lua"
         with tempfile.TemporaryDirectory() as directory:
             folder = Path(directory)
             destination = folder / "shared/library.lib"
@@ -37,52 +34,69 @@ class BundledSDKTest(unittest.TestCase):
                 source.write_bytes(payload)
                 processes.append(
                     subprocess.Popen(
-                        [cmake, f"-DSOURCE_FILE={source}", f"-DDESTINATION={destination}", "-P", str(publisher)],
+                        [xmake, "lua", str(publisher), str(source), str(destination)],
                         stdout=subprocess.PIPE,
                         stderr=subprocess.STDOUT,
                     )
                 )
-            for process in processes:
-                output, _ = process.communicate(timeout=30)
+            completed = [(process, process.communicate(timeout=30)[0]) for process in processes]
+            for process, output in completed:
                 self.assertEqual(process.returncode, 0, output.decode(errors="replace"))
             self.assertIn(destination.read_bytes(), payloads)
             self.assertFalse(destination.with_suffix(".lib.tmp").exists())
 
-    def test_packaging_with_conflicting_engine_generator(self):
-        old_module = sys.modules.get("make_interface_header")
-        engine_generator = types.ModuleType("make_interface_header")
-        sys.modules["make_interface_header"] = engine_generator
-        try:
-            archive = SDK.make_archive(ROOT / "thirdparty/godot-cpp", ROOT / "editor/settings/gdextension/cpp_sdk")
-            self.assertIs(sys.modules["make_interface_header"], engine_generator)
-        finally:
-            if old_module is None:
-                sys.modules.pop("make_interface_header", None)
-            else:
-                sys.modules["make_interface_header"] = old_module
-        files = {}
-        offset = 0
-        while offset < len(archive):
-            name_size, data_size = struct.unpack_from("<II", archive, offset)
-            offset += 8
-            name = archive[offset : offset + name_size].decode()
-            offset += name_size
-            self.assertNotIn("..", Path(name).parts)
-            self.assertFalse(Path(name).is_absolute())
-            self.assertNotIn(name, files)
-            files[name] = archive[offset : offset + data_size]
-            offset += data_size
-        self.assertEqual(offset, len(archive))
+    def test_native_lua_packaging(self):
+        xmake = self.require_xmake()
+        api = Path(os.environ.get("EGP_CPP_API", ROOT / "thirdparty/godot-cpp/gdextension/extension_api-4-7.json"))
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "sdk"
+            subprocess.run(
+                [
+                    xmake,
+                    "lua",
+                    str(ROOT / "misc/scripts/extract_egp_cpp_sdk.lua"),
+                    "--output",
+                    str(output),
+                    "--api",
+                    str(api),
+                ],
+                cwd=ROOT,
+                check=True,
+                timeout=360,
+            )
+            files = {
+                path.relative_to(output).as_posix(): path.read_bytes() for path in output.rglob("*") if path.is_file()
+            }
         self.assertIn("gen/include/gdextension_interface.h", files)
         self.assertIn("gen/include/godot_cpp/classes/node.hpp", files)
         self.assertIn("LICENSE.md", files)
         self.assertEqual(
             json.loads(files["sdk.json"])["api_sha256"],
-            hashlib.sha256((ROOT / "thirdparty/godot-cpp/gdextension/extension_api-4-7.json").read_bytes()).hexdigest(),
+            hashlib.sha256(api.read_bytes()).hexdigest(),
         )
-        self.assertIn(b'compatibility_minimum = "4.7"', files["templates/extension.gdextension.in"])
-        self.assertNotIn(b"@BITS@", files["CMakeLists.txt"])
-        self.assertNotIn(b"find_package(Python", files["CMakeLists.txt"])
+        header = json.loads(api.read_text())["header"]
+        minimum = f'compatibility_minimum = "{header["version_major"]}.{header["version_minor"]}"'.encode()
+        self.assertIn(minimum, files["templates/extension.gdextension.in"])
+        self.assertNotIn(b"@BITS@", files["xmake.lua"])
+        self.assertFalse(any(name.endswith(".py") for name in files))
+        self.assertFalse(any(".build" in Path(name).parts or ".xmake" in Path(name).parts for name in files))
+        self.assertIn("tools/doc_source_generator.lua", files)
+        metadata = json.loads(files["sdk.json"])
+        fingerprint = b"".join(
+            name.encode() + hashlib.sha256(files[name]).digest() for name in sorted(files) if name != "sdk.json"
+        )
+        self.assertEqual(metadata["source_sha256"], hashlib.sha256(fingerprint).hexdigest())
+        self.assertEqual(metadata["api_major"], header["version_major"])
+        self.assertEqual(metadata["api_minor"], header["version_minor"])
+        self.assertEqual(str(metadata["bits"]), "64")
+        self.assertEqual(metadata["precision"], "single")
+        self.assertEqual(metadata["build_system"], "xmake")
+        self.assertEqual(metadata["xmake_version"], "3.1.1")
+        self.assertEqual(metadata["public_cpp_standard"], "c++17")
+        self.assertEqual(metadata["entrypoint"], "xmake.lua")
+        self.assertIn(b'set_xmakever("3.1.1")', files["xmake.lua"])
+        self.assertIn("tools/xmake.lock.json", files)
+        self.assertFalse(any(name.endswith(("CMakeLists.txt", "SConstruct", "SConscript", ".bff")) for name in files))
 
 
 if __name__ == "__main__":

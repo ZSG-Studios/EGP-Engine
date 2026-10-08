@@ -17,7 +17,7 @@ MANUALS = {
     "doc/egp_box2d.md": "box2d.md",
     "doc/egp_box3d.md": "box3d.md",
     "doc/egp_cpp_extensions.md": "cpp_extensions.md",
-    "doc/egp_fastbuild.md": "fastbuild.md",
+    "doc/egp_xmake.md": "xmake.md",
     "doc/egp_api_contract.md": "api_contract.md",
     "doc/egp_network_lab.md": "network_lab.md",
     "doc/egp_documentation.md": "documentation.md",
@@ -34,17 +34,30 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_text(encoding="utf-8").encode("utf-8")).hexdigest()
 
 
+def tracked_xml_sources() -> list[Path]:
+    # An unrelated, untracked module must not become published API documentation.
+    tracked = (
+        subprocess
+        .check_output(["git", "ls-files", "-z", "--", "doc/classes", "modules", "platform"], cwd=ROOT)
+        .decode("utf-8")
+        .split("\0")
+    )
+    return sorted(
+        ROOT / name
+        for name in tracked
+        if name.endswith(".xml")
+        and (name.startswith("doc/classes/") or "doc_classes" in Path(name).parts)
+        and (ROOT / name).is_file()
+    )
+
+
 def tracked_sources() -> list[Path]:
-    # This is the same input selection used by the engine's own RST generator.
-    sources = list((ROOT / "doc/classes").glob("*.xml"))
-    for folder in (ROOT / "modules", ROOT / "platform"):
-        for docs in folder.rglob("doc_classes"):
-            sources.extend(docs.glob("*.xml"))
+    sources = tracked_xml_sources()
     sources.extend(ROOT / name for name in MANUALS)
     sources.extend((ROOT / "modules/egp_net/gdscript").glob("*.gd"))
     sources.extend((ROOT / "modules/egp_net/csharp").glob("*.cs"))
     sources.extend((ROOT / "modules/egp_net/cpp").glob("*.hpp"))
-    sources.extend([ROOT / "version.py", ROOT / "doc/tools/make_rst.py", Path(__file__).resolve()])
+    sources.extend([ROOT / "version.lua", ROOT / "doc/tools/make_rst.py", Path(__file__).resolve()])
     return sorted(set(sources))
 
 
@@ -163,16 +176,24 @@ def main() -> int:
         output = Path(temporary)
         classes = output / "classes"
         classes.mkdir()
+        generator_arguments = [
+            str(ROOT / "doc/tools/make_rst.py"),
+            "-o",
+            str(classes),
+            *(str(path) for path in tracked_xml_sources()),
+        ]
+        # Pass the exact tracked input list on stdin; Windows cannot fit the full
+        # class inventory into its process command line. Keep original source
+        # paths so generated provenance and class grouping remain accurate.
         subprocess.run(
             [
                 sys.executable,
-                str(ROOT / "doc/tools/make_rst.py"),
-                "-o",
-                str(classes),
-                str(ROOT / "doc/classes"),
-                str(ROOT / "modules"),
-                str(ROOT / "platform"),
+                "-c",
+                "import json, runpy, sys; sys.argv = json.load(sys.stdin); "
+                "runpy.run_path(sys.argv[0], run_name='__main__')",
             ],
+            input=json.dumps(generator_arguments),
+            text=True,
             cwd=ROOT,
             check=True,
         )

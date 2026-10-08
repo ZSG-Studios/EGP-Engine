@@ -1858,7 +1858,7 @@ ProjectSettings::ProjectSettings() {
 
 	// The default value must match the minor part of the Agility SDK version
 	// installed by the scripts provided in the repository
-	// (check `misc/scripts/install_d3d12_sdk_windows.py`).
+	// (check `misc/scripts/install_build_dependencies.lua d3d12`).
 	// For example, if the script installs 1.618.5, the default value must be 618.
 	GLOBAL_DEF_RST(PropertyInfo(Variant::INT, "rendering/rendering_device/d3d12/agility_sdk_version", PROPERTY_HINT_RANGE, "0,10000,1,or_greater,hide_control"), 618);
 #endif // RD_ENABLED

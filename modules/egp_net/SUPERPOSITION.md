@@ -1,32 +1,144 @@
 # Superposition
 
-Superposition is the engine's first Inspector-driven replication component for low-rate gameplay state. It uses the existing native Yojimbo entity lifecycle, so a joining player receives current state without a separate game-specific spawn/update handler.
+Superposition adds an Inspector workflow for native scene spawning, selected gameplay properties and permitted remote calls. It uses EGP's existing Yojimbo transport and authenticated peer identities. The same native nodes and resources are available in GDScript, C# and the editor's matching C++ SDK.
 
-1. Add **Superposition** beneath the gameplay node in matching server and client scenes.
-2. Set **Session Path** to the configured `EGPNet` node. Your existing connection/authentication setup and session polling stay in that node.
-3. Expand **Replicate** and check the target properties to transmit. Supported stored properties appear automatically.
-4. Open **Config / Properties** to select types, quantization and optional cosmetic smoothing. Save the config as a shared resource.
-5. Leave **Replication Key** empty for matching scene paths, or assign a unique stable key to spawned/preplaced corresponding objects. Duplicate `(entity kind, key)` identities fail with a diagnostic.
+## Set up a networked scene
 
-The component captures selected gameplay values once per configured update interval, validates finite values and bounds, quantizes float/vector properties, and compares the resulting payload with its previous state. Unchanged quantized state produces no entity update. Native lifecycle replication handles late joining, interest re-entry and removal. Rebinding retires the old owned server entity; stopping and restarting a server creates a new baseline rather than using a stale handle.
+1. Add **SuperpositionWorld** as the network owner. Choose **Role**, **Port**, the shared game protocol and simulation fingerprint. Enable **Auto Poll** for ordinary scene processing. **Auto Start** is optional; authenticated clients normally call `join_token()` after receiving an admission token.
+2. Add **SuperpositionSpawner** below the World. Set **Spawn Path** to the gameplay container. Add **SuperpositionScene** resources to **Scenes**, assign each a unique **Prefab ID**, and choose its **PackedScene**. Ship the same allowlist on server and clients.
+3. In each gameplay scene, add **Superposition** below the node whose properties should replicate. Expand **Replicate** and check the stored properties to transmit. Save the generated **Config** as a shared resource.
+4. Add **SuperpositionRPC** beside the Spawner. Choose **Spawner Path** and add **SuperpositionRPCMethod** resources. Give each a stable **Method ID**, the root actor's method name, caller permission, exact argument types and call-rate limit.
+5. Spawn from the listening server with `spawner.spawn(prefab_id, owner_peer, data)`. The component creates the matching local scene on each compatible client, including late joiners. A root actor can read `superposition_entity_id`, `superposition_owner_client_id` and `superposition_spawn_data` metadata in `_ready()`.
 
-The default is 10 Hz. **Priority** selects a service weight from 1 to 16. The native scheduler stores a pending flow's virtual finish position until admission; continually changing high-priority objects cannot keep resetting lower-priority objects to the back of the queue. Scheduling operates independently for each peer and accounts for envelope size. The existing one-in-flight-state limit still coalesces revisions and affects the observed delivery ratio under latency; weights are preferences, not a promised frequency.
+World descendants discover their nearest ancestor's `get_session()` provider. The Spawner refreshes that binding when the World stops or replaces its session. An explicit **Session Path** can point to another provider; `set_session()` supports code-owned sessions. A manually assigned session takes precedence over automatic discovery.
 
-**Pushed capture:** select Config / Capture Mode / Pushed when gameplay can notify changes. Call `mark_dirty()` after changing selected properties. This skips target getter calls and serialization until notified; a new entity, schema change or session restart still captures a complete baseline automatically. Automatic mode retains the checkbox-only polling workflow, quantization and unchanged-state suppression. Repeated dirty notifications coalesce into one capture at the configured update rate.
+For preplaced objects, add Superposition directly to matching server/client scenes and use matching scene paths or an explicit unique **Replication Key**. For spawned scenes, the Spawner assigns the session and keys based on the native spawn entity plus each component's relative scene path before tree entry. Multiple nested components therefore have distinct, corresponding identities on every peer.
 
-**Per-peer update budgets:** configure once after authenticated admission with `session.command("set_peer_replication_budget", {"peer": peer_id, "bytes_per_second": 16384})`. Budgets apply to admitted changed gameplay state envelopes, not actual UDP/retransmission bytes. The token bucket permits a burst of `max(rate, 4160)` bytes so even the largest allowed state can eventually fit. Zero disables this subbudget. Rates from 1 byte/second up to the existing session quota are valid. A waiting selected large state reserves the next budget opportunity, preventing smaller constantly changing states from starving it. Initial/new membership baselines and teardown bypass this gameplay update subbudget, but remain subject to the session's existing per-peer transport quotas. Raw input, application traffic and independent motion streams retain their existing quotas. `replication_peer_statistics` reports update bytes, admitted updates, available tokens and budget deferrals for an authenticated peer. Budgets expire on disconnect and must be configured for the new peer generation after reconnect.
+## Authentication and admission
 
-The default capture rate is 10 Hz. Strings are limited to 256 UTF-8 bytes, schemas to 32 rules and envelopes to 4096 bytes. Clients validate the entire protocol version, identity, ordered schema, exact types, quantization and values before changing any target property. Object deserialization is disabled. Listening servers reject received property state; player inputs still need the game's server-authorized input flow.
+The game/backend authenticates accounts and delivers short-lived admission tokens through its authenticated service. Start the server, issue a token for that account's stable numeric identity and public endpoint, and pass the returned token to the client's World:
 
-**Physical motion:** use the independent unreliable snapshot stream and `EGPNetSnapshotInterpolator` for high-rate poses. This initial reliable gameplay state channel can experience ordered-delivery delays under loss. Property smoothing is cosmetic exponential easing; it does not provide rollback, physical prediction or a render clock. Box3D's trusted local solver snapshots are never transmitted by Superposition.
+```gdscript
+# Server, after authenticating the player's account:
+var admission: Dictionary = world.get_session().issue_token(player_id, "203.0.113.10:10515")
+if admission.error == OK:
+    # Deliver admission.token to that player through the game's account service.
+    pass
 
-**Spatial relevance:** set a positive Interest Radius on a Node3D target and call `set_observer_position(peer_id, position)` as authenticated players move. Visible objects remain relevant until they leave Radius + Hysteresis; hidden objects re-enter at the base Radius. This avoids repeated spawn/despawn traffic when players hover near a boundary. At most 64 observers are retained. Unspecified observers see the entity. Call `clear_observer()` when removing an observer. Relevance is bandwidth optimization, not a privacy boundary: creation can precede observer filtering. Keep secrets out of replicated state.
+# Client, with matching game protocol, simulation fingerprint and tick rate:
+var error: Error = world.join_token(player_id, admission_token)
+```
 
-**Feedback:** scene-tree configuration warnings identify a missing target/schema/session. `replication_error(error, message)` reports failures, and `get_statistics()` exposes captures, sent updates, skipped unchanged states, applied/rejected states, bytes and the last error. Duplicate keys, incompatible schemas and transport errors are observable.
+Check every returned `Error`. Configure token lifetime and any server private key before starting. **Allow Insecure Loopback** is an explicit local-development option. Token delivery, account policy, persistence and production recovery remain game/backend responsibilities.
 
-`modules/egp_net/samples/gdscript/Superposition.tscn` saves the native resources and nodes directly in a scene. Its qualification script runs a real native server and two clients in one process, exercising late join, quantization, unchanged-state suppression, malformed-state rejection, interest exit/re-entry and lifecycle behavior. This is scoped transport/component validation, not a 52-player or cross-platform qualification.
+## Scene spawning and ownership
 
-The architecture separates gameplay objects, a quantized property schema, and connection relevance. Epic describes those concerns in [Components of Iris](https://dev.epicgames.com/documentation/unreal-engine/components-of-iris-in-unreal-engine). Superposition is an initial EGP implementation; it does not claim Iris feature parity. Compressed deltas, automatic scene spawning, general RPCs and prediction integration remain future work. Priority, per-peer gameplay update budgets, stable interest and optional push dirtiness are implemented in this version.
+The allowlist accepts 1–64 scenes with unique IDs from 1–65535. Wire data contains IDs and bounded scalar metadata, never a resource path chosen by a remote peer. Compatibility handshakes compare the allowlist's stable IDs, saved scene structure, nested replication schemas, resource identity and sorted declared script method/property/RPC interfaces. Unknown or mismatched peers remain hidden and cannot dispatch RPC. Script implementation bytes are not hashed, so source and compiled-script deployments can match. Matching asset builds and game-protocol/build-version gating are still required; the handshake is not a complete package-content hash.
 
+Only the listening server can spawn, despawn or change scene visibility. `spawn()` returns the native entity ID, or zero with a `spawn_error` diagnostic. `despawn()` retires that entity and removes its local instances. `get_spawned_node()` returns the current root actor. The default instance cap is 256 and can be configured up to 4096.
 
-Native usage examples are [C#](samples/trilingual/SuperpositionUsage.cs) and [C++](samples/trilingual/extension/superposition_usage.hpp). The saved Inspector scene is the shortest setup for all three languages; the examples illustrate optional code-based construction and pushed changes. They do not add another networking assembly or transport.
+An owner is identified by the authenticated account/client ID captured from the native peer table. A disconnect's reusable peer slot does not transfer ownership. Reconnecting with a fresh token for the same identity can recover owner permission for a retained scene. Numeric entities belong to their issuing session; a replacement session can reuse numbers and requires new scene bindings.
+
+`set_visible(entity, peer, visible)` controls whole-scene interest. Hidden clients remove the local instance; re-entry recreates it from the current allowlisted scene and baseline. Superposition property components additionally provide distance relevance through **Interest Radius**, **Interest Hysteresis** and `set_observer_position(peer, position)`. Unspecified property observers remain visible. Relevance is an optimization; keep secrets outside replicated gameplay state.
+
+Spawn data accepts at most 16 string keys and scalar values: null, bool, int, finite float, finite Vector3 and bounded string. Keys are at most 64 UTF-8 bytes; strings are at most 256 bytes. The complete manifest is capped at 4096 bytes. Object deserialization is disabled.
+
+## Select and schedule properties
+
+Supported property types are bool, int, finite float, string, Vector2, Vector3 and Color. Schemas contain 1–32 rules; strings are capped at 256 UTF-8 bytes and complete snapshots at 4096 bytes. Clients validate version, identity, ordered schema, exact types, quantization and values before changing the target. A listening server rejects received property state.
+
+The default capture rate is 10 Hz. Float and vector quantization reduces insignificant changes. An unchanged quantized snapshot produces no update. Optional property smoothing eases presentation values; it is separate from physical prediction and fixed-tick simulation.
+
+**Capture Mode / Pushed** skips getter calls and serialization until gameplay calls `mark_dirty()`. Notifications coalesce at the configured update rate. A new entity, schema change or restarted session captures a complete baseline automatically. **Automatic** retains the checkbox-only polling workflow.
+
+**Priority** selects a weight from 1–16. The per-peer scheduler retains a pending flow's position until admission so continually changing high-priority objects cannot indefinitely move lower-priority objects behind them. Weights are preferences, not a promised delivery frequency; reliable in-flight state coalescing, loss and latency still affect observed rates.
+
+Set an authenticated peer's gameplay update budget with:
+
+```gdscript
+session.command("set_peer_replication_budget", {
+    "peer": peer_id,
+    "bytes_per_second": 16384,
+})
+```
+
+Zero disables this additional budget. It accounts for admitted gameplay update envelopes, not all UDP headers or retransmissions. The token bucket permits a burst of `max(rate, 4160)` bytes. A selected large update reserves the next opportunity to avoid starvation. Membership baselines and teardown bypass this update budget while retaining the session's transport quotas. Reconfigure the budget for each fresh peer generation. `replication_peer_statistics` reports admitted bytes, updates, available tokens and deferrals.
+
+### Acknowledged delta updates
+
+Enable **Config / Delta Replication** to send sparse byte-run patches against each peer's acknowledged full snapshot. Quantization and validation still operate on the complete gameplay frame; the receiver reconstructs a full native entity state before applying properties. This is byte-patch compression, rather than semantic property encoding.
+
+Joining, re-entry, reconnect, changed sizes or authority/kind, insufficient savings and baseline-capacity pressure send full frames. Acknowledged and pending baseline retention is capped at 1 MiB per peer. Evicting a baseline makes the next update full. Reliable ordering supplies patch prerequisites; malformed patches or a wrong baseline reject the connection. Both endpoints must use the matching `native-wire-3` fingerprint. Delta compression does not change the application's complete-state contract.
+
+## Allowlisted remote calls
+
+Each method resource defines who may invoke it:
+
+| Permission | Allowed sender |
+| --- | --- |
+| **Authority** | The authenticated server |
+| **Owner** | The authenticated client identity that owns the target scene |
+| **Any Peer** | Any currently authenticated, schema-compatible peer, including the server |
+
+Calls target a Spawner-owned root entity and a configured numeric method ID. A remote packet cannot choose an arbitrary node path or method name. The Inspector's **Argument Types** entries select bool, int, float, string or Vector3. At most eight arguments are permitted, with exact type matching, finite numeric values and strings up to 256 UTF-8 bytes. Containers and objects are rejected.
+
+```gdscript
+# Owner/Any Peer calls travel from a client to its authenticated server.
+var error: Error = rpc.send_rpc(entity_id, 1, [requested_action])
+
+# Authority/Any Peer calls travel from the server to compatible clients.
+var error: Error = rpc.send_rpc(entity_id, 2, [announcement], target_peer)
+```
+
+The default peer argument broadcasts on the server and selects peer zero on clients. The server cannot invoke an owner-only method. The server checks ownership again against its live native peer table; game handlers must also validate action values, gameplay state and permissions specific to the game.
+
+Each resource permits 1–128 calls per second, default 16. Aggregate outgoing and incoming limits are 128 calls per second per endpoint/sender, with a maximum 256-call dispatch queue and a 4096-byte wire frame. Dispatch runs after transport receipt and revalidates the session generation, scene/root instance, method schema, sender identity and ownership. Disconnect or rebind invalidates queued work. Root metadata `superposition_rpc_sender_peer` and `superposition_rpc_sender_client_id` exposes the authenticated sender to the called game method.
+
+## Motion and complete-world prediction
+
+Use the independent unreliable snapshot stream and `EGPNetSnapshotInterpolator` for high-rate poses. Reliable gameplay snapshots and RPC can wait behind retransmissions. Buffered interpolation separates the rendered pose from authoritative fixed-step physics; selected-property easing does not replace that presentation clock.
+
+Native **SuperpositionPrediction** maintains bounded local snapshots and canonical-input history. Configure local `capture() -> PackedByteArray`, `restore(local_snapshot) -> Error`, `simulate(tick, input, replay) -> Error` and `state_hash() -> String` callbacks. `predict(tick, input)` advances local prediction; `accept([{tick, input, hash}], epoch)` validates contiguous authority frames, restores a locally captured baseline and replays the complete predicted world. It never accepts remote solver snapshots for restoration.
+
+The default caps are 128 pending ticks, 1 MiB per snapshot and 32 MiB total history. Hash or callback failure stops prediction and releases history. Supply a trusted local baseline and a strictly newer epoch for an explicit reset. Genesis, simulation profile, creation/removal order, seeds and every input affecting the predicted collision world must match. A body selected for presentation does not limit rollback to that body.
+
+The **EGPNetBox3DPrediction** helper offers an Inspector adapter for an explicit Box3D world, session provider, body and presentation node. Game hooks supply typed input and queue validated commands; the adapter owns `step_tick()`. The server authorizes remote input and publishes complete-world canonical frames. Native World routing accepts authority frames only from the authenticated server. This helper supplies bounded reconciliation plumbing; the game's full input/genesis, authorization, admission and resynchronization contracts remain explicit.
+
+## Native APIs in three languages
+
+The saved scene workflow is shared. Programmatic construction uses the native generated classes directly:
+
+```gdscript
+var world := SuperpositionWorld.new()
+world.port = 10515
+add_child(world)
+var error: Error = world.start_server()
+```
+
+```csharp
+using Godot;
+
+var world = new SuperpositionWorld { Port = 10515 };
+AddChild(world);
+Error error = world.StartServer();
+```
+
+```cpp
+#include <godot_cpp/classes/superposition_world.hpp>
+#include <godot_cpp/core/memory.hpp>
+
+auto *world = memnew(godot::SuperpositionWorld);
+world->set_port(10515);
+add_child(world);
+godot::Error error = world->start_server();
+```
+
+C# requires the matching Mono engine and freshly generated GodotSharp assembly. C++ requires that editor's bundled generated SDK. Native GDScript/C++ nodes do not require Mono or a networking assembly. Existing helper facades remain available for application-specific message codecs and game flows; they share the transport with the new native components.
+
+## Feedback and qualification
+
+Configuration warnings identify missing targets, scene allowlists, providers and method rules. `spawn_error`, `rpc_error` and `replication_error` carry actionable error/message pairs. `get_statistics()` exposes instance counts, compatibility state/fingerprints, captures, traffic, queued/rejected calls and the last failure. World exposes its session state and last error in the Inspector.
+
+`misc/scripts/validate_superposition_spawner_rpc.py` runs an authenticated dedicated server and two independent clients with simulated delay, jitter and loss. It checks late join, deliberately mismatched scene IDs, nested property streams, ownership/authority/schema/argument rejection, interest removal/re-entry, despawn and identity-preserving reconnect. A separate World fixture checks automatic discovery/rebinding and stale queued RPC isolation. Retain the validator's binary/source-hashed receipt; these are bounded component tests, not WAN scale or game-performance qualification.
+
+Native property/delta, complete-world prediction and motion fixtures qualify their own contracts. Production account services, persistence, larger-world prediction costs, lag compensation, bandwidth scale, platform parity and long-running recovery need game-specific evidence. Superposition does not claim feature parity with another engine's replication system.
