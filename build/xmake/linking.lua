@@ -51,7 +51,8 @@ function flags(target, policy)
 end
 
 function archive_group(target, policy, options)
-    if not table.contains({'linuxbsd','android','web'},options.platform) then return end
+    local mingw=options.platform=='windows' and import('platforms.init',{rootdir=os.scriptdir()}).enabled(options.use_mingw)
+    if not mingw and not table.contains({'linuxbsd','android','web'},options.platform) then return end
     local libraries,seen={},{}
     for _, value in ipairs(policy.LIBS or {}) do
         if value.kind=='target' and not seen[value.name] then
@@ -59,6 +60,15 @@ function archive_group(target, policy, options)
         end
     end
     if #libraries>0 then
+        if mingw then
+            -- Xmake's GNU mapper omits linkgroup wrappers for the mingw platform.
+            -- Keep the archive rescan scope atomic and after the object inputs.
+            local flags={'-Wl,--start-group'}
+            for _,name in ipairs(libraries) do table.insert(flags,'-l' .. name) end
+            table.insert(flags,'-Wl,--end-group')
+            for _,key in ipairs({'ldflags','shflags'}) do target:add(key,flags,{force=true,expand=false}) end
+            return
+        end
         target:add('linkgroups',table.unpack(table.join(libraries,{{group=true,name='egp_native_archives'}})))
         -- System shared libraries must follow their archive consumers under --as-needed.
         for _, key in ipairs({'links','syslinks'}) do

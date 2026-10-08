@@ -18,6 +18,16 @@ function main()
     end
     linking.archive_group(target,{LIBS={}},{platform='web'})
     assert(#target.calls==7,'Dynamic Web loader with empty LIBS must not pull engine archives')
+    local mingw={calls={},add=target.add}
+    linking.archive_group(mingw,{LIBS=refs},{platform='windows',use_mingw='y'})
+    assert(#mingw.calls==2 and mingw.calls[1][1]=='ldflags' and mingw.calls[2][1]=='shflags','Only GNU Windows binary/shared links need explicit archive rescans')
+    for _,call in ipairs(mingw.calls) do
+        assert(table.concat(call[2],',')=='-Wl,--start-group,-legp_archive_main,-legp_archive_core,-Wl,--end-group','Native archive group must preserve recipe identity and scope')
+        assert(call[3].force and call[3].expand==false,'Native GNU group must remain an atomic argument sequence')
+    end
+    local empty={calls={},add=target.add}
+    linking.archive_group(empty,{LIBS={}},{platform='windows',use_mingw=true})
+    assert(#empty.calls==0,'An empty GNU Windows graph must not pull engine archives')
     local ordered={calls={}}
     ordered.add=target.add
     function ordered:get(key) return key=='syslinks' and {'pthread','z'} or {} end
@@ -110,5 +120,5 @@ function main()
         check(autodetected.calls[1][2]=='Metal' and autodetected.calls[3][2]=='MoltenVK','Automatic SDK discovery must produce effective Metal and MoltenVK link dependencies')
     end
     os.tryrm(fixture)
-    print('XMAKE_LINK_POLICY_PASS ' .. (23+checks))
+    print('XMAKE_LINK_POLICY_PASS ' .. (29+checks))
 end

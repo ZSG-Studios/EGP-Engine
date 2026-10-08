@@ -377,7 +377,9 @@ function configure(target, options, build_env)
         target:add("defines", "ANGLE_ENABLED", "EGL_STATIC")
         target:add("linkdirs", angle)
         local prefix = msvc and "lib" or ""
-        for _, name in ipairs({"ANGLE", "EGL", "GLES"}) do target:add("syslinks", prefix .. name .. "." .. platform .. "." .. arch .. (msvc and enabled(options.use_asan) and ".san" or "")) end
+        -- GNU static archives must follow their users: EGL -> GLES -> ANGLE.
+        local libraries = platform == "windows" and not msvc and {"EGL", "GLES", "ANGLE"} or {"ANGLE", "EGL", "GLES"}
+        for _, name in ipairs(libraries) do target:add("syslinks", prefix .. name .. "." .. platform .. "." .. arch .. (msvc and enabled(options.use_asan) and ".san" or "")) end
         if platform == "windows" then target:add("syslinks", "dxgi", "d3d9", "d3d11") else target:add("frameworks", "Metal") end
     end
     if platform == "android" and enabled(options.swappy) then
