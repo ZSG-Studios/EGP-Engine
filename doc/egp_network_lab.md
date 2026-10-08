@@ -8,7 +8,7 @@ Encrypted admission tokens live only in a temporary trusted local handoff.
 To inspect the source fixture in the editor, install its shared helpers first:
 
 ```powershell
-python misc/scripts/install_egp_net_helpers.py --project misc/egp/network_lab
+xmake lua misc/scripts/install_egp_net_helpers.lua --project misc/egp/network_lab
 bin/godot.windows.editor.dev.x86_64.mono.exe --editor --path misc/egp/network_lab
 ```
 

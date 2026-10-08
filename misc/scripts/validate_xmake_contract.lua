@@ -15,6 +15,7 @@ function main(compressor, zipper)
         {'sdk_paths','build/xmake/tests/sdk_paths.lua',marker='NATIVE_SDK_PATH_CHECKS=(%d+)'},
         {'sdk_native_structures','build/xmake/tests/sdk_native_structures.lua',marker='NATIVE_SDK_NATIVE_STRUCTURE_CHECKS=(%d+)'},
         {'godot_cpp_fixture','tests/build/test_godot_cpp_fixture.lua'},
+        {'helper_install','tests/build/test_install_egp_net_helpers.lua',marker='NATIVE_HELPER_INSTALL_CHECKS=(%d+)'},
         {'linking','tests/build/test_xmake_linking.lua'},
         {'link_dependencies','tests/build/test_xmake_link_dependencies.lua'},
         {'api_fence','tests/build/test_xmake_api_fence.lua'},
@@ -71,6 +72,15 @@ function main(compressor, zipper)
     table.insert(receipt.tests,{name='linux_sanitizer_model',checks=sanitizerchecks,status='PASS'})
     print('linux_sanitizer_model: PASS ' .. sanitizerchecks)
     if os.host()=='windows' then
+        local r128_project=path.join(root,'build/xmake/tests/windows_r128')
+        local r128_output=path.join(directory,'windows-r128')
+        local r128_stdout,r128_stderr=os.iorunv(os.programfile(),{'f','-y','-p','windows','-a','x64','--toolchain=msvc','-P',r128_project,'-o',r128_output},{curdir=r128_project,envs={XMAKE_CONFIGDIR=path.join(r128_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-windows-r128')}})
+        io.writefile(path.join(directory,'windows_r128.log'),r128_stdout .. (r128_stderr or ''))
+        local r128_cases,r128_checks=0,0
+        for count in r128_stdout:gmatch('NATIVE_WINDOWS_R128_CHECKS=(%d+)') do r128_cases=r128_cases+1; r128_checks=r128_checks+tonumber(count) end
+        assert(r128_cases==2,'MSVC and clang-cl must compile the bundled r128 C implementation with their distinct production policies')
+        table.insert(receipt.tests,{name='windows_r128',checks=r128_checks,status='PASS'})
+        print('windows_r128: PASS ' .. r128_checks)
         local exception_project=path.join(root,'build/xmake/tests/windows_exceptions')
         local exception_output=path.join(directory,'windows-exceptions')
         local exception_stdout,exception_stderr=os.iorunv(os.programfile(),{'f','-y','-p','windows','-a','x64','--toolchain=msvc','-P',exception_project,'-o',exception_output},{curdir=exception_project,envs={XMAKE_CONFIGDIR=path.join(exception_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-windows-exceptions')}})

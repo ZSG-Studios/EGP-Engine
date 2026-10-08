@@ -15,17 +15,29 @@ Optional acknowledged byte-patch deltas reduce changed-state payloads; native
 The game still supplies account authentication/token delivery, input authorization
 and the full deterministic genesis/input contract.
 
-Build the desktop engine with `profile=misc/egp/egp_net_profile.py`.
+Build the native desktop editor with xmake:
+
+```sh
+xmake lua misc/scripts/build_egp.lua windows editor 4 .build/xmake-cache "module_egp_net_enabled=yes module_box2d_enabled=yes module_box3d_enabled=yes module_mono_enabled=no"
+```
+
+Use `linuxbsd` or `macos` instead of `windows` on those hosts. See the
+[native build guide](../../doc/egp_xmake.md) for compiler setup and export templates.
 Install the helpers into an existing game:
 
 ```sh
-python misc/scripts/install_egp_net_helpers.py --project /path/to/game
+xmake lua misc/scripts/install_egp_net_helpers.lua --project /path/to/game
 ```
 
-For all three language APIs, build with `profile=misc/egp/egp_net_mono_profile.py`
-and install using `--languages gdscript csharp cpp`. C# requires the matching
+For all three language APIs, enable Mono in the same native build:
+
+```sh
+xmake lua misc/scripts/build_egp.lua windows editor 4 .build/xmake-cache "module_egp_net_enabled=yes module_box2d_enabled=yes module_box3d_enabled=yes module_mono_enabled=yes"
+```
+
+Install using `--languages gdscript csharp cpp`. C# requires the matching
 Mono editor, freshly generated GodotSharp assemblies and Mono export templates.
-The native profile remains usable for games that use only GDScript and C++.
+The editor without Mono remains usable for games that use only GDScript and C++.
 
 | Layer | GDScript | C# | C++ |
 | --- | --- | --- | --- |

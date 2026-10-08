@@ -129,6 +129,11 @@ function configure(target, options, build_env)
     end
     local platform = normalized.godot_platform
     local msvc = platform == "windows" and not enabled(options.use_mingw)
+    if normalized.toolchain == "clang-cl" then
+        -- Clang's MSVC-compatible driver does not expose the _udiv128 intrinsic.
+        -- Preserve the upstream Windows policy for the portable r128 implementation.
+        target:add("defines", "R128_STDC_ONLY")
+    end
     if (normalized.toolchain=="gcc" or normalized.toolchain=="mingw") and target.script then
         import("compiler_warnings",{rootdir=os.scriptdir()}).configure(target)
     end

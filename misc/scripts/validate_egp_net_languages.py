@@ -294,11 +294,13 @@ def main():
             raise RuntimeError(label)
 
     try:
+        xmake = os.environ.get("XMAKE") or shutil.which("xmake") or "xmake"
         run(
             "install",
             [
-                sys.executable,
-                ROOT / "misc/scripts/install_egp_net_helpers.py",
+                xmake,
+                "lua",
+                ROOT / "misc/scripts/install_egp_net_helpers.lua",
                 "--project",
                 project,
                 "--languages",
@@ -308,7 +310,6 @@ def main():
             ],
             30,
         )
-        xmake = os.environ.get("XMAKE") or shutil.which("xmake") or "xmake"
         command = [
             xmake,
             "f",

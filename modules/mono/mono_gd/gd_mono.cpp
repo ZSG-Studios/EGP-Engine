@@ -612,6 +612,14 @@ godot_plugins_initialize_fn initialize_coreclr_and_godot_plugins(bool &r_runtime
 
 bool GDMono::should_initialize() {
 #ifdef TOOLS_ENABLED
+	// Native API metadata is also used to bootstrap the SDK before the managed
+	// assemblies exist. These commands never execute managed project code.
+	const List<String> &args = OS::get_singleton()->get_cmdline_args();
+	if (args.find("--dump-extension-api") || args.find("--dump-extension-api-with-docs") ||
+			args.find("--dump-gdextension-interface") || args.find("--dump-gdextension-interface-json") ||
+			args.find("--validate-extension-api")) {
+		return false;
+	}
 	// The editor always needs to initialize the .NET module for now.
 	return true;
 #else

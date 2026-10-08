@@ -1,4 +1,15 @@
 -- Prepare the complete upstream test project from the same source snapshot as the SDK.
+function source_files(project)
+    local files = {}
+    for _, filename in ipairs(os.files(path.join(project, '**'))) do
+        local relative = path.relative(filename, project):gsub('\\', '/')
+        if not relative:startswith('project/bin/') then
+            table.insert(files, filename)
+        end
+    end
+    return files
+end
+
 function validate_templates(project, include)
     local count = 0
     for _, filename in ipairs(os.files(path.join(project, 'src/**'))) do
@@ -21,7 +32,7 @@ function main(destination, root)
     assert(#revision == 40, 'Vendored C++ fixture provenance requires a full upstream revision')
     local project = path.join(destination, 'test')
     local files = 0
-    for _, filename in ipairs(os.files(path.join(source, 'test/**'))) do
+    for _, filename in ipairs(source_files(path.join(source, 'test'))) do
         local output = path.join(project, path.relative(filename, path.join(source, 'test')))
         os.mkdir(path.directory(output)); os.cp(filename, output)
         files = files + 1

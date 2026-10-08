@@ -23,6 +23,8 @@ function main()
         end
     end
     assert(object_count == 4, "All four actual translation units must compile")
+    local short_object = import("core.base.json").loadfile(path.join(directory, "short-object.json")).object
+    snapshots[short_object] = {mtime = os.mtime(short_object), hash = hash.sha256(short_object)}
     invoke("warm", {"-P", project, "-b", "-j", "1"})
     for object, state in pairs(snapshots) do
         assert(os.mtime(object) == state.mtime and hash.sha256(object) == state.hash, "Warm build unexpectedly rebuilt an object")
@@ -40,7 +42,9 @@ function main()
             compact_count = compact_count + 1
         end
     end
-    assert(compact_count == (os.host() == "windows" and 3 or 2))
+    assert(compact_count == import("core.base.json").loadfile(path.join(directory, "mapping-count.json")).count)
+    local release_short = import("core.base.json").loadfile(path.join(directory, "short-object.json")).object
+    release_objects[release_short] = {mtime = os.mtime(release_short), hash = hash.sha256(release_short)}
     invoke("warm-release", {"-P", project, "-b", "-j", "1"})
     for object, state in pairs(release_objects) do
         assert(os.mtime(object) == state.mtime and hash.sha256(object) == state.hash, "Warm Release build unexpectedly rebuilt an object")
@@ -53,7 +57,7 @@ function main()
     invoke("run-release", {"run", "-P", project, "egp_generated_object_probe"})
     local external = path.join(root, ".build/generated-object-external-source")
     local deep_project = path.join(directory, "deep-project", "nested-extension-project-with-external-sdk-source", "nested-external-path-regression")
-    local deep_build = path.join(directory, "external-build")
+    local deep_build = path.join(root, ".build/generated-object-external-build")
     os.mkdir(external); os.mkdir(deep_project)
     local external_source = path.join(external, "source.cpp")
     local external_header = path.join(external, "local.h")
@@ -94,7 +98,7 @@ function main()
     deep_invoke("external-run-changed", {"run", "-P", deep_project, "external_probe"})
     import("core.base.json").savefile(path.join(directory, "receipt.json"), {
         passed = true, build_backend = "xmake", host = os.host(), compiler = compiler,
-        checks = 25, compiled_translation_units = object_count, objects = snapshots,
+        checks = 33, compiled_translation_units = object_count + 1, objects = snapshots,
         external_source_absolute = os.host() == "windows", external_perfile_define_preserved = true,
         external_warm_unchanged = true, external_quoted_header_rebuilt = true,
         release_objects = release_objects, same_builddir_modes_distinct = true,
@@ -102,5 +106,5 @@ function main()
         same_basename_generated_units = 2, warm_objects_unchanged = true,
         ordinary_object_path_preserved = true, deep_ordinary_compiled = true
     })
-    print("NATIVE_GENERATED_OBJECT_CHECKS=25")
+    print("NATIVE_GENERATED_OBJECT_CHECKS=33")
 end
