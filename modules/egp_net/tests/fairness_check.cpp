@@ -30,6 +30,7 @@
 
 #include "net_core.h"
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <cstdlib>
@@ -69,21 +70,64 @@ int main(int argc, char **argv) {
 	std::array<int64_t, 2> owners{};
 	std::array<std::vector<uint64_t>, 2> handles;
 	bool pump_first = true;
+	std::array<std::string, 3> last_diagnostic;
+	server.diagnostic = [&](const std::string &message) { last_diagnostic[0] = message; };
+	first.diagnostic = [&](const std::string &message) { last_diagnostic[1] = message; };
+	second.diagnostic = [&](const std::string &message) { last_diagnostic[2] = message; };
+	unsigned phase = 0;
 	auto until = [&](auto done, int milliseconds = 5000) {
-		const auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(milliseconds);
+		++phase;
+		const auto start = std::chrono::steady_clock::now();
+		const auto end = start + std::chrono::milliseconds(milliseconds);
+		auto previous = start;
+		int64_t max_gap_ms = 0;
+		unsigned pumps = 0;
+		auto failure_context = [&](const char *reason, Result result) {
+			std::cerr << "FAIRNESS_FAILURE phase=" << phase << " reason=" << reason << " result=" << int(result)
+					  << " requested_ms=" << milliseconds << " elapsed_ms=" << std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() - start).count()
+					  << " pumps=" << pumps << " max_gap_ms=" << max_gap_ms << " symmetric=" << symmetric << " abrupt=" << abrupt << " frame_paced=" << frame_paced << std::endl;
+			std::array<Session *, 3> sessions{ &server, &first, &second };
+			for (size_t i = 0; i < sessions.size(); ++i) {
+				const auto stats = sessions[i]->statistics();
+				std::cerr << "FAIRNESS_SESSION index=" << i << " state=" << sessions[i]->state() << " entities=" << sessions[i]->entities().size()
+						  << " peers=" << stats.peers << " tick=" << stats.tick << " server_tick=" << stats.server_tick
+						  << " received_messages=" << stats.received_messages << " received_bytes=" << stats.received_bytes << " rejected_messages=" << stats.rejected_messages
+						  << " diagnostic=" << last_diagnostic[i] << std::endl;
+			}
+			for (const auto &peer : server.peers()) {
+				const auto stats = server.replication_statistics(peer.id);
+				if (stats) {
+					std::cerr << "FAIRNESS_REPLICATION peer=" << peer.id << " sent_updates=" << stats->sent_updates << " sent_bytes=" << stats->sent_bytes
+							  << " full_state_updates=" << stats->full_state_updates << " baseline_bytes=" << stats->baseline_bytes << " budget_deferrals=" << stats->budget_deferrals << std::endl;
+				}
+			}
+		};
 		do {
-			check(server.pump() == Result::Ok, "server pump");
+			const auto current = std::chrono::steady_clock::now();
+			max_gap_ms = std::max(max_gap_ms, std::chrono::duration_cast<std::chrono::milliseconds>(current - previous).count());
+			previous = current;
+			++pumps;
+			const auto server_result = server.pump();
+			if (server_result != Result::Ok) {
+				failure_context("server pump", server_result);
+			}
+			check(server_result == Result::Ok, "server pump");
 			for (auto *client : clients) {
 				if (client == &first && !pump_first) {
 					continue;
 				}
-				check(client->pump() == Result::Ok, "client pump");
+				const auto client_result = client->pump();
+				if (client_result != Result::Ok) {
+					failure_context(client == &first ? "first client pump" : "second client pump", client_result);
+				}
+				check(client_result == Result::Ok, "client pump");
 			}
 			if (done()) {
 				return true;
 			}
 			std::this_thread::sleep_for(std::chrono::milliseconds(frame_paced ? 16 : 2));
 		} while (std::chrono::steady_clock::now() < end);
+		failure_context("completion deadline", Result::Ok);
 		return false;
 	};
 	auto admit = [&](int index) {

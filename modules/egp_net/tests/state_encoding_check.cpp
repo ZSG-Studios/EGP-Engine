@@ -31,6 +31,7 @@
 #include "net_core.h"
 #include "netcode.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <iostream>
@@ -49,25 +50,57 @@ int main() {
 	options.messages_per_second = 32;
 	options.bytes_per_second = 8192;
 	Session server(options), client(options);
+	const char *stage = "initial baseline";
+	int expected_size = -1;
+	uint64_t pumps = 0;
+	double maximum_gap_ms = 0;
+	auto previous_pump = std::chrono::steady_clock::now();
+	auto report = [&](const char *side, const std::string &reason) {
+		const Statistics server_stats = server.statistics(), client_stats = client.statistics();
+		std::cerr << "STATE_ENCODING_DIAGNOSTIC side=" << side << " stage=" << stage
+				  << " expected_size=" << expected_size << " pumps=" << pumps << " maximum_gap_ms=" << maximum_gap_ms
+				  << " server_state=" << server.state() << " client_state=" << client.state()
+				  << " server_tick=" << server_stats.tick << " client_tick=" << client_stats.tick
+				  << " server_received=" << server_stats.received_messages << " client_received=" << client_stats.received_messages
+				  << " server_rejected=" << server_stats.rejected_messages << " client_rejected=" << client_stats.rejected_messages
+				  << " server_entities=" << server.entities().size() << " client_entities=" << client.entities().size()
+				  << " reason=" << reason << std::endl;
+	};
+	server.diagnostic = [&](const std::string &reason) { report("server", reason); };
+	client.diagnostic = [&](const std::string &reason) { report("client", reason); };
 	auto until = [&](auto predicate) {
 		const auto end = std::chrono::steady_clock::now() + std::chrono::seconds(5);
 		do {
-			check(server.pump() == Result::Ok && client.pump() == Result::Ok, "pump");
+			const auto current = std::chrono::steady_clock::now();
+			maximum_gap_ms = std::max(maximum_gap_ms, std::chrono::duration<double, std::milli>(current - previous_pump).count());
+			previous_pump = current;
+			++pumps;
+			const Result server_result = server.pump();
+			const Result client_result = server_result == Result::Ok ? client.pump() : Result::Unconfigured;
+			if (server_result != Result::Ok || client_result != Result::Ok) {
+				report("pump", "server_result=" + std::to_string(int(server_result)) + " client_result=" + std::to_string(int(client_result)));
+				check(false, "pump");
+			}
 			if (predicate()) {
 				return true;
 			}
 			std::this_thread::sleep_for(std::chrono::milliseconds(16));
 		} while (std::chrono::steady_clock::now() < end);
+		report("completion", "five-second predicate deadline exceeded");
 		return false;
 	};
 	check(server.listen(0, "127.0.0.1") == Result::Ok, "listen");
 	check(client.connect_loopback("127.0.0.1", server.statistics().local_port) == Result::Ok, "connect");
 	check(until([&] { return client.state() == "Connected"; }), "initial baseline");
 	uint64_t handle = 0;
+	stage = "empty state replication";
+	expected_size = 0;
 	check(server.spawn(1, {}, -1, handle) == Result::Ok, "empty state spawn");
 	check(until([&] { return client.entities().count(handle) != 0; }), "empty state replication");
 	int phase = 0;
 	for (int size : { 1, 128, 129, 4096, 128, 0 }) {
+		stage = "inline/block transition";
+		expected_size = size;
 		std::vector<uint8_t> payload(size, uint8_t(++phase));
 		check(server.update(handle, payload) == Result::Ok, "state transition accepted");
 		const uint64_t revision = server.entities().at(handle).revision;
