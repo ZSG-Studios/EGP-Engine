@@ -501,11 +501,11 @@ void ProjectDialog::_renderer_selected() {
 
 	if (renderer_type == "forward_plus") {
 		renderer_info->set_text(
-				String::utf8("â€¢  ") + TTR("Supports desktop platforms only.") +
-				String::utf8("\nâ€¢  ") + TTR("Advanced 3D graphics available.") +
-				String::utf8("\nâ€¢  ") + TTR("Can scale to large complex scenes.") +
-				String::utf8("\nâ€¢  ") + TTR("Uses RenderingDevice backend.") +
-				String::utf8("\nâ€¢  ") + TTR("Slower rendering of simple scenes."));
+				String::utf8("•  ") + TTR("Supports desktop platforms only.") +
+				String::utf8("\n•  ") + TTR("Advanced 3D graphics available.") +
+				String::utf8("\n•  ") + TTR("Can scale to large complex scenes.") +
+				String::utf8("\n•  ") + TTR("Uses RenderingDevice backend.") +
+				String::utf8("\n•  ") + TTR("Slower rendering of simple scenes."));
 		rd_error = !rendering_device_supported;
 	} else {
 		WARN_PRINT("Unknown renderer type. Please report this as a bug on GitHub.");

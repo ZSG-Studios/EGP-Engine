@@ -1083,6 +1083,9 @@ LightmapperRD::BakeError LightmapperRD::_denoise(RenderingDevice *p_rd, Ref<RDSh
 		if (p_step_function) {
 			int percent = (s + 1) * 100 / p_atlas_slices;
 			float p = float(s) / p_atlas_slices * 0.1;
+			if (p_step_function(0.8 + p, vformat(RTR("Denoising %d%%"), percent), p_bake_userdata, false)) {
+				return BAKE_ERROR_USER_ABORTED;
+			}
 		}
 	}
 
@@ -1863,6 +1866,15 @@ LightmapperRD::BakeError LightmapperRD::bake(BakeQuality p_quality, bool p_use_d
 						int total = (atlas_slices * x_regions * y_regions);
 						int percent = count * 100 / total;
 						float p = float(count) / total * 0.1;
+						if (p_step_function(0.5 + p, vformat(RTR("Plot direct lighting %d%%"), percent), p_bake_userdata, false)) {
+							FREE_TEXTURES
+							FREE_BUFFERS
+							FREE_RASTER_RESOURCES
+							FREE_COMPUTE_RESOURCES
+							memdelete(rd);
+							memdelete(rcd);
+							return BAKE_ERROR_USER_ABORTED;
+						}
 					}
 				}
 			}
@@ -1998,6 +2010,15 @@ LightmapperRD::BakeError LightmapperRD::bake(BakeQuality p_quality, bool p_use_d
 							int total = (atlas_slices * x_regions * y_regions * ray_iterations);
 							int percent = count * 100 / total;
 							float p = float(count) / total * 0.1;
+							if (p_step_function(0.6 + p, vformat(RTR("Integrate indirect lighting %d%%"), percent), p_bake_userdata, false)) {
+								FREE_TEXTURES
+								FREE_BUFFERS
+								FREE_RASTER_RESOURCES
+								FREE_COMPUTE_RESOURCES
+								memdelete(rd);
+								memdelete(rcd);
+								return BAKE_ERROR_USER_ABORTED;
+							}
 						}
 					}
 				}
@@ -2100,6 +2121,18 @@ LightmapperRD::BakeError LightmapperRD::bake(BakeQuality p_quality, bool p_use_d
 			if (p_step_function) {
 				int percent = i * 100 / ray_iterations;
 				float p = float(i) / ray_iterations * 0.1;
+				if (p_step_function(0.7 + p, vformat(RTR("Integrating light probes %d%%"), percent), p_bake_userdata, false)) {
+					FREE_TEXTURES
+					FREE_BUFFERS
+					FREE_RASTER_RESOURCES
+					FREE_COMPUTE_RESOURCES
+					if (probe_positions.size() > 0) {
+						rd->free_rid(light_probe_buffer);
+					}
+					memdelete(rd);
+					memdelete(rcd);
+					return BAKE_ERROR_USER_ABORTED;
+				}
 			}
 		}
 	}

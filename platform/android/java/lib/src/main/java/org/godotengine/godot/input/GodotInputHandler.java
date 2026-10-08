@@ -30,8 +30,6 @@
 
 package org.godotengine.godot.input;
 
-import static org.godotengine.godot.utils.GLUtils.DEBUG;
-
 import org.godotengine.godot.Godot;
 import org.godotengine.godot.GodotLib;
 import org.godotengine.godot.GodotRenderView;
@@ -69,6 +67,7 @@ import java.util.concurrent.atomic.AtomicInteger;
  */
 public class GodotInputHandler implements InputManager.InputDeviceListener, SensorEventListener {
 	private static final String TAG = GodotInputHandler.class.getSimpleName();
+	private static final boolean DEBUG = false;
 
 	private static final int ROTARY_INPUT_VERTICAL_AXIS = 1;
 	private static final int ROTARY_INPUT_HORIZONTAL_AXIS = 0;
