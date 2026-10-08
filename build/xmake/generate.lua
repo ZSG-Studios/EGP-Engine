@@ -10,13 +10,19 @@ local function canonical(value)
 end
 
 local function host_tools(root, options)
+    options = options or {}
     local project = path.join(root, "build/xmake/tools")
     local directory = path.join(root, ".build/xmake-host-tools", os.host() .. "-" .. os.arch())
     local executable = path.join(directory, "bin/egp_compress" .. (os.host() == "windows" and ".exe" or ""))
     os.mkdir(directory)
     local envs = {XMAKE_CONFIGDIR = path.join(directory, "config"), XMAKE_GLOBALDIR = path.join(root, ".build/xmake-global/codegen")}
-    local host = import("platforms.host", {rootdir=os.scriptdir()}).select(options)
-    os.vrunv(os.programfile(), {"f", "-y", "--toolchain=" .. host.toolchain, "-P", project, "-o", directory, "-p", host.plat, "-a", host.arch, "-m", "release"}, {curdir = project, envs = envs})
+    local hosts = import("platforms.host", {rootdir=os.scriptdir()})
+    local host = hosts.select(options)
+    local configure = {"f", "-y", "--toolchain=" .. host.toolchain, "-P", project, "-o", directory, "-p", host.plat, "-a", host.arch, "-m", "release"}
+    -- The built-in xmake SDK option is not an engine graph option.
+    local sdkroot = options.mingw or import("core.project.config").get("mingw")
+    table.join2(configure, hosts.configure_arguments(host, options, sdkroot))
+    os.vrunv(os.programfile(), configure, {curdir = project, envs = envs})
     os.vrunv(os.programfile(), {"-P", project, "-b", "-j", "4"}, {curdir = project, envs = envs})
     assert(os.isfile(executable), "Native host compressor build failed")
     return executable, path.join(directory, "bin/egp_zip" .. (os.host() == "windows" and ".exe" or ""))

@@ -29,7 +29,9 @@ def main():
         text=True,
         check=True,
     )
-    assert "XMAKE_NATIVE_GENERATORS_PASS 17" in process.stdout, process.stdout + process.stderr
+    success = re.search(r"XMAKE_NATIVE_GENERATORS_PASS (\d+)", process.stdout)
+    assert success and int(success.group(1)) >= 20, process.stdout + process.stderr
+    lua_checks = int(success.group(1))
     folder = ROOT / ".build/xmake-generator-tests"
     expected = "hello\0UTF8: café\n".encode() + b"compressible\n" * 1000
     assert zlib.decompress((folder / "compression.zlib").read_bytes()) == expected
@@ -43,7 +45,12 @@ def main():
     )
     assert zlib.decompress(raw_output.read_bytes(), -15) == expected
     interface = (folder / "core.extension.make_interface_header.run.gen.h").read_text(encoding="utf-8")
-    checks = {"lua_checks": 17, "binary_zlib_roundtrip": True, "binary_raw_deflate_roundtrip": True, "crc32": crc}
+    checks = {
+        "lua_checks": lua_checks,
+        "binary_zlib_roundtrip": True,
+        "binary_raw_deflate_roundtrip": True,
+        "crc32": crc,
+    }
     checks["interface_tokens_sha256"] = hashlib.sha256(json.dumps(tokens(interface)).encode()).hexdigest()
     if args.reference_dir:
         reference = (args.reference_dir / "gdextension_interface.gen.h").read_text(encoding="utf-8")

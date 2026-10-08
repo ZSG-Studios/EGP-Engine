@@ -39,8 +39,9 @@ function main(platform, target, jobs, cache, flags, dryrun, resultpath)
     local digest = hash.sha256(bytes(table.concat(ordered,'\n'))):sub(1,12)
     local variant = path.join(path.absolute(cache or path.join(root,'.build/xmake-cache')), platform .. '-' .. options.arch .. '-' .. target .. '-' .. digest)
     local configure = {'f','-y','-P',root,'-o',variant,'-p',normalized.plat,'-a',normalized.arch,'--toolchain=' .. normalized.toolchain,'-m',(policy.enabled(options.dev_build) or target=='template_debug') and 'debug' or 'release','--godot_platform=' .. platform,'--egp_arch=' .. options.arch,'--egp_target=' .. target}
+    table.join2(configure, import('build.xmake.platforms.host', {rootdir=root}).configure_arguments(normalized, options))
     for _, key in ipairs(keys) do
-        if key ~= 'platform' and key ~= 'target' and key ~= 'arch' then table.insert(configure,'--' .. key .. '=' .. options[key]) end
+        if key ~= 'platform' and key ~= 'target' and key ~= 'arch' and key ~= 'mingw' then table.insert(configure,'--' .. key .. '=' .. options[key]) end
     end
     if platform == 'android' then
         local ndk = os.getenv('ANDROID_NDK_ROOT') or os.getenv('ANDROID_NDK_HOME') or (os.getenv('ANDROID_HOME') and path.join(os.getenv('ANDROID_HOME'),'ndk/29.0.14206865'))

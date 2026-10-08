@@ -14,7 +14,8 @@ function main()
         assert(type(module.can_build) == "function" and type(module.configure) == "function", "Module capability contract missing: " .. name)
         configs = configs + 1
     end
-    assert(recipes >= 217 and configs >= 57, "Native metadata catalog unexpectedly incomplete")
+    -- The shipped catalog has 216 recipes; optional local modules can add more.
+    assert(recipes >= 216 and configs >= 57, "Native metadata catalog unexpectedly incomplete")
     local model = import("build.xmake.graph", {rootdir = root})
     local packages = import("build.xmake.platform_packages", {rootdir = root})
     for _, profile in ipairs({

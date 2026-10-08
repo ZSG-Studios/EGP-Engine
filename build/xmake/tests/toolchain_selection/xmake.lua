@@ -37,6 +37,41 @@ for index, options in ipairs(selections) do
                 assert(probe.extras.simulator==expected_simulator)
                 if profile.platform=="ios" then assert(probe.extras.appledev==(profile.simulator=="y" and "simulator" or "iphone") and probe.extras.target_minver=="15.0") end
             end
+            local apple_checks=0
+            local toolchain_utils=import("private.utils.toolchain")
+            for _, profile in ipairs({
+                {arch="arm64",minimum="13.0"},
+                {arch="x86_64",minimum="11.0"},
+                {arch="aarch64",minimum="13.0"},
+                {arch="amd64",minimum="11.0"}
+            }) do
+                local options={platform="macos",arch=profile.arch,accesskit=false,metal=false,vulkan=false,angle=false}
+                local probe={values={}}
+                function probe:set(key,...)
+                    self.values[key]={...}
+                    if key=="toolchains" then self.name,self.extras=... end
+                end
+                function probe:add(key,...)
+                    self.values[key]=self.values[key] or {}
+                    for _,value in ipairs({...}) do if type(value)~="table" then table.insert(self.values[key],value) end end
+                end
+                policy.configure(probe,options)
+                assert(probe.extras.target_minver==profile.minimum,"macOS Xcode deployment target must not default to the SDK version")
+                apple_checks=apple_checks+1
+                local normalized=policy.normalize(options)
+                local compiler={}
+                function compiler:arch() return normalized.arch end
+                function compiler:plat() return normalized.plat end
+                function compiler:config(key) return probe.extras[key] end
+                local triple=toolchain_utils.get_xcode_target_triple(compiler)
+                assert(triple==normalized.arch .. "-apple-macos" .. profile.minimum,"Xcode's real compiler target triple must preserve macOS compatibility")
+                apple_checks=apple_checks+1
+                for _,key in ipairs({"cxflags","ldflags","shflags"}) do
+                    assert(table.contains(probe.values[key],"-mmacosx-version-min=" .. profile.minimum),"macOS compiler and linker deployment flags must agree with the target triple")
+                    apple_checks=apple_checks+1
+                end
+                print("NATIVE_MACOS_DEPLOYMENT_TARGET=" .. triple)
+            end
             local hosts=import("build.xmake.platforms.host",{rootdir=path.absolute("../../../..",os.scriptdir())})
             local absent=function() return false end
             assert(hosts.select({platform="windows",use_mingw=true},"windows","x64",absent).plat=="mingw")
@@ -50,7 +85,7 @@ for index, options in ipairs(selections) do
             for _, pair in ipairs({{"windows","amd64","x64"},{"windows","i386","x86"},{"android","aarch64","arm64-v8a"},{"linuxbsd","x64","x86_64"},{"linuxbsd","riscv64","riscv64"}}) do
                 assert(policy.normalize({platform=pair[1],arch=pair[2]}).arch==pair[3])
             end
-            print("NATIVE_TOOLCHAIN_SELECTION_CHECKS=" .. (#selections*2+17))
+            print("NATIVE_TOOLCHAIN_SELECTION_CHECKS=" .. (#selections*2+17+apple_checks))
         end)
     target_end()
     end

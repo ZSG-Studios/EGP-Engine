@@ -41,6 +41,9 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Setup native xmake
+        uses: ./.github/actions/godot-deps
+
       - name: Set up Emscripten latest
         uses: emscripten-core/setup-emsdk@v16
         with:
@@ -56,9 +59,6 @@ jobs:
         with:
           cache-name: ${{ matrix.cache-name }}
         continue-on-error: true
-
-      - name: Setup native xmake
-        uses: ./.github/actions/godot-deps
 
       - name: Compilation
         uses: ./.github/actions/godot-build

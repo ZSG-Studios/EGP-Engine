@@ -15,8 +15,10 @@ function generate(job, context)
     os.vrunv(scanner, {"-c", mode, source, temporary}, {timeout = 60000})
     local value = assert(io.readfile(temporary), "Wayland scanner did not produce an output")
     if job.sources[2].value then
-        value = value:gsub("wayland%-client%-core%.h", "../dynwrappers/wayland-client-core-so_wrap.h")
-        value = value:gsub("wayland%-util%.h", "../dynwrappers/wayland-client-core-so_wrap.h")
+        -- Generated protocols live in the build directory; wrappers stay in the source tree.
+        local wrapper = "platform/linuxbsd/wayland/dynwrappers/wayland-client-core-so_wrap.h"
+        value = value:gsub("wayland%-client%-core%.h", wrapper)
+        value = value:gsub("wayland%-util%.h", wrapper)
     end
     if not os.isfile(target) or io.readfile(target) ~= value then io.writefile(target, value) end
     os.tryrm(temporary)

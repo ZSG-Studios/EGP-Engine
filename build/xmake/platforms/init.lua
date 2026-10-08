@@ -23,6 +23,10 @@ end
 function configure_toolchain(target, options, build_env)
     local normalized = normalize(options)
     local settings = {}
+    if normalized.godot_platform == "macos" then
+        -- Xcode's target triple must agree with the compile/link deployment flags.
+        settings.target_minver = normalized.arch == "arm64" and "13.0" or "11.0"
+    end
     if normalized.godot_platform == "ios" or normalized.godot_platform == "visionos" then settings.simulator = enabled(options.simulator) end
     if normalized.godot_platform == "ios" then
         settings.appledev = settings.simulator and "simulator" or "iphone"

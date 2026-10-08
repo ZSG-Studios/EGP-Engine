@@ -16,3 +16,13 @@ function select(options, host, arch, available)
     if host=='linux' and not available('g++') and available('clang++') then return {plat=host,arch=arch,toolchain='clang'} end
     return {plat=host,arch=arch,toolchain=assert(({windows='msvc',linux='gcc',macosx='xcode',bsd='clang'})[host],'Unsupported native code-generation host')}
 end
+
+-- Explicit SDK roots must reach both the engine and isolated native generator projects.
+function configure_arguments(normalized, options, sdkroot)
+    if normalized.plat ~= 'mingw' then return {} end
+    sdkroot = sdkroot or (options and options.mingw) or os.getenv('EGP_MINGW_ROOT')
+    if not sdkroot or sdkroot == '' then return {} end
+    sdkroot = path.absolute(sdkroot)
+    assert(os.isdir(path.join(sdkroot, 'bin')), 'Configured MinGW SDK has no bin directory: ' .. sdkroot)
+    return {'--mingw=' .. sdkroot}
+end

@@ -14,7 +14,6 @@ toolchain("egp-visionos")
         toolchain:config_set("egp_clang", os.iorunv(xcrun.program, {"--sdk", sdk, "--find", "clang"}):trim())
         toolchain:config_set("egp_clangxx", os.iorunv(xcrun.program, {"--sdk", sdk, "--find", "clang++"}):trim())
         toolchain:config_set("egp_ar", os.iorunv(xcrun.program, {"--sdk", sdk, "--find", "ar"}):trim())
-        toolchain:save()
         return true
     end)
     on_load(function (toolchain)

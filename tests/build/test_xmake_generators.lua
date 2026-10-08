@@ -19,6 +19,41 @@ function main(compressor)
     check(disabled:find('is_class_enabled<CSGBox3D>',1,true), 'Disabled classes')
     local modules = generate('modules_enabled_builder', {{value={'egp_net','box3d'}}})
     check(modules:find('MODULE_BOX3D_ENABLED',1,true) < modules:find('MODULE_EGP_NET_ENABLED',1,true), 'Stable module define order')
+    local module_tests = generate('modules_tests_builder', {{path='modules/zip/tests/test_zip.h'}, {path='modules/jsonrpc/tests/test_jsonrpc.h'}})
+    local jsonrpc_header = module_tests:find('#include "modules/jsonrpc/tests/test_jsonrpc.h"',1,true)
+    local zip_header = module_tests:find('#include "modules/zip/tests/test_zip.h"',1,true)
+    check(jsonrpc_header and zip_header and jsonrpc_header < zip_header, 'Nonempty module test headers must generate in stable native path order')
+    check(not module_tests:find('\\',1,true), 'Module test includes must use portable forward slashes')
+    check(module_tests:find('// IWYU pragma: begin_keep.',1,true) and module_tests:find('// IWYU pragma: end_keep.',1,true), 'Generated module test includes must retain IWYU guards')
+    local wayland = import('build.xmake.generators.wayland', {rootdir=os.curdir()})
+    local scanner_output = '#include "wayland-client-core.h"\n#include "wayland-util.h"\n'
+    local original_run = os.vrunv
+    os.vrunv = function(program, arguments, options)
+        check(program == 'fixture-wayland-scanner' and arguments[1] == '-c' and
+            (arguments[2] == 'client-header' or arguments[2] == 'private-code') and
+            os.isfile(arguments[3]) and options.timeout == 60000, 'Wayland generation must invoke the scanner with a real protocol XML')
+        io.writefile(arguments[4], scanner_output)
+    end
+    local scanner_success, scanner_error = utils.trycall(function()
+        for _, mode in ipairs({'client_header', 'private_code'}) do
+            for _, wrapped in ipairs({true, false}) do
+                local output = path.join(folder, 'relocated/generated/platform/linuxbsd/wayland/protocol', mode .. tostring(wrapped) .. '.gen.h')
+                check(wayland.generate({builder='wayland.scanner.' .. mode,targets={output},sources={{path='thirdparty/wayland/protocol/wayland.xml'},{value=wrapped}}},
+                    {root=os.curdir(),wayland_scanner='fixture-wayland-scanner'}), 'Both Wayland scanner modes must publish relocated output')
+                local actual = assert(io.readfile(output))
+                if wrapped then
+                    check(not actual:find('../dynwrappers/',1,true), 'Relocated Wayland outputs must not resolve wrappers inside the build directory')
+                    for include in actual:gmatch('#include "([^"]+)"') do
+                        check(os.isfile(path.join(context.root, include)), 'Generated Wayland includes must resolve through the engine source-root include directory')
+                    end
+                else
+                    check(actual == scanner_output, 'System-linked Wayland must preserve the native scanner includes')
+                end
+            end
+        end
+    end)
+    os.vrunv = original_run
+    assert(scanner_success, scanner_error)
     local key = generate('encryption_key_builder', {{value=string.rep('ab',32)}})
     check(key:find('171, 171',1,true), 'AES exact bytes')
     local compressed = support.compress('hello\0UTF8: café\n' .. string.rep('compressible\n',1000), context)

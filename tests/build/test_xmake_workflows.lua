@@ -102,6 +102,11 @@ function main()
     assert(android:find('platform/android/java/app/config.gradle',1,true) and android:find('sdkmanager --sdk_root="$SDK_ROOT" "ndk;$NDK_VERSION"',1,true),'Android CI must read and install the same NDK revision as Gradle')
     assert(android:find('ANDROID_NDK_ROOT=%s\\nANDROID_NDK_HOME=%s\\n',1,true),'Native compilation and libc++ staging must share the selected NDK')
     count=count+3
+    local web=assert(io.readfile(path.join(root,'.github/workflows/web_builds.yml')))
+    assert(assert(web:find('name: Setup native xmake',1,true)) < assert(web:find('name: Set up Emscripten latest',1,true)), 'Build the host xmake executable before activating the Web cross compiler')
+    local windows=assert(io.readfile(path.join(root,'.github/workflows/windows_builds.yml')))
+    assert(windows:find('EGP_MINGW_ROOT=$mingwRoot',1,true) and windows:find('$env:GITHUB_ENV',1,true), 'The installed MSYS compiler SDK root must reach isolated engine and host-tool configurations')
+    count=count+2
     local native=assert(io.readfile(path.join(root,'platform/android/java/scripts/native-build.gradle')))
     for key in native:gmatch('"([%w_]+)=') do
         assert(declared[key],'Unknown Android Gradle native engine option ' .. key)

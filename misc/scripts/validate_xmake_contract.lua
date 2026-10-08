@@ -15,6 +15,7 @@ function main(compressor, zipper)
         {'api_fence','tests/build/test_xmake_api_fence.lua'},
         {'metadata','tests/build/test_xmake_metadata.lua'},
         {'workflows','tests/build/test_xmake_workflows.lua'},
+        {'host_sdk','build/xmake/tests/host_sdk.lua',marker='NATIVE_HOST_SDK_CHECKS=(%d+)'},
         {'recipe_compat','build/xmake/tests/recipe_compat.lua',marker='LUA_RECIPE_COMPAT_CHECKS=(%d+)'},
         {'recipes','build/xmake/tests/recipes.lua',marker='PLATFORM_PROFILES=(%d+)'},
         {'platform_defaults','build/xmake/tests/platform_defaults.lua',marker='NATIVE_PLATFORM_DEFAULT_CHECKS=(%d+)'},
@@ -51,6 +52,13 @@ function main(compressor, zipper)
     local toolchainchecks=assert(tonumber(toolchain_stdout:match('NATIVE_TOOLCHAIN_SELECTION_CHECKS=(%d+)')))
     table.insert(receipt.tests,{name='toolchain_selection',checks=toolchainchecks,status='PASS'})
     print('toolchain_selection: PASS ' .. toolchainchecks)
+    local visionos_project=path.join(root,'build/xmake/tests/visionos_toolchain')
+    local visionos_output=path.join(directory,'visionos-toolchain')
+    local visionos_stdout,visionos_stderr=os.iorunv(os.programfile(),{'f','-y','--toolchain=' .. hostcompiler,'-P',visionos_project,'-o',visionos_output},{curdir=visionos_project,envs={XMAKE_CONFIGDIR=path.join(visionos_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-visionos')}})
+    io.writefile(path.join(directory,'visionos_toolchain.log'),visionos_stdout .. (visionos_stderr or ''))
+    local visionoschecks=assert(tonumber(visionos_stdout:match('NATIVE_VISIONOS_TOOLCHAIN_CHECKS=(%d+)')))
+    table.insert(receipt.tests,{name='visionos_toolchain',checks=visionoschecks,status='PASS'})
+    print('visionos_toolchain: PASS ' .. visionoschecks)
     local link_project=path.join(root,'build/xmake/tests/link_environment')
     local link_output=path.join(directory,'link-environment')
     local link_stdout,link_stderr=os.iorunv(os.programfile(),{'f','-y','-p','cross','--toolchain=egp_link_probe','-P',link_project,'-o',link_output},{curdir=link_project,envs={XMAKE_CONFIGDIR=path.join(link_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-link-environment')}})

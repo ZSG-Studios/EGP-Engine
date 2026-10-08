@@ -20,7 +20,7 @@ function generate(name, job, context)
         end
     elseif name == "modules_tests_builder" then
         local headers = {}
-        for _, source in ipairs(job.sources) do table.insert(headers, path.relative(util.sourcepath(source, context), context.root):gsub('\\','/')) end
+        for _, source in ipairs(job.sources) do table.insert(headers, (path.relative(util.sourcepath(source, context), context.root):gsub('\\','/'))) end
         table.sort(headers)
         table.insert(text, '// IWYU pragma: begin_keep.\n')
         for _, header in ipairs(headers) do table.insert(text, '#include "' .. header .. '"\n') end
