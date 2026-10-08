@@ -71,7 +71,7 @@ func _process(delta: float) -> void:
 					fail("Stereo eye images lack expected parallax")
 					return
 			var result := {"status": "PASS", "scope": "external stereo colour/depth textures and resize; not Apple compositor or hardware", "device_validated": false, "snapshots": mock.snapshots}
-			FileAccess.open("user://probe-result.json", FileAccess.WRITE).store_string(JSON.stringify(result, "  "))
+			FileAccess.open(mock.evidence_path("probe-result.json"), FileAccess.WRITE).store_string(JSON.stringify(result, "  "))
 			print("EGP_EXTERNAL_STEREO_PASS ", JSON.stringify(result))
 			finish(0)
 		elif elapsed > 30.0:

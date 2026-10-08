@@ -20,6 +20,7 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     engine = args.engine.resolve()
     env = os.environ.copy()
+    env["EGP_STEREO_OUTPUT"] = str(output)
     env["APPDATA" if os.name == "nt" else "XDG_DATA_HOME"] = str(output / "userdata")
     # Exclude third-party implicit Vulkan injection from the graphics fixture.
     if args.driver == "vulkan":

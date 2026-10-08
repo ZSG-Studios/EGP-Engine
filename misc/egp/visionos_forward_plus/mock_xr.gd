@@ -103,7 +103,7 @@ func capture() -> void:
 					x_sum += x
 				nearest = maxf(nearest, z.decode_float((y * size.x + x) * stride))
 		image.convert(Image.FORMAT_RGBA8)
-		image.save_png("user://probe_%d_eye_%d.png" % [rendered, eye])
+		image.save_png(evidence_path("probe_%d_eye_%d.png" % [rendered, eye]))
 		eyes.append({"lit_pixels": count, "centroid_x": x_sum / maxf(count, 1), "nearest_depth": nearest})
 	snapshots.append({"size": [size.x, size.y], "eyes": eyes})
 	print("EGP_STEREO_SNAPSHOT ", JSON.stringify(snapshots[-1]))
@@ -159,3 +159,9 @@ func cleanup() -> void:
 	retired.clear()
 	color = RID()
 	depth = RID()
+
+func evidence_path(filename: String) -> String:
+	var directory := OS.get_environment("EGP_STEREO_OUTPUT")
+	if directory.is_empty():
+		directory = "user://"
+	return directory.path_join(filename)

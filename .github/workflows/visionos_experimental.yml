@@ -57,7 +57,7 @@ jobs:
         with:
           platform: linuxbsd
           target: editor
-          xmake-flags: dev_mode=yes debug_symbols=no vulkan=yes module_mono_enabled=no
+          xmake-flags: dev_mode=yes debug_symbols=no vulkan=yes accesskit=no module_mono_enabled=no
       - name: Render and read both eyes and depth, then resize
         run: |
           xvfb-run -a python3 misc/scripts/validate_visionos_forward_plus.py --engine bin/godot.linuxbsd.editor.x86_64 --driver vulkan --output .build/visionos-experimental
@@ -79,7 +79,7 @@ jobs:
         with:
           platform: macos
           target: editor
-          xmake-flags: arch=arm64 dev_mode=yes debug_symbols=no metal=yes vulkan=no module_mono_enabled=no
+          xmake-flags: arch=arm64 dev_mode=yes debug_symbols=no metal=yes vulkan=no accesskit=no module_mono_enabled=no
       - name: Check runner architecture and Metal device
         id: capability
         run: |
