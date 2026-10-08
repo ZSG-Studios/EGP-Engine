@@ -367,7 +367,15 @@ void NativeExtensionEditor::_append_line(const String &p_line) {
 	}
 	RegEx diagnostic;
 	diagnostic.compile("^(.+\\.(?:cpp|hpp|h|c))(?:(?:\\((\\d+)(?:,\\d+)?\\))|(?::(\\d+)(?::\\d+)?))\\s*:");
-	Ref<RegExMatch> match = diagnostic.search(line);
+	// xmake may prefix the first compiler diagnostic with its own severity.
+	// Keep that text visible, but exclude it from the source location.
+	String diagnostic_line = line;
+	if (diagnostic_line.begins_with("error: ")) {
+		diagnostic_line = diagnostic_line.substr(7);
+	} else if (diagnostic_line.begins_with("warning: ")) {
+		diagnostic_line = diagnostic_line.substr(9);
+	}
+	Ref<RegExMatch> match = diagnostic.search(diagnostic_line);
 	if (match.is_valid()) {
 		Array location;
 		location.push_back(match->get_string(1).strip_edges());

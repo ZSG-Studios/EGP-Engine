@@ -195,6 +195,8 @@ func run_test() -> void:
 	var before := FileAccess.get_file_as_string(descriptor)
 	var source_path := "res://extensions/smoke/src/extension.cpp"
 	var source := FileAccess.get_file_as_string(source_path)
+	var diagnostic_line := source.count("\n") + 2
+	diagnostics.clear()
 	var file := FileAccess.open(source_path, FileAccess.WRITE)
 	file.store_string(source + "\n#error EGP deliberate diagnostic fixture\n")
 	file.close()
@@ -203,7 +205,7 @@ func run_test() -> void:
 	var recipe_path := "res://extensions/smoke/xmake.lua"
 	var recipe := FileAccess.get_file_as_string(recipe_path)
 	file = FileAccess.open(recipe_path, FileAccess.WRITE)
-	file.store_string(recipe + "\ntarget(\"extension\")\n    before_build(function ()\n        io.stdout:write(string.char(27) .. \"[31m\" .. string.char(27) .. \"]8;;https://example.invalid\" .. string.char(7) .. \"EGP terminal link fixture\" .. string.char(27) .. \"]8;;\" .. string.char(7) .. string.char(27) .. \"[0m\\n\")\n        io.stdout:flush()\n    end)\n")
+	file.store_string(recipe + ("\ntarget(\"extension\")\n    before_build(function ()\n        io.stdout:write(string.char(27) .. \"[31m\" .. string.char(27) .. \"]8;;https://example.invalid\" .. string.char(7) .. \"EGP terminal link fixture\" .. string.char(27) .. \"]8;;\" .. string.char(7) .. string.char(27) .. \"[0m\\n\")\n        io.stdout:write(\"error: src/extension.cpp:%d:1: EGP wrapped error fixture\\nwarning: src/extension.cpp:%d:1: EGP wrapped warning fixture\\n\")\n        io.stdout:flush()\n    end)\n" % [diagnostic_line, diagnostic_line]))
 	file.close()
 	var failure_build_started: bool = panel.build_extension("smoke", false) == OK
 	var failure_selection_updated: bool = selector.get_item_text(selector.get_selected()) == "smoke"
@@ -240,12 +242,31 @@ func run_test() -> void:
 			and not compiler_output.contains("]8;;https://example.invalid")
 			and compiler_output.contains("EGP terminal link fixture"), "Terminal escapes obscured compiler diagnostics"):
 		return
-	if not require(not diagnostics.is_empty() and str(diagnostics[-1][0]).ends_with("extension.cpp"),
-			"Compiler source location was not parsed"):
+	if not require(diagnostics.size() >= 3, "Wrapped and actual compiler source locations were not captured"):
+		return
+	var wrapped_locations := 0
+	for location in diagnostics:
+		if location == ["src/extension.cpp", diagnostic_line]:
+			wrapped_locations += 1
+		if not require(not str(location[0]).begins_with("error: ") and not str(location[0]).begins_with("warning: "),
+				"Compiler severity prefix was retained in a source path"):
+			return
+	if not require(wrapped_locations >= 2, "Wrapped compiler diagnostics did not retain the exact usable source path and line"):
+		return
+	var compiler_path := str(diagnostics[-1][0])
+	if not compiler_path.is_absolute_path():
+		compiler_path = ProjectSettings.globalize_path("res://extensions/smoke").path_join(compiler_path)
+	if not require(ProjectSettings.localize_path(compiler_path) == source_path
+			and int(diagnostics[-1][1]) == diagnostic_line, "Compiler source location was not parsed exactly"):
 		return
 	logs[0].emit_signal("meta_clicked", diagnostics[-1])
 	await process_frame
-	var text_editor = EditorInterface.get_script_editor().get_current_editor().get_base_editor()
+	var current_editor = EditorInterface.get_script_editor().get_current_editor()
+	if not require(is_instance_valid(current_editor), "Diagnostic navigation did not open a source editor"):
+		return
+	var text_editor = current_editor.get_base_editor()
+	if not require(is_instance_valid(text_editor), "Diagnostic navigation did not expose its text editor"):
+		return
 	if not require(text_editor.get_text().contains("EGP deliberate diagnostic fixture")
 			and text_editor.get_caret_line() == int(diagnostics[-1][1]) - 1, "Diagnostic navigation opened the wrong source line"):
 		return
