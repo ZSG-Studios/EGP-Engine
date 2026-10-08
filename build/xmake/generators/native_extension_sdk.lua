@@ -15,7 +15,15 @@ local function u32(value)
 end
 local function names(files)
     local result = {}; for name in pairs(files) do result[#result + 1] = name end
-    table.sort(result); return result
+    -- Lua's string comparison follows LC_COLLATE; archive order must follow bytes.
+    table.sort(result, function(left, right)
+        for index = 1, math.min(#left, #right) do
+            local a, b = left:byte(index), right:byte(index)
+            if a ~= b then return a < b end
+        end
+        return #left < #right
+    end)
+    return result
 end
 function make_archive(cpp_root, template_root, api_file, bits, precision, generation_directory)
     assert(os.isfile(api_file), "An actual engine extension API dump is required")

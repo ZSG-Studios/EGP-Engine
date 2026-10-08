@@ -123,6 +123,8 @@ function configure(env, options, explicit)
         if options[option] then env:add({[field] = os.argv(options[option])}) end
     end
     if env.msvc then
+        -- Recipes clone and replace this source policy for deterministic modules.
+        env:add({CCFLAGS = {"/fp:strict"}})
         env:add({CFLAGS = {"/std:c17"}, CXXFLAGS = {"/std:c++17", "/Zc:__cplusplus"}})
         if options.arch == "x86_64" then env:add({CCFLAGS = options.use_llvm and {"-msse4.2", "-mpopcnt"} or {"/d2archSSE42"}})
         elseif options.arch == "x86_32" then env:add({CCFLAGS = options.use_llvm and {"-msse2", "-mfpmath=sse", "-mstackrealign"} or {"/arch:SSE2"}}) end

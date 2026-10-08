@@ -11,7 +11,11 @@ function main(graph)
         R.setindex(net_env, key, (function() local __item4 = {}; for _, __item5 in ipairs(R.iter(R.index(net_env, key))) do; local flag = __item5; if R.truthy(not R.truthy(R.startswith(R.str(flag), {"/fp:", "-ffast-math", "-Ofast", "-ffp-contract=", "-funsafe-math-optimizations"}))) then; table.insert(__item4, flag); end; end; return __item4 end)())
     end
     if R.truthy(env.msvc) then
-        net_env:add({["CCFLAGS"] = {"/fp:precise"}})
+        if R.truthy(R.index(env, "use_llvm")) then
+            net_env:add({["CCFLAGS"] = {"/clang:-fno-fast-math", "/clang:-ffp-contract=off"}})
+        else
+            net_env:add({["CCFLAGS"] = {"/fp:precise"}})
+        end
     else
         net_env:add({["CCFLAGS"] = {"-fno-fast-math", "-ffp-contract=off"}})
     end

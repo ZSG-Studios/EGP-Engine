@@ -1,6 +1,7 @@
 -- Native Lua source selection and generator metadata.
 function main(graph)
     local R = graph.compat
+    local json = import("core.base.json")
     local build, build_targets, env, ext, js, lib, sys, sys_env, wasm, web_files
     env = graph:use("env")
     web_files = {"audio_driver_web.cpp", "webmidi_driver.cpp", "display_server_web.cpp", "http_client_web.cpp", "javascript_bridge_singleton.cpp", "remote_debugger_peer_messageport.cpp", "web_main.cpp", "os_web.cpp"}
@@ -36,10 +37,10 @@ function main(graph)
     end
     R.setindex(R.index(sys_env, "ENV"), "EMCC_CLOSURE_ARGS", R.strip(R.index(R.index(sys_env, "ENV"), "EMCC_CLOSURE_ARGS")))
     if R.truthy(R.len(R.index(env, "EXPORTED_FUNCTIONS"))) then
-        sys_env:add({["LINKFLAGS"] = {R.add("-sEXPORTED_FUNCTIONS=", R.repr(R.sorted(R.list(R.set(R.index(env, "EXPORTED_FUNCTIONS"))))))}})
+        sys_env:add({["LINKFLAGS"] = {R.add("-sEXPORTED_FUNCTIONS=", json.encode(R.sorted(R.list(R.set(R.index(env, "EXPORTED_FUNCTIONS"))))))}})
     end
     if R.truthy(R.len(R.index(env, "EXPORTED_RUNTIME_METHODS"))) then
-        sys_env:add({["LINKFLAGS"] = {R.add("-sEXPORTED_RUNTIME_METHODS=", R.repr(R.sorted(R.list(R.set(R.index(env, "EXPORTED_RUNTIME_METHODS"))))))}})
+        sys_env:add({["LINKFLAGS"] = {R.add("-sEXPORTED_RUNTIME_METHODS=", json.encode(R.sorted(R.list(R.set(R.index(env, "EXPORTED_RUNTIME_METHODS"))))))}})
     end
     sys_env:add({["LINKFLAGS"] = {"-sMODULARIZE=1", "-sEXPORT_NAME='Godot'"}})
     build = {}

@@ -138,9 +138,8 @@ function configure(target, options, build_env)
     if msvc then
         target:set("runtimes", enabled(options.debug_crt) and "MDd" or (enabled(options.use_static_cpp, true) and "MT" or "MD"))
         link(target, "/INCREMENTAL:NO")
-        cc(target, "/utf-8", "/fp:strict", "/bigobj", "/Zc:__cplusplus", "/permissive-")
+        cc(target, "/utf-8", "/bigobj", "/Zc:__cplusplus", "/permissive-")
         target:set("exceptions", enabled(options.disable_exceptions, true) and "no-cxx" or "cxx")
-        if enabled(options.use_llvm) then cc(target, "/clang:-ffp-contract=off") end
     else
         cc(target, "-ffp-contract=off", "-fno-strict-aliasing")
         if enabled(options.disable_exceptions, true) then target:add("cxxflags", "-fno-exceptions", {force = true}) end
@@ -195,7 +194,7 @@ function configure(target, options, build_env)
     if options.linker and options.linker ~= "default" then link(target, "-fuse-ld=" .. options.linker) end
     if enabled(options.use_coverage) then flags(target, "--coverage") end
     if platform == "windows" then
-        target:add("defines", "WINDOWS_ENABLED", "WASAPI_ENABLED", "WINMIDI_ENABLED", "NOMINMAX", "WINVER=0x0A00", "_WIN32_WINNT=0x0A00", "_CRT_SECURE_NO_WARNINGS")
+        target:add("defines", "WINDOWS_ENABLED", "WASAPI_ENABLED", "WINMIDI_ENABLED", "NOMINMAX", "WINVER=0x0A00", "_WIN32_WINNT=0x0A00")
         if msvc then target:add("defines", "TYPED_METHOD_BIND", "WIN32") end
         if normalized.arch == "x64" or normalized.arch == "arm64" then target:add("defines", "_WIN64") end
         target:add("syslinks", "winmm", "dsound", "kernel32", "ole32", "oleaut32", "sapi", "user32", "gdi32", "iphlpapi", "shlwapi", "shcore", "wsock32", "ws2_32", "shell32", "advapi32", "dinput8", "dxguid", "imm32", "bcrypt", "crypt32", "avrt", "dwmapi", "dwrite", "wbemuuid", "ntdll", "hid", "mincore", "psapi", "dbghelp")
@@ -236,8 +235,12 @@ function configure(target, options, build_env)
         assert(not enabled(options.vulkan) or platform == "ios", "visionOS does not support Vulkan")
         assert(not enabled(options.opengl3) or platform == "ios", "visionOS does not support OpenGL")
         if enabled(options.simulator) then target:add("defines", platform == "ios" and "IOS_SIMULATOR" or "VISIONOS_SIMULATOR") end
-        local deployment = platform == "ios" and (enabled(options.simulator) and "-mios-simulator-version-min=15.0" or "-miphoneos-version-min=15.0") or (enabled(options.simulator) and "-mtargetos=xros26.0-simulator" or "-mtargetos=xros26.0")
-        flags(target, deployment)
+        -- The custom visionOS toolchain already selects deployment via its target triple.
+        -- Clang rejects a second -mtargetos alongside that explicit -target.
+        if platform == "ios" then
+            flags(target, enabled(options.simulator) and "-mios-simulator-version-min=15.0" or "-miphoneos-version-min=15.0")
+            if enabled(options.opengl3, true) then target:add("defines", "GLES_SILENCE_DEPRECATION") end
+        end
         target:add("mflags", "-fobjc-arc", "-fblocks")
         target:add("mxflags", "-fobjc-arc", "-fblocks")
     elseif platform == "android" then

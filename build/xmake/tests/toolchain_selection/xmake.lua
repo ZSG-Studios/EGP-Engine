@@ -80,7 +80,7 @@ for index, options in ipairs(selections) do
                 for _,value in ipairs({...}) do if type(value)~="table" then table.insert(self.values[key],value) end end
             end
             policy.configure(clang_probe,{platform="windows",arch="x86_64",use_llvm=true,werror=true,accesskit=false,angle=false,d3d12=false})
-            assert(table.contains(clang_probe.values.cxflags,"/clang:-ffp-contract=off"),"Clang-cl must receive floating-point contraction policy through its native passthrough")
+            assert(not table.contains(clang_probe.values.cxflags,"/fp:strict"),"Target flags must not reinstate floating-point models removed by source recipes")
             clang_checks=clang_checks+1
             assert(not table.contains(clang_probe.values.cxflags,"-ffp-contract=off"),"Clang-cl must not receive an unsupported GNU driver argument")
             clang_checks=clang_checks+1

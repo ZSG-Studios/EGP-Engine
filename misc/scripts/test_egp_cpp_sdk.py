@@ -50,14 +50,35 @@ class BundledSDKTest(unittest.TestCase):
         api = Path(os.environ.get("EGP_CPP_API", ROOT / "thirdparty/godot-cpp/gdextension/extension_api-4-7.json"))
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "sdk"
+            probe = Path(directory) / "package_locale.lua"
+            probe.write_text(
+                """function main(root, output, api)
+    local native_os = debug.global("os")
+    assert(native_os.setlocale("C", "collate"))
+    local canonical = {"src/A", "src/Z", "src/_", "src/a", "src/z"}
+    local applied
+    for _, locale in ipairs({"en_US.UTF-8", "en_US.utf8", "English_United States.1252"}) do
+        applied = native_os.setlocale(locale, "collate")
+        if applied then break end
+    end
+    assert(applied, "A real non-C collation locale is required for the SDK regression")
+    local previous = table.clone(canonical)
+    table.sort(previous)
+    assert(table.concat(previous, "|") ~= table.concat(canonical, "|"), "Non-C negative control must change default Lua filename ordering")
+    local extractor = import("misc.scripts.extract_egp_cpp_sdk", {rootdir=root})
+    extractor.main("--output", output, "--api", api)
+    print("SDK_REAL_NON_C_COLLATION_PASS")
+end
+""",
+                encoding="utf-8",
+            )
             subprocess.run(
                 [
                     xmake,
                     "lua",
-                    str(ROOT / "misc/scripts/extract_egp_cpp_sdk.lua"),
-                    "--output",
+                    str(probe),
+                    str(ROOT),
                     str(output),
-                    "--api",
                     str(api),
                 ],
                 cwd=ROOT,

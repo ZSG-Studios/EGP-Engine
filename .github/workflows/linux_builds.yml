@@ -205,8 +205,9 @@ jobs:
         if: matrix.superposition-2d-test
         env:
           EGP_BINARY: ${{ matrix.bin }}
+          XDG_CACHE_HOME: ${{ github.workspace }}/.build/superposition-2d-cache
         run: |
-          mkdir -p .build
+          mkdir -p .build "$XDG_CACHE_HOME"
           timeout --signal=TERM --kill-after=5s 60s "$EGP_BINARY" --headless --test --test-case="*[Superposition][No3D]*" > .build/superposition-2d-fixture.log 2>&1
           cat .build/superposition-2d-fixture.log
           ! grep -E 'ERROR:|SCRIPT ERROR' .build/superposition-2d-fixture.log
