@@ -192,7 +192,6 @@ void OpenXRFrameSynthesisExtension::on_main_swapchains_created() {
 		swapchain_format = GL_RGBA16F;
 		depth_swapchain_format = GL_DEPTH24_STENCIL8;
 	} else if (rendering_driver_name == "vulkan") {
-		String rendering_method = rendering_server->get_current_rendering_method();
 		{
 			WARN_PRINT("OpenXR: Frame synthesis not supported for this rendering method!");
 			frame_synthesis_ext = false;
