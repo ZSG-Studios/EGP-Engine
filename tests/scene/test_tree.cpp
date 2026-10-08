@@ -92,7 +92,7 @@ TEST_CASE("[SceneTree][Tree]") {
 		Tree *tree = memnew(Tree);
 		TreeItem *root = tree->create_item();
 
-		TreeItem *last;
+		TreeItem *last = nullptr;
 		for (int i = 0; i < 10; i++) {
 			last = tree->create_item();
 		}

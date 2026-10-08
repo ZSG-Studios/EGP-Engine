@@ -33,7 +33,9 @@
 #include "core/config/engine.h"
 #include "core/io/marshalls.h"
 #include "core/object/class_db.h"
+#ifndef _3D_DISABLED
 #include "scene/3d/node_3d.h"
+#endif
 
 namespace {
 bool supported(int t) {
@@ -208,10 +210,17 @@ Error Superposition::schema(Array &r_rules) const {
 	if (config.is_null() || !target()) {
 		return ERR_UNCONFIGURED;
 	}
+
 	auto rules = config->get_properties();
 	if (rules.size() > 32 || !Math::is_finite(config->get_update_rate()) || config->get_capture_mode() < 0 || config->get_capture_mode() > 1 || config->get_priority() < 1 || config->get_priority() > 16 || !Math::is_finite(config->get_interest_hysteresis()) || config->get_interest_hysteresis() < 0 || config->get_interest_hysteresis() > 1e6 || config->get_update_rate() < 1 || config->get_update_rate() > 30 || !Math::is_finite(config->get_interest_radius()) || config->get_interest_radius() < 0 || effective_key().is_empty() || effective_key().length() > 256 || entity_kind < 0) {
 		return ERR_INVALID_PARAMETER;
 	}
+
+#ifdef _3D_DISABLED
+	if (config->get_interest_radius() > 0) {
+		return ERR_UNAVAILABLE;
+	}
+#endif
 	HashSet<StringName> names;
 	for (int i = 0; i < rules.size(); i++) {
 		Ref<SuperpositionProperty> rule = rules[i];
@@ -417,6 +426,11 @@ Error Superposition::replicate_now() {
 	if (config->get_capture_mode() < 0 || config->get_capture_mode() > 1 || config->get_priority() < 1 || config->get_priority() > 16 || !Math::is_finite(config->get_interest_radius()) || config->get_interest_radius() < 0 || !Math::is_finite(config->get_interest_hysteresis()) || config->get_interest_hysteresis() < 0 || config->get_interest_hysteresis() > 1e6 || !Math::is_finite(config->get_update_rate()) || config->get_update_rate() < 1 || config->get_update_rate() > 30) {
 		return fail(ERR_INVALID_PARAMETER, "Invalid Superposition scheduling or interest policy.");
 	}
+#ifdef _3D_DISABLED
+	if (config->get_interest_radius() > 0) {
+		return fail(ERR_UNAVAILABLE, "Spatial interest requires 3D support; set Interest Radius to zero in a 2D-only build.");
+	}
+#endif
 	if (config.is_valid() && config->get_properties().size() <= 32) {
 		Array signature;
 		auto rules = config->get_properties();
@@ -551,8 +565,12 @@ Error Superposition::replicate_now() {
 			}
 			applied_priority = config->get_priority();
 		}
+		bool spatial_interest = false;
+#ifndef _3D_DISABLED
 		Node3D *spatial = Object::cast_to<Node3D>(target());
-		if (config->get_interest_radius() == 0 || !spatial) {
+		spatial_interest = config->get_interest_radius() > 0 && spatial;
+#endif
+		if (!spatial_interest) {
 			Array keys = visibility.keys();
 			for (int i = 0; i < keys.size(); i++) {
 				if (bool(visibility[keys[i]])) {
@@ -568,7 +586,9 @@ Error Superposition::replicate_now() {
 				}
 			}
 			visibility.clear();
-		} else {
+		}
+#ifndef _3D_DISABLED
+		else {
 			Array observer_keys = observers.keys();
 			for (int observer_index = 0; observer_index < observer_keys.size(); observer_index++) {
 				Variant peer = observer_keys[observer_index];
@@ -603,6 +623,7 @@ Error Superposition::replicate_now() {
 				visibility[peer] = visible;
 			}
 		}
+#endif
 	} else if (session->get_state() == "Connected") {
 		if (entity == 0) {
 			Array entities = session->command("entities");
@@ -898,6 +919,11 @@ PackedStringArray Superposition::get_configuration_warnings() const {
 	if (schema_error != OK) {
 		warnings.push_back("Select 1-32 Boolean, Integer, Float, String, Vector2, Vector3 or Color properties and use matching server/client configuration.");
 	}
+#ifdef _3D_DISABLED
+	if (config.is_valid() && config->get_interest_radius() > 0) {
+		warnings.push_back("Spatial interest requires 3D support; set Interest Radius to zero in a 2D-only build.");
+	}
+#endif
 	if (!session_provider() && session.is_null()) {
 		warnings.push_back("Place this node below a SuperpositionWorld, choose a Session Path providing get_session() or a session property, or call set_session().");
 	}

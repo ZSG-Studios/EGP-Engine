@@ -1772,7 +1772,7 @@ public:
 		return ulRef;
 	}
 
-	HRESULT STDMETHODCALLTYPE GetTextAtPosition(UINT32 p_text_position, WCHAR const **r_text_string, UINT32 *r_text_length) override {
+	HRESULT STDMETHODCALLTYPE GetTextAtPosition(UINT32 p_text_position, WCHAR const **r_text_string, UINT32 *r_text_length) noexcept override {
 		if (p_text_position >= (UINT32)string.length()) {
 			*r_text_string = nullptr;
 			*r_text_length = 0;
@@ -1783,7 +1783,7 @@ public:
 		return S_OK;
 	}
 
-	HRESULT STDMETHODCALLTYPE GetTextBeforePosition(UINT32 p_text_position, WCHAR const **r_text_string, UINT32 *r_text_length) override {
+	HRESULT STDMETHODCALLTYPE GetTextBeforePosition(UINT32 p_text_position, WCHAR const **r_text_string, UINT32 *r_text_length) noexcept override {
 		if (p_text_position < 1 || p_text_position >= (UINT32)string.length()) {
 			*r_text_string = nullptr;
 			*r_text_length = 0;
@@ -1794,16 +1794,16 @@ public:
 		return S_OK;
 	}
 
-	DWRITE_READING_DIRECTION STDMETHODCALLTYPE GetParagraphReadingDirection() override {
+	DWRITE_READING_DIRECTION STDMETHODCALLTYPE GetParagraphReadingDirection() noexcept override {
 		return (rtl) ? DWRITE_READING_DIRECTION_RIGHT_TO_LEFT : DWRITE_READING_DIRECTION_LEFT_TO_RIGHT;
 	}
 
-	HRESULT STDMETHODCALLTYPE GetLocaleName(UINT32 p_text_position, UINT32 *r_text_length, WCHAR const **r_locale_name) override {
+	HRESULT STDMETHODCALLTYPE GetLocaleName(UINT32 p_text_position, UINT32 *r_text_length, WCHAR const **r_locale_name) noexcept override {
 		*r_locale_name = reinterpret_cast<const wchar_t *>(locale.get_data());
 		return S_OK;
 	}
 
-	HRESULT STDMETHODCALLTYPE GetNumberSubstitution(UINT32 p_text_position, UINT32 *r_text_length, IDWriteNumberSubstitution **r_number_substitution) override {
+	HRESULT STDMETHODCALLTYPE GetNumberSubstitution(UINT32 p_text_position, UINT32 *r_text_length, IDWriteNumberSubstitution **r_number_substitution) noexcept override {
 		*r_number_substitution = n_sub;
 		return S_OK;
 	}

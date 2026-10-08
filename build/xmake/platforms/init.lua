@@ -127,6 +127,9 @@ function configure(target, options, build_env)
     end
     local platform = normalized.godot_platform
     local msvc = platform == "windows" and not enabled(options.use_mingw)
+    if (normalized.toolchain=="gcc" or normalized.toolchain=="mingw") and target.script then
+        import("compiler_warnings",{rootdir=os.scriptdir()}).configure(target)
+    end
     target:add("includedirs", "platform/" .. platform)
     target:set("languages", "c17", "cxx17")
     target:set("symbols", enabled(options.debug_symbols, true) and "debug" or "none")
@@ -136,7 +139,7 @@ function configure(target, options, build_env)
         target:set("runtimes", enabled(options.debug_crt) and "MDd" or (enabled(options.use_static_cpp, true) and "MT" or "MD"))
         link(target, "/INCREMENTAL:NO")
         cc(target, "/utf-8", "/fp:strict", "/bigobj", "/Zc:__cplusplus", "/permissive-")
-        if not enabled(options.disable_exceptions, true) then target:add("cxxflags", "/EHsc", {force = true}) end
+        target:set("exceptions", enabled(options.disable_exceptions, true) and "no-cxx" or "cxx")
         if enabled(options.use_llvm) then cc(target, "/clang:-ffp-contract=off") end
     else
         cc(target, "-ffp-contract=off", "-fno-strict-aliasing")

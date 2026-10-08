@@ -45,7 +45,7 @@ function generate(name, job, context)
     for _, license in ipairs(licenses) do
         local lines = {}
         for index = 2, #license do table.insert(lines, license[index] == '.' and '' or license[index]) end
-        table.insert(text, util.rawstring(table.concat(lines, '\n') .. '\n') .. ',\n')
+        table.insert(text, '(' .. util.rawstring(table.concat(lines, '\n') .. '\n') .. '),\n')
     end
     table.insert(text, '};\n')
     util.write(job.targets[1], table.concat(text))

@@ -8,6 +8,7 @@ function main(compressor, zipper)
     local tests={
         {'common','tests/build/test_xmake_common.lua'},
         {'generators','tests/build/test_xmake_generators.lua',compressor},
+        {'license_literals','build/xmake/tests/license_literals.lua',marker='NATIVE_LICENSE_LITERAL_CHECKS=(%d+)'},
         {'shaders','tests/build/validate_builders.lua'},
         {'packages','tests/build/test_xmake_packages.lua',zipper},
         {'linking','tests/build/test_xmake_linking.lua'},
@@ -58,6 +59,17 @@ function main(compressor, zipper)
     local toolchainchecks=assert(tonumber(toolchain_stdout:match('NATIVE_TOOLCHAIN_SELECTION_CHECKS=(%d+)')))
     table.insert(receipt.tests,{name='toolchain_selection',checks=toolchainchecks,status='PASS'})
     print('toolchain_selection: PASS ' .. toolchainchecks)
+    if os.host()=='windows' then
+        local exception_project=path.join(root,'build/xmake/tests/windows_exceptions')
+        local exception_output=path.join(directory,'windows-exceptions')
+        local exception_stdout,exception_stderr=os.iorunv(os.programfile(),{'f','-y','-p','windows','-a','x64','--toolchain=msvc','-P',exception_project,'-o',exception_output},{curdir=exception_project,envs={XMAKE_CONFIGDIR=path.join(exception_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-windows-exceptions')}})
+        io.writefile(path.join(directory,'windows_exceptions.log'),exception_stdout .. (exception_stderr or ''))
+        local exceptioncases=0
+        for _ in exception_stdout:gmatch('NATIVE_WINDOWS_EXCEPTION_CASE_PASS=') do exceptioncases=exceptioncases+1 end
+        assert(exceptioncases==6,'MSVC and clang-cl must each qualify default, disabled and enabled engine exception options')
+        table.insert(receipt.tests,{name='windows_exceptions',checks=exceptioncases*4,status='PASS'})
+        print('windows_exceptions: PASS ' .. (exceptioncases*4))
+    end
     local visionos_project=path.join(root,'build/xmake/tests/visionos_toolchain')
     local visionos_output=path.join(directory,'visionos-toolchain')
     local visionos_stdout,visionos_stderr=os.iorunv(os.programfile(),{'f','-y','-p',os.host(),'-a',os.arch(),'--toolchain=' .. hostcompiler,'-P',visionos_project,'-o',visionos_output},{curdir=visionos_project,envs={XMAKE_CONFIGDIR=path.join(visionos_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-visionos')}})

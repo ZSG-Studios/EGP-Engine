@@ -101,6 +101,10 @@ for index, options in ipairs(selections) do
                 os.tryrm(source); os.tryrm(object)
                 clang_checks=clang_checks+1
                 print("NATIVE_CLANGCL_PLATFORM_POLICY_COMPILE_PASS")
+                local sdk_arguments={"/c","/WX"}
+                table.join2(sdk_arguments,clang_probe.values.cxflags)
+                table.join2(sdk_arguments,clang_probe.values.cxxflags or {})
+                clang_checks=clang_checks+import("build.xmake.tests.windows_com",{rootdir=path.absolute("../../../..",os.scriptdir())}).main(path.absolute("../../../..",os.scriptdir()),compiler,sdk_arguments)
             end
             local hosts=import("build.xmake.platforms.host",{rootdir=path.absolute("../../../..",os.scriptdir())})
             local absent=function() return false end
@@ -115,7 +119,17 @@ for index, options in ipairs(selections) do
             for _, pair in ipairs({{"windows","amd64","x64"},{"windows","i386","x86"},{"android","aarch64","arm64-v8a"},{"linuxbsd","x64","x86_64"},{"linuxbsd","riscv64","riscv64"}}) do
                 assert(policy.normalize({platform=pair[1],arch=pair[2]}).arch==pair[3])
             end
-            print("NATIVE_TOOLCHAIN_SELECTION_CHECKS=" .. (#selections*2+17+apple_checks+clang_checks))
+            local version_policy=import("build.xmake.platforms.compiler_warnings",{rootdir=path.absolute("../../../..",os.scriptdir())})
+            assert(version_policy.gcc_warning("gxx","15.2.0")==nil,"GCC before16 must retain its previous warning policy")
+            assert(version_policy.gcc_warning("gxx","16.0.0")=="-Wno-sfinae-incomplete","GCC16 must retain the intentional upstream SFINAE exception")
+            assert(version_policy.gcc_warning("gcc","17.0.1")=="-Wno-sfinae-incomplete","Newer GCC must retain that same compatibility policy")
+            assert(version_policy.gcc_warning("clangxx","22.1.3")==nil,"Clang must not receive a GCC-specific diagnostic option")
+            assert(version_policy.gcc_warning("clang_cl","22.1.3")==nil,"Clang-cl must retain its independent strict warning policy")
+            local compiler_name,compiler_version=version_policy.apply(target)
+            local expected_warning=version_policy.gcc_warning(compiler_name,compiler_version)
+            assert(table.contains(table.wrap(target:get("cxxflags")),"-Wno-sfinae-incomplete")== (expected_warning~=nil),"The actual selected native compiler must determine the deferred GCC version flag")
+            print("NATIVE_COMPILER_VERSION_WARNING_POLICY=" .. compiler_name .. ":" .. tostring(compiler_version))
+            print("NATIVE_TOOLCHAIN_SELECTION_CHECKS=" .. (#selections*2+17+apple_checks+clang_checks+6))
         end)
     target_end()
     end

@@ -120,6 +120,7 @@ jobs:
           - name: Minimal template (target=template_release, everything disabled)
             cache-name: linux-template-minimal
             target: template_release
+            superposition-2d-test: true
             xmake-flags: >-
               modules_enabled_by_default=no
               module_text_server_fb_enabled=no
@@ -199,6 +200,17 @@ jobs:
           platform: linuxbsd
           target: ${{ matrix.target }}
           compile-commands: ${{ matrix.clangd-tidy || false }}
+
+      - name: Qualify generic replication without 3D
+        if: matrix.superposition-2d-test
+        env:
+          EGP_BINARY: ${{ matrix.bin }}
+        run: |
+          mkdir -p .build
+          timeout --signal=TERM --kill-after=5s 60s "$EGP_BINARY" --headless --test --test-case="*[Superposition][No3D]*" > .build/superposition-2d-fixture.log 2>&1
+          cat .build/superposition-2d-fixture.log
+          ! grep -E 'ERROR:|SCRIPT ERROR' .build/superposition-2d-fixture.log
+          grep -E 'test cases:[[:space:]]+1 .*1 passed.*0 failed' .build/superposition-2d-fixture.log
 
       - name: Style checks via clangd-tidy
         if: matrix.clangd-tidy

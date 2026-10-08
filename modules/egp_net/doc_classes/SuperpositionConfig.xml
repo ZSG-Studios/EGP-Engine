@@ -19,7 +19,7 @@
 			Visible objects leave at Radius + Hysteresis; hidden objects re-enter at Radius. Prevents interest boundary churn.
 		</member>
 		<member name="interest_radius" type="float" setter="set_interest_radius" getter="get_interest_radius" default="0.0">
-			Radius around a Node3D target used for explicitly supplied observer positions. Zero disables spatial relevance filtering. Unspecified observers remain visible.
+			Radius around a Node3D target used for explicitly supplied observer positions. Zero disables spatial relevance filtering. Unspecified observers remain visible. Builds with 3D disabled require a zero radius; positive radii are unsupported.
 		</member>
 		<member name="priority" type="int" setter="set_priority" getter="get_priority" default="1">
 			Native scheduling service weight from 1 to 16. Higher values favor this object under a peer update budget; waiting lower-priority flows retain their scheduling position.

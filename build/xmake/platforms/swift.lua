@@ -20,7 +20,9 @@ end
 function configure(target, settings, options)
     if not settings then return end
     assert(options.platform == "ios" or options.platform == "visionos", "Unexpected Swift platform policy")
-    target:add("rules", "egp.apple.swift")
+    import("core.project.project")
+    target:rule_add(assert(project.rule("egp.apple.swift"), "Native Swift module rule is not registered"))
+    target:add("rules", "egp.apple.swift", {override = true})
     target:data_set("egp.apple.swift.settings", settings)
     target:data_set("egp.apple.swift.options", options)
     target:add("includedirs", target:autogendir("egp.apple.swift"), {public = true})
