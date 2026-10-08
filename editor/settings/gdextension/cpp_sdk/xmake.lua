@@ -51,6 +51,11 @@ target("godot-cpp")
         import("lib.detect.find_tool")
         import("core.base.bytes")
         local function compact_objects()
+            -- MSVC resolves a relative /OUT against the deep game-project cwd
+            -- before normalizing it. Keep the short external archive absolute.
+            if target:is_plat("windows") then
+                target:set("targetdir", path.absolute(target:targetdir(), os.projectdir()))
+            end
             import("tools.generated_objects", {rootdir = sdk_root}).apply(target, path.join(sdk_root, "gen"))
         end
         local cache = get_config("egp_cpp_cache")

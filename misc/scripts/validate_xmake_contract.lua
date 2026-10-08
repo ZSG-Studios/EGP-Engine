@@ -32,6 +32,9 @@ function main(compressor, zipper)
         {'compile_variants','build/xmake/tests/compile_variants.lua',marker='NATIVE_COMPILE_VARIANT_CHECKS=(%d+)'},
         {'custom_modules','build/xmake/tests/custom_modules.lua',marker='NATIVE_CUSTOM_MODULE_CHECKS=(%d+)'}
     }
+    if os.host()=='windows' then
+        table.insert(tests,{'sdk_archive_path','tests/build/test_sdk_archive_path.lua',marker='NATIVE_SDK_ARCHIVE_PATH_CHECKS=(%d+)'})
+    end
     local version=os.iorunv(os.programfile(),{'--version'})
     local receipt={xmake=assert(version:match('v(%d+%.%d+%.%d+)')),host=os.host(),architecture=os.arch(),tests={}}
     for _, test in ipairs(tests) do
@@ -81,6 +84,25 @@ function main(compressor, zipper)
         assert(r128_cases==2,'MSVC and clang-cl must compile the bundled r128 C implementation with their distinct production policies')
         table.insert(receipt.tests,{name='windows_r128',checks=r128_checks,status='PASS'})
         print('windows_r128: PASS ' .. r128_checks)
+        local stack_project=path.join(root,'build/xmake/tests/windows_stack')
+        local stack_output=path.join(directory,'windows-stack')
+        local stack_stdout,stack_stderr=os.iorunv(os.programfile(),{'f','-y','-p','windows','-a','x64','--toolchain=msvc','-P',stack_project,'-o',stack_output},{curdir=stack_project,envs={XMAKE_CONFIGDIR=path.join(stack_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-windows-stack')}})
+        io.writefile(path.join(directory,'windows_stack.log'),stack_stdout .. (stack_stderr or ''))
+        local stack_cases,stack_checks=0,0
+        for count in stack_stdout:gmatch('NATIVE_WINDOWS_STACK_CHECKS=(%d+)') do stack_cases=stack_cases+1; stack_checks=stack_checks+tonumber(count) end
+        assert(stack_cases==2,'MSVC and clang-cl must link and execute the bounded native stack probe with the engine reserve')
+        table.insert(receipt.tests,{name='windows_stack',checks=stack_checks,status='PASS'})
+        print('windows_stack: PASS ' .. stack_checks)
+        local profile_project=path.join(root,'build/xmake/tests/windows_profile')
+        local profile_output=path.join(directory,'windows-profile')
+        local profile_stdout,profile_stderr=os.iorunv(os.programfile(),{'f','-y','-p','windows','-a','x64','--toolchain=msvc','-P',profile_project,'-o',profile_output},{curdir=profile_project,envs={XMAKE_CONFIGDIR=path.join(profile_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-windows-profile')}})
+        io.writefile(path.join(directory,'windows_profile.log'),profile_stdout .. (profile_stderr or ''))
+        local profile_checks=assert(tonumber(profile_stdout:match('NATIVE_WINDOWS_PROFILE_CHECKS=(%d+)')))
+        local profile_lto_cases=0
+        for count in profile_stdout:gmatch('NATIVE_WINDOWS_LTO_CHECKS=(%d+)') do profile_lto_cases=profile_lto_cases+1; profile_checks=profile_checks+tonumber(count) end
+        assert(profile_lto_cases==3,'MSVC full LTO and clang-cl full/ThinLTO must compile, archive, link and execute tiny production-policy controls')
+        table.insert(receipt.tests,{name='windows_profile',checks=profile_checks,status='PASS'})
+        print('windows_profile: PASS ' .. profile_checks)
         local exception_project=path.join(root,'build/xmake/tests/windows_exceptions')
         local exception_output=path.join(directory,'windows-exceptions')
         local exception_stdout,exception_stderr=os.iorunv(os.programfile(),{'f','-y','-p','windows','-a','x64','--toolchain=msvc','-P',exception_project,'-o',exception_output},{curdir=exception_project,envs={XMAKE_CONFIGDIR=path.join(exception_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-windows-exceptions')}})

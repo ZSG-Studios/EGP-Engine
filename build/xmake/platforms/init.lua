@@ -23,6 +23,16 @@ end
 function configure_toolchain(target, options, build_env)
     local normalized = normalize(options)
     local settings = {}
+    if normalized.toolchain == "mingw" then settings.clang = enabled(options.use_llvm) end
+    if normalized.toolchain == "clang-cl" then
+        settings.llvm = true
+        -- LLVM bitcode archives require the MSVC-compatible LLVM librarian.
+        target:set("toolset", "ar", "link@llvm-lib")
+    end
+    if normalized.toolchain == "msvc" or normalized.toolchain == "clang-cl" then
+        if options.msvc_version and options.msvc_version ~= "" then settings.vs_toolset = options.msvc_version end
+        if options.mssdk_version and options.mssdk_version ~= "" then settings.vs_sdkver = options.mssdk_version end
+    end
     if normalized.godot_platform == "macos" then
         -- Xcode's target triple must agree with the compile/link deployment flags.
         settings.target_minver = normalized.arch == "arm64" and "13.0" or "11.0"
@@ -36,6 +46,16 @@ function configure_toolchain(target, options, build_env)
         settings.egp_closure_args = build_env.EMCC_CLOSURE_ARGS
     end
     target:set("toolchains", normalized.toolchain, settings)
+    if normalized.toolchain == "clang-cl" and target.script then
+        local previous = target:script("config")
+        target:set("config", function(current, config_options)
+            local toolchain = assert(current:toolchain("clang-cl"))
+            assert(toolchain:check(), "The selected clang-cl toolchain is unavailable")
+            local librarian = assert(import("lib.detect.find_program")("llvm-lib", {envs=toolchain:runenvs()}), "The selected clang-cl installation requires llvm-lib")
+            current:set("toolset", "ar", "link@" .. librarian)
+            if previous then previous(current, config_options) end
+        end)
+    end
     if settings.egp_closure_args then
         import("build_environment", {rootdir = os.scriptdir()}).configure(target, normalized.toolchain, settings.egp_closure_args)
     end
@@ -134,7 +154,7 @@ function configure(target, options, build_env)
         -- Preserve the upstream Windows policy for the portable r128 implementation.
         target:add("defines", "R128_STDC_ONLY")
     end
-    if (normalized.toolchain=="gcc" or normalized.toolchain=="mingw") and target.script then
+    if (normalized.toolchain=="gcc" or (normalized.toolchain=="mingw" and not enabled(options.use_llvm))) and target.script then
         import("compiler_warnings",{rootdir=os.scriptdir()}).configure(target)
     end
     target:add("includedirs", "platform/" .. platform)
@@ -144,7 +164,7 @@ function configure(target, options, build_env)
     target:set("optimize", ({none = "none", debug = "none", speed = "fast", speed_trace = "fast", size = "small", size_extra = "small"})[optimize] or optimize)
     if msvc then
         target:set("runtimes", enabled(options.debug_crt) and "MDd" or (enabled(options.use_static_cpp, true) and "MT" or "MD"))
-        link(target, "/INCREMENTAL:NO")
+        if not enabled(options.incremental_link) then link(target, "/INCREMENTAL:NO") end
         cc(target, "/utf-8", "/bigobj", "/Zc:__cplusplus", "/permissive-")
         target:set("exceptions", enabled(options.disable_exceptions, true) and "no-cxx" or "cxx")
     else
@@ -162,7 +182,7 @@ function configure(target, options, build_env)
         if enabled(options.werror) then cc(target, "/WX"); link(target, "/WX") end
     else
         cc(target, warnings == "no" and "-w" or (msvc and "-W3" or "-Wall"))
-        local clang = normalized.toolchain ~= "gcc" and normalized.toolchain ~= "mingw"
+        local clang = enabled(options.use_llvm) or (normalized.toolchain ~= "gcc" and normalized.toolchain ~= "mingw")
         if warnings ~= "no" then
             if clang then cc(target, "-Wshadow-field-in-constructor", "-Wshadow-uncaptured-local", "-Wno-ordered-compare-function-pointers", "-Wenum-conversion")
             else cc(target, "-Wshadow", "-Wno-misleading-indentation") end
@@ -181,6 +201,13 @@ function configure(target, options, build_env)
             end
         end
     end
+    if platform == "windows" then
+        assert(not (enabled(options.use_tsan) or enabled(options.use_lsan) or enabled(options.use_msan)), "Windows supports only address and undefined behavior sanitizers")
+        if not msvc and (enabled(options.use_asan) or enabled(options.use_ubsan)) then
+            assert(enabled(options.use_llvm), "GCC does not support sanitizers on Windows; use MinGW LLVM")
+            assert(normalized.arch == "x86" or normalized.arch == "x64", "MinGW sanitizers require x86_32 or x86_64")
+        end
+    end
     local sanitizer = {}
     for key, value in pairs({asan = "address", ubsan = "undefined", tsan = "thread", lsan = "leak", msan = "memory"}) do
         if enabled(options["use_" .. key]) then
@@ -197,21 +224,52 @@ function configure(target, options, build_env)
             flags(target, "-mcmodel=medium")
         end
         if msvc then cc(target, "/fsanitize=address"); link(target, "/INFERASANLIBS")
-        else flags(target, "-fsanitize=" .. table.concat(sanitizer, ",")); cc(target, "-fno-omit-frame-pointer") end
+        else
+            flags(target, "-fsanitize=" .. table.concat(sanitizer, ","))
+            cc(target, "-fno-omit-frame-pointer")
+            -- COM interface calls intentionally do not satisfy LLVM's vptr check.
+            if platform == "windows" and enabled(options.use_ubsan) then flags(target, "-fno-sanitize=vptr") end
+        end
     end
-    if options.lto and options.lto ~= "none" and options.lto ~= "no" then
-        if msvc and not enabled(options.use_llvm) then cc(target, "/GL"); link(target, "/LTCG")
-        else flags(target, options.lto == "thin" and "-flto=thin" or "-flto") end
+    local lto = options.lto
+    if platform == "windows" and lto == "auto" then
+        lto = msvc and "none" or (enabled(options.use_llvm) and "thin" or "full")
+    end
+    if lto and lto ~= "none" and lto ~= "no" then
+        if platform == "windows" then
+            assert(lto ~= "thin" or enabled(options.use_llvm), "ThinLTO requires LLVM; use use_llvm=y or lto=full")
+        end
+        if msvc then
+            cc(target, enabled(options.use_llvm) and (lto == "thin" and "-flto=thin" or "-flto") or "/GL")
+            link(target, "/LTCG")
+            addflags(target, "arflags", "/LTCG")
+        else
+            flags(target, lto == "thin" and "-flto=thin" or "-flto")
+            if platform == "windows" and not enabled(options.use_llvm) then
+                -- Preserve the MinGW GCC LTO workaround for upstream GH-102867.
+                flags(target, "-fno-use-linker-plugin", "-fwhole-program")
+            end
+        end
     end
     if options.linker and options.linker ~= "default" then link(target, "-fuse-ld=" .. options.linker) end
     if enabled(options.use_coverage) then flags(target, "--coverage") end
     if platform == "windows" then
+        -- Preserve the engine's upstream main/thread stack reserve.
+        local stack_reserve = enabled(options.use_asan) and 30 * 1024 * 1024 or 8 * 1024 * 1024
+        link(target, msvc and "/STACK:" .. stack_reserve or "-Wl,--stack," .. stack_reserve)
         target:add("defines", "WINDOWS_ENABLED", "WASAPI_ENABLED", "WINMIDI_ENABLED", "NOMINMAX", "WINVER=0x0A00", "_WIN32_WINNT=0x0A00")
         if msvc then target:add("defines", "TYPED_METHOD_BIND", "WIN32") end
         if normalized.arch == "x64" or normalized.arch == "arm64" then target:add("defines", "_WIN64") end
         target:add("syslinks", "winmm", "dsound", "kernel32", "ole32", "oleaut32", "sapi", "user32", "gdi32", "iphlpapi", "shlwapi", "shcore", "wsock32", "ws2_32", "shell32", "advapi32", "dinput8", "dxguid", "imm32", "bcrypt", "crypt32", "avrt", "dwmapi", "dwrite", "wbemuuid", "ntdll", "hid", "mincore", "psapi", "dbghelp")
-        if enabled(options.use_mingw) then target:add("defines", "MINGW_ENABLED", "MINGW_HAS_SECURE_API=1"); target:add("syslinks", "mingw32") end
-        if enabled(options.use_static_cpp, true) and not msvc then link(target, "-static-libgcc", "-static-libstdc++") end
+        if enabled(options.use_mingw) then
+            target:add("defines", "MINGW_ENABLED", "MINGW_HAS_SECURE_API=1")
+            target:add("syslinks", "mingw32", "d3d9", "ksuser", "uuid")
+            cc(target, "-Wa,-mbig-obj")
+        end
+        if enabled(options.use_static_cpp, true) and not msvc then
+            link(target, "-static")
+            if normalized.arch == "x86" then link(target, "-static-libgcc", "-static-libstdc++") end
+        end
         if enabled(options.d3d12) then target:add("defines", "D3D12_ENABLED"); target:add("syslinks", "dxgi", "dxguid", "version") end
         if options.windows_subsystem == "console" then
             target:add("defines", "WINDOWS_SUBSYSTEM_CONSOLE")
@@ -300,7 +358,8 @@ function configure(target, options, build_env)
         local mesa = options.mesa_libs
         assert(os.isdir(mesa), "Direct3D12 requires the installed Mesa/NIR SDK; install it or configure d3d12=n")
         target:add("linkdirs", path.join(mesa, "bin"))
-        target:add("syslinks", "libNIR.windows." .. arch .. (msvc and enabled(options.use_asan) and ".san" or ""))
+        local nir = "libNIR.windows." .. arch .. (msvc and enabled(options.use_asan) and ".san" or "")
+        target:add("syslinks", msvc and nir or path.absolute(path.join(mesa, "bin", nir .. ".a")))
         if enabled(options.use_pix) then
             local pix = sdkpath(options.pix_path, path.join(deps, "pix"))
             assert(os.isdir(pix), "PIX SDK missing")
@@ -317,7 +376,7 @@ function configure(target, options, build_env)
         target:add("includedirs", "thirdparty/angle/include")
         target:add("defines", "ANGLE_ENABLED", "EGL_STATIC")
         target:add("linkdirs", angle)
-        local prefix = platform == "windows" and "lib" or ""
+        local prefix = msvc and "lib" or ""
         for _, name in ipairs({"ANGLE", "EGL", "GLES"}) do target:add("syslinks", prefix .. name .. "." .. platform .. "." .. arch .. (msvc and enabled(options.use_asan) and ".san" or "")) end
         if platform == "windows" then target:add("syslinks", "dxgi", "d3d9", "d3d11") else target:add("frameworks", "Metal") end
     end

@@ -19,9 +19,34 @@ var late_actor: Actor
 var source: Superposition
 var replica: Superposition
 var late_replica: Superposition
+var pump_diagnostics: Dictionary = {}
+
+func session_diagnostics(session: EGPNetSession) -> Dictionary:
+ var result := {"state": session.get_state(), "statistics": session.get_statistics()}
+ var entities = session.command("entities")
+ if entities is Array:
+  result["entities"] = []
+  for entity in entities:
+   result["entities"].append({"entity": entity.entity, "revision": entity.revision, "state_bytes": entity.state.size()})
+ var peers = session.command("peers")
+ if peers is Array:
+  result["peers"] = []
+  for peer in peers:
+   result["peers"].append({"peer_id": peer.peer_id, "replication": session.command("replication_peer_statistics", {"peer": peer.peer_id})})
+ return result
 
 func check(value: bool, message: String) -> void:
  if not value:
+  if not failed:
+   var context := {"first_failure": message, "checks_before_failure": checks, "pump": pump_diagnostics,
+    "server": session_diagnostics(server), "client": session_diagnostics(client), "late": session_diagnostics(late)}
+   if is_instance_valid(source_actor): context["source_actor"] = {"points": source_actor.points, "tint": source_actor.tint}
+   if is_instance_valid(client_actor): context["client_actor"] = {"points": client_actor.points, "tint": client_actor.tint}
+   if is_instance_valid(late_actor): context["late_actor"] = {"points": late_actor.points, "tint": late_actor.tint}
+   if is_instance_valid(source): context["source_component"] = source.get_statistics()
+   if is_instance_valid(replica): context["client_component"] = replica.get_statistics()
+   if is_instance_valid(late_replica): context["late_component"] = late_replica.get_statistics()
+   print("SUPERPOSITION_DELTA_FIRST_FAILURE ", JSON.stringify(context))
   failed = true
   push_error(message)
   get_tree().quit(1)
@@ -43,14 +68,23 @@ func attach(actor: Actor, session: EGPNetSession) -> Superposition:
  return component
 
 func pump(seconds: float) -> void:
- var deadline := Time.get_ticks_msec() + int(seconds * 1000)
+ var started := Time.get_ticks_msec()
+ var previous := started
+ var deadline := started + int(seconds * 1000)
+ pump_diagnostics = {"requested_ms": int(seconds * 1000), "frames": 0, "max_frame_gap_ms": 0, "elapsed_ms": 0}
  while not failed and Time.get_ticks_msec() < deadline:
+  var current := Time.get_ticks_msec()
+  pump_diagnostics.max_frame_gap_ms = maxi(pump_diagnostics.max_frame_gap_ms, current - previous)
+  pump_diagnostics.frames += 1
+  pump_diagnostics.elapsed_ms = current - started
+  previous = current
   check(server.poll() == OK and client.poll() == OK, "Poll native sessions")
   if late_connected: check(late.poll() == OK, "Poll late session")
-  if server.get_state() == "Listening": source.replicate_now()
-  if client.get_state() == "Connected": replica.replicate_now()
-  if late_connected and late.get_state() == "Connected": late_replica.replicate_now()
+  if server.get_state() == "Listening": pump_diagnostics.source_result = source.replicate_now()
+  if client.get_state() == "Connected": pump_diagnostics.client_result = replica.replicate_now()
+  if late_connected and late.get_state() == "Connected": pump_diagnostics.late_result = late_replica.replicate_now()
   await get_tree().process_frame
+ pump_diagnostics.elapsed_ms = Time.get_ticks_msec() - started
 
 func check_session_binding() -> void:
  var world := SuperpositionWorld.new()

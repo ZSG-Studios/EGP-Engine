@@ -5,6 +5,7 @@ function main(installed)
     local policy = import('build.xmake.platforms.init', {rootdir=root})
     local package = import('build.xmake.platforms.package', {rootdir=root})
     local checks = 0
+    local proof_compiler
     local function check(value, message) assert(value, message); checks = checks + 1 end
     local directory = path.join(root, '.build/sdk-path-contract')
     os.mkdir(directory)
@@ -86,6 +87,7 @@ function main(installed)
                 compiler = find_tool('clang++', {force=true, paths=candidates})
             end
             assert(compiler, 'Clang is required to validate the production Mesa macro literals')
+            proof_compiler = compiler
             local source = path.join(directory, 'mesa-macros.cpp')
             io.writefile(source, 'constexpr char version[]=PACKAGE_VERSION;\nconstexpr char bugreport[]=PACKAGE_BUGREPORT;\nstatic_assert(version[0]==\'2\' && bugreport[0]==\'h\', "Mesa string macros changed");\n')
             local function parse(version, bugreport)
@@ -112,7 +114,47 @@ function main(installed)
         end
         policy.configure(probe, options)
         check(table.contains(probe.values.linkdirs, path.join(mesa, 'bin')), 'Native linker must use the same Mesa selected by recipes')
-        check(table.contains(probe.values.syslinks, 'libNIR.windows.x86_64'), 'Native NIR archive linkage must survive normalization')
+        local nir = profile.compiler == 'msvc' and 'libNIR.windows.x86_64' or path.absolute(path.join(mesa, 'bin/libNIR.windows.x86_64.a'))
+        check(table.contains(probe.values.syslinks, nir), 'Native NIR archive linkage must retain the selected compiler filename')
+        if index == 3 then
+            local gcc = import('core.tools.gcc')
+            local driver = {}
+            function driver:is_plat(...) return table.contains({...}, 'mingw') end
+            function driver:program() return proof_compiler.program end
+            function driver:name() return 'clang' end
+            function driver:kind() return 'ld' end
+            function driver:get() return {} end
+            local linkflag = gcc.nf_syslink(driver, nir)
+            check(linkflag == nir, 'GNU native mapper must pass the complete archive path as one argument')
+            check(gcc.nf_syslink(driver, 'libNIR.windows.x86_64') == '-llibNIR.windows.x86_64', 'Negative control must retain the original double-lib lookup')
+            local proof = path.join(directory, 'GNU archive with spaces')
+            os.mkdir(proof)
+            local source, main = path.join(proof, 'nir.c'), path.join(proof, 'main.c')
+            io.writefile(source, 'int nir_probe(void) { return 42; }\n')
+            io.writefile(main, 'extern int nir_probe(void); int probe_entry(void) { return nir_probe() != 42; }\n')
+            local object, archive = path.join(proof, 'nir.o'), path.join(proof, 'libNIR.windows.x86_64.a')
+            local common = os.host() == 'windows' and {'--target=x86_64-w64-windows-gnu'} or {}
+            local find_tool = import('lib.detect.find_tool')
+            local ar = find_tool('llvm-ar', {paths={path.directory(proof_compiler.program)}}) or (os.host() ~= 'windows' and find_tool('ar'))
+            assert(ar, 'Native archive tool is required for actual GNU link proof')
+            os.vrunv(proof_compiler.program, table.join(common, {'-x', 'c', '-c', source, '-o', object}), {timeout=30000})
+            local main_object = path.join(proof, 'main.o')
+            os.vrunv(proof_compiler.program, table.join(common, {'-x', 'c', '-c', main, '-o', main_object}), {timeout=30000})
+            os.vrunv(ar.program, {'rcs', archive, object}, {timeout=30000})
+            local flags = {'-nostdlib', '-Wl,-e,' .. (os.host() == 'macosx' and '_probe_entry' or 'probe_entry'), '-L' .. proof}
+            if os.host() == 'windows' then table.insert(flags, 1, '-fuse-ld=lld') end
+            local _, argv = gcc.linkargv(driver, {main_object}, 'binary', path.join(proof, 'linked'), table.join(common, flags, {gcc.nf_syslink(driver, archive)}), {rawargs=true})
+            check(table.contains(argv, archive), 'Actual xmake GNU linker argv must preserve the archive path including spaces')
+            local failed, reason = false, ''
+            try {function () os.iorunv(proof_compiler.program, table.join(common, flags, {main_object, '-llibNIR.windows.x86_64', '-o', path.join(proof, 'negative')}), {timeout=30000}) end,
+                catch {function(errors) failed=true; reason=tostring(errors) end}}
+            check(failed and reason:find('libNIR.windows.x86_64',1,true), 'Original double-lib naming must fail with the real archive present')
+            io.writefile(path.join(proof, 'negative-control.txt'), reason)
+            os.iorunv(proof_compiler.program, argv, {timeout=30000})
+            check(os.isfile(path.join(proof, 'linked')) or os.isfile(path.join(proof, 'linked.exe')), 'Corrected GNU linker argv must link the actual archive')
+            import('core.base.json').savefile(path.join(proof, 'receipt.json'), {passed=true, compiler=proof_compiler.program, argv=argv,
+                boundary=os.host()=='windows' and 'Clang GNU-driver Windows COFF link; MSYS GCC execution not qualified locally' or 'Clang GNU-driver native ELF link', negative_double_lib_failed=true})
+        end
         check(os.isfile(path.join(mesa, 'bin/libNIR.windows.x86_64.' .. (profile.compiler == 'msvc' and 'lib' or 'a'))), 'Installed NIR archive must match the selected compiler ABI')
         local destination = path.join(directory, 'package-' .. index)
         os.mkdir(destination)

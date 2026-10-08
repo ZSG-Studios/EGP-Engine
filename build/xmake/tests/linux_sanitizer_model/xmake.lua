@@ -33,7 +33,7 @@ target('linux_sanitizer_model')
    {platform='linuxbsd',arch='x86_32',use_asan=true,expect=false},
    {platform='linuxbsd',arch='arm64',use_asan=true,expect=false},
    {platform='windows',arch='x86_64',use_asan=true,expect=false},
-   {platform='windows',arch='x86_64',use_mingw=true,use_asan=true,expect=false},
+   {platform='windows',arch='x86_64',use_mingw=true,use_llvm=true,use_asan=true,expect=false},
    {platform='macos',arch='x86_64',use_asan=true,expect=false},
    {platform='android',arch='arm64',use_asan=true,expect=false},
    {platform='ios',arch='arm64',use_asan=true,expect=false},
