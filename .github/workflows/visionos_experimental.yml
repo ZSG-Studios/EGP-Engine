@@ -7,6 +7,12 @@ on:
         required: false
         type: string
         default: ''
+      metal_sync_mode:
+        description: 'Metal synchronization diagnostic for a reused editor'
+        required: false
+        type: choice
+        options: [default, none]
+        default: default
   push:
     branches: [experimental/visionos-forward-plus]
   pull_request:
@@ -261,6 +267,8 @@ jobs:
           run-id: ${{ inputs.source_run_id }}
           github-token: ${{ github.token }}
       - name: Run Metal stereo fixture
+        env:
+          GODOT_MTL_SYNC_MODE: ${{ inputs.metal_sync_mode == 'none' && 'none' || '' }}
         run: |
           chmod +x bin/godot.macos.editor.arm64
           python3 misc/scripts/validate_visionos_forward_plus.py --engine bin/godot.macos.editor.arm64 --driver metal --output .build/visionos-experimental

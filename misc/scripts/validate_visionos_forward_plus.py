@@ -81,6 +81,7 @@ def main():
         "exit_code": exit_code,
         "timed_out": timed_out,
         "driver": args.driver,
+        "metal_sync_mode": env.get("GODOT_MTL_SYNC_MODE") or "default",
         "device_validated": False,
         "scope": "External stereo colour/depth and resize only; no Apple compositor or headset validation",
         "engine": str(engine),
