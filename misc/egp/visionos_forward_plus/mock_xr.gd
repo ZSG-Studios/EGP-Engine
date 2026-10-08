@@ -10,6 +10,8 @@ var rendered := 0
 var snapshots: Array[Dictionary] = []
 var failure := ""
 var retired: Array[RID] = []
+var color_slots: Array[RID] = []
+var depth_slots: Array[RID] = []
 
 func _get_name() -> StringName:
 	return &"EGPExternalStereoProbe"
@@ -50,7 +52,7 @@ func _get_camera_projections(_tracker_name: StringName, aspect: float, z_near: f
 	return [projection, projection]
 
 func _pre_draw_viewport(_target: RID) -> bool:
-	if not color.is_valid():
+	if color_slots.is_empty():
 		rd = RenderingServer.get_rendering_device()
 		var fmt := RDTextureFormat.new()
 		fmt.texture_type = RenderingDevice.TEXTURE_TYPE_2D_ARRAY
@@ -59,10 +61,14 @@ func _pre_draw_viewport(_target: RID) -> bool:
 		fmt.array_layers = 2
 		fmt.format = RenderingDevice.DATA_FORMAT_R16G16B16A16_SFLOAT
 		fmt.usage_bits = RenderingDevice.TEXTURE_USAGE_COLOR_ATTACHMENT_BIT | RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT | RenderingDevice.TEXTURE_USAGE_CAN_COPY_FROM_BIT
-		color = rd.texture_create(fmt, RDTextureView.new())
+		for slot in range(3):
+			color_slots.append(rd.texture_create(fmt, RDTextureView.new()))
 		fmt.format = RenderingDevice.DATA_FORMAT_D32_SFLOAT_S8_UINT
 		fmt.usage_bits = RenderingDevice.TEXTURE_USAGE_DEPTH_STENCIL_ATTACHMENT_BIT | RenderingDevice.TEXTURE_USAGE_SAMPLING_BIT | RenderingDevice.TEXTURE_USAGE_CAN_COPY_FROM_BIT | RenderingDevice.TEXTURE_USAGE_DEPTH_RESOLVE_ATTACHMENT_BIT
-		depth = rd.texture_create(fmt, RDTextureView.new())
+		for slot in range(3):
+			depth_slots.append(rd.texture_create(fmt, RDTextureView.new()))
+	color = color_slots[rendered % 3]
+	depth = depth_slots[rendered % 3]
 	return active and color.is_valid() and depth.is_valid()
 
 func _get_color_texture() -> RID:
@@ -76,8 +82,10 @@ func _post_draw_viewport(_target: RID, _rect: Rect2) -> void:
 	if rendered == 12 or rendered == 28:
 		capture()
 	if rendered == 16:
-		retired.append(color)
-		retired.append(depth)
+		retired.append_array(color_slots)
+		retired.append_array(depth_slots)
+		color_slots.clear()
+		depth_slots.clear()
 		color = RID()
 		depth = RID()
 		size = Vector2i(160, 96)
@@ -153,10 +161,12 @@ void main() {
 	return data
 
 func cleanup() -> void:
-	for resource in retired + [color, depth]:
+	for resource in retired + color_slots + depth_slots:
 		if resource.is_valid():
 			rd.free_rid(resource)
 	retired.clear()
+	color_slots.clear()
+	depth_slots.clear()
 	color = RID()
 	depth = RID()
 

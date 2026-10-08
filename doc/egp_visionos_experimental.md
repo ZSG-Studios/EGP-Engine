@@ -38,7 +38,8 @@ python3 misc/scripts/validate_visionos_forward_plus.py \
 ```
 
 The fixture renders an asymmetric view of a box into two external RGBA16F/D32S8
-texture layers. It reads back color and sampled reverse-Z depth, checks both eyes
+texture layers, rotating through three texture pairs to mimic a swapchain. It
+reads back color and sampled reverse-Z depth, checks both eyes
 have visible geometry and different horizontal centroids, changes target size,
 and repeats. It retains PNGs, numeric measurements, the binary hash and the full
 log. Any engine/script error, timeout or missing success marker fails the test.
