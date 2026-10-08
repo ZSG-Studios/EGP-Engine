@@ -59,6 +59,15 @@ def main():
         environment = ET.SubElement(launch, "EnvironmentVariables")
     ET.SubElement(environment, "EnvironmentVariable", key="GODOT_MTL_SYNC_MODE", value="none", isEnabled="YES")
     scheme_tree.write(scheme, encoding="utf-8", xml_declaration=True)
+    # Clear both build settings and target metadata before validating the exact
+    # project that will be handed to the device owner.
+    pbxproj = project / "project.pbxproj"
+    project_text = pbxproj.read_text()
+    for key in ("DEVELOPMENT_TEAM", "DevelopmentTeam"):
+        project_text = project_text.replace(f"{key} = 0000000000;", f'{key} = "";')
+    if "0000000000" in project_text:
+        raise RuntimeError("Placeholder development team remains in the Xcode project")
+    pbxproj.write_text(project_text)
     derived = output / "derived-data"
     build_log = run(
         [
@@ -100,9 +109,6 @@ def main():
     architectures = run(["xcrun", "lipo", "-archs", str(executable)], output / "architectures.txt", 30).strip()
     if architectures != "arm64":
         raise RuntimeError(f"Unexpected device architectures: {architectures}")
-    # Ship a project ready for the owner's signing configuration, not the CI placeholder.
-    pbxproj = project / "project.pbxproj"
-    pbxproj.write_text(pbxproj.read_text().replace("DEVELOPMENT_TEAM = 0000000000;", 'DEVELOPMENT_TEAM = "";'))
     shutil.copytree(app, output / "unsigned-app/EGPProbe.app")
     receipt = {
         "status": "PASS",
