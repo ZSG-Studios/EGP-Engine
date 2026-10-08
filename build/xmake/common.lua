@@ -23,7 +23,7 @@ function configure(env, options, explicit)
         optimize = "auto", precision = "single", deprecated = true, threads = true,
         disable_exceptions = true, warnings = "all", werror = false, tests = false,
         strict_checks = false, use_static_cpp = true, lto = "none", rendering_device = true,
-        forward_mobile_renderer = true, forward_plus_renderer = true, engine_update_check = true,
+        forward_mobile_renderer = false, forward_plus_renderer = true, engine_update_check = true,
         no_editor_splash = true, use_precise_math_checks = false, limit_transitive_includes = false,
         minizip = true, brotli = true, disable_overrides = false, disable_path_overrides = true,
         extra_suffix = "", object_prefix = "", build_profile = "", library_type = "executable"
@@ -63,6 +63,16 @@ function configure(env, options, explicit)
         for key, value in pairs(profile.disabled_build_options or {}) do options[key] = value end
     end
     platform_policy.normalize(options, json.loadfile(path.join(env.graph.root, "build/xmake/defaults.json")), enabled)
+    -- EGP ships only Forward+ on RenderingDevice backends.
+    assert(platform ~= "web", "EGP Forward+ requires RenderingDevice; WebGL exports are unsupported")
+    for _, key in ipairs({"opengl3", "angle", "forward_mobile_renderer"}) do
+        assert(not explicit[key] or not enabled(options[key]), "EGP removed renderer option: " .. key)
+        options[key] = false
+    end
+    for _, key in ipairs({"rendering_device", "forward_plus_renderer"}) do
+        assert(not explicit[key] or enabled(options[key]), "EGP requires renderer option: " .. key)
+        options[key] = true
+    end
     -- System Theora/Vorbis must share their system Ogg dependency, as upstream does.
     if platform == "linuxbsd" then
         if options.builtin_libtheora == false then options.builtin_libvorbis, options.builtin_libogg = false, false end
@@ -73,9 +83,8 @@ function configure(env, options, explicit)
     end
     if enabled(options.disable_2d) then options.disable_navigation_2d, options.disable_physics_2d, options.tests = true, true, false end
     if enabled(options.disable_3d) then options.disable_navigation_3d, options.disable_physics_3d, options.disable_xr = true, true, true end
-    if platform == "web" then options.rendering_device = false end
     if not os.isfile(path.join(env.graph.root, "main/splash_editor.png")) then options.no_editor_splash = true end
-    if not options.rendering_device or not (options.forward_mobile_renderer or options.forward_plus_renderer) then options.vulkan, options.metal, options.d3d12 = false, false, false end
+    if not options.rendering_device or not options.forward_plus_renderer then options.vulkan, options.metal, options.d3d12 = false, false, false end
     env.disabled_modules, env.module_dependencies, env.module_optional_dependencies = {}, {}, {}
     env.module_icons_paths, env.module_list, env.modules_detected, env.doc_class_path = {}, {}, {}, {}
     env.module_version_string = ""
@@ -105,12 +114,10 @@ function configure(env, options, explicit)
         if enabled(options[key]) then table.insert(definitions, definition) end
     end
     if options.rendering_device then
-        if options.forward_mobile_renderer then table.insert(definitions, "MOBILE_RD_ENABLED") end
         if options.forward_plus_renderer then table.insert(definitions, "FORWARD_RD_ENABLED") end
     end
     if options.vulkan then table.insert(definitions, "VULKAN_ENABLED") end
     if options.use_volk then table.insert(definitions, "USE_VOLK") end
-    if options.opengl3 then table.insert(definitions, "GLES3_ENABLED") end
     if env.editor_build then
         if options.engine_update_check then table.insert(definitions, "ENGINE_UPDATE_CHECK_ENABLED") end
         if options.no_editor_splash or not os.isfile(path.join(env.graph.root, "main/splash_editor.png")) then table.insert(definitions, "NO_EDITOR_SPLASH") end

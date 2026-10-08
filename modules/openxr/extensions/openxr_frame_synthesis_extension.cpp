@@ -193,10 +193,7 @@ void OpenXRFrameSynthesisExtension::on_main_swapchains_created() {
 		depth_swapchain_format = GL_DEPTH24_STENCIL8;
 	} else if (rendering_driver_name == "vulkan") {
 		String rendering_method = rendering_server->get_current_rendering_method();
-		if (rendering_method == "mobile") {
-			swapchain_format = VK_FORMAT_R16G16B16A16_SFLOAT;
-			depth_swapchain_format = VK_FORMAT_D24_UNORM_S8_UINT;
-		} else {
+		{
 			WARN_PRINT("OpenXR: Frame synthesis not supported for this rendering method!");
 			frame_synthesis_ext = false;
 			openxr_api->unregister_projection_views_extension(this);

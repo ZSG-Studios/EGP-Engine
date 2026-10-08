@@ -30,7 +30,7 @@
 
 package org.godotengine.godot;
 
-import org.godotengine.godot.gl.GodotRenderer;
+import org.godotengine.godot.vulkan.VkRenderer;
 import org.godotengine.godot.io.directory.DirectoryAccessHandler;
 import org.godotengine.godot.io.file.FileAccessHandler;
 import org.godotengine.godot.nativeapi.GodotNativeBridge;
@@ -47,7 +47,6 @@ import android.view.View;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityNodeProvider;
 
-import javax.microedition.khronos.opengles.GL10;
 
 /**
  * Wrapper for native library
@@ -76,17 +75,16 @@ public class GodotLib {
 	public static native void ondestroy();
 
 	/**
-	 * Invoked on the GL thread to complete setup for the Godot native layer logic.
+	 * Invoked on the render thread to complete setup for the Godot native layer logic.
 	 * @param p_cmdline Command line arguments used to configure Godot native layer components.
 	 */
 	public static native boolean setup(String[] p_cmdline, GodotTTS tts);
 
 	/**
-	 * Invoked on the GL thread when the underlying Android surface has changed size.
+	 * Invoked on the render thread when the underlying Android surface has changed size.
 	 * @param p_surface
 	 * @param p_width
 	 * @param p_height
-	 * @see org.godotengine.godot.gl.GLSurfaceView.Renderer#onSurfaceChanged(GL10, int, int)
 	 */
 	public static native void resize(Surface p_surface, int p_width, int p_height);
 
@@ -102,8 +100,7 @@ public class GodotLib {
 	public static native void back();
 
 	/**
-	 * Invoked on the GL thread to draw the current frame.
-	 * @see org.godotengine.godot.gl.GLSurfaceView.Renderer#onDrawFrame(GL10)
+	 * Invoked on the render thread to draw the current frame.
 	 */
 	public static native boolean step();
 
@@ -304,19 +301,19 @@ public class GodotLib {
 	public static native void filePickerCallback(boolean p_ok, String[] p_selected_paths);
 
 	/**
-	 * Invoked on the GL thread to configure the height of the virtual keyboard.
+	 * Invoked on the render thread to configure the height of the virtual keyboard.
 	 */
 	public static native void setVirtualKeyboardHeight(int p_height);
 
 	/**
-	 * Invoked on the GL thread when the {@link GodotRenderer} has been resumed.
-	 * @see GodotRenderer#onActivityResumed()
+	 * Invoked on the render thread when the {@link VkRenderer} has been resumed.
+	 * @see VkRenderer#onActivityResumed()
 	 */
 	public static native void onRendererResumed();
 
 	/**
-	 * Invoked on the GL thread when the {@link GodotRenderer} has been paused.
-	 * @see GodotRenderer#onActivityPaused()
+	 * Invoked on the render thread when the {@link VkRenderer} has been paused.
+	 * @see VkRenderer#onActivityPaused()
 	 */
 	public static native void onRendererPaused();
 

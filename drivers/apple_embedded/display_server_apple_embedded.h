@@ -48,10 +48,6 @@
 #endif // METAL_ENABLED
 #endif // RD_ENABLED
 
-#if defined(GLES3_ENABLED)
-#include "drivers/gles3/rasterizer_gles3.h"
-#endif // GLES3_ENABLED
-
 #import <Foundation/Foundation.h>
 #import <QuartzCore/CAMetalLayer.h>
 

@@ -308,13 +308,11 @@ function configure(target, options, build_env)
     elseif platform == "ios" or platform == "visionos" then
         target:add("defines", platform == "ios" and "IOS_ENABLED" or "VISIONOS_ENABLED", "APPLE_EMBEDDED_ENABLED", "UNIX_ENABLED", "COREAUDIO_ENABLED")
         assert(not enabled(options.vulkan) or platform == "ios", "visionOS does not support Vulkan")
-        assert(not enabled(options.opengl3) or platform == "ios", "visionOS does not support OpenGL")
         if enabled(options.simulator) then target:add("defines", platform == "ios" and "IOS_SIMULATOR" or "VISIONOS_SIMULATOR") end
         -- The custom visionOS toolchain already selects deployment via its target triple.
         -- Clang rejects a second -mtargetos alongside that explicit -target.
         if platform == "ios" then
             flags(target, enabled(options.simulator) and "-mios-simulator-version-min=15.0" or "-miphoneos-version-min=15.0")
-            if enabled(options.opengl3, true) then target:add("defines", "GLES_SILENCE_DEPRECATION") end
         end
         target:add("mflags", "-fobjc-arc", "-fblocks")
         target:add("mxflags", "-fobjc-arc", "-fblocks")
@@ -324,7 +322,6 @@ function configure(target, options, build_env)
         cc(target, "-fPIC", "-ffunction-sections", "-funwind-tables", "-fstack-protector-strong")
         link(target, "-Wl,--gc-sections", "-Wl,--no-undefined", "-Wl,-z,now", "-Wl,--build-id", "-Wl,-soname,libgodot_android.so")
         if options.arch == "arm32" then cc(target, "-march=armv7-a", "-mfloat-abi=softfp"); target:add("defines", "__ARM_ARCH_7__", "__ARM_ARCH_7A__", "__ARM_NEON__") end
-        if enabled(options.opengl3, true) then target:add("syslinks", "GLESv3") end
     elseif platform == "web" then
         target:add("defines", "WEB_ENABLED", "UNIX_ENABLED", "UNIX_SOCKET_UNAVAILABLE", "GDSCRIPT_NO_LSP")
         link(target, "-sINITIAL_MEMORY=" .. tostring(options.initial_memory or 32) .. "MB", "-sSTACK_SIZE=" .. tostring(options.stack_size or 5120) .. "KB", "-sENVIRONMENT=web,worker", "-sALLOW_MEMORY_GROWTH=1", "-sINVOKE_RUN=0", "-sEXIT_RUNTIME=1", "-sSUPPORT_LONGJMP=wasm", "-sMAX_WEBGL_VERSION=2", "-sGL_ENABLE_GET_PROC_ADDRESS=0", "-sOFFSCREEN_FRAMEBUFFER=1", "-sEXPORTED_FUNCTIONS=['_main','_malloc','_free']", "-sEXPORTED_RUNTIME_METHODS=['callMain','cwrap']")
@@ -376,21 +373,6 @@ function configure(target, options, build_env)
             target:add("syslinks", "WinPixEventRuntime")
         end
     end
-    if (platform == "windows" or platform == "macos") and enabled(options.angle) and enabled(options.opengl3, true) then
-        local angle = sdkpath(options.angle_libs, path.join(deps, "angle"))
-        local compiler = platform == "macos" and "macos" or (msvc and "msvc" or (enabled(options.use_llvm) and "llvm" or "gcc"))
-        local variant = angle .. "-" .. arch .. "-" .. compiler
-        if os.isdir(variant) then angle = variant end
-        assert(os.isdir(angle), "ANGLE SDK missing; install it or configure angle=n")
-        target:add("includedirs", "thirdparty/angle/include")
-        target:add("defines", "ANGLE_ENABLED", "EGL_STATIC")
-        target:add("linkdirs", angle)
-        local prefix = msvc and "lib" or ""
-        -- GNU static archives must follow their users: EGL -> GLES -> ANGLE.
-        local libraries = platform == "windows" and not msvc and {"EGL", "GLES", "ANGLE"} or {"ANGLE", "EGL", "GLES"}
-        for _, name in ipairs(libraries) do target:add("syslinks", prefix .. name .. "." .. platform .. "." .. arch .. (msvc and enabled(options.use_asan) and ".san" or "")) end
-        if platform == "windows" then target:add("syslinks", "dxgi", "d3d9", "d3d11") else target:add("frameworks", "Metal") end
-    end
     if platform == "android" and enabled(options.swappy) then
         local directory = path.join("thirdparty/swappy-frame-pacing", normalized.arch)
         assert(os.isfile(path.join(directory, "libswappy_static.a")), "Swappy archive missing for " .. normalized.arch)
@@ -400,7 +382,7 @@ function configure(target, options, build_env)
     end
     if platform == "linuxbsd" and not enabled(options.use_sowrap, true) then
         import("lib.detect.pkgconfig")
-        local packages = {x11 = {"x11", "xcursor", "xinerama", "xext", "xrandr", "xrender", "xi"}, wayland = {"wayland-client", "wayland-cursor", "wayland-egl", "xkbcommon", "libdecor-0"}, alsa = {"alsa"}, pulseaudio = {"libpulse"}, dbus = {"dbus-1"}, speechd = {"speech-dispatcher"}, fontconfig = {"fontconfig"}, udev = {"libudev"}}
+        local packages = {x11 = {"x11", "xcursor", "xinerama", "xext", "xrandr", "xrender", "xi"}, wayland = {"wayland-client", "wayland-cursor", "xkbcommon", "libdecor-0"}, alsa = {"alsa"}, pulseaudio = {"libpulse"}, dbus = {"dbus-1"}, speechd = {"speech-dispatcher"}, fontconfig = {"fontconfig"}, udev = {"libudev"}}
         for option, names in pairs(packages) do
             if enabled(options[option], true) then
                 for _, name in ipairs(names) do
@@ -419,7 +401,6 @@ function configure(target, options, build_env)
             configure_macos_vulkan(target, options)
         elseif not enabled(options.use_volk, true) then target:add("syslinks", platform == "windows" and "vulkan-1" or "vulkan") end
     end
-    if enabled(options.opengl3, platform ~= "visionos") then target:add("defines", "GLES3_ENABLED") end
     if enabled(options.metal, platform == "macos" or platform == "ios" or platform == "visionos") and not enabled(options.simulator) then
         target:add("defines", "METAL_ENABLED")
         if platform == "macos" then target:add("frameworks", "Metal", "MetalKit", "MetalFX") end

@@ -57,11 +57,6 @@ function main(graph)
             graph:include("metal/recipe.lua")
         end
     end
-    if R.truthy(R.index(env, "opengl3")) then
-        graph:include("gl_context/recipe.lua")
-        graph:include("gles3/recipe.lua")
-        graph:include("egl/recipe.lua")
-    end
     if R.truthy((function() local v = R.index(env, "sdl"); if not R.truthy(v) then return v end; return (R.contains({"linuxbsd", "macos", "windows", "ios", "visionos"}, R.index(env, "platform"))) end)()) then
         graph:include("sdl/recipe.lua")
     end

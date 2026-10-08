@@ -4,4 +4,4 @@ config_version=5
 config/name="EGP Box3D Native Qualification"
 
 [rendering]
-renderer/rendering_method="gl_compatibility"
+renderer/rendering_method="forward_plus"

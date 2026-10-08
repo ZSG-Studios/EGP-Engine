@@ -60,10 +60,6 @@ private:
 	};
 	JSKeyEvent key_event;
 
-#ifdef GLES3_ENABLED
-	EMSCRIPTEN_WEBGL_CONTEXT_HANDLE webgl_ctx = 0;
-#endif
-
 	HashMap<int64_t, CharString> utterance_ids;
 
 	DisplayServerEnums::WindowMode window_mode = DisplayServerEnums::WINDOW_MODE_WINDOWED;

@@ -18,7 +18,6 @@ function main(installed)
             io.writefile(path.join(mesa, 'generated/src/compiler/nir/nir_opcodes.h'), 'fixture generated header')
             os.mkdir(path.join(deps, 'mesa-x86_64-' .. compiler, 'bin'))
             io.writefile(path.join(deps, 'mesa-x86_64-' .. compiler, 'bin/libNIR.windows.x86_64.' .. (compiler == 'msvc' and 'lib' or 'a')), 'fixture NIR archive')
-            os.mkdir(path.join(deps, 'angle-x86_64-' .. compiler))
         end
         os.mkdir(path.join(deps, 'pix/bin/x64'))
         io.writefile(path.join(deps, 'pix/bin/x64/WinPixEventRuntime.dll'), 'fixture PIX DLL')
@@ -39,7 +38,7 @@ function main(installed)
     check(paths.dependencies(root) == path.join(directory, 'local/Godot/build_deps'), 'Native Windows default must follow LOCALAPPDATA')
     os.setenv('LOCALAPPDATA', old_local); os.setenv('MSYSTEM', old_msystem); os.setenv('EGP_BUILD_DEPS', deps)
     for index, profile in ipairs({{compiler='msvc'}, {compiler='msvc',use_llvm=true}, {compiler='gcc',use_mingw=true}, {compiler='llvm',use_mingw=true,use_llvm=true}}) do
-        local graph = model.new(root, {platform='windows',arch='x86_64',target='template_release',d3d12=true,angle=true,use_pix=true,accesskit=false,use_mingw=profile.use_mingw,use_llvm=profile.use_llvm})
+        local graph = model.new(root, {platform='windows',arch='x86_64',target='template_release',d3d12=true,angle=false,use_pix=true,accesskit=false,use_mingw=profile.use_mingw,use_llvm=profile.use_llvm})
         -- This source/path contract does not require a foreign compiler installation.
         -- Only the old-GCC warning lookup is simulated; all production recipes still execute.
         if profile.use_mingw and not profile.use_llvm then
@@ -54,7 +53,6 @@ function main(installed)
         local options = graph.options
         local mesa = path.join(deps, 'mesa-x86_64-' .. profile.compiler)
         check(options.mesa_libs == mesa, 'Recipes must select the installed ABI-compatible Mesa variant')
-        check(options.angle_libs == path.join(deps, 'angle-x86_64-' .. profile.compiler), 'ANGLE must share the compiler/architecture route')
         check(options.pix_path == path.join(deps, 'pix') and options.agility_sdk_path == path.join(deps, 'agility_sdk'), 'PIX and Agility paths must be resolved before recipes')
         local driver
         for _, library in ipairs(graph.libraries) do
@@ -165,7 +163,7 @@ function main(installed)
         end
         check(hash.sha256(path.join(destination, 'WinPixEventRuntime.dll')) == hash.sha256(path.join(deps, 'pix/bin/x64/WinPixEventRuntime.dll')), 'Packaging must copy the same installed PIX DLL')
     end
-    local override = {platform='windows',arch='x86_64',d3d12=true,angle=true,mesa_libs=path.join(deps,'mesa-x86_64-msvc'),angle_libs=path.join(deps,'angle-x86_64-msvc'),pix_path=path.join(directory,'custom-pix'),agility_sdk_path=path.join(directory,'custom-agility')}
+    local override = {platform='windows',arch='x86_64',d3d12=true,angle=false,mesa_libs=path.join(deps,'mesa-x86_64-msvc'),angle_libs=path.join(deps,'angle-x86_64-msvc'),pix_path=path.join(directory,'custom-pix'),agility_sdk_path=path.join(directory,'custom-agility')}
     paths.resolve(override, root)
     check(override.pix_path == path.join(directory,'custom-pix') and override.agility_sdk_path == path.join(directory,'custom-agility'), 'Explicit PIX/Agility overrides must remain intact')
     check(override.mesa_libs == path.join(deps,'mesa-x86_64-msvc') and override.angle_libs == path.join(deps,'angle-x86_64-msvc'), 'Explicit fully selected Mesa/ANGLE overrides must not be replaced')

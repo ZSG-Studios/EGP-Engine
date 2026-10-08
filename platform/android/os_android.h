@@ -46,10 +46,6 @@ private:
 
 	bool use_apk_expansion;
 
-#if defined(GLES3_ENABLED)
-	const char *gl_extensions;
-#endif
-
 #if defined(VULKAN_ENABLED)
 	ANativeWindow *native_window = nullptr;
 #endif

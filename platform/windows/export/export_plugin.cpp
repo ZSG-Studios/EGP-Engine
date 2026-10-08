@@ -251,21 +251,6 @@ Error EditorExportPlatformWindows::export_project(const Ref<EditorExportPreset> 
 	}
 
 	Ref<DirAccess> da = DirAccess::create(DirAccess::ACCESS_FILESYSTEM);
-	int export_angle = p_preset->get("application/export_angle");
-	bool include_angle_libs = false;
-	if (export_angle == 0) {
-		include_angle_libs = (String(get_project_setting(p_preset, "rendering/gl_compatibility/driver.windows")) == "opengl3_angle") && (String(get_project_setting(p_preset, "rendering/renderer/rendering_method")) == "gl_compatibility");
-	} else if (export_angle == 1) {
-		include_angle_libs = true;
-	}
-	if (include_angle_libs) {
-		if (da->file_exists(template_path.get_base_dir().path_join("libEGL." + arch + ".dll"))) {
-			da->copy(template_path.get_base_dir().path_join("libEGL." + arch + ".dll"), path.get_base_dir().path_join("libEGL.dll"), get_chmod_flags());
-		}
-		if (da->file_exists(template_path.get_base_dir().path_join("libGLESv2." + arch + ".dll"))) {
-			da->copy(template_path.get_base_dir().path_join("libGLESv2." + arch + ".dll"), path.get_base_dir().path_join("libGLESv2.dll"), get_chmod_flags());
-		}
-	}
 	if (da->file_exists(template_path.get_base_dir().path_join("accesskit." + arch + ".dll"))) {
 		da->copy(template_path.get_base_dir().path_join("accesskit." + arch + ".dll"), path.get_base_dir().path_join("accesskit." + arch + ".dll"), get_chmod_flags());
 	}
@@ -274,7 +259,7 @@ Error EditorExportPlatformWindows::export_project(const Ref<EditorExportPreset> 
 	bool agility_sdk_multiarch = p_preset->get("application/d3d12_agility_sdk_multiarch");
 	bool include_d3d12_extra_libs = false;
 	if (export_d3d12 == 0) {
-		include_d3d12_extra_libs = (String(get_project_setting(p_preset, "rendering/rendering_device/driver.windows")) == "d3d12") && (String(get_project_setting(p_preset, "rendering/renderer/rendering_method")) != "gl_compatibility");
+		include_d3d12_extra_libs = (String(get_project_setting(p_preset, "rendering/rendering_device/driver.windows")) == "d3d12");
 	} else if (export_d3d12 == 1) {
 		include_d3d12_extra_libs = true;
 	}
@@ -482,7 +467,6 @@ void EditorExportPlatformWindows::get_export_options(List<ExportOption> *r_optio
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "application/file_description"), ""));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "application/copyright"), ""));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "application/trademarks"), ""));
-	r_options->push_back(ExportOption(PropertyInfo(Variant::INT, "application/export_angle", PROPERTY_HINT_ENUM, "Auto,Yes,No"), 0, true));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::INT, "application/export_d3d12", PROPERTY_HINT_ENUM, "Auto,Yes,No"), 0, true));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::BOOL, "application/d3d12_agility_sdk_multiarch"), true, true));
 

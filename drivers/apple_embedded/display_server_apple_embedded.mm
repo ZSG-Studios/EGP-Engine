@@ -112,15 +112,6 @@ DisplayServerAppleEmbedded::DisplayServerAppleEmbedded(const String &p_rendering
 		if (rendering_context->initialize() != OK) {
 			memdelete(rendering_context);
 			rendering_context = nullptr;
-#if defined(GLES3_ENABLED)
-			bool fallback_to_opengl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
-			if (fallback_to_opengl3 && rendering_driver != "opengl3") {
-				WARN_PRINT("Your device does not seem to support MoltenVK or Metal, switching to OpenGL 3.");
-				rendering_driver = "opengl3";
-				OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
-				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-			} else
-#endif
 			{
 				ERR_PRINT(vformat("Failed to initialize %s context", rendering_driver));
 				r_error = ERR_UNAVAILABLE;
@@ -153,19 +144,6 @@ DisplayServerAppleEmbedded::DisplayServerAppleEmbedded(const String &p_rendering
 		rendering_device->screen_create(DisplayServerEnums::MAIN_WINDOW_ID);
 
 		RendererCompositorRD::make_current();
-		has_made_render_compositor_current = true;
-	}
-#endif
-
-#if defined(GLES3_ENABLED)
-	if (rendering_driver == "opengl3") {
-		CALayer *layer = [GDTAppDelegateService.viewController.godotView initializeRenderingForDriver:@"opengl3"];
-
-		if (!layer) {
-			ERR_FAIL_MSG("Failed to create iOS OpenGLES rendering layer.");
-		}
-
-		RasterizerGLES3::make_current(false);
 		has_made_render_compositor_current = true;
 	}
 #endif
@@ -224,9 +202,6 @@ Vector<String> DisplayServerAppleEmbedded::get_rendering_drivers_func() {
 	if (@available(ios 14.0, *)) {
 		drivers.push_back("metal");
 	}
-#endif
-#if defined(GLES3_ENABLED)
-	drivers.push_back("opengl3");
 #endif
 
 	return drivers;

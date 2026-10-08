@@ -8624,14 +8624,13 @@ Error RenderingDevice::initialize(RenderingContextDriver *p_context, DisplayServ
 	err = driver->initialize(device_index, frame_count);
 	ERR_FAIL_COND_V_MSG(err != OK, FAILED, "Failed to initialize driver for device.");
 
+	// Rendered EGP projects require Forward+; local compute devices remain independent.
+	ERR_FAIL_COND_V_MSG(is_main_instance && driver->limit_get(RDD::LIMIT_MAX_TEXTURES_PER_SHADER_STAGE) < 48,
+			ERR_UNAVAILABLE, "Forward+ requires at least 48 textures per shader stage; this device is unsupported.");
+
 	if (is_main_instance) {
 		// Only the singleton instance with a display should print this information.
-		String rendering_method;
-		if (OS::get_singleton()->get_current_rendering_method() == "mobile") {
-			rendering_method = "Forward Mobile";
-		} else {
-			rendering_method = "Forward+";
-		}
+		const String rendering_method = "Forward+";
 
 		// Output our device version.
 		Engine::get_singleton()->print_header(vformat("%s %s - %s - Using Device #%d: %s - %s", get_device_api_name(), get_device_api_version(), rendering_method, device_index, _get_device_vendor_name(device), device.name));

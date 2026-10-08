@@ -72,12 +72,7 @@ private:
 	String rendering_driver;
 	bool fb_swapchain_update_state_ext = false;
 	bool fb_swapchain_update_state_vulkan_ext = false;
-	bool fb_swapchain_update_state_opengles_ext = false;
 	bool fb_swapchain_update_state_android_ext = false;
-
-	uint32_t filter_to_gl(OpenXRCompositionLayerExtension::Filter p_filter, OpenXRCompositionLayerExtension::MipmapMode p_mipmap_mode = OpenXRCompositionLayerExtension::MipmapMode::MIPMAP_MODE_DISABLED);
-	uint32_t wrap_to_gl(OpenXRCompositionLayerExtension::Wrap p_wrap);
-	uint32_t swizzle_to_gl(OpenXRCompositionLayerExtension::Swizzle p_swizzle);
 
 	uint32_t filter_to_vk(OpenXRCompositionLayerExtension::Filter p_filter);
 	uint32_t mipmap_mode_to_vk(OpenXRCompositionLayerExtension::MipmapMode p_mipmap);

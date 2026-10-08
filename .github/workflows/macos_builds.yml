@@ -45,17 +45,6 @@ jobs:
       - name: Setup native xmake
         uses: ./.github/actions/godot-deps
 
-      - name: Download pre-built ANGLE
-        shell: sh
-        id: angle-sdk
-        run: |
-          if xmake lua misc/scripts/install_build_dependencies.lua angle; then
-            echo "ANGLE_ENABLED=yes" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::ANGLE SDK installation failed, building without ANGLE support."
-            echo "ANGLE_ENABLED=no" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Download pre-built AccessKit
         shell: sh
         id: accesskit-sdk
@@ -82,14 +71,14 @@ jobs:
         uses: ./.github/actions/godot-build
         with:
           # Silence warning about Metal not being supported in x86_64 builds using `metal=no`.
-          xmake-flags: ${{ env.XMAKE_FLAGS }} ${{ matrix.xmake-flags }} arch=x86_64 vulkan=${{ steps.vulkan-sdk.outputs.VULKAN_ENABLED || 'no' }} accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED || 'no' }} angle=${{ steps.angle-sdk.outputs.ANGLE_ENABLED || 'no' }} metal=no
+          xmake-flags: ${{ env.XMAKE_FLAGS }} ${{ matrix.xmake-flags }} arch=x86_64 vulkan=${{ steps.vulkan-sdk.outputs.VULKAN_ENABLED || 'no' }} accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED || 'no' }} metal=no
           platform: macos
           target: ${{ matrix.target }}
 
       - name: Compilation (arm64)
         uses: ./.github/actions/godot-build
         with:
-          xmake-flags: ${{ env.XMAKE_FLAGS }} ${{ matrix.xmake-flags }} arch=arm64 vulkan=${{ steps.vulkan-sdk.outputs.VULKAN_ENABLED || 'no' }} accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED || 'no' }} angle=${{ steps.angle-sdk.outputs.ANGLE_ENABLED || 'no' }}
+          xmake-flags: ${{ env.XMAKE_FLAGS }} ${{ matrix.xmake-flags }} arch=arm64 vulkan=${{ steps.vulkan-sdk.outputs.VULKAN_ENABLED || 'no' }} accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED || 'no' }}
           platform: macos
           target: ${{ matrix.target }}
 

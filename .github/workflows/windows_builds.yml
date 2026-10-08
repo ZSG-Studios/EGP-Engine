@@ -96,17 +96,6 @@ jobs:
           fi
         continue-on-error: true
 
-      - name: Download pre-built ANGLE
-        shell: sh
-        id: angle-sdk
-        run: |
-          if xmake lua misc/scripts/install_build_dependencies.lua angle; then
-            echo "ANGLE_ENABLED=yes" >> "$GITHUB_OUTPUT"
-          else
-            echo "::warning::ANGLE SDK installation failed, building without ANGLE support."
-            echo "ANGLE_ENABLED=no" >> "$GITHUB_OUTPUT"
-          fi
-
       - name: Download pre-built AccessKit
         shell: sh
         id: accesskit-sdk
@@ -121,7 +110,7 @@ jobs:
       - name: Compilation
         uses: ./.github/actions/godot-build
         with:
-          xmake-flags: ${{ env.XMAKE_FLAGS }} ${{ matrix.xmake-flags }} d3d12=${{ steps.d3d12-sdk.outputs.D3D12_ENABLED || 'no' }} accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED || 'no' }} angle=${{ steps.angle-sdk.outputs.ANGLE_ENABLED || 'no' }}
+          xmake-flags: ${{ env.XMAKE_FLAGS }} ${{ matrix.xmake-flags }} d3d12=${{ steps.d3d12-sdk.outputs.D3D12_ENABLED || 'no' }} accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED || 'no' }}
           platform: windows
           target: ${{ matrix.target }}
 

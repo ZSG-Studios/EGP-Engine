@@ -44,7 +44,7 @@ local function environment(graph, options)
     local result = {graph = graph, options = options}
     for _, field in ipairs({"CPPPATH", "CPPDEFINES", "CCFLAGS", "CFLAGS", "CXXFLAGS", "CPPFLAGS", "LINKFLAGS", "LIBS", "LIBPATH", "ASFLAGS", "ARFLAGS", "RCFLAGS"}) do result[field] = {} end
     result.ENV = os.getenvs()
-    result.BUILDERS = {RD_GLSL = {}, GLES3_GLSL = {}, GLSL_HEADER = {}, RES = {}}
+    result.BUILDERS = {RD_GLSL = {}, GLSL_HEADER = {}, RES = {}}
     return table.inherit2(result, {__index = function (self, key)
         if env_methods[key] then return env_methods[key] end
         if options[key] ~= nil then return options[key] end
@@ -200,7 +200,6 @@ function env_methods:detect(program) return import("lib.detect.find_program")(pr
 function env_methods:bind_method(callback, name) self[name] = function (_, ...) return callback(self, ...) end end
 function env_methods:RD_GLSL(sources) return self.graph:shaders(self, "glsl_builders.build_rd_headers", sources) end
 function env_methods:GLSL_HEADER(sources) return self.graph:shaders(self, "glsl_builders.build_raw_headers", sources) end
-function env_methods:GLES3_GLSL(sources) return self.graph:shaders(self, "gles3_builders.build_gles3_headers", sources) end
 
 function graph_methods:use(name) return assert(self.exports[name], "Unknown metadata export: " .. name) end
 function graph_methods:publish(name, value) self.exports[name] = value end

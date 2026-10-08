@@ -19,5 +19,4 @@ function main(graph)
     graph:include("effects/recipe.lua")
     graph:include("environment/recipe.lua")
     graph:include("forward_clustered/recipe.lua")
-    graph:include("forward_mobile/recipe.lua")
 end

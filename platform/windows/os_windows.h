@@ -273,7 +273,7 @@ public:
 	}
 
 #ifdef TOOLS_ENABLED
-	virtual bool _test_create_rendering_device_and_gl(const String &p_display_driver) const override;
+	virtual bool _test_create_rendering_device_with_window(const String &p_display_driver) const override;
 	virtual bool _test_create_rendering_device(const String &p_display_driver) const override;
 #endif
 

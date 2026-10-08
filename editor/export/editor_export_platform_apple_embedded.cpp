@@ -203,9 +203,7 @@ String EditorExportPlatformAppleEmbedded::get_export_option_warning(const Editor
 			}
 		} else if (p_name == "shader_baker/enabled" && bool(p_preset->get("shader_baker/enabled"))) {
 			String export_renderer = GLOBAL_GET("rendering/renderer/rendering_method.mobile");
-			if (OS::get_singleton()->get_current_rendering_method() == "gl_compatibility") {
-				return TTR("\"Shader Baker\" doesn't work with the Compatibility renderer.");
-			} else if (OS::get_singleton()->get_current_rendering_method() != export_renderer) {
+			if (OS::get_singleton()->get_current_rendering_method() != export_renderer) {
 				return vformat(TTR("The editor is currently using a different renderer than what the target platform will use. \"Shader Baker\" won't be able to include core shaders. Switch to the \"%s\" renderer temporarily to fix this."), export_renderer);
 			}
 		}

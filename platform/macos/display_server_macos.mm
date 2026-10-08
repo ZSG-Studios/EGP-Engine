@@ -70,15 +70,6 @@
 // Rendering drivers - include after general Godot deps as they imply system includes
 // which may need precise ordering.
 
-#if defined(GLES3_ENABLED)
-#if defined(ANGLE_ENABLED)
-#include "gl_manager_macos_angle.h"
-#endif
-#include "gl_manager_macos_legacy.h"
-
-#include "drivers/gles3/rasterizer_gles3.h"
-#endif
-
 #if defined(RD_ENABLED)
 #include "servers/rendering/renderer_rd/renderer_compositor_rd.h"
 #include "servers/rendering/rendering_device.h"
@@ -216,30 +207,6 @@ DisplayServerEnums::WindowID DisplayServerMacOS::_create_window(DisplayServerEnu
 		}
 #endif
 
-#if defined(GLES3_ENABLED)
-		bool gl_failed = false;
-		if (gl_manager_legacy) {
-			Error err = gl_manager_legacy->window_create(window_id_counter, wd.window_view, p_rect.size.width, p_rect.size.height);
-			if (err != OK) {
-				gl_failed = true;
-			}
-		}
-#if defined(ANGLE_ENABLED)
-		if (gl_manager_angle) {
-			Error err = gl_manager_angle->window_create(window_id_counter, nullptr, (__bridge void *)layer, p_rect.size.width, p_rect.size.height);
-			if (err != OK) {
-				gl_failed = true;
-			}
-		}
-#endif
-		if (gl_failed) {
-			AccessibilityServer::get_singleton()->window_destroy(id);
-
-			windows.erase(id);
-			ERR_FAIL_V_MSG(DisplayServerEnums::INVALID_WINDOW_ID, "Can't create an OpenGL context.");
-		}
-		window_set_vsync_mode(p_vsync_mode, id);
-#endif
 		[wd.window_view updateLayerDelegate];
 
 		const NSRect contentRect = [wd.window_view frame];
@@ -264,17 +231,6 @@ DisplayServerEnums::WindowID DisplayServerMacOS::_create_window(DisplayServerEnu
 	if (layer) {
 		layer.contentsScale = scale;
 	}
-
-#if defined(GLES3_ENABLED)
-	if (gl_manager_legacy) {
-		gl_manager_legacy->window_resize(id, wd.size.width, wd.size.height);
-	}
-#if defined(ANGLE_ENABLED)
-	if (gl_manager_angle) {
-		gl_manager_angle->window_resize(id, wd.size.width, wd.size.height);
-	}
-#endif
-#endif
 
 	return id;
 }
@@ -345,11 +301,6 @@ void DisplayServerMacOS::set_window_per_pixel_transparency_enabled(bool p_enable
 			[layer setBackgroundColor:[NSColor clearColor].CGColor];
 			[layer setOpaque:NO];
 		}
-#if defined(GLES3_ENABLED)
-		if (gl_manager_legacy) {
-			gl_manager_legacy->window_set_per_pixel_transparency_enabled(p_window, true);
-		}
-#endif
 	} else {
 		NSColor *bg_color = [NSColor windowBackgroundColor];
 		Color _bg_color;
@@ -366,11 +317,6 @@ void DisplayServerMacOS::set_window_per_pixel_transparency_enabled(bool p_enable
 			[layer setBackgroundColor:bg_color.CGColor];
 			[layer setOpaque:YES];
 		}
-#if defined(GLES3_ENABLED)
-		if (gl_manager_legacy) {
-			gl_manager_legacy->window_set_per_pixel_transparency_enabled(p_window, false);
-		}
-#endif
 	}
 }
 
@@ -776,11 +722,6 @@ bool DisplayServerMacOS::get_is_resizing() const {
 void DisplayServerMacOS::window_destroy(DisplayServerEnums::WindowID p_window) {
 	ERR_FAIL_COND(!windows.has(p_window));
 
-#if defined(GLES3_ENABLED)
-	if (gl_manager_legacy) {
-		gl_manager_legacy->window_destroy(p_window);
-	}
-#endif
 #ifdef RD_ENABLED
 	if (rendering_device) {
 		rendering_device->screen_free(p_window);
@@ -805,16 +746,6 @@ void DisplayServerMacOS::window_resize(DisplayServerEnums::WindowID p_window, in
 	if (rendering_context) {
 		rendering_context->window_set_size(p_window, p_width, p_height);
 	}
-#endif
-#if defined(GLES3_ENABLED)
-	if (gl_manager_legacy) {
-		gl_manager_legacy->window_resize(p_window, p_width, p_height);
-	}
-#if defined(ANGLE_ENABLED)
-	if (gl_manager_angle) {
-		gl_manager_angle->window_resize(p_window, p_width, p_height);
-	}
-#endif
 #endif
 }
 
@@ -2848,35 +2779,6 @@ int64_t DisplayServerMacOS::window_get_native_handle(DisplayServerEnums::HandleT
 		case DisplayServerEnums::WINDOW_VIEW: {
 			return (int64_t)windows[p_window].window_view;
 		}
-#ifdef GLES3_ENABLED
-		case DisplayServerEnums::OPENGL_CONTEXT: {
-			if (gl_manager_legacy) {
-				return (int64_t)gl_manager_legacy->get_context(p_window);
-			}
-#if defined(ANGLE_ENABLED)
-			if (gl_manager_angle) {
-				return (int64_t)gl_manager_angle->get_context(p_window);
-			}
-#endif
-			return 0;
-		}
-		case DisplayServerEnums::EGL_DISPLAY: {
-#if defined(ANGLE_ENABLED)
-			if (gl_manager_angle) {
-				return (int64_t)gl_manager_angle->get_display(p_window);
-			}
-#endif
-			return 0;
-		}
-		case DisplayServerEnums::EGL_CONFIG: {
-#if defined(ANGLE_ENABLED)
-			if (gl_manager_angle) {
-				return (int64_t)gl_manager_angle->get_config(p_window);
-			}
-#endif
-			return 0;
-		}
-#endif
 		default: {
 			return 0;
 		}
@@ -2898,30 +2800,10 @@ ObjectID DisplayServerMacOS::window_get_attached_instance_id(DisplayServerEnums:
 }
 
 void DisplayServerMacOS::gl_window_make_current(DisplayServerEnums::WindowID p_window_id) {
-#if defined(GLES3_ENABLED)
-	if (gl_manager_legacy) {
-		gl_manager_legacy->window_make_current(p_window_id);
-	}
-#if defined(ANGLE_ENABLED)
-	if (gl_manager_angle) {
-		gl_manager_angle->window_make_current(p_window_id);
-	}
-#endif
-#endif
 }
 
 void DisplayServerMacOS::window_set_vsync_mode(DisplayServerEnums::VSyncMode p_vsync_mode, DisplayServerEnums::WindowID p_window) {
 	_THREAD_SAFE_METHOD_
-#if defined(GLES3_ENABLED)
-#if defined(ANGLE_ENABLED)
-	if (gl_manager_angle) {
-		gl_manager_angle->set_use_vsync(p_vsync_mode != DisplayServerEnums::VSYNC_DISABLED);
-	}
-#endif
-	if (gl_manager_legacy) {
-		gl_manager_legacy->set_use_vsync(p_vsync_mode != DisplayServerEnums::VSYNC_DISABLED);
-	}
-#endif
 #if defined(RD_ENABLED)
 	if (rendering_context) {
 		rendering_context->window_set_vsync_mode(p_window, p_vsync_mode);
@@ -2931,16 +2813,6 @@ void DisplayServerMacOS::window_set_vsync_mode(DisplayServerEnums::VSyncMode p_v
 
 DisplayServerEnums::VSyncMode DisplayServerMacOS::window_get_vsync_mode(DisplayServerEnums::WindowID p_window) const {
 	_THREAD_SAFE_METHOD_
-#if defined(GLES3_ENABLED)
-#if defined(ANGLE_ENABLED)
-	if (gl_manager_angle) {
-		return (gl_manager_angle->is_using_vsync() ? DisplayServerEnums::VSyncMode::VSYNC_ENABLED : DisplayServerEnums::VSyncMode::VSYNC_DISABLED);
-	}
-#endif
-	if (gl_manager_legacy) {
-		return (gl_manager_legacy->is_using_vsync() ? DisplayServerEnums::VSyncMode::VSYNC_ENABLED : DisplayServerEnums::VSyncMode::VSYNC_DISABLED);
-	}
-#endif
 #if defined(RD_ENABLED)
 	if (rendering_context) {
 		return rendering_context->window_get_vsync_mode(p_window);
@@ -3336,29 +3208,9 @@ void DisplayServerMacOS::force_process_and_drop_events() {
 }
 
 void DisplayServerMacOS::release_rendering_thread() {
-#if defined(GLES3_ENABLED)
-#if defined(ANGLE_ENABLED)
-	if (gl_manager_angle) {
-		gl_manager_angle->release_current();
-	}
-#endif
-	if (gl_manager_legacy) {
-		gl_manager_legacy->release_current();
-	}
-#endif
 }
 
 void DisplayServerMacOS::swap_buffers() {
-#if defined(GLES3_ENABLED)
-#if defined(ANGLE_ENABLED)
-	if (gl_manager_angle) {
-		gl_manager_angle->swap_buffers();
-	}
-#endif
-	if (gl_manager_legacy) {
-		gl_manager_legacy->swap_buffers();
-	}
-#endif
 }
 
 void DisplayServerMacOS::set_native_icon(const String &p_filename) {
@@ -3549,26 +3401,7 @@ bool DisplayServerMacOS::is_window_transparency_available() const {
 DisplayServer *DisplayServerMacOS::create_func(const String &p_rendering_driver, DisplayServerEnums::WindowMode p_mode, DisplayServerEnums::VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i *p_position, const Vector2i &p_resolution, int p_screen, DisplayServerEnums::Context p_context, int64_t p_parent_window, Error &r_error) {
 	DisplayServer *ds = memnew(DisplayServerMacOS(p_rendering_driver, p_mode, p_vsync_mode, p_flags, p_position, p_resolution, p_screen, p_context, p_parent_window, r_error));
 	if (r_error != OK) {
-		if (p_rendering_driver == "vulkan") {
-			String executable_command;
-			if (OS::get_singleton()->get_bundle_resource_dir() == OS::get_singleton()->get_executable_path().get_base_dir()) {
-				executable_command = vformat("\"%s\" --rendering-driver opengl3", OS::get_singleton()->get_executable_path());
-			} else {
-				executable_command = vformat("open \"%s\" --args --rendering-driver opengl3", OS::get_singleton()->get_bundle_resource_dir().path_join("../..").simplify_path());
-			}
-			OS::get_singleton()->alert(
-					vformat("Your video card drivers seem not to support the required Vulkan version.\n\n"
-							"If possible, consider updating your macOS version or using the OpenGL 3 driver.\n\n"
-							"You can enable the OpenGL 3 driver by starting the engine from the\n"
-							"command line with the command:\n\n    %s",
-							executable_command),
-					"Unable to initialize Vulkan video driver");
-		} else {
-			OS::get_singleton()->alert(
-					"Your video card drivers seem not to support the required OpenGL 3.3 version.\n\n"
-					"If possible, consider updating your macOS version.",
-					"Unable to initialize OpenGL video driver");
-		}
+		OS::get_singleton()->alert("Forward+ requires a supported Metal or Vulkan GPU and driver.", "Unable to initialize video driver");
 	}
 	return ds;
 }
@@ -3581,12 +3414,6 @@ Vector<String> DisplayServerMacOS::get_rendering_drivers_func() {
 #endif
 #if defined(METAL_ENABLED)
 	drivers.push_back("metal");
-#endif
-#if defined(GLES3_ENABLED)
-	drivers.push_back("opengl3");
-#if defined(ANGLE_ENABLED)
-	drivers.push_back("opengl3_angle");
-#endif
 #endif
 	drivers.push_back("dummy");
 
@@ -3887,62 +3714,10 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, Display
 		if (rendering_context->initialize() != OK) {
 			memdelete(rendering_context);
 			rendering_context = nullptr;
-#if defined(GLES3_ENABLED)
-			bool fallback_to_opengl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
-			if (fallback_to_opengl3 && rendering_driver != "opengl3") {
-				WARN_PRINT("Your device does not seem to support MoltenVK or Metal, switching to OpenGL 3.");
-				rendering_driver = "opengl3";
-				OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
-				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-			} else
-#endif
 			{
 				r_error = ERR_CANT_CREATE;
 				ERR_FAIL_MSG("Could not initialize " + rendering_driver);
 			}
-		}
-	}
-#endif
-
-#if defined(GLES3_ENABLED)
-#if defined(ANGLE_ENABLED)
-	if (rendering_driver == "opengl3" && OS::get_singleton()->get_processor_name().contains("Virtual")) {
-		WARN_PRINT("Virtual Machine detected, switching to ANGLE.");
-		rendering_driver = "opengl3_angle";
-	}
-	if (rendering_driver == "opengl3_angle") {
-		gl_manager_angle = memnew(GLManagerANGLE_MacOS);
-		if (gl_manager_angle->initialize() != OK || gl_manager_angle->open_display(nullptr) != OK) {
-			memdelete(gl_manager_angle);
-			gl_manager_angle = nullptr;
-			if (OS::get_singleton()->get_processor_name().contains("Virtual")) {
-				r_error = ERR_UNAVAILABLE;
-				ERR_FAIL_MSG("Could not initialize ANGLE OpenGL.");
-			}
-			bool fallback = GLOBAL_GET("rendering/gl_compatibility/fallback_to_native");
-			if (fallback) {
-				WARN_PRINT("Your video card drivers seem not to support GLES3 / ANGLE, switching to native OpenGL.");
-				rendering_driver = "opengl3";
-				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-			} else {
-				r_error = ERR_UNAVAILABLE;
-				ERR_FAIL_MSG("Could not initialize ANGLE OpenGL.");
-			}
-		}
-	}
-#else
-	if (rendering_driver == "opengl3" && OS::get_singleton()->get_processor_name().contains("Virtual")) {
-		r_error = ERR_UNAVAILABLE;
-		ERR_FAIL_MSG("Virtual Machine detected, could not initialize OpenGL.");
-	}
-#endif
-	if (rendering_driver == "opengl3") {
-		gl_manager_legacy = memnew(GLManagerLegacy_MacOS);
-		if (gl_manager_legacy->initialize() != OK) {
-			memdelete(gl_manager_legacy);
-			gl_manager_legacy = nullptr;
-			r_error = ERR_UNAVAILABLE;
-			ERR_FAIL_MSG("Could not initialize native OpenGL.");
 		}
 	}
 #endif
@@ -3980,16 +3755,6 @@ DisplayServerMacOS::DisplayServerMacOS(const String &p_rendering_driver, Display
 		RasterizerDummy::make_current();
 	}
 
-#if defined(GLES3_ENABLED)
-	if (rendering_driver == "opengl3") {
-		RasterizerGLES3::make_current(true);
-	}
-#if defined(ANGLE_ENABLED)
-	if (rendering_driver == "opengl3_angle") {
-		RasterizerGLES3::make_current(false);
-	}
-#endif
-#endif
 #if defined(RD_ENABLED)
 	if (rendering_context) {
 		rendering_device = memnew(RenderingDevice);
@@ -4022,18 +3787,6 @@ DisplayServerMacOS::~DisplayServerMacOS() {
 	}
 
 	// Destroy drivers.
-#if defined(GLES3_ENABLED)
-	if (gl_manager_legacy) {
-		memdelete(gl_manager_legacy);
-		gl_manager_legacy = nullptr;
-	}
-#if defined(ANGLE_ENABLED)
-	if (gl_manager_angle) {
-		memdelete(gl_manager_angle);
-		gl_manager_angle = nullptr;
-	}
-#endif
-#endif
 #if defined(RD_ENABLED)
 	if (rendering_device) {
 		memdelete(rendering_device);

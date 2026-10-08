@@ -14,8 +14,8 @@ function main()
         assert(type(module.can_build) == "function" and type(module.configure) == "function", "Module capability contract missing: " .. name)
         configs = configs + 1
     end
-    -- The shipped catalog has 216 recipes; optional local modules can add more.
-    assert(recipes >= 216 and configs >= 57, "Native metadata catalog unexpectedly incomplete")
+    -- The shipped catalog has 204 recipes; optional local modules can add more.
+    assert(recipes >= 204 and configs >= 56, "Native metadata catalog unexpectedly incomplete")
     local model = import("build.xmake.graph", {rootdir = root})
     local packages = import("build.xmake.platform_packages", {rootdir = root})
     for _, profile in ipairs({
@@ -28,8 +28,6 @@ function main()
         {platform = "ios", arch = "x86_64", target = "template_debug", simulator = true},
         {platform = "visionos", arch = "arm64", target = "template_debug"},
         {platform = "visionos", arch = "arm64", target = "template_debug", simulator = true},
-        {platform = "web", arch = "wasm32", target = "template_debug"},
-        {platform = "web", arch = "wasm32", target = "template_debug", dlink_enabled = true},
     }) do
         local graph = model.new(root, profile)
         packages.configure(graph)
@@ -66,14 +64,7 @@ function main()
             for _, program in ipairs(graph.programs) do
                 for _, source in ipairs(program.sources) do assert(not source.path.path:find("table:", 1, true), "Nested protocol source list was not flattened") end
             end
-        elseif profile.platform == "web" then
-            assert(#graph.environment.EXPORTED_RUNTIME_METHODS == 12, "Heap views must remain exported")
-            local websocket = path.join(root, "modules/websocket/library_godot_websocket.js")
-            local found = false
-            for _, file in ipairs(graph.environment.JS_LIBS) do if file.path == websocket then found = true end end
-            assert(found, "Websocket JavaScript runtime dependency lost")
-            if profile.dlink_enabled then assert(#graph.programs >= 2, "Dynamic linking requires runtime and side module") end
         end
     end
-    print("NATIVE_RECIPE_IMPORTS=" .. recipes .. " MODULE_CONFIG_IMPORTS=" .. configs .. " PLATFORM_PROFILES=11")
+    print("NATIVE_RECIPE_IMPORTS=" .. recipes .. " MODULE_CONFIG_IMPORTS=" .. configs .. " PLATFORM_PROFILES=9")
 end

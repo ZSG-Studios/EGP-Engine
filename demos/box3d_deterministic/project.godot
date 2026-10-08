@@ -7,7 +7,7 @@ run/max_fps=60
 window/size/viewport_width=900
 window/size/viewport_height=640
 [rendering]
-renderer/rendering_method="gl_compatibility"
+renderer/rendering_method="forward_plus"
 shader_compiler/shader_cache/enabled=false
 [threading]
 worker_pool/max_threads=2

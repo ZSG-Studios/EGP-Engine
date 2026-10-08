@@ -4,12 +4,9 @@ function main(graph)
     local env, files, platform_macos_builders, prog
     platform_macos_builders = graph:builders("platform_macos_builders")
     env = graph:use("env")
-    files = {"os_macos.mm", "godot_application.mm", "godot_application_delegate.mm", "crash_handler_macos.mm", "display_server_macos_base.mm", "display_server_macos.mm", "godot_button_view.mm", "godot_content_view.mm", "godot_core_cursor.mm", "godot_status_item.mm", "godot_window_delegate.mm", "godot_window.mm", "key_mapping_macos.mm", "godot_menu_delegate.mm", "godot_menu_item.mm", "godot_open_save_delegate.mm", "native_menu_macos.mm", "dir_access_macos.mm", "tts_macos.mm", "rendering_context_driver_vulkan_macos.mm", "gl_manager_macos_legacy.mm", "godot_progress_view.mm"}
-    if R.truthy(R.index(env, "angle")) then
-        files = R.iadd(files, {"gl_manager_macos_angle.mm"})
-    end
+    files = {"os_macos.mm", "godot_application.mm", "godot_application_delegate.mm", "crash_handler_macos.mm", "display_server_macos_base.mm", "display_server_macos.mm", "godot_button_view.mm", "godot_content_view.mm", "godot_core_cursor.mm", "godot_status_item.mm", "godot_window_delegate.mm", "godot_window.mm", "key_mapping_macos.mm", "godot_menu_delegate.mm", "godot_menu_item.mm", "godot_open_save_delegate.mm", "native_menu_macos.mm", "dir_access_macos.mm", "tts_macos.mm", "rendering_context_driver_vulkan_macos.mm", "godot_progress_view.mm"}
     if R.truthy(env.editor_build) then
-        files = R.iadd(files, {"display_server_macos_embedded.mm", "embedded_debugger.mm", "embedded_gl_manager.mm", "editor/embedded_game_view_plugin.mm", "editor/embedded_process_macos.mm"})
+        files = R.iadd(files, {"display_server_macos_embedded.mm", "embedded_debugger.mm", "editor/embedded_game_view_plugin.mm", "editor/embedded_process_macos.mm"})
     end
     if R.truthy(((R.index(env, "library_type") == "executable"))) then
         files = R.iadd(files, {"godot_main_macos.mm"})

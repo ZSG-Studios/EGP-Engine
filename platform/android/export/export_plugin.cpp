@@ -951,8 +951,8 @@ void EditorExportPlatformAndroid::_get_manifest_info(const Ref<EditorExportPrese
 		};
 		r_features.append(vulkan_level);
 
-		// Require vulkan version 1.1 if fallback_to_opengl3 is disabled.
-		bool vulkan_1_1_required = !GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
+		// Forward+ requires Vulkan 1.1.
+		bool vulkan_1_1_required = true;
 		FeatureInfo vulkan_version = {
 			"android.hardware.vulkan.version", // name
 			vulkan_1_1_required, // required
@@ -2122,9 +2122,7 @@ String EditorExportPlatformAndroid::get_export_option_warning(const EditorExport
 			}
 		} else if (p_name == "shader_baker/enabled" && bool(p_preset->get("shader_baker/enabled"))) {
 			String export_renderer = GLOBAL_GET("rendering/renderer/rendering_method.mobile");
-			if (OS::get_singleton()->get_current_rendering_method() == "gl_compatibility") {
-				return TTR("\"Shader Baker\" is not supported when using the Compatibility renderer.");
-			} else if (OS::get_singleton()->get_current_rendering_method() != export_renderer) {
+			if (OS::get_singleton()->get_current_rendering_method() != export_renderer) {
 				return vformat(TTR("The editor is currently using a different renderer than what the target platform will use. \"Shader Baker\" won't be able to include core shaders. Switch to the \"%s\" renderer temporarily to fix this."), export_renderer);
 			}
 		}
@@ -2960,8 +2958,7 @@ bool EditorExportPlatformAndroid::has_valid_project_configuration(const Ref<Edit
 				min_sdk_int = min_sdk_str.to_int();
 			}
 		}
-		bool fallback_to_opengl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
-		if (min_sdk_int < AndroidSDKManager::VULKAN_MIN_SDK_VERSION && !fallback_to_opengl3) {
+		if (min_sdk_int < AndroidSDKManager::VULKAN_MIN_SDK_VERSION) {
 			// Warning only, so don't override `valid`.
 			err += vformat(TTR("\"Min SDK\" should be greater or equal to %d for the \"%s\" renderer."), AndroidSDKManager::VULKAN_MIN_SDK_VERSION, current_renderer);
 			err += "\n";

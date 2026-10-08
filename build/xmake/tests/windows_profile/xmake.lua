@@ -127,22 +127,7 @@ target("windows_profile")
                 check(count==1,"AccessKit dependency must not rely on duplicated syslinks surviving xmake deduplication")
             end
         end
-        for _,profile in ipairs(profiles) do
-            local probe=capture(table.join(profile,{angle=true,angle_libs=directory}))
-            local ordered={}
-            for _,name in ipairs({"ANGLE","EGL","GLES"}) do
-                local identity=(profile.use_mingw and "" or "lib")..name..".windows.x86_64"
-                check(table.contains(probe.values.syslinks,identity),"ANGLE must preserve the GNU versus MSVC archive identity")
-                if profile.use_mingw then check(gcc.nf_syslink(driver,identity)=="-l"..identity,"Installed GNU linker mapper must avoid a doubled library prefix") end
-            end
-            for _,identity in ipairs(probe.values.syslinks) do
-                if identity:find("%.windows%.") then table.insert(ordered,identity) end
-            end
-            local expected=profile.use_mingw and "EGL.windows.x86_64,GLES.windows.x86_64,ANGLE.windows.x86_64" or "libANGLE.windows.x86_64,libEGL.windows.x86_64,libGLES.windows.x86_64"
-            check(table.concat(ordered,",")==expected,"GNU dependency order must not alter MSVC or clang-cl ordering")
-        end
-        -- Link three real archives using the production GNU identities. The old
-        -- MSVC-style names are a negative control against the same files.
+        -- Real archive link controls retain AccessKit and engine dependency coverage.
         local find_tool=import("lib.detect.find_tool")
         local compiler=find_tool("clang++")
         if not compiler and os.host()=="windows" then
@@ -161,59 +146,9 @@ target("windows_profile")
         end
         assert(compiler,"Clang is required for the real GNU archive link control")
         local ar=assert(find_tool("llvm-ar",{paths={path.directory(compiler.program)}}) or (os.host()~="windows" and find_tool("ar")),"A native archive tool is required for the GNU link controls")
-        local proof=path.join(directory,"ANGLE libraries with spaces")
-        os.mkdir(proof)
-        local common=os.host()=="windows" and {"--target=x86_64-w64-windows-gnu","-fuse-ld=lld"} or {}
-        local identities={}
-        for _,name in ipairs({"ANGLE","EGL","GLES"}) do
-            local source,object=path.join(proof,name..".c"),path.join(proof,name..".o")
-            io.writefile(source,"int "..name.."_probe(void) { return 14; }\n")
-            os.iorunv(compiler.program,table.join(common,{"-x","c","-c",source,"-o",object}),{timeout=30000})
-            local identity=name..".windows.x86_64"
-            table.insert(identities,identity)
-            os.iorunv(ar.program,{"rcs",path.join(proof,"lib"..identity..".a"),object},{timeout=30000})
-        end
-        local source,object=path.join(proof,"main.c"),path.join(proof,"main.o")
-        io.writefile(source,"extern int ANGLE_probe(void), EGL_probe(void), GLES_probe(void); int probe_entry(void) { return ANGLE_probe()+EGL_probe()+GLES_probe()!=42; }\n")
-        os.iorunv(compiler.program,table.join(common,{"-x","c","-c",source,"-o",object}),{timeout=30000})
-        local linker={program=function() return compiler.program end,is_plat=function() return false end}
-        local flags=table.join(common,{"-nostdlib","-Wl,-e,"..(os.host()=="macosx" and "_probe_entry" or "probe_entry"),"-L"..proof})
-        local negative=table.clone(flags)
-        for _,identity in ipairs(identities) do table.insert(flags,gcc.nf_syslink(linker,identity)); table.insert(negative,gcc.nf_syslink(linker,"lib"..identity)) end
-        local _,argv=gcc.linkargv(linker,{object},"binary",path.join(proof,"linked"),flags,{rawargs=true})
-        os.iorunv(compiler.program,argv,{timeout=30000})
-        check(os.isfile(path.join(proof,"linked")) or os.isfile(path.join(proof,"linked.exe")),"Production GNU ANGLE identities must link all real archives")
-        local _,bad=gcc.linkargv(linker,{object},"binary",path.join(proof,"negative"),negative,{rawargs=true})
-        local rejected=false
-        try {function() os.iorunv(compiler.program,bad,{timeout=30000}) end,catch {function(errors) rejected=tostring(errors):find("libANGLE.windows",1,true)~=nil end}}
-        check(rejected,"Original double-lib ANGLE identity must fail against the same archive files")
-        import("core.base.json").savefile(path.join(proof,"receipt.json"),{passed=true,compiler=compiler.program,argv=argv,negative_double_lib_rejected=true,boundary=os.host()=="windows" and "Clang GNU-driver COFF link; MSYS GCC not executed locally" or "Native Clang GNU-driver link"})
-        -- Independent archives cannot expose a back-reference. This chain uses
-        -- GNU bfd on Linux and strict ELF back-reference checking on Windows.
         if os.host()=="windows" or os.host()=="linux" then
-            local chain=path.join(directory,"GNU dependent ANGLE archives")
-            os.mkdir(chain)
             local chain_compiler=os.host()=="linux" and assert(find_tool("gcc")) or compiler
             local chain_common=os.host()=="windows" and {"--target=x86_64-linux-gnu"} or {}
-            local bodies={ANGLE="int ANGLE_probe(void) { return 14; }",GLES="extern int ANGLE_probe(void); int GLES_probe(void) { return ANGLE_probe()+14; }",EGL="extern int GLES_probe(void); int EGL_probe(void) { return GLES_probe()+14; }"}
-            for _,name in ipairs({"ANGLE","EGL","GLES"}) do
-                local source,object=path.join(chain,name..".c"),path.join(chain,name..".o")
-                io.writefile(source,bodies[name].."\n")
-                os.iorunv(chain_compiler.program,table.join(chain_common,{"-x","c","-c",source,"-o",object}),{timeout=30000})
-                os.iorunv(ar.program,{"rcs",path.join(chain,"lib"..name..".windows.x86_64.a"),object},{timeout=30000})
-            end
-            local source,object=path.join(chain,"main.c"),path.join(chain,"main.o")
-            io.writefile(source,"extern int EGL_probe(void); int probe_entry(void) { return EGL_probe()!=42; }\n")
-            os.iorunv(chain_compiler.program,table.join(chain_common,{"-x","c","-c",source,"-o",object}),{timeout=30000})
-            local selected=capture({use_mingw=true,angle=true,angle_libs=chain})
-            local identities={}
-            for _,identity in ipairs(selected.values.syslinks) do
-                if identity=="ANGLE.windows.x86_64" or identity=="EGL.windows.x86_64" or identity=="GLES.windows.x86_64" then table.insert(identities,identity) end
-            end
-            check(table.concat(identities,",")=="EGL.windows.x86_64,GLES.windows.x86_64,ANGLE.windows.x86_64","GNU library order must follow the actual static dependency chain")
-            local link_flags=table.join(chain_common,{"-nostdlib","-Wl,-e,probe_entry","-L"..chain})
-            table.insert(link_flags,os.host()=="linux" and "-fuse-ld=bfd" or "-fuse-ld=lld")
-            if os.host()=="windows" then table.join2(link_flags,{"-Wl,--warn-backrefs","-Wl,--fatal-warnings"}) end
             local chain_driver={program=function() return chain_compiler.program end,is_plat=function() return false end}
             local accesskit=path.join(directory,"GNU AccessKit dependency")
             os.mkdir(accesskit)
@@ -239,19 +174,6 @@ target("windows_profile")
             check(accesskit_rejected and accesskit_reason:find("NtWriteFile",1,true) and accesskit_reason:find("Ole_probe",1,true) and accesskit_reason:find("User_probe",1,true),"Original dependencies-before-AccessKit order must fail all three back-reference controls")
             io.writefile(path.join(accesskit,"negative-control.log"),accesskit_reason)
             import("core.base.json").savefile(path.join(accesskit,"receipt.json"),{passed=true,requested_platform="windows",use_mingw=true,compiler=chain_compiler.program,argv=accesskit_argv,old_order_rejected=true,boundary=os.host()=="linux" and "Actual GCC GNU bfd ELF link; real MinGW CI still required" or "Clang ELF lld strict back-reference check; real MinGW CI still required"})
-            local fixed=table.clone(link_flags)
-            for _,identity in ipairs(identities) do table.insert(fixed,gcc.nf_syslink(chain_driver,identity)) end
-            local _,argv=gcc.linkargv(chain_driver,{object},"binary",path.join(chain,"fixed.elf"),fixed,{rawargs=true})
-            os.iorunv(chain_compiler.program,argv,{timeout=30000})
-            check(os.isfile(path.join(chain,"fixed.elf")),"Production GNU ordering must link dependent archives")
-            local old=table.clone(link_flags)
-            for _,name in ipairs({"ANGLE","EGL","GLES"}) do table.insert(old,gcc.nf_syslink(chain_driver,name..".windows.x86_64")) end
-            local _,bad=gcc.linkargv(chain_driver,{object},"binary",path.join(chain,"old.elf"),old,{rawargs=true})
-            local rejected,reason=false,""
-            try {function() os.iorunv(chain_compiler.program,bad,{timeout=30000}) end,catch {function(errors) rejected=true; reason=tostring(errors) end}}
-            check(rejected and reason:find("ANGLE_probe",1,true),"Original archive order must fail the dependent-chain control")
-            io.writefile(path.join(chain,"negative-control.log"),reason)
-            import("core.base.json").savefile(path.join(chain,"receipt.json"),{passed=true,compiler=chain_compiler.program,argv=argv,old_order_rejected=true,boundary=os.host()=="linux" and "Actual GCC GNU bfd ELF link" or "Clang ELF lld strict back-reference check; real MinGW CI still required"})
             local cycle=path.join(directory,"GNU cyclic engine archives")
             os.mkdir(cycle)
             local objects={}

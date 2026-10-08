@@ -70,10 +70,6 @@ HashMap<String, bool *> OpenXRFBUpdateSwapchainExtension::get_requested_extensio
 #ifdef XR_USE_GRAPHICS_API_VULKAN
 		request_extensions[XR_FB_SWAPCHAIN_UPDATE_STATE_VULKAN_EXTENSION_NAME] = &fb_swapchain_update_state_vulkan_ext;
 #endif
-	} else if (rendering_driver == "opengl3" || rendering_driver == "opengl3_es") {
-#ifdef XR_USE_GRAPHICS_API_OPENGL_ES
-		request_extensions[XR_FB_SWAPCHAIN_UPDATE_STATE_OPENGL_ES_EXTENSION_NAME] = &fb_swapchain_update_state_opengles_ext;
-#endif
 	}
 
 #ifdef ANDROID_ENABLED
@@ -92,16 +88,11 @@ void OpenXRFBUpdateSwapchainExtension::on_instance_created(const XrInstance p_in
 	if (fb_swapchain_update_state_vulkan_ext) {
 		// nothing to register here...
 	}
-
-	if (fb_swapchain_update_state_opengles_ext) {
-		// nothing to register here...
-	}
 }
 
 void OpenXRFBUpdateSwapchainExtension::on_instance_destroyed() {
 	fb_swapchain_update_state_ext = false;
 	fb_swapchain_update_state_vulkan_ext = false;
-	fb_swapchain_update_state_opengles_ext = false;
 }
 
 bool OpenXRFBUpdateSwapchainExtension::is_enabled() const {
@@ -146,34 +137,6 @@ void OpenXRFBUpdateSwapchainExtension::update_swapchain_state(XrSwapchain p_swap
 			return;
 		}
 #endif
-	} else if (rendering_driver == "opengl3" || rendering_driver == "opengl3_es") {
-#ifdef XR_USE_GRAPHICS_API_OPENGL_ES
-		if (!fb_swapchain_update_state_ext || !fb_swapchain_update_state_opengles_ext) {
-			return;
-		}
-
-		Color border_color = p_swapchain_state->border_color;
-		XrSwapchainStateSamplerOpenGLESFB swapchain_state = {
-			XR_TYPE_SWAPCHAIN_STATE_SAMPLER_OPENGL_ES_FB, // type
-			nullptr, // next
-			filter_to_gl(p_swapchain_state->min_filter, p_swapchain_state->mipmap_mode), // minFilter
-			filter_to_gl(p_swapchain_state->mag_filter), // magFilter
-			wrap_to_gl(p_swapchain_state->horizontal_wrap), // wrapModeS;
-			wrap_to_gl(p_swapchain_state->vertical_wrap), // wrapModeT
-			swizzle_to_gl(p_swapchain_state->red_swizzle), // swizzleRed
-			swizzle_to_gl(p_swapchain_state->green_swizzle), // swizzleGreen
-			swizzle_to_gl(p_swapchain_state->blue_swizzle), // swizzleBlue
-			swizzle_to_gl(p_swapchain_state->alpha_swizzle), // swizzleAlpha
-			p_swapchain_state->max_anisotropy, // maxAnisotropy
-			{ border_color.r, border_color.g, border_color.b, border_color.a } // borderColor
-		};
-
-		XrResult result = xrUpdateSwapchainFB(p_swapchain, (XrSwapchainStateBaseHeaderFB *)&swapchain_state);
-		if (XR_FAILED(result)) {
-			print_error(vformat("OpenXR: Failed to update swapchain [%s]", OpenXRAPI::get_singleton()->get_error_string(result)));
-			return;
-		}
-#endif
 	}
 }
 
@@ -195,79 +158,6 @@ void OpenXRFBUpdateSwapchainExtension::update_swapchain_surface_size(XrSwapchain
 		print_error(vformat("OpenXR: Failed to update swapchain surface size [%s]", OpenXRAPI::get_singleton()->get_error_string(result)));
 	}
 #endif
-}
-
-uint32_t OpenXRFBUpdateSwapchainExtension::filter_to_gl(OpenXRCompositionLayerExtension::Filter p_filter, OpenXRCompositionLayerExtension::MipmapMode p_mipmap_mode) {
-#ifdef XR_USE_GRAPHICS_API_OPENGL_ES
-	switch (p_mipmap_mode) {
-		case OpenXRCompositionLayerExtension::MipmapMode::MIPMAP_MODE_DISABLED:
-			switch (p_filter) {
-				case OpenXRCompositionLayerExtension::Filter::FILTER_NEAREST:
-					return GL_NEAREST;
-				case OpenXRCompositionLayerExtension::Filter::FILTER_LINEAR:
-					return GL_LINEAR;
-				case OpenXRCompositionLayerExtension::Filter::FILTER_CUBIC:
-					return GL_CUBIC_IMG;
-			}
-		case OpenXRCompositionLayerExtension::MipmapMode::MIPMAP_MODE_NEAREST:
-			switch (p_filter) {
-				case OpenXRCompositionLayerExtension::Filter::FILTER_NEAREST:
-					return GL_NEAREST_MIPMAP_NEAREST;
-				case OpenXRCompositionLayerExtension::Filter::FILTER_LINEAR:
-					return GL_LINEAR_MIPMAP_NEAREST;
-				case OpenXRCompositionLayerExtension::Filter::FILTER_CUBIC:
-					return GL_CUBIC_MIPMAP_NEAREST_IMG;
-			}
-		case OpenXRCompositionLayerExtension::MipmapMode::MIPMAP_MODE_LINEAR:
-			switch (p_filter) {
-				case OpenXRCompositionLayerExtension::Filter::FILTER_NEAREST:
-					return GL_NEAREST_MIPMAP_LINEAR;
-				case OpenXRCompositionLayerExtension::Filter::FILTER_LINEAR:
-					return GL_LINEAR_MIPMAP_LINEAR;
-				case OpenXRCompositionLayerExtension::Filter::FILTER_CUBIC:
-					return GL_CUBIC_MIPMAP_LINEAR_IMG;
-			}
-	}
-#endif
-	return 0;
-}
-
-uint32_t OpenXRFBUpdateSwapchainExtension::wrap_to_gl(OpenXRCompositionLayerExtension::Wrap p_wrap) {
-#ifdef XR_USE_GRAPHICS_API_OPENGL_ES
-	switch (p_wrap) {
-		case OpenXRCompositionLayerExtension::Wrap::WRAP_CLAMP_TO_BORDER:
-			return GL_CLAMP_TO_BORDER;
-		case OpenXRCompositionLayerExtension::Wrap::WRAP_CLAMP_TO_EDGE:
-			return GL_CLAMP_TO_EDGE;
-		case OpenXRCompositionLayerExtension::Wrap::WRAP_REPEAT:
-			return GL_REPEAT;
-		case OpenXRCompositionLayerExtension::Wrap::WRAP_MIRRORED_REPEAT:
-			return GL_MIRRORED_REPEAT;
-		case OpenXRCompositionLayerExtension::Wrap::WRAP_MIRROR_CLAMP_TO_EDGE:
-			return GL_CLAMP_TO_EDGE;
-	}
-#endif
-	return 0;
-}
-
-uint32_t OpenXRFBUpdateSwapchainExtension::swizzle_to_gl(OpenXRCompositionLayerExtension::Swizzle p_swizzle) {
-#ifdef XR_USE_GRAPHICS_API_OPENGL_ES
-	switch (p_swizzle) {
-		case OpenXRCompositionLayerExtension::Swizzle::SWIZZLE_RED:
-			return GL_RED;
-		case OpenXRCompositionLayerExtension::Swizzle::SWIZZLE_GREEN:
-			return GL_GREEN;
-		case OpenXRCompositionLayerExtension::Swizzle::SWIZZLE_BLUE:
-			return GL_BLUE;
-		case OpenXRCompositionLayerExtension::Swizzle::SWIZZLE_ALPHA:
-			return GL_ALPHA;
-		case OpenXRCompositionLayerExtension::Swizzle::SWIZZLE_ZERO:
-			return GL_ZERO;
-		case OpenXRCompositionLayerExtension::Swizzle::SWIZZLE_ONE:
-			return GL_ONE;
-	}
-#endif
-	return 0;
 }
 
 uint32_t OpenXRFBUpdateSwapchainExtension::filter_to_vk(OpenXRCompositionLayerExtension::Filter p_filter) {

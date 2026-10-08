@@ -108,14 +108,8 @@ const PackedStringArray ProjectSettings::_get_supported_features() {
 #ifdef FORWARD_RD_ENABLED
 	features.append("Forward Plus");
 #endif // FORWARD_RD_ENABLED
-#ifdef MOBILE_RD_ENABLED
-	features.append("Mobile");
-#endif // MOBILE_RD_ENABLED
 #endif
 
-#ifdef GLES3_ENABLED
-	features.append("GL Compatibility");
-#endif
 	return features;
 }
 

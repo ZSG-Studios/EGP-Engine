@@ -24,7 +24,6 @@ function main()
         {platform='android',arch='arm64',target='template_debug',disable_physics_2d=true,disable_physics_3d=true},
         {platform='ios',arch='arm64',target='template_release'},
         {platform='visionos',arch='arm64',target='template_release'},
-        {platform='web',arch='wasm32',target='template_release',disable_physics_2d=true,disable_physics_3d=true}
     }) do
         profile.dev_mode=true
         local graph=model.new(root,profile)

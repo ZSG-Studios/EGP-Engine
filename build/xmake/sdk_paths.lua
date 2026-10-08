@@ -46,8 +46,5 @@ function resolve(options, root)
         options.agility_sdk_path = route(options, 'agility_sdk_path', path.join(deps, 'agility_sdk'), root)
         options.pix_path = route(options, 'pix_path', path.join(deps, 'pix'), root)
     end
-    if enabled(options.angle) then
-        options.angle_libs = variant(route(options, 'angle_libs', path.join(deps, 'angle'), root), arch, compiler(options))
-    end
     return options
 end

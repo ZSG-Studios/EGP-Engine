@@ -3,4 +3,4 @@ config_version=5
 config/name="EGP GDScript AIO Qualification"
 run/main_scene="res://Entry.tscn"
 [rendering]
-renderer/rendering_method="gl_compatibility"
+renderer/rendering_method="forward_plus"

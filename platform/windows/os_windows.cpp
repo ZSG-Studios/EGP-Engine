@@ -77,18 +77,11 @@ extern "C" {
 #include "servers/rendering/rendering_device.h"
 #endif
 
-#if defined(GLES3_ENABLED)
-#include "gl_manager_windows_native.h"
-#endif
-
 #if defined(VULKAN_ENABLED)
 #include "drivers/vulkan/rendering_context_driver_vulkan.h"
 #endif
 #if defined(D3D12_ENABLED)
 #include "drivers/d3d12/rendering_context_driver_d3d12.h"
-#endif
-#if defined(GLES3_ENABLED)
-#include "drivers/gles3/rasterizer_gles3.h"
 #endif
 
 #ifdef DEBUG_ENABLED
@@ -2747,8 +2740,8 @@ bool OS_Windows::_test_create_rendering_device(const String &p_display_driver) c
 	return ok;
 }
 
-bool OS_Windows::_test_create_rendering_device_and_gl(const String &p_display_driver) const {
-	// Tests OpenGL context and Rendering Device simultaneous creation. This function is expected to crash on some NVIDIA drivers.
+bool OS_Windows::_test_create_rendering_device_with_window(const String &p_display_driver) const {
+	// Probe RenderingDevice support while a native window exists.
 
 	WNDCLASSEXW wc_probe;
 	memset(&wc_probe, 0, sizeof(WNDCLASSEXW));
@@ -2775,14 +2768,6 @@ bool OS_Windows::_test_create_rendering_device_and_gl(const String &p_display_dr
 	}
 
 	bool ok = true;
-#ifdef GLES3_ENABLED
-	GLManagerNative_Windows *test_gl_manager_native = memnew(GLManagerNative_Windows);
-	if (test_gl_manager_native->window_create(DisplayServerEnums::MAIN_WINDOW_ID, hWnd, GetModuleHandle(nullptr), 800, 600) == OK) {
-		RasterizerGLES3::make_current(true);
-	} else {
-		ok = false;
-	}
-#endif
 
 	MSG msg = {};
 	while (PeekMessageW(&msg, nullptr, 0, 0, PM_REMOVE)) {
@@ -2793,10 +2778,6 @@ bool OS_Windows::_test_create_rendering_device_and_gl(const String &p_display_dr
 	if (ok) {
 		ok = _test_create_rendering_device(p_display_driver);
 	}
-
-#ifdef GLES3_ENABLED
-	memdelete(test_gl_manager_native);
-#endif
 
 	DestroyWindow(hWnd);
 	UnregisterClassW(L"Engine probe window", GetModuleHandle(nullptr));

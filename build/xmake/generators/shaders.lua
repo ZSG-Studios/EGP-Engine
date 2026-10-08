@@ -1,6 +1,5 @@
 local util = import("util", {rootdir = os.scriptdir()})
 local rd_templates = import("glsl_templates", {rootdir = os.scriptdir()})
-local gl_templates = import("gles3_templates", {rootdir = os.scriptdir()})
 
 local stages = {"vertex", "fragment", "compute", "raygen", "any_hit", "closest_hit", "miss", "intersection"}
 
@@ -168,62 +167,6 @@ local function emit_rd(target, source, context)
     util.write(target, table.concat(body))
 end
 
-local function emit_gles(target, source, context)
-    local header = data()
-    parse(source, header, context, true, 0)
-    local values = {out_file_class = classname(source, "ShaderGLES3"), defspec = 0,
-        defvariant = #header.variant_names > 0 and "" or " = DEFAULT",
-        vertex_code = raw(header.vertex), fragment_code = raw(header.fragment),
-        uniforms_count = #header.uniforms, ubos_count = #header.ubos, feedbacks_count = #header.feedbacks,
-        texunits_count = #header.texunits, specialization_names_count = #header.specialization_names,
-        variant_count = #header.variant_defines > 0 and #header.variant_defines or 1}
-    local function assemble(items, formatter, separator)
-        local result = {}; for index, item in ipairs(items) do table.insert(result, formatter(item, index)) end
-        return table.concat(result, separator or ",\n\t\t\t")
-    end
-    local function specialization(index)
-        local value = header.specialization_values[index]:trim():upper()
-        return value == "TRUE" or value == "1"
-    end
-    values.variant_names = #header.variant_names > 0 and table.concat(header.variant_names, ",\n\t\t") or "DEFAULT"
-    values.specialization_names = assemble(header.specialization_names, function (name, index) return name:upper() .. " = " .. string.format("%.0f", 2 ^ (index - 1)) end, ",\n\t\t")
-    for index = 1, #header.specialization_values do if specialization(index) then values.defspec = values.defspec + 2 ^ (index - 1) end end
-    values.defspec = string.format("%.0f", values.defspec)
-    local body = {template(gl_templates, "256", values)}
-    if #header.uniforms > 0 then values.uniforms = assemble(header.uniforms, function (name) return name:upper() end, ",\n\t\t"); table.insert(body, template(gl_templates, "265", values)) end
-    table.insert(body, template(gl_templates, "277", values))
-    if #header.specialization_names > 0 then table.insert(body, template(gl_templates, "288", values)) end
-    table.insert(body, template(gl_templates, "298", values))
-    if #header.uniforms > 0 then table.insert(body, template(gl_templates, "306", values)) end
-    table.insert(body, template(gl_templates, "469", values))
-    if #header.uniforms > 0 then
-        values.uniforms = assemble(header.uniforms, function (name) return '"' .. name .. '"' end)
-        table.insert(body, template(gl_templates, "476", values))
-    else table.insert(body, template(gl_templates, "482", values)) end
-    if #header.variant_defines > 0 then
-        values.variant_defines = assemble(header.variant_defines, function (define) return '"' .. define .. '"' end)
-        table.insert(body, template(gl_templates, "489", values))
-    else table.insert(body, template(gl_templates, "496", values)) end
-    for _, category in ipairs({{"texunits", "502", "508"}, {"ubos", "514", "520"}}) do
-        if #header[category[1]] > 0 then
-            values[category[1]] = assemble(header[category[1]], function (pair) return '{ "' .. pair[1] .. '", ' .. pair[2] .. ' }' end)
-            table.insert(body, template(gl_templates, category[2], values))
-        else table.insert(body, template(gl_templates, category[3], values)) end
-    end
-    if #header.specialization_names > 0 then
-        values.specializations = assemble(header.specialization_names, function (name, index) return '{ "' .. name .. '", ' .. (specialization(index) and "true" or "false") .. ' }' end)
-        table.insert(body, template(gl_templates, "529", values))
-    else table.insert(body, template(gl_templates, "535", values)) end
-    if #header.feedbacks > 0 then
-        values.feedbacks = assemble(header.feedbacks, function (pair)
-            local mask = 0; for index, name in ipairs(header.specialization_names) do if name == pair[2] then mask = 2 ^ (index - 1) end end
-            return '{ "' .. pair[1] .. '", ' .. string.format("%.0f", mask) .. ' }'
-        end)
-        table.insert(body, template(gl_templates, "544", values))
-    else table.insert(body, template(gl_templates, "550", values)) end
-    table.insert(body, template(gl_templates, "554", values))
-    util.write(target, table.concat(body))
-end
 
 local function raw_shader(filename, depth)
     assert(depth < 128, "Raw shader include depth exceeded")
@@ -239,12 +182,11 @@ end
 
 function generate(job, context)
     local name = job.builder:match("([%w_]+)$")
-    if name ~= "build_rd_headers" and name ~= "build_gles3_headers" and name ~= "build_raw_headers" then return false end
+    if name ~= "build_rd_headers" and name ~= "build_raw_headers" then return false end
     for index, target in ipairs(job.targets) do
         local source = job.sources[index].path
         source = path.is_absolute(source) and source or path.join(context.root, source)
         if name == "build_rd_headers" then emit_rd(target, source, context)
-        elseif name == "build_gles3_headers" then emit_gles(target, source, context)
         else
             local variable = path.filename(source):gsub("%.glsl", "_shader_glsl")
             util.write(target, "static const char " .. variable .. "[] = {\n" .. raw(raw_shader(source, 0)) .. "\n};\n")

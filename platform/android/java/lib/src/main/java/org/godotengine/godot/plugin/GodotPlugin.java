@@ -52,8 +52,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-import javax.microedition.khronos.egl.EGLConfig;
-import javax.microedition.khronos.opengles.GL10;
 
 /**
  * Base class for Godot Android plugins.
@@ -251,23 +249,9 @@ public abstract class GodotPlugin {
 	public void onGodotTerminating() {}
 
 	/**
-	 * When using the OpenGL renderer, this is invoked once per frame on the GL thread after the
-	 * frame is drawn.
-	 */
-	public void onGLDrawFrame(GL10 gl) {}
-
-	/**
 	 * When using the OpenGL renderer, this is called on the GL thread after the surface is created
 	 * and whenever the OpenGL ES surface size changes.
 	 */
-	public void onGLSurfaceChanged(GL10 gl, int width, int height) {}
-
-	/**
-	 * When using the OpenGL renderer, this is called on the GL thread when the surface is created
-	 * or recreated.
-	 */
-	public void onGLSurfaceCreated(GL10 gl, EGLConfig config) {}
-
 	/**
 	 * When using the Vulkan renderer, this is invoked once per frame on the Vulkan thread after
 	 * the frame is drawn.

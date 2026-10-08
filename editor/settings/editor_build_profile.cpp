@@ -67,11 +67,9 @@ const char *EditorBuildProfile::build_option_identifiers[BUILD_OPTION_MAX] = {
 	"alsa",
 	"rendering_device",
 	"forward_plus_renderer",
-	"forward_mobile_renderer",
 	"vulkan",
 	"d3d12",
 	"metal",
-	"opengl3",
 	"disable_physics_2d",
 	"module_box2d_enabled",
 	"disable_physics_3d",
@@ -100,11 +98,9 @@ const bool EditorBuildProfile::build_option_disabled_by_default[BUILD_OPTION_MAX
 	false, // ALSA
 	false, // RENDERING_DEVICE
 	false, // FORWARD_RENDERER
-	false, // MOBILE_RENDERER
 	false, // VULKAN
 	false, // D3D12
 	false, // METAL
-	false, // OPENGL
 	false, // PHYSICS_2D
 	false, // PHYSICS_BOX2D
 	false, // PHYSICS_3D
@@ -133,11 +129,9 @@ const bool EditorBuildProfile::build_option_disable_values[BUILD_OPTION_MAX] = {
 	false, // ALSA
 	false, // RENDERING_DEVICE
 	false, // FORWARD_RENDERER
-	false, // MOBILE_RENDERER
 	false, // VULKAN
 	false, // D3D12
 	false, // METAL
-	false, // OPENGL
 	true, // PHYSICS_2D
 	false, // PHYSICS_BOX2D
 	true, // PHYSICS_3D
@@ -166,11 +160,9 @@ const bool EditorBuildProfile::build_option_explicit_use[BUILD_OPTION_MAX] = {
 	false, // ALSA
 	false, // RENDERING_DEVICE
 	false, // FORWARD_RENDERER
-	false, // MOBILE_RENDERER
 	false, // VULKAN
 	false, // D3D12
 	false, // METAL
-	false, // OPENGL
 	false, // PHYSICS_2D
 	false, // PHYSICS_BOX2D
 	false, // PHYSICS_3D
@@ -198,11 +190,9 @@ const EditorBuildProfile::BuildOptionCategory EditorBuildProfile::build_option_c
 	BUILD_OPTION_CATEGORY_GENERAL, // ALSA
 	BUILD_OPTION_CATEGORY_GRAPHICS, // RENDERING_DEVICE
 	BUILD_OPTION_CATEGORY_GRAPHICS, // FORWARD_RENDERER
-	BUILD_OPTION_CATEGORY_GRAPHICS, // MOBILE_RENDERER
 	BUILD_OPTION_CATEGORY_GRAPHICS, // VULKAN
 	BUILD_OPTION_CATEGORY_GRAPHICS, // D3D12
 	BUILD_OPTION_CATEGORY_GRAPHICS, // METAL
-	BUILD_OPTION_CATEGORY_GRAPHICS, // OPENGL
 	BUILD_OPTION_CATEGORY_PHYSICS, // PHYSICS_2D
 	BUILD_OPTION_CATEGORY_PHYSICS, // PHYSICS_BOX2D
 	BUILD_OPTION_CATEGORY_PHYSICS, // PHYSICS_3D
@@ -227,20 +217,14 @@ const HashMap<EditorBuildProfile::BuildOption, LocalVector<EditorBuildProfile::B
 	{ BUILD_OPTION_FORWARD_RENDERER, {
 			BUILD_OPTION_RENDERING_DEVICE,
 	} },
-	{ BUILD_OPTION_MOBILE_RENDERER, {
-			BUILD_OPTION_RENDERING_DEVICE,
-	} },
 	{ BUILD_OPTION_VULKAN, {
 			BUILD_OPTION_FORWARD_RENDERER,
-			BUILD_OPTION_MOBILE_RENDERER,
 	} },
 	{ BUILD_OPTION_D3D12, {
 			BUILD_OPTION_FORWARD_RENDERER,
-			BUILD_OPTION_MOBILE_RENDERER,
 	} },
 	{ BUILD_OPTION_METAL, {
 			BUILD_OPTION_FORWARD_RENDERER,
-			BUILD_OPTION_MOBILE_RENDERER,
 	} },
 	{ BUILD_OPTION_PHYSICS_BOX2D, {
 			BUILD_OPTION_PHYSICS_2D,
@@ -373,6 +357,7 @@ bool EditorBuildProfile::is_item_collapsed(const StringName &p_class) const {
 
 void EditorBuildProfile::set_disable_build_option(BuildOption p_build_option, bool p_disable) {
 	ERR_FAIL_INDEX(p_build_option, BUILD_OPTION_MAX);
+	ERR_FAIL_COND_MSG(p_disable && (p_build_option == BUILD_OPTION_RENDERING_DEVICE || p_build_option == BUILD_OPTION_FORWARD_RENDERER), "EGP requires RenderingDevice and Forward+.");
 	build_options_disabled[p_build_option] = p_disable;
 }
 
@@ -383,6 +368,9 @@ void EditorBuildProfile::clear_disabled_classes() {
 
 bool EditorBuildProfile::is_build_option_disabled(BuildOption p_build_option) const {
 	ERR_FAIL_INDEX_V(p_build_option, BUILD_OPTION_MAX, false);
+	if (p_build_option == BUILD_OPTION_RENDERING_DEVICE || p_build_option == BUILD_OPTION_FORWARD_RENDERER) {
+		return false;
+	}
 	return build_options_disabled[p_build_option];
 }
 
@@ -427,11 +415,9 @@ String EditorBuildProfile::get_build_option_name(BuildOption p_build_option) {
 		TTRC("ALSA"),
 		TTRC("RenderingDevice"),
 		TTRC("Forward+ Renderer"),
-		TTRC("Mobile Renderer"),
 		TTRC("Vulkan"),
 		TTRC("D3D12"),
 		TTRC("Metal"),
-		TTRC("OpenGL"),
 		TTRC("Physics Server (2D)"),
 		TTRC("Box2D Physics"),
 		TTRC("Physics Server (3D)"),
@@ -462,13 +448,11 @@ String EditorBuildProfile::get_build_option_description(BuildOption p_build_opti
 		TTRC("X11 display server support (Linux only)."),
 		TTRC("PulseAudio audio driver (Linux only)."),
 		TTRC("ALSA audio driver (Linux only)."),
-		TTRC("RenderingDevice-based rendering (if disabled, the OpenGL backend is required)."),
+		TTRC("RenderingDevice rendering is required by EGP."),
 		TTRC("Forward+ renderer for advanced 3D graphics."),
-		TTRC("Mobile renderer for less advanced 3D graphics."),
 		TTRC("Vulkan backend of RenderingDevice."),
 		TTRC("Direct3D 12 backend of RenderingDevice."),
 		TTRC("Metal backend of RenderingDevice (Apple arm64 only)."),
-		TTRC("OpenGL backend (if disabled, the RenderingDevice backend is required)."),
 		TTRC("PhysicsServer and capabilities for 2D."),
 		TTRC("Box2D backend for 2D physics."),
 		TTRC("PhysicsServer and capabilities for 3D."),
@@ -636,11 +620,9 @@ void EditorBuildProfile::_bind_methods() {
 	BIND_ENUM_CONSTANT(BUILD_OPTION_X11);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_RENDERING_DEVICE);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_FORWARD_RENDERER);
-	BIND_ENUM_CONSTANT(BUILD_OPTION_MOBILE_RENDERER);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_VULKAN);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_D3D12);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_METAL);
-	BIND_ENUM_CONSTANT(BUILD_OPTION_OPENGL);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_PHYSICS_2D);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_PHYSICS_BOX2D);
 	BIND_ENUM_CONSTANT(BUILD_OPTION_PHYSICS_3D);
@@ -713,14 +695,6 @@ EditorBuildProfile::EditorBuildProfile() {
 		{ "rendering/rendering_device/driver.macos", { "metal" } },
 	};
 	build_option_settings.insert(BUILD_OPTION_METAL, settings_metal);
-
-	HashMap<String, LocalVector<Variant>> settings_opengl = {
-		{ "rendering/renderer/rendering_method", { "gl_compatibility" } },
-		{ "rendering/renderer/rendering_method.mobile", { "gl_compatibility" } },
-		{ "rendering/renderer/rendering_method.web", { "gl_compatibility" } },
-		{ "rendering/rendering_device/fallback_to_opengl3", { true } },
-	};
-	build_option_settings.insert(BUILD_OPTION_OPENGL, settings_opengl);
 
 	HashMap<String, LocalVector<Variant>> settings_phy_box2d = {
 		{ "physics/2d/physics_engine", { "DEFAULT", "Box2D Physics" } },
@@ -1302,7 +1276,7 @@ void EditorBuildProfileManager::_update_edited_profile() {
 		build_option->set_cell_mode(0, TreeItem::CELL_MODE_CHECK);
 		build_option->set_text(0, EditorBuildProfile::get_build_option_name(EditorBuildProfile::BuildOption(i)));
 		build_option->set_selectable(0, true);
-		build_option->set_editable(0, true);
+		build_option->set_editable(0, i != EditorBuildProfile::BUILD_OPTION_RENDERING_DEVICE && i != EditorBuildProfile::BUILD_OPTION_FORWARD_RENDERER);
 		build_option->set_metadata(0, i);
 		if (!edited->is_build_option_disabled(EditorBuildProfile::BuildOption(i))) {
 			build_option->set_checked(0, true);

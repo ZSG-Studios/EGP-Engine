@@ -445,15 +445,6 @@ void ViewportRotationControl::gui_input(const Ref<InputEvent> &p_event) {
 	// Key events
 	const Ref<InputEventKey> k = p_event;
 
-	if (k.is_valid() && k->is_action_pressed(SNAME("ui_cancel"), false, true)) {
-		if (Input::get_singleton()->get_mouse_mode() == Input::MouseMode::MOUSE_MODE_CAPTURED) {
-			Input::get_singleton()->set_mouse_mode(Input::MouseMode::MOUSE_MODE_VISIBLE);
-			Input::get_singleton()->warp_mouse(orbiting_mouse_start);
-			viewport->view_3d_controller->cursor = saved_cursor;
-			gizmo_activated = false;
-		}
-	}
-
 	// Mouse events
 	const Ref<InputEventMouseButton> mb = p_event;
 	if (mb.is_valid()) {
@@ -3250,11 +3241,11 @@ void Node3DEditorViewport::_notification(int p_what) {
 					case SupportedRenderingMethods::ALL:
 						break;
 					case SupportedRenderingMethods::FORWARD_PLUS_MOBILE:
-						disabled = OS::get_singleton()->get_current_rendering_method() == "gl_compatibility";
+						disabled = false;
 						disabled_tooltip = TTR("This debug draw mode is only supported when using the Forward+ or Mobile renderer.");
 						break;
 					case SupportedRenderingMethods::FORWARD_PLUS:
-						disabled = OS::get_singleton()->get_current_rendering_method() == "gl_compatibility" || OS::get_singleton()->get_current_rendering_method() == "mobile";
+						disabled = false;
 						disabled_tooltip = TTR("This debug draw mode is only supported when using the Forward+ renderer.");
 						break;
 				}

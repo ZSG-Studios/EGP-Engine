@@ -8,10 +8,7 @@ function main(graph)
     platform_windows_builders = graph:builders("platform_windows_builders")
     redirect_emitter = graph:methods().redirect_emitter
     sources = {}
-    common_win = {"os_windows.cpp", "display_server_windows.cpp", "key_mapping_windows.cpp", "windows_terminal_logger.cpp", "windows_utils.cpp", "native_menu_windows.cpp", "gl_manager_windows_native.cpp", "wgl_detect_version.cpp", "rendering_context_driver_vulkan_windows.cpp", "drop_target_windows.cpp", "winrt_utils.cpp", "tts_windows.cpp", "tts_driver_sapi.cpp", "tts_driver_onecore.cpp"}
-    if R.truthy(R.index(env, "angle")) then
-        common_win = R.iadd(common_win, {"gl_manager_windows_angle.cpp"})
-    end
+    common_win = {"os_windows.cpp", "display_server_windows.cpp", "key_mapping_windows.cpp", "windows_terminal_logger.cpp", "windows_utils.cpp", "native_menu_windows.cpp", "rendering_context_driver_vulkan_windows.cpp", "drop_target_windows.cpp", "winrt_utils.cpp", "tts_windows.cpp", "tts_driver_sapi.cpp", "tts_driver_onecore.cpp"}
     if R.truthy(((R.index(env, "library_type") == "executable"))) then
         common_win = R.iadd(common_win, {"godot_windows.cpp"})
     else

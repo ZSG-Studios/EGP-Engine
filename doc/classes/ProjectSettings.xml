@@ -2837,73 +2837,6 @@
 		<member name="rendering/environment/volumetric_fog/volume_size" type="int" setter="" getter="" default="64">
 			Base size used to determine size of froxel buffer in the camera X-axis and Y-axis. The final size is scaled by the aspect ratio of the screen, so actual values may differ from what is set. Set a larger size for more detailed fog, set a smaller size for better performance.
 		</member>
-		<member name="rendering/gl_compatibility/driver" type="String" setter="" getter="" default="&quot;opengl3&quot;">
-			Sets the driver to be used by the renderer when using the Compatibility renderer. Editing this property has no effect in the default configuration, as first-party platforms each have platform-specific overrides. Use those overrides to configure the driver for each platform.
-			This can be overridden using the [code]--rendering-driver &lt;driver&gt;[/code] command line argument.
-			Supported values are:
-			- [code]opengl3[/code], OpenGL 3.3 on desktop platforms, OpenGL ES 3.0 on mobile platforms, WebGL 2.0 on web.
-			- [code]opengl3_angle[/code], OpenGL ES 3.0 using the ANGLE compatibility layer, supported on macOS (over native OpenGL) and Windows (over Direct3D 11).
-			- [code]opengl3_es[/code], OpenGL ES 3.0 on Linux/BSD.
-			[b]Note:[/b] The availability of these options depends on whether the engine was compiled with support for them (determined by build options [code]opengl3[/code] and [code]angle_libs[/code]).
-			[b]Note:[/b] The actual rendering driver may be automatically changed by the engine as a result of a fallback, or a user-specified command line argument. To get the actual rendering driver that is used at runtime, use [method RenderingServer.get_current_rendering_driver_name] instead of reading this project setting's value.
-		</member>
-		<member name="rendering/gl_compatibility/driver.android" type="String" setter="" getter="" default="&quot;opengl3&quot;">
-			Android override for [member rendering/gl_compatibility/driver].
-			Only one option is supported:
-			- [code]opengl3[/code], OpenGL ES 3.0 from native drivers.
-		</member>
-		<member name="rendering/gl_compatibility/driver.ios" type="String" setter="" getter="" default="&quot;opengl3&quot;">
-			iOS override for [member rendering/gl_compatibility/driver].
-			Only one option is supported:
-			- [code]opengl3[/code], OpenGL ES 3.0 from native drivers.
-		</member>
-		<member name="rendering/gl_compatibility/driver.linuxbsd" type="String" setter="" getter="" default="&quot;opengl3&quot;">
-			LinuxBSD override for [member rendering/gl_compatibility/driver].
-			Two options are supported:
-			- [code]opengl3[/code] (default), OpenGL 3.3 from native drivers.
-			- [code]opengl3_es[/code], OpenGL ES 3.0 from native drivers. If [member rendering/gl_compatibility/fallback_to_gles] is enabled, this is used as a fallback if OpenGL 3.3 is not supported.
-		</member>
-		<member name="rendering/gl_compatibility/driver.macos" type="String" setter="" getter="" default="&quot;opengl3&quot;">
-			macOS override for [member rendering/gl_compatibility/driver].
-			Two options are supported:
-			- [code]opengl3[/code] (default), OpenGL 3.3 from native drivers. If [member rendering/gl_compatibility/fallback_to_native] is enabled, this is used as a fallback if ANGLE is configured as the preferred driver but not supported.
-			- [code]opengl3_angle[/code], OpenGL ES 3.0 using the ANGLE compatibility layer over native OpenGL drivers. If [member rendering/gl_compatibility/fallback_to_angle] is enabled, this is used as a fallback if OpenGL 3.3 is not supported.
-		</member>
-		<member name="rendering/gl_compatibility/driver.web" type="String" setter="" getter="" default="&quot;opengl3&quot;">
-			Web override for [member rendering/gl_compatibility/driver].
-			Only one option is supported:
-			- [code]opengl3[/code], WebGL 2.0. The underlying native API depends on the target OS, browser, and browser configuration.
-		</member>
-		<member name="rendering/gl_compatibility/driver.windows" type="String" setter="" getter="" default="&quot;opengl3&quot;">
-			Windows override for [member rendering/gl_compatibility/driver].
-			Two options are supported:
-			- [code]opengl3[/code] (default), OpenGL 3.3 from native drivers. If [member rendering/gl_compatibility/fallback_to_native] is enabled, this is used as a fallback if ANGLE is configured as the preferred driver but not supported.
-			- [code]opengl3_angle[/code], OpenGL ES 3.0 using the ANGLE compatibility layer over native Direct3D 11 drivers. If [member rendering/gl_compatibility/fallback_to_angle] is enabled, this is used as a fallback if OpenGL 3.3 is not supported. By default, ANGLE is used as the default driver for some devices listed in [member rendering/gl_compatibility/force_angle_on_devices].
-		</member>
-		<member name="rendering/gl_compatibility/fallback_to_angle" type="bool" setter="" getter="" default="true">
-			If [code]true[/code], the Compatibility renderer will fall back to ANGLE if native OpenGL is not supported or the device is listed in [member rendering/gl_compatibility/force_angle_on_devices].
-			[b]Note:[/b] This setting is implemented only on Windows.
-		</member>
-		<member name="rendering/gl_compatibility/fallback_to_gles" type="bool" setter="" getter="" default="true">
-			If [code]true[/code], the Compatibility renderer will fall back to OpenGLES if desktop OpenGL is not supported.
-			[b]Note:[/b] This setting is implemented only on Linux/X11.
-		</member>
-		<member name="rendering/gl_compatibility/fallback_to_native" type="bool" setter="" getter="" default="true">
-			If [code]true[/code], the Compatibility renderer will fall back to native OpenGL if ANGLE is not supported, or ANGLE dynamic libraries aren't found.
-			[b]Note:[/b] This setting is implemented on macOS and Windows.
-		</member>
-		<member name="rendering/gl_compatibility/force_angle_on_devices" type="Array" setter="" getter="">
-			An [Array] of devices which should always use the ANGLE renderer.
-			Each entry is a [Dictionary] with the following keys: [code]vendor[/code] and [code]name[/code]. [code]name[/code] can be set to [code]*[/code] to add all devices with the specified [code]vendor[/code].
-			[b]Note:[/b] This setting is implemented only on Windows.
-		</member>
-		<member name="rendering/gl_compatibility/item_buffer_size" type="int" setter="" getter="" default="16384">
-			Maximum number of canvas items commands that can be drawn in a single viewport update. If more render commands are issued they will be ignored. Decreasing this limit may improve performance on bandwidth limited devices. Increase this limit if you find that not all objects are being drawn in a frame.
-		</member>
-		<member name="rendering/gl_compatibility/nvidia_disable_threaded_optimization" type="bool" setter="" getter="" default="true">
-			If [code]true[/code], disables the threaded optimization feature from the NVIDIA drivers, which are known to cause stuttering in most OpenGL applications.
-			[b]Note:[/b] This setting only works on Windows, as threaded optimization is disabled by default on other platforms.
-		</member>
 		<member name="rendering/global_illumination/gi/use_half_resolution" type="bool" setter="" getter="" default="false" keywords="size">
 			If [code]true[/code], renders [VoxelGI] and SDFGI ([member Environment.sdfgi_enabled]) buffers at halved resolution (e.g. 960×540 when the viewport size is 1920×1080). This improves performance significantly when VoxelGI or SDFGI is enabled, at the cost of artifacts that may be visible on polygon edges. The loss in quality becomes less noticeable as the viewport resolution increases. [LightmapGI] rendering is not affected by this setting.
 			[b]Note:[/b] This property is only read when the project starts. To set half-resolution GI at run-time, call [method RenderingServer.gi_set_use_half_resolution] instead.
@@ -3143,18 +3076,10 @@
 			If [code]true[/code], reduces reflections based on ambient light.
 		</member>
 		<member name="rendering/renderer/rendering_method" type="String" setter="" getter="" default="&quot;forward_plus&quot;">
-			Sets the renderer that will be used by the project. Options are:
-			[b]forward_plus[/b] (Forward+): High-end renderer designed for desktop devices. Has a higher base overhead, but scales well with complex scenes. Not suitable for older devices or mobile.
-			[b]mobile[/b] (Mobile): Modern renderer designed for mobile devices. Has a lower base overhead than Forward+, but does not scale as well to large scenes with many elements.
-			[b]gl_compatibility[/b] (Compatibility): Low-end renderer designed for older devices. Based on the limitations of the OpenGL 3.3 / OpenGL ES 3.0 / WebGL 2 APIs. Lighting calculations are performed on nonlinear sRGB-encoded color data, which produces inaccurate results that may look acceptable for some games.
-			This can be overridden using the [code]--rendering-method &lt;method&gt;[/code] command line argument.
-			[b]Note:[/b] The actual rendering method may be automatically changed by the engine as a result of a fallback, or a user-specified command line argument. To get the actual rendering method that is used at runtime, use [method RenderingServer.get_current_rendering_method] instead of reading this project setting's value.
+			EGP supports only [code]forward_plus[/code] for rendered projects. Forward+ requires a supported RenderingDevice GPU and driver. Removed renderer selections are rejected; no fallback to Compatibility or Mobile is available. The [code]dummy[/code] backend is reserved for headless servers and tooling.
 		</member>
-		<member name="rendering/renderer/rendering_method.mobile" type="String" setter="" getter="" default="&quot;mobile&quot;">
+		<member name="rendering/renderer/rendering_method.mobile" type="String" setter="" getter="" default="&quot;forward_plus&quot;">
 			Override for [member rendering/renderer/rendering_method] on mobile devices.
-		</member>
-		<member name="rendering/renderer/rendering_method.web" type="String" setter="" getter="" default="&quot;gl_compatibility&quot;">
-			Override for [member rendering/renderer/rendering_method] on web.
 		</member>
 		<member name="rendering/rendering_device/d3d12/agility_sdk_version" type="int" setter="" getter="" default="618">
 			Version code of the [url=https://devblogs.microsoft.com/directx/directx12agility/]Direct3D 12 Agility SDK[/url] to use ([code]D3D12SDKVersion[/code]). This must match the [i]minor[/i] version that is installed next to the editor binary and in the export templates directory for the current editor version. For example, if you have [code]1.618.5[/code] installed, you need to input [code]618[/code] here.
@@ -3217,10 +3142,6 @@
 		<member name="rendering/rendering_device/fallback_to_d3d12" type="bool" setter="" getter="" default="true">
 			If [code]true[/code], the Forward+ renderer will fall back to Direct3D 12 if Vulkan is not supported. The fallback is always attempted regardless of this setting if Vulkan driver support was disabled at compile time.
 			[b]Note:[/b] This setting is implemented only on Windows.
-		</member>
-		<member name="rendering/rendering_device/fallback_to_opengl3" type="bool" setter="" getter="" default="true">
-			If [code]true[/code], the Forward+ renderer will fall back to OpenGL 3 if Direct3D 12, Metal, and Vulkan are not supported.
-			[b]Note:[/b] This setting is implemented on Windows, Android, macOS, iOS, and Linux/X11.
 		</member>
 		<member name="rendering/rendering_device/fallback_to_vulkan" type="bool" setter="" getter="" default="true">
 			If [code]true[/code], the Forward+ renderer will fall back to Vulkan if Direct3D 12 (on Windows) or Metal (on macOS x86_64) are not supported. The fallback is always attempted regardless of this setting if Direct3D 12 (Windows) or Metal (macOS) driver support was disabled at compile time.

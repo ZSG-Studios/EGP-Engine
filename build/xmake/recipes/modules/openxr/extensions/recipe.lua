@@ -17,9 +17,6 @@ function main(graph)
     if R.truthy(R.index(env, "metal")) then
         env_openxr:sources(module_obj, "platform/openxr_metal_extension.mm")
     end
-    if R.truthy((function() local v = R.index(env, "opengl3"); if not R.truthy(v) then return v end; return ((R.index(env, "platform") ~= "macos")) end)()) then
-        env_openxr:sources(module_obj, "platform/openxr_opengl_extension.cpp")
-    end
     if R.truthy(R.index(env, "d3d12")) then
         env_openxr:sources(module_obj, "platform/openxr_d3d12_extension.cpp")
     end

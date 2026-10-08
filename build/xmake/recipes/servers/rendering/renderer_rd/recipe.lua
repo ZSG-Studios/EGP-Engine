@@ -10,9 +10,6 @@ function main(graph)
     if R.truthy(R.index(env, "forward_plus_renderer")) then
         graph:include("forward_clustered/recipe.lua")
     end
-    if R.truthy(R.index(env, "forward_mobile_renderer")) then
-        graph:include("forward_mobile/recipe.lua")
-    end
     graph:include("shaders/recipe.lua")
     graph:include("spirv-reflect/recipe.lua")
 end

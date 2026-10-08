@@ -11,9 +11,5 @@ function main(graph)
     if R.truthy(R.index(env, "vulkan")) then
         R.append(source_files, graph:file("rendering_context_driver_vulkan_x11.cpp"))
     end
-    if R.truthy(R.index(env, "opengl3")) then
-        env:add({["CPPDEFINES"] = {"GLAD_GLX_NO_X11"}})
-        R.append(source_files, {graph:file("gl_manager_x11_egl.cpp"), graph:file("gl_manager_x11.cpp"), graph:file("detect_prime_x11.cpp"), graph:file("#thirdparty/glad/glx.c")})
-    end
     return source_files
 end

@@ -282,10 +282,6 @@ void TextureStreaming::_start_streaming() {
 	}
 
 	const String rendering_method = OS::get_singleton()->get_current_rendering_method();
-	if (rendering_method == "gl_compatibility") {
-		WARN_PRINT("Texture streaming is not supported with the Compatibility renderer.");
-		return;
-	}
 
 	feedback_buffer_thread.start(_feedback_buffer_thread_func, this);
 	texture_reload_thread.start(_texture_reload_thread_func, this);

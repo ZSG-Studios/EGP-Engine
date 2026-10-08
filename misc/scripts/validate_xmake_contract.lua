@@ -7,6 +7,7 @@ function main(compressor, zipper)
     os.mkdir(directory)
     local tests={
         {'common','tests/build/test_xmake_common.lua'},
+        {'forward_only','build/xmake/tests/forward_only.lua',marker='FORWARD_ONLY_POLICY_PASS (%d+)'},
         {'generators','tests/build/test_xmake_generators.lua',compressor},
         {'license_literals','build/xmake/tests/license_literals.lua',marker='NATIVE_LICENSE_LITERAL_CHECKS=(%d+)'},
         {'unit_summary','build/xmake/tests/unit_summary.lua',marker='NATIVE_UNIT_SUMMARY_CHECKS=(%d+)'},
@@ -131,15 +132,6 @@ function main(compressor, zipper)
     local visionoschecks=assert(tonumber(visionos_stdout:match('NATIVE_VISIONOS_TOOLCHAIN_CHECKS=(%d+)')))
     table.insert(receipt.tests,{name='visionos_toolchain',checks=visionoschecks,status='PASS'})
     print('visionos_toolchain: PASS ' .. visionoschecks)
-    local web_project=path.join(root,'build/xmake/tests/web_export_arguments')
-    local web_output=path.join(directory,'web-export-arguments')
-    local web_envs={XMAKE_CONFIGDIR=path.join(web_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-web-export-arguments')}
-    local web_config,web_config_error=os.iorunv(os.programfile(),{'f','-y','-p',os.host(),'-a',os.arch(),'--toolchain=' .. hostcompiler,'-P',web_project,'-o',web_output},{curdir=web_project,envs=web_envs})
-    local web_stdout,web_stderr=os.iorunv(os.programfile(),{'-P',web_project,'-b','-j','1'},{curdir=web_project,envs=web_envs})
-    io.writefile(path.join(directory,'web_export_arguments.log'),web_config .. (web_config_error or '') .. web_stdout .. (web_stderr or ''))
-    local web_checks=assert(tonumber(web_stdout:match('NATIVE_WEB_EXPORT_ARGUMENT_CHECKS=(%d+)')))
-    table.insert(receipt.tests,{name='web_export_arguments',checks=web_checks,status='PASS'})
-    print('web_export_arguments: PASS ' .. web_checks)
     local web_link_project=path.join(root,'build/xmake/tests/web_link_flags')
     local web_link_output=path.join(directory,'web-link-flags')
     local web_link_stdout,web_link_stderr=os.iorunv(os.programfile(),{'f','-y','-p',os.host(),'-a',os.arch(),'--toolchain=' .. hostcompiler,'-P',web_link_project,'-o',web_link_output},{curdir=web_link_project,envs={XMAKE_CONFIGDIR=path.join(web_link_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-web-link-flags')}})

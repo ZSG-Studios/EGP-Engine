@@ -10,6 +10,7 @@ maintained by ZSG-Studios and based on upstream `master`.
 - Superposition property replication configured through the Inspector.
 - Built-in C++ extension tools and a bundled godot-cpp SDK.
 - Native xmake builds with platform toolchains and incremental dependencies.
+- Forward+ rendering exclusively, using Vulkan, Direct3D 12 or Metal.
 
 ## What EGP replaces, and why
 
@@ -23,6 +24,16 @@ across GDScript, C# and C++.
 | Godot Physics 2D | Native Box2D integration | Use a pinned solver with an explicit fixed-step profile, substeps and worker settings, while keeping `PhysicsServer2D` and ordinary 2D physics nodes as the game-facing API. |
 | Godot Physics 3D and Jolt, including the Jolt vendor dependency | Native Box3D integration | Use the Box solver family for both dimensions and expose an explicit 3D world with ordered entity commands, fixed ticks and local full-world snapshots for authoritative simulation and replay. |
 | Godot's high-level multiplayer/RPC stack, ENet, WebRTC and `WebSocketMultiplayerPeer` | Native Yojimbo transport with `EGPNetSession` and shared networking helpers | Make encrypted token admission, authoritative entity ownership, interest, replication and bounded traffic part of one explicit protocol, with matching GDScript, C# and C++ APIs. |
+
+### Rendering: Forward+ only
+
+EGP removes the Compatibility and Mobile renderers, OpenGL/OpenGL ES, ANGLE,
+and WebGL/WebXR support. Rendered projects require Forward+ through a supported
+RenderingDevice backend. The dummy backend remains available for headless servers
+and tooling. Projects that explicitly select a removed renderer must change
+`rendering/renderer/rendering_method` and any mobile override to `forward_plus`.
+Devices below Forward+ requirements cannot fall back to another renderer.
+Web exports are unsupported until a RenderingDevice web backend is available.
 
 ### Physics: consistent integration and explicit simulation
 

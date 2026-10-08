@@ -124,7 +124,7 @@ target("visionos_configuration_probe")
             check(table.contains(swiftflags, triple) and table.contains(swiftflags, "-sdk") and table.contains(swiftflags, sdkroot), "Swift must use the selected visionOS SDK and target")
         end
         for _, simulator in ipairs({false, true}) do
-            for _, opengl in ipairs({false, true}) do
+            for _, opengl in ipairs({false}) do
                 local probe = {values={}}
                 function probe:set(key, ...) self.values[key] = {...} end
                 function probe:add(key, ...)
@@ -134,7 +134,7 @@ target("visionos_configuration_probe")
                     end
                 end
                 policy.configure(probe, {platform="ios", arch="arm64", simulator=simulator, accesskit=false, vulkan=false, opengl3=opengl, metal=false, sdl=false, werror=true})
-                check(table.contains(probe.values.defines, "GLES_SILENCE_DEPRECATION") == opengl, "iOS OpenGLES SDK deprecation opt-out must follow the selected renderer")
+                check(not table.contains(probe.values.defines, "GLES_SILENCE_DEPRECATION"), "EGP must not enable OpenGLES")
                 for _, key in ipairs({"cxflags", "ldflags", "shflags"}) do
                     check(table.contains(probe.values[key], simulator and "-mios-simulator-version-min=15.0" or "-miphoneos-version-min=15.0"), "iOS deployment flags must remain unchanged")
                 end

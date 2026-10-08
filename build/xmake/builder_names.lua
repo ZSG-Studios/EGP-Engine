@@ -5,7 +5,6 @@ local names = {
     ["editor_builders"] = "editor.editor_builders",
     ["editor_icons_builders"] = "editor.icons.editor_icons_builders",
     ["editor_theme_builders"] = "editor.themes.editor_theme_builders",
-    ["gles3_builders"] = "gles3_builders",
     ["glsl_builders"] = "glsl_builders",
     ["input_builders"] = "core.input.input_builders",
     ["main_builders"] = "main.main_builders",

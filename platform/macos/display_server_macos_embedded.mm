@@ -41,14 +41,6 @@
 #import "core/os/os.h"
 #import "servers/display/native_menu.h"
 
-#if defined(GLES3_ENABLED)
-#import "embedded_gl_manager.h"
-
-#import "drivers/gles3/rasterizer_gles3.h"
-
-#import <platform_gl.h>
-#endif
-
 #if defined(RD_ENABLED)
 #import "servers/rendering/renderer_rd/renderer_compositor_rd.h"
 #import "servers/rendering/rendering_device.h"
@@ -103,49 +95,11 @@ DisplayServerMacOSEmbedded::DisplayServerMacOSEmbedded(const String &p_rendering
 		if (rendering_context->initialize() != OK) {
 			memdelete(rendering_context);
 			rendering_context = nullptr;
-#if defined(GLES3_ENABLED)
-			bool fallback_to_opengl3 = GLOBAL_GET("rendering/rendering_device/fallback_to_opengl3");
-			if (fallback_to_opengl3 && rendering_driver != "opengl3") {
-				WARN_PRINT("Your device does not seem to support MoltenVK or Metal, switching to OpenGL 3.");
-				rendering_driver = "opengl3";
-				OS::get_singleton()->set_current_rendering_method("gl_compatibility", OS::RENDERING_SOURCE_FALLBACK);
-				OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-			} else
-#endif
 			{
 				r_error = ERR_CANT_CREATE;
 				ERR_FAIL_MSG("Could not initialize " + rendering_driver);
 			}
 		}
-	}
-#endif
-
-#if defined(GLES3_ENABLED)
-	if (rendering_driver == "opengl3_angle") {
-		WARN_PRINT("ANGLE not supported for embedded display, switching to native OpenGL.");
-		rendering_driver = "opengl3";
-		OS::get_singleton()->set_current_rendering_driver_name(rendering_driver, OS::RENDERING_SOURCE_FALLBACK);
-	}
-
-	if (rendering_driver == "opengl3") {
-		gl_manager = memnew(GLManagerEmbedded);
-		if (gl_manager->initialize() != OK) {
-			memdelete(gl_manager);
-			gl_manager = nullptr;
-			r_error = ERR_UNAVAILABLE;
-			ERR_FAIL_MSG("Could not initialize native OpenGL.");
-		}
-		layer = [CALayer new];
-		// OpenGL content is flipped, so it must be transformed.
-		layer.anchorPoint = CGPointMake(0, 0);
-		layer.transform = CATransform3DMakeScale(1.0, -1.0, 1.0);
-
-		Size2i render_size = _source_to_render_size(p_resolution);
-		Error err = gl_manager->window_create(window_id_counter, layer, render_size.width, render_size.height);
-		if (err != OK) {
-			ERR_FAIL_MSG("Could not create OpenGL context.");
-		}
-		gl_manager->set_vsync_enabled(p_vsync_mode != DisplayServerEnums::VSYNC_DISABLED);
 	}
 #endif
 
@@ -181,14 +135,6 @@ DisplayServerMacOSEmbedded::DisplayServerMacOSEmbedded(const String &p_rendering
 	}
 #endif
 
-#if defined(GLES3_ENABLED)
-	if (rendering_driver == "opengl3") {
-		RasterizerGLES3::make_current(true);
-	}
-	if (rendering_driver == "opengl3_angle") {
-		RasterizerGLES3::make_current(false);
-	}
-#endif
 #if defined(RD_ENABLED)
 	if (rendering_context) {
 		rendering_device = memnew(RenderingDevice);
@@ -230,13 +176,6 @@ DisplayServerMacOSEmbedded::~DisplayServerMacOSEmbedded() {
 
 	EmbeddedDebugger::deinitialize();
 
-#if defined(GLES3_ENABLED)
-	if (gl_manager) {
-		memdelete(gl_manager);
-		gl_manager = nullptr;
-	}
-#endif
-
 #if defined(RD_ENABLED)
 	if (rendering_device) {
 		memdelete(rendering_device);
@@ -262,9 +201,6 @@ Vector<String> DisplayServerMacOSEmbedded::get_rendering_drivers_func() {
 #endif
 #if defined(METAL_ENABLED)
 	drivers.push_back("metal");
-#endif
-#if defined(GLES3_ENABLED)
-	drivers.push_back("opengl3");
 #endif
 
 	return drivers;
@@ -585,11 +521,6 @@ void DisplayServerMacOSEmbedded::_window_set_size(const Size2i p_size, DisplaySe
 		rendering_context->window_set_size(p_window, render_size.width, render_size.height);
 	}
 #endif
-#if defined(GLES3_ENABLED)
-	if (gl_manager) {
-		gl_manager->window_resize(p_window, render_size.width, render_size.height);
-	}
-#endif
 	[CATransaction commit];
 
 	Callable *cb = window_resize_callbacks.getptr(p_window);
@@ -607,11 +538,6 @@ Size2i DisplayServerMacOSEmbedded::window_get_size(DisplayServerEnums::WindowID 
 		uint32_t width = rendering_context->surface_get_width(surface);
 		uint32_t height = rendering_context->surface_get_height(surface);
 		return Size2i(width, height);
-	}
-#endif
-#ifdef GLES3_ENABLED
-	if (gl_manager) {
-		return gl_manager->window_get_size(p_window);
 	}
 #endif
 	return Size2i();
@@ -740,11 +666,6 @@ void DisplayServerMacOSEmbedded::set_state(const DisplayServerMacOSEmbeddedState
 	state = p_state;
 
 	if (state.display_id != old_display_id) {
-#if defined(GLES3_ENABLED)
-		if (gl_manager) {
-			gl_manager->set_display_id(state.display_id);
-		}
-#endif
 	}
 	if (state.screen_max_scale != old_scale) {
 		// Recover source pixel size from current bounds using the old display scale.
@@ -758,12 +679,6 @@ void DisplayServerMacOSEmbedded::set_state(const DisplayServerMacOSEmbeddedState
 }
 
 void DisplayServerMacOSEmbedded::window_set_vsync_mode(DisplayServerEnums::VSyncMode p_vsync_mode, DisplayServerEnums::WindowID p_window) {
-#if defined(GLES3_ENABLED)
-	if (gl_manager) {
-		gl_manager->set_vsync_enabled(p_vsync_mode != DisplayServerEnums::VSYNC_DISABLED);
-	}
-#endif
-
 #if defined(RD_ENABLED)
 	if (rendering_context) {
 		rendering_context->window_set_vsync_mode(p_window, p_vsync_mode);
@@ -773,11 +688,6 @@ void DisplayServerMacOSEmbedded::window_set_vsync_mode(DisplayServerEnums::VSync
 
 DisplayServerEnums::VSyncMode DisplayServerMacOSEmbedded::window_get_vsync_mode(DisplayServerEnums::WindowID p_window) const {
 	_THREAD_SAFE_METHOD_
-#if defined(GLES3_ENABLED)
-	if (gl_manager) {
-		return (gl_manager->is_vsync_enabled() ? DisplayServerEnums::VSyncMode::VSYNC_ENABLED : DisplayServerEnums::VSyncMode::VSYNC_DISABLED);
-	}
-#endif
 #if defined(RD_ENABLED)
 	if (rendering_context) {
 		return rendering_context->window_get_vsync_mode(p_window);
@@ -803,11 +713,6 @@ void DisplayServerMacOSEmbedded::cursor_set_custom_image(const Ref<Resource> &p_
 }
 
 void DisplayServerMacOSEmbedded::swap_buffers() {
-#ifdef GLES3_ENABLED
-	if (gl_manager) {
-		gl_manager->swap_buffers();
-	}
-#endif
 }
 
 void DisplayServerMacOSEmbeddedState::serialize(PackedByteArray &r_data) {

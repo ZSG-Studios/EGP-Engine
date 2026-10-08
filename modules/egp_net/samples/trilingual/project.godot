@@ -8,5 +8,5 @@ run/main_scene="res://Main.tscn"
 project/assembly_name="NetInterop"
 
 [rendering]
-renderer/rendering_method="gl_compatibility"
+renderer/rendering_method="forward_plus"
 

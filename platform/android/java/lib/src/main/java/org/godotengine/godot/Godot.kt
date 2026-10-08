@@ -208,7 +208,6 @@ class Godot private constructor(val context: Context) {
 	internal var xrMode = XRMode.REGULAR
 	private val useImmersive = AtomicBoolean(false)
 	private val isEdgeToEdge = AtomicBoolean(false)
-	private var useDebugOpengl = false
 	internal var darkMode = false
 	private var backgroundColor: Int = Color.BLACK
 	private var orientation = Configuration.ORIENTATION_UNDEFINED
@@ -285,8 +284,6 @@ class Godot private constructor(val context: Context) {
 					xrMode = XRMode.REGULAR
 				} else if (commandLine[i] == XRMode.OPENXR.cmdLineArg) {
 					xrMode = XRMode.OPENXR
-				} else if (commandLine[i] == "--debug_opengl") {
-					useDebugOpengl = true
 				} else if (commandLine[i] == "--edge_to_edge") {
 					isEdgeToEdge.set(true)
 				} else if (commandLine[i] == "--fullscreen") {
@@ -572,8 +569,6 @@ class Godot private constructor(val context: Context) {
 			val nativeRenderer = getNativeRenderer()
 			if (nativeRenderer == "vulkan") {
 				renderView = GodotVulkanRenderView(this, godotInputHandler, shouldBeTransparent)
-			} else if (nativeRenderer == "opengl3") {
-				renderView = GodotGLRenderView(this, godotInputHandler, xrMode, useDebugOpengl, shouldBeTransparent)
 			} else {
 				throw IllegalStateException("No native renderer is available.")
 			}

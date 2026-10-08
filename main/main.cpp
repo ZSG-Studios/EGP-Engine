@@ -1092,7 +1092,7 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	OS::RenderingSource rendering_driver_source = OS::RenderingSource::RENDERING_SOURCE_DEFAULT;
 	OS::RenderingSource rendering_method_source = OS::RenderingSource::RENDERING_SOURCE_DEFAULT;
 	String default_renderer = "";
-	String default_renderer_mobile = "";
+	String default_renderer_mobile = "forward_plus";
 	String renderer_hints = "";
 
 	packed_data = PackedData::get_singleton();
@@ -2079,11 +2079,7 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 #endif // defined(DEBUG_ENABLED) || defined (TOOLS_ENABLED)
 
 	OS::get_singleton()->_in_editor = editor;
-	if (globals->setup(project_path, main_pack, false, editor) == OK) {
-#ifdef TOOLS_ENABLED
-		found_project = true;
-#endif
-	} else {
+	{
 #ifdef TOOLS_ENABLED
 		editor = false;
 #else
@@ -2191,7 +2187,7 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		// Test OpenGL context and Rendering Device simultaneous creation and exit.
 
 		OS::get_singleton()->set_crash_handler_silent();
-		if (OS::get_singleton()->_test_create_rendering_device_and_gl(display_driver)) {
+		if (OS::get_singleton()->_test_create_rendering_device_with_window(display_driver)) {
 			exit_err = ERR_HELP;
 		} else {
 			exit_err = ERR_UNAVAILABLE;
@@ -2382,95 +2378,6 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 
 		GLOBAL_DEF_RST("rendering/rendering_device/fallback_to_vulkan", true);
 		GLOBAL_DEF_RST("rendering/rendering_device/fallback_to_d3d12", true);
-		GLOBAL_DEF_RST("rendering/rendering_device/fallback_to_opengl3", true);
-	}
-
-	{
-		// GL Compatibility driver overrides per platform.
-		GLOBAL_DEF_RST("rendering/gl_compatibility/driver", "opengl3");
-		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.windows", PROPERTY_HINT_ENUM, "opengl3,opengl3_angle"), "opengl3");
-		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.linuxbsd", PROPERTY_HINT_ENUM, "opengl3,opengl3_es"), "opengl3");
-		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.web", PROPERTY_HINT_ENUM, "opengl3"), "opengl3");
-		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.android", PROPERTY_HINT_ENUM, "opengl3"), "opengl3");
-		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.ios", PROPERTY_HINT_ENUM, "opengl3"), "opengl3");
-		GLOBAL_DEF_RST(PropertyInfo(Variant::STRING, "rendering/gl_compatibility/driver.macos", PROPERTY_HINT_ENUM, "opengl3,opengl3_angle"), "opengl3");
-
-		GLOBAL_DEF_RST("rendering/gl_compatibility/nvidia_disable_threaded_optimization", true);
-		GLOBAL_DEF_RST("rendering/gl_compatibility/fallback_to_angle", true);
-		GLOBAL_DEF_RST("rendering/gl_compatibility/fallback_to_native", true);
-		GLOBAL_DEF_RST("rendering/gl_compatibility/fallback_to_gles", true);
-
-		Array force_angle_list;
-
-#define FORCE_ANGLE(m_vendor, m_name) \
-	{ \
-		Dictionary device; \
-		device["vendor"] = m_vendor; \
-		device["name"] = m_name; \
-		force_angle_list.push_back(device); \
-	}
-
-		// AMD GPUs.
-		FORCE_ANGLE("ATI", "Radeon 9"); // ATI Radeon 9000 Series
-		FORCE_ANGLE("ATI", "Radeon X"); // ATI Radeon X500-X2000 Series
-		FORCE_ANGLE("ATI", "Radeon HD 2"); // AMD/ATI (Mobility) Radeon HD 2xxx Series
-		FORCE_ANGLE("ATI", "Radeon HD 3"); // AMD/ATI (Mobility) Radeon HD 3xxx Series
-		FORCE_ANGLE("ATI", "Radeon HD 4"); // AMD/ATI (Mobility) Radeon HD 4xxx Series
-		FORCE_ANGLE("ATI", "Radeon HD 5"); // AMD/ATI (Mobility) Radeon HD 5xxx Series
-		FORCE_ANGLE("ATI", "Radeon HD 6"); // AMD/ATI (Mobility) Radeon HD 6xxx Series
-		FORCE_ANGLE("ATI", "Radeon HD 7"); // AMD/ATI (Mobility) Radeon HD 7xxx Series
-		FORCE_ANGLE("ATI", "Radeon HD 8"); // AMD/ATI (Mobility) Radeon HD 8xxx Series
-		FORCE_ANGLE("ATI", "Radeon(TM) R2 Graphics"); // APUs
-		FORCE_ANGLE("ATI", "Radeon(TM) R3 Graphics");
-		FORCE_ANGLE("ATI", "Radeon(TM) R4 Graphics");
-		FORCE_ANGLE("ATI", "Radeon(TM) R5 Graphics");
-		FORCE_ANGLE("ATI", "Radeon(TM) R6 Graphics");
-		FORCE_ANGLE("ATI", "Radeon(TM) R7 Graphics");
-		FORCE_ANGLE("AMD", "Radeon(TM) R7 Graphics");
-		FORCE_ANGLE("AMD", "Radeon(TM) R8 Graphics");
-		FORCE_ANGLE("ATI", "Radeon R5 Graphics");
-		FORCE_ANGLE("ATI", "Radeon R6 Graphics");
-		FORCE_ANGLE("ATI", "Radeon R7 Graphics");
-		FORCE_ANGLE("AMD", "Radeon R7 Graphics");
-		FORCE_ANGLE("AMD", "Radeon R8 Graphics");
-		FORCE_ANGLE("ATI", "Radeon R5 2"); // Rx 2xx Series
-		FORCE_ANGLE("ATI", "Radeon R7 2");
-		FORCE_ANGLE("ATI", "Radeon R9 2");
-		FORCE_ANGLE("ATI", "Radeon R5 M2"); // Rx M2xx Series
-		FORCE_ANGLE("ATI", "Radeon R7 M2");
-		FORCE_ANGLE("ATI", "Radeon R9 M2");
-		FORCE_ANGLE("ATI", "Radeon (TM) R9 Fury");
-		FORCE_ANGLE("ATI", "Radeon (TM) R5 3"); // Rx 3xx Series
-		FORCE_ANGLE("AMD", "Radeon (TM) R5 3");
-		FORCE_ANGLE("ATI", "Radeon (TM) R7 3");
-		FORCE_ANGLE("AMD", "Radeon (TM) R7 3");
-		FORCE_ANGLE("ATI", "Radeon (TM) R9 3");
-		FORCE_ANGLE("AMD", "Radeon (TM) R9 3");
-		FORCE_ANGLE("ATI", "Radeon (TM) R5 M3"); // Rx M3xx Series
-		FORCE_ANGLE("AMD", "Radeon (TM) R5 M3");
-		FORCE_ANGLE("ATI", "Radeon (TM) R7 M3");
-		FORCE_ANGLE("AMD", "Radeon (TM) R7 M3");
-		FORCE_ANGLE("ATI", "Radeon (TM) R9 M3");
-		FORCE_ANGLE("AMD", "Radeon (TM) R9 M3");
-
-		// Intel GPUs (Gen7-Gen9.5 devices).
-		FORCE_ANGLE("Intel", "Intel(R) HD Graphics");
-		FORCE_ANGLE("Intel", "Intel HD Graphics");
-		FORCE_ANGLE("Intel", "Intel(R) Vallyview Graphics");
-		FORCE_ANGLE("Intel", "Intel(R) Iris(TM) Graphics 5100");
-		FORCE_ANGLE("Intel", "Intel(R) Iris(TM) Pro Graphics 5200");
-		FORCE_ANGLE("Intel", "Intel(R) Iris(TM) Graphics 6100");
-		FORCE_ANGLE("Intel", "Intel(R) Iris(TM) Pro Graphics 6200");
-		FORCE_ANGLE("Intel", "Intel(R) Iris(TM) Pro Graphics P6300");
-		FORCE_ANGLE("Intel", "Intel(R) Iris Graphics 540");
-		FORCE_ANGLE("Intel", "Intel(R) Iris Plus Graphics 640");
-		FORCE_ANGLE("Intel", "Intel(R) Iris Plus Graphics 650");
-		FORCE_ANGLE("Intel", "Intel(R) Iris Pro Graphics 580");
-		FORCE_ANGLE("Intel", "Intel(R) Iris Pro Graphics P580");
-
-#undef FORCE_ANGLE
-
-		GLOBAL_DEF_RST_NOVAL(PropertyInfo(Variant::ARRAY, "rendering/gl_compatibility/force_angle_on_devices", PROPERTY_HINT_ARRAY_TYPE, vformat("%s/%s:%s", Variant::DICTIONARY, PROPERTY_HINT_NONE, String())), force_angle_list);
 	}
 
 	// Start with RenderingDevice-based backends.
@@ -2479,36 +2386,10 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	renderer_hints = "forward_plus";
 #endif // FORWARD_RD_ENABLED
 
-#ifdef MOBILE_RD_ENABLED
-	if (!renderer_hints.is_empty()) {
-		renderer_hints += ",";
-	}
-	renderer_hints += "mobile";
-	default_renderer_mobile = "mobile";
-#endif // MOBILE_RD_ENABLED
-#endif
-
-	// And Compatibility next, or first if Vulkan is disabled.
-#ifdef GLES3_ENABLED
-	if (!renderer_hints.is_empty()) {
-		renderer_hints += ",";
-	}
-	renderer_hints += "gl_compatibility";
-	if (default_renderer_mobile.is_empty()) {
-		default_renderer_mobile = "gl_compatibility";
-	}
-	// Default to Compatibility when using the project manager.
-	if (rendering_driver.is_empty() && rendering_method.is_empty() && project_manager) {
-		rendering_driver = "opengl3";
-		rendering_method = "gl_compatibility";
-		default_renderer_mobile = "gl_compatibility";
-	}
 #endif
 
 	if (!rendering_method.is_empty()) {
 		if (rendering_method != "forward_plus" &&
-				rendering_method != "mobile" &&
-				rendering_method != "gl_compatibility" &&
 				rendering_method != "dummy") {
 			OS::get_singleton()->print("Unknown rendering method '%s', aborting.\nValid options are ",
 					rendering_method.utf8().get_data());
@@ -2583,8 +2464,6 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		if (rendering_method.is_empty()) {
 			if (rendering_driver == "dummy") {
 				rendering_method = "dummy";
-			} else if (rendering_driver == "opengl3" || rendering_driver == "opengl3_angle" || rendering_driver == "opengl3_es") {
-				rendering_method = "gl_compatibility";
 			} else {
 				rendering_method = "forward_plus";
 			}
@@ -2594,7 +2473,7 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		bool valid_combination = false;
 		Vector<String> available_drivers;
 #ifdef RD_ENABLED
-		if (rendering_method == "forward_plus" || rendering_method == "mobile") {
+		if (rendering_method == "forward_plus") {
 #ifdef VULKAN_ENABLED
 			available_drivers.push_back("vulkan");
 #endif
@@ -2607,13 +2486,6 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		}
 #endif // RD_ENABLED
 
-#ifdef GLES3_ENABLED
-		if (rendering_method == "gl_compatibility") {
-			available_drivers.push_back("opengl3");
-			available_drivers.push_back("opengl3_angle");
-			available_drivers.push_back("opengl3_es");
-		}
-#endif
 		if (rendering_method == "dummy") {
 			available_drivers.push_back("dummy");
 		}
@@ -2645,7 +2517,6 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	default_renderer = renderer_hints.get_slicec(',', 0);
 	GLOBAL_DEF_RST_BASIC(PropertyInfo(Variant::STRING, "rendering/renderer/rendering_method", PROPERTY_HINT_ENUM, renderer_hints), default_renderer);
 	GLOBAL_DEF_RST_BASIC("rendering/renderer/rendering_method.mobile", default_renderer_mobile);
-	GLOBAL_DEF_RST_BASIC(PropertyInfo(Variant::STRING, "rendering/renderer/rendering_method.web", PROPERTY_HINT_ENUM, "gl_compatibility"), "gl_compatibility"); // This is a bit of a hack until we have WebGPU support.
 
 	// Default to ProjectSettings default if nothing set on the command line.
 	if (rendering_method.is_empty()) {
@@ -2653,12 +2524,15 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 		rendering_method_source = OS::RenderingSource::RENDERING_SOURCE_PROJECT_SETTING;
 	}
 
+	// Reject unsupported renderer settings, including platform overrides in old projects.
+	if (rendering_method != "forward_plus" && rendering_method != "dummy") {
+		OS::get_singleton()->print("EGP supports only Forward+; project requested '%s'.\n", rendering_method.utf8().get_data());
+		goto error;
+	}
+
 	if (rendering_driver.is_empty()) {
 		if (rendering_method == "dummy") {
 			rendering_driver = "dummy";
-		} else if (rendering_method == "gl_compatibility") {
-			rendering_driver = GLOBAL_GET("rendering/gl_compatibility/driver");
-			rendering_driver_source = OS::RenderingSource::RENDERING_SOURCE_PROJECT_SETTING;
 		} else {
 			rendering_driver = GLOBAL_GET("rendering/rendering_device/driver");
 			rendering_driver_source = OS::RenderingSource::RENDERING_SOURCE_PROJECT_SETTING;
@@ -3989,7 +3863,7 @@ void Main::setup_boot_logo() {
 				}
 			}
 		} else {
-			// Create a 1×1 transparent image. This will effectively hide the splash image.
+			// Create a 1Ã—1 transparent image. This will effectively hide the splash image.
 			boot_logo.instantiate();
 			boot_logo->initialize_data(1, 1, false, Image::FORMAT_RGBA8);
 			boot_logo->set_pixel(0, 0, Color(0, 0, 0, 0));

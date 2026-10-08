@@ -6,7 +6,7 @@ function main()
     for _, folder in ipairs(os.dirs(path.join(root,'modules/*'))) do declared['module_' .. path.filename(folder) .. '_enabled']=true end
     local count=0
     local sdk_fields={
-        D3D12_ENABLED={option='d3d12',fallback='no'}, ANGLE_ENABLED={option='angle',fallback='no'},
+        D3D12_ENABLED={option='d3d12',fallback='no'},
         ACCESSKIT_ENABLED={option='accesskit',fallback='no'}, SWAPPY_ENABLED={option='swappy',fallback='no'},
         VULKAN_ENABLED={option='vulkan',fallback='no'}, PROFILER_ENABLED={option='profiler',fallback='none'}
     }
@@ -102,8 +102,8 @@ function main()
     assert(android:find('platform/android/java/app/config.gradle',1,true) and android:find('sdkmanager --sdk_root="$SDK_ROOT" "ndk;$NDK_VERSION"',1,true),'Android CI must read and install the same NDK revision as Gradle')
     assert(android:find('ANDROID_NDK_ROOT=%s\\nANDROID_NDK_HOME=%s\\n',1,true),'Native compilation and libc++ staging must share the selected NDK')
     count=count+3
-    local web=assert(io.readfile(path.join(root,'.github/workflows/web_builds.yml')))
-    assert(assert(web:find('name: Setup native xmake',1,true)) < assert(web:find('name: Set up Emscripten latest',1,true)), 'Build the host xmake executable before activating the Web cross compiler')
+    local runner=assert(io.readfile(path.join(root,'.github/workflows/runner.yml')))
+    assert(not runner:find('web-build:',1,true),'CI must not build the removed WebGL backend')
     local windows=assert(io.readfile(path.join(root,'.github/workflows/windows_builds.yml')))
     assert(windows:find('EGP_MINGW_ROOT=$mingwRoot',1,true) and windows:find('$env:GITHUB_ENV',1,true), 'The installed MSYS compiler SDK root must reach isolated engine and host-tool configurations')
     count=count+2

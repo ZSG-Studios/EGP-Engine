@@ -75,7 +75,7 @@ bool EditorExportPlatformIOS::has_valid_export_configuration(const Ref<EditorExp
 	String err;
 	String rendering_method = get_project_setting(p_preset, "rendering/renderer/rendering_method.mobile");
 	String rendering_driver = get_project_setting(p_preset, "rendering/rendering_device/driver." + get_platform_name());
-	if ((rendering_method == "forward_plus" || rendering_method == "mobile") && rendering_driver == "metal") {
+	if ((rendering_method == "forward_plus") && rendering_driver == "metal") {
 		float version = p_preset->get("application/min_ios_version").operator String().to_float();
 		if (version < 14.0) {
 			err += TTR("Metal renderer require iOS 14+.") + "\n";
@@ -249,7 +249,7 @@ void EditorExportPlatformIOS::get_required_device_capabilities(const Ref<EditorE
 	if ((bool)p_preset->get("capabilities/performance_gaming_tier") && !r_capabilities.has("iphone-performance-gaming-tier")) {
 		r_capabilities.push_back("iphone-performance-gaming-tier");
 	}
-	if (((bool)p_preset->get("capabilities/performance_a12") || rendering_method == "forward_plus" || rendering_method == "mobile") && !r_capabilities.has("iphone-ipad-minimum-performance-a12")) {
+	if (((bool)p_preset->get("capabilities/performance_a12") || rendering_method == "forward_plus") && !r_capabilities.has("iphone-ipad-minimum-performance-a12")) {
 		r_capabilities.push_back("iphone-ipad-minimum-performance-a12");
 	}
 }

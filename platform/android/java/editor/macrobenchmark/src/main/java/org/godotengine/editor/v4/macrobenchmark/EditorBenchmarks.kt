@@ -65,8 +65,7 @@ class EditorBenchmarks {
 		private const val EXTRA_LOAD_EMPTY_BENCHMARK_PROJECT = "load_empty_benchmark_project"
 		private const val EXTRA_BENCHMARK_RENDERING_METHOD = "benchmark_rendering_method"
 
-		private const val MOBILE_RENDERING_METHOD = "mobile"
-		private const val GL_COMPATIBILITY_RENDERING_METHOD = "gl_compatibility"
+		private const val FORWARD_PLUS_RENDERING_METHOD = "forward_plus"
 	}
 
 	@get:Rule
@@ -76,26 +75,7 @@ class EditorBenchmarks {
 		Manifest.permission.READ_EXTERNAL_STORAGE,
 		Manifest.permission.WRITE_EXTERNAL_STORAGE)
 
-	/**
-	 * Navigates to the device's home screen, and launches the Project Manager.
-	 */
-	@OptIn(ExperimentalMetricApi::class)
-	@Test
-	fun startupProjectManagerUsingOpenGL() = benchmarkRule.measureRepeated(
-			packageName = PACKAGE_NAME,
-			metrics = listOf(
-				StartupTimingMetric(),
-				MemoryUsageMetric(MemoryUsageMetric.Mode.Max),
-				FrameTimingGfxInfoMetric(),
-			),
-			iterations = ITERATION_COUNT,
-			startupMode = StartupMode.COLD
-	) {
-		pressHome()
-		startActivityAndWait { intent ->
-			intent.putExtra(EXTRA_BENCHMARK_RENDERING_METHOD, GL_COMPATIBILITY_RENDERING_METHOD)
-		}
-	}
+
 
 	/**
 	 * Navigates to the device's home screen, and launches the Project Manager using the Vulkan renderer.
@@ -114,33 +94,11 @@ class EditorBenchmarks {
 	) {
 		pressHome()
 		startActivityAndWait { intent ->
-			intent.putExtra(EXTRA_BENCHMARK_RENDERING_METHOD, MOBILE_RENDERING_METHOD)
+			intent.putExtra(EXTRA_BENCHMARK_RENDERING_METHOD, FORWARD_PLUS_RENDERING_METHOD)
 		}
 	}
 
-	/**
-	 * Navigates to the device's home screen, launches the editor and loads an empty project.
-	 */
-	@OptIn(ExperimentalMetricApi::class)
-	@Test
-	fun startupEditorWindowUsingOpenGL() = benchmarkRule.measureRepeated(
-		packageName = PACKAGE_NAME,
-		metrics = listOf(
-			StartupTimingMetric(),
-			MemoryUsageMetric(MemoryUsageMetric.Mode.Max),
-			FrameTimingGfxInfoMetric(),
-		),
-		iterations = ITERATION_COUNT,
-		startupMode = StartupMode.COLD,
-	) {
-		pressHome()
-		startActivityAndWait { intent ->
-			intent.putExtra(EXTRA_LOAD_EMPTY_BENCHMARK_PROJECT, true)
-			intent.putExtra(EXTRA_BENCHMARK_RENDERING_METHOD, GL_COMPATIBILITY_RENDERING_METHOD)
-		}
 
-		waitForEditorLoadingIndicator()
-	}
 
 	/**
 	 * Navigates to the device's home screen, launches the editor and loads an empty project using the Vulkan renderer.
@@ -160,7 +118,7 @@ class EditorBenchmarks {
 		pressHome()
 		startActivityAndWait { intent ->
 			intent.putExtra(EXTRA_LOAD_EMPTY_BENCHMARK_PROJECT, true)
-			intent.putExtra(EXTRA_BENCHMARK_RENDERING_METHOD, MOBILE_RENDERING_METHOD)
+			intent.putExtra(EXTRA_BENCHMARK_RENDERING_METHOD, FORWARD_PLUS_RENDERING_METHOD)
 		}
 
 		waitForEditorLoadingIndicator()

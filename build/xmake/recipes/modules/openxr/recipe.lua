@@ -16,10 +16,6 @@ function main(graph)
             if R.truthy(R.index(env, "x11")) then
                 env_openxr:add_unique({["CPPDEFINES"] = {"XR_USE_PLATFORM_XLIB"}})
             end
-            if R.truthy((function() local v = R.index(env, "wayland"); if not R.truthy(v) then return v end; return R.index(env, "opengl3") end)()) then
-                env_openxr:add_unique({["CPPDEFINES"] = {"XR_USE_PLATFORM_EGL", "XRDEPENDENCIES_USE_GLAD"}})
-                env_openxr:prepend({["CPPPATH"] = {"#thirdparty/glad"}})
-            end
             if R.truthy(not R.truthy(R.startswith(sys.platform, "freebsd"))) then
                 env_openxr:add_unique({["CPPDEFINES"] = {"HAVE_SECURE_GETENV"}})
             end

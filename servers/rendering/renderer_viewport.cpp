@@ -153,13 +153,7 @@ void RendererViewport::_configure_3d_render_buffers(Viewport *p_viewport) {
 				scaling_3d_mode = RSE::VIEWPORT_SCALING_3D_MODE_OFF;
 			}
 
-			if (scaling_3d_mode != RSE::VIEWPORT_SCALING_3D_MODE_OFF && scaling_3d_mode != RSE::VIEWPORT_SCALING_3D_MODE_BILINEAR && scaling_3d_mode != RSE::VIEWPORT_SCALING_3D_MODE_NEAREST && OS::get_singleton()->get_current_rendering_method() == "gl_compatibility") {
-				scaling_3d_mode = RSE::VIEWPORT_SCALING_3D_MODE_BILINEAR;
-				scaling_type = RSE::scaling_3d_mode_type(scaling_3d_mode);
-				WARN_PRINT_ONCE("MetalFX and FSR upscaling are not supported in the Compatibility renderer. Falling back to bilinear scaling.");
-			}
-
-			if ((scaling_3d_mode == RSE::VIEWPORT_SCALING_3D_MODE_FSR || scaling_3d_mode == RSE::VIEWPORT_SCALING_3D_MODE_FSR2 || scaling_3d_mode == RSE::VIEWPORT_SCALING_3D_MODE_METALFX_TEMPORAL) && OS::get_singleton()->get_current_rendering_method() == "mobile") {
+			if ((scaling_3d_mode == RSE::VIEWPORT_SCALING_3D_MODE_FSR || scaling_3d_mode == RSE::VIEWPORT_SCALING_3D_MODE_FSR2 || scaling_3d_mode == RSE::VIEWPORT_SCALING_3D_MODE_METALFX_TEMPORAL) && false) {
 				scaling_3d_mode = RSE::VIEWPORT_SCALING_3D_MODE_BILINEAR;
 				scaling_type = RSE::scaling_3d_mode_type(scaling_3d_mode);
 				WARN_PRINT_ONCE("MetalFX temporal and FSR upscaling are not supported in the Mobile renderer. Falling back to bilinear scaling.");
@@ -343,11 +337,6 @@ void RendererViewport::_draw_viewport(Viewport *p_viewport) {
 		String rt_id = "vp_begin_" + itos(p_viewport->self.get_id());
 		RSG::utilities->capture_timestamp(rt_id);
 		timestamp_vp_map[rt_id] = p_viewport->self;
-	}
-
-	if (OS::get_singleton()->get_current_rendering_method() == "gl_compatibility") {
-		// This is currently needed for GLES to keep the current window being rendered to up to date
-		DisplayServer::get_singleton()->gl_window_make_current(p_viewport->viewport_to_screen);
 	}
 
 	/* Camera should always be BEFORE any other 3D */
@@ -1042,10 +1031,6 @@ void RendererViewport::viewport_set_scaling_3d_mode(RID p_viewport, RSE::Viewpor
 			return;
 		}
 	}
-	if (rendering_method == "gl_compatibility" && p_mode == RSE::VIEWPORT_SCALING_3D_MODE_METALFX_SPATIAL) {
-		WARN_PRINT_ONCE_ED("MetalFX Spatial 3D scaling is only available when using the Forward+ or Mobile renderer.");
-		return;
-	}
 
 	if (viewport->scaling_3d_mode == p_mode) {
 		return;
@@ -1436,10 +1421,6 @@ bool RendererViewport::viewport_is_using_hdr_2d(RID p_viewport) const {
 void RendererViewport::viewport_set_screen_space_aa(RID p_viewport, RSE::ViewportScreenSpaceAA p_mode) {
 	Viewport *viewport = viewport_owner.get_or_null(p_viewport);
 	ERR_FAIL_NULL(viewport);
-	if (OS::get_singleton()->get_current_rendering_method() == "gl_compatibility" && p_mode != RSE::VIEWPORT_SCREEN_SPACE_AA_DISABLED) {
-		WARN_PRINT_ONCE_ED("Screen-space AA is only available when using the Forward+ or Mobile renderer.");
-		return;
-	}
 
 	if (viewport->screen_space_aa == p_mode) {
 		return;

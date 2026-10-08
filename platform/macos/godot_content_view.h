@@ -37,12 +37,7 @@
 #import <AppKit/AppKit.h>
 #import <Foundation/Foundation.h>
 
-#if defined(GLES3_ENABLED)
-#import <AppKit/NSOpenGLView.h>
-#define RootView NSOpenGLView
-#else
 #define RootView NSView
-#endif
 
 #import <QuartzCore/CAMetalLayer.h>
 

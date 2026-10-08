@@ -36,7 +36,6 @@
 #include "core/math/projection.h"
 #include "core/templates/local_vector.h"
 #include "servers/rendering/renderer_rd/forward_clustered/scene_shader_forward_clustered.h"
-#include "servers/rendering/renderer_rd/forward_mobile/scene_shader_forward_mobile.h"
 #include "servers/rendering/renderer_rd/storage_rd/texture_storage.h"
 #include "servers/rendering/storage/variant_converters.h"
 
@@ -1318,24 +1317,6 @@ void MaterialStorage::TexBlitShaderData::set_code(const String &p_code) {
 	}
 
 	blend_mode = BlendMode(blend_modei);
-
-#if 0
-	print_line("**compiling shader:");
-	print_line("**defines:\n");
-	for (int i = 0; i < gen_code.defines.size(); i++) {
-		print_line(gen_code.defines[i]);
-	}
-
-	HashMap<String, String>::Iterator el = gen_code.code.begin();
-	while (el) {
-		print_line("\n**code " + el->key + ":\n" + el->value);
-		++el;
-	}
-
-	print_line("\n**uniforms:\n" + gen_code.uniforms);
-	print_line("\n**vertex_globals:\n" + gen_code.stage_globals[ShaderCompiler::STAGE_VERTEX]);
-	print_line("\n**fragment_globals:\n" + gen_code.stage_globals[ShaderCompiler::STAGE_FRAGMENT]);
-#endif
 
 	texture_storage->tex_blit_shader.shader.version_set_code(version, gen_code.code, gen_code.uniforms, gen_code.stage_globals[ShaderCompiler::STAGE_VERTEX], gen_code.stage_globals[ShaderCompiler::STAGE_FRAGMENT], gen_code.defines);
 	ERR_FAIL_COND(!texture_storage->tex_blit_shader.shader.version_is_valid(version));
@@ -2663,13 +2644,6 @@ RSE::CullMode RendererRD::MaterialStorage::material_get_cull_mode(RID p_material
 			return (RSE::CullMode)sd_clustered->cull_mode;
 		}
 #endif // FORWARD_RD_ENABLED
-
-#ifdef MOBILE_RD_ENABLED
-		RendererSceneRenderImplementation::SceneShaderForwardMobile::ShaderData *sd_mobile = dynamic_cast<RendererSceneRenderImplementation::SceneShaderForwardMobile::ShaderData *>(material->shader->data);
-		if (sd_mobile) {
-			return (RSE::CullMode)sd_mobile->cull_mode;
-		}
-#endif // MOBILE_RD_ENABLED
 	}
 
 	return RSE::CULL_MODE_DISABLED;

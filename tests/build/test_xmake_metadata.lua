@@ -12,8 +12,8 @@ function main()
     local root=os.curdir()
     local factory=import('build.xmake.graph',{rootdir=root})
     local checks=0
-    for _, platform in ipairs({'windows','linuxbsd','ios','visionos','web'}) do
-        local arch=platform=='web' and 'wasm32' or (platform=='ios' or platform=='visionos') and 'arm64' or 'x86_64'
+    for _, platform in ipairs({'windows','linuxbsd','ios','visionos'}) do
+        local arch=(platform=='ios' or platform=='visionos') and 'arm64' or 'x86_64'
         local graph=factory.new(root,{platform=platform,target='template_debug',arch=arch,vulkan=false,d3d12=false,accesskit=false})
         graph:configure()
         local data=graph:serialize()
@@ -37,12 +37,8 @@ function main()
             checks=checks+2
         end
     end
-    local graph=factory.new(root,{platform='web',target='template_debug',arch='wasm32',dlink_enabled=true})
-    graph:configure()
-    local programs=graph:serialize().programs
-    assert(#programs==2 and #programs[1].policy.LIBS==1 and programs[1].policy.LIBS[1].name=='idbfs.js','Dynamic Web loader must not statically link engine archives')
-    assert(#programs[2].policy.LIBS>20,'Dynamic Web side module must retain engine archives')
-    checks=checks+2
+    assert(not utils.trycall(function() factory.new(root,{platform='web'}):configure() end),'Removed WebGL graph must fail')
+    checks=checks+1
     for _, platform in ipairs({'windows','linuxbsd','macos'}) do
         for _, kind in ipairs({'static_library','shared_library'}) do
             local graph=factory.new(root,{platform=platform,target='template_debug',arch='x86_64',library_type=kind,vulkan=false,d3d12=false,accesskit=false,metal=false})
