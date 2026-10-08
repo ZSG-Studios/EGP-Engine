@@ -35,7 +35,22 @@ jobs:
         with:
           platform: visionos
           target: template_debug
-          xmake-flags: arch=arm64 dev_mode=yes debug_symbols=no metal=yes vulkan=no module_visionos_xr_enabled=yes
+          xmake-flags: arch=arm64 dev_mode=yes debug_symbols=no metal=yes vulkan=no module_visionos_xr_enabled=yes generate_bundle=yes
+      - name: Check packaged debug template
+        run: |
+          python3 - <<'PY'
+          import hashlib, json, zipfile
+          from pathlib import Path
+          template = Path("bin/godot_visionos.zip")
+          library = "libgodot.visionos.debug.xcframework/xros-arm64/libgodot.a"
+          with zipfile.ZipFile(template) as archive:
+              assert archive.getinfo(library).file_size > 0, "Device library missing from template"
+              assert archive.testzip() is None, "Corrupt template ZIP"
+          receipt = {"template": str(template), "sha256": hashlib.sha256(template.read_bytes()).hexdigest(),
+                     "library": library, "scope": "Packaged debug template only; no signed app or device test"}
+          Path(".build/visionos-experimental/template.json").write_text(json.dumps(receipt, indent=2) + "\n")
+          print("EGP_VISIONOS_TEMPLATE_PASS", json.dumps(receipt))
+          PY
       - name: Upload device library and toolchain evidence
         if: always()
         uses: actions/upload-artifact@v4

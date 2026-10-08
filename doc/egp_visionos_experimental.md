@@ -46,7 +46,7 @@ log. Any engine/script error, timeout or missing success marker fails the test.
 The Windows runner keeps the window hidden/offscreen, capped at 60 FPS with a
 55-second watchdog. Linux CI uses Xvfb and Mesa's software Vulkan driver.
 
-The `Experimental visionOS Forward+` workflow builds the device library and two
+The `Experimental visionOS Forward+` workflow builds and packages a debug device template and two
 editors from the candidate commit. Linux runs the stereo test. macOS records GPU
 and architecture capabilities and only runs the Metal test when the hosted
 runner can execute the arm64 Metal editor. A `NOT_RUN.txt` artifact means runtime
@@ -55,11 +55,17 @@ Compositor Services, foveation, ARKit or a headset.
 
 ## Hand off to a device owner
 
-1. Build matching visionOS templates and a macOS editor with Xcode; the workflow's
-   device archive is a compile artifact, not a signed, installable app.
+1. Build a macOS editor from the same commit, or use your matching local editor.
+   Download `godot_visionos.zip` from the workflow's device artifact. It contains
+   the debug device template; release and simulator builds are not included.
+   This is not a signed, installable app.
 2. Open `misc/egp/visionos_forward_plus/project.godot`. Export using the visionOS
    preset with application role **Immersive (experimental)**, initially **Full**
-   immersion. Supply your own signing team and bundle identifier in Xcode.
+   immersion. Set **Custom Template > Debug** to the downloaded ZIP. Set your
+   own **App Store Team ID** and bundle identifier in the export preset before
+   exporting (the exporter requires a team even for project-only exports).
+   **Export Project Only** is enabled in this preset. Open the generated Xcode
+   project and configure your signing identity and device there.
 3. Run without `--mock-xr`. The project initializes the real visionOS interface.
    Keep the supplied HDR, scale and AA settings. Read the startup warning and
    periodic `EGP_VISIONOS_DEVICE_OBSERVATION` messages; those are liveness signals,
