@@ -129,11 +129,9 @@ struct ContentStageConfiguration: CompositorLayerConfiguration {
 		// Forward+ renders through ordinary intermediate textures. Apple's foveated
 		// textures have different logical/physical coordinates, which its compute
 		// and post-process passes do not yet remap. Keep this prototype unfoveated.
-		let foveationEnabled = false
-		configuration.isFoveationEnabled = foveationEnabled
+		configuration.isFoveationEnabled = false
 
-		let options: LayerRenderer.Capabilities.SupportedLayoutsOptions = foveationEnabled ? [.foveationEnabled] : []
-		let supportedLayouts = capabilities.supportedLayouts(options: options)
+		let supportedLayouts = capabilities.supportedLayouts(options: [])
 		if (!supportedLayouts.contains(.layered)) {
 			fatalError("Only the .layered layout is supported by Godot's visionOS XR module.")
 		}
