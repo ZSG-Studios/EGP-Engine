@@ -268,10 +268,26 @@ jobs:
           bin: ${{ matrix.bin }}
 
       - name: Unit tests
+        env:
+          XDG_CACHE_HOME: ${{ github.workspace }}/.build/linux-unit-cache
         run: |
+          set -o pipefail
+          mkdir -p .build "$XDG_CACHE_HOME"
           ${{ matrix.bin }} --version
           ${{ matrix.bin }} --help
-          ${{ matrix.bin }} --headless --test --force-colors
+          startup_root="$(mktemp -d "$PWD/.build/linux-unit-startup.XXXXXX")"
+          XDG_CACHE_HOME="$startup_root/missing/nested/cache" timeout --signal=TERM --kill-after=5s 60s ${{ matrix.bin }} --headless --test --force-colors --test-case="[String] Assign Latin-1 char string" | tee .build/linux-unit-startup.log
+          xmake lua misc/scripts/validate_egp_unit_summary.lua .build/linux-unit-startup.log .build/linux-unit-startup-receipt.json
+          printf 'Uncreatable test cache root\n' > "$startup_root/blocked"
+          set +e
+          XDG_CACHE_HOME="$startup_root/blocked" timeout --signal=TERM --kill-after=5s 60s ${{ matrix.bin }} --headless --test --force-colors --test-case="[String] Assign Latin-1 char string" > .build/linux-unit-startup-blocked.log 2>&1
+          startup_exit=$?
+          set -e
+          test "$startup_exit" -eq 1
+          grep -q 'Failed to create test cache directory' .build/linux-unit-startup-blocked.log
+          ! grep -qE '\[doctest\].*Status:.*SUCCESS' .build/linux-unit-startup-blocked.log
+          ${{ matrix.bin }} --headless --test --force-colors | tee .build/linux-unit-tests.log
+          xmake lua misc/scripts/validate_egp_unit_summary.lua .build/linux-unit-tests.log .build/linux-unit-tests-receipt.json
 
       - name: .NET source generators tests
         if: matrix.build-mono

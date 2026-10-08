@@ -17,6 +17,11 @@ function select(options, host, arch, available)
     return {plat=host,arch=arch,toolchain=assert(({windows='msvc',linux='gcc',macosx='xcode',bsd='clang'})[host],'Unsupported native code-generation host')}
 end
 
+-- These standalone generators must not load an unrelated Git/MSYS runtime from PATH.
+function configure_runtime(target)
+    if target:is_plat('mingw') then target:add('ldflags', {'-static', '-pthread'}, {force=true}) end
+end
+
 -- Explicit SDK roots must reach both the engine and isolated native generator projects.
 function configure_arguments(normalized, options, sdkroot)
     if normalized.plat ~= 'mingw' then return {} end

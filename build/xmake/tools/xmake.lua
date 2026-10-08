@@ -11,6 +11,7 @@ option_end()
 rule("egp.codegen_host")
     on_load(function(target)
         if is_plat("mingw") and has_config("egp_mingw_clang") then target:set("toolchains", "mingw", {clang=true}) end
+        import('build.xmake.platforms.host', {rootdir=path.absolute('../../..',os.scriptdir())}).configure_runtime(target)
     end)
 rule_end()
 target("egp_compress")

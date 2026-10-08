@@ -114,6 +114,9 @@ jobs:
 
       - name: Unit tests
         run: |
+          set -o pipefail
+          mkdir -p .build
           ${{ matrix.bin }} --version
           ${{ matrix.bin }} --help
-          ${{ matrix.bin }} --test --force-colors
+          ${{ matrix.bin }} --test --force-colors | tee .build/macos-unit-tests.log
+          xmake lua misc/scripts/validate_egp_unit_summary.lua .build/macos-unit-tests.log .build/macos-unit-tests-receipt.json

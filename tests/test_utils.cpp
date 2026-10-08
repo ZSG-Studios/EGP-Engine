@@ -45,7 +45,8 @@ String TestUtils::get_executable_dir() {
 
 String TestUtils::get_temp_path(const String &p_suffix) {
 	const String temp_base = OS::get_singleton()->get_cache_path().path_join("godot_test");
-	DirAccess::make_dir_absolute(temp_base); // Ensure the directory exists.
+	const Error error = DirAccess::make_dir_recursive_absolute(temp_base);
+	ERR_FAIL_COND_V_MSG(error != OK, temp_base.path_join(p_suffix), "Failed to create test cache directory.");
 	return temp_base.path_join(p_suffix);
 }
 

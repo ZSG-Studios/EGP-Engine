@@ -94,8 +94,8 @@ int test_main(int argc, char *argv[]) {
 	{
 		const String test_path = TestUtils::get_temp_path("");
 		Ref<DirAccess> da = DirAccess::open(test_path); // get_temp_path() automatically creates the folder.
-		ERR_FAIL_COND_V(da.is_null(), 0);
-		ERR_FAIL_COND_V_MSG(da->erase_contents_recursive() != OK, 0, "Failed to delete files");
+		ERR_FAIL_COND_V(da.is_null(), 1);
+		ERR_FAIL_COND_V_MSG(da->erase_contents_recursive() != OK, 1, "Failed to delete files");
 	}
 
 	// Run custom test tools.

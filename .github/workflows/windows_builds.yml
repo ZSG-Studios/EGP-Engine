@@ -145,6 +145,9 @@ jobs:
 
       - name: Unit tests
         run: |
+          New-Item -ItemType Directory -Force .build | Out-Null
           ${{ matrix.bin }} --version
           ${{ matrix.bin }} --help
-          ${{ matrix.bin }} --test --force-colors
+          ${{ matrix.bin }} --test --force-colors 2>&1 | Tee-Object -FilePath .build/windows-unit-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          xmake lua misc/scripts/validate_egp_unit_summary.lua .build/windows-unit-tests.log .build/windows-unit-tests-receipt.json
