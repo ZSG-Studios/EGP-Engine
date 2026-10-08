@@ -46,7 +46,7 @@ try:
                 cwd=engine.parent,
                 stdout=log,
                 stderr=subprocess.STDOUT,
-                creationflags=subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0,
+                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0) if os.name == "nt" else 0,
             )
         )
     for role, child in zip(["server", "client"], children):

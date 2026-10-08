@@ -4,7 +4,7 @@ using Godot;
 /// Optional native C# construction. The Inspector workflow needs none of this.
 public static class SuperpositionUsage
 {
-	public static Superposition Attach(Node3D target, EGPNetSession session, string stableKey)
+	public static Superposition Attach(Node3D target, EgpNetSession session, string stableKey)
 	{
 		var visible = new SuperpositionProperty
 		{
