@@ -10,7 +10,7 @@ class EngineProcessTests(unittest.TestCase):
     def setUp(self):
         self.temporary = tempfile.TemporaryDirectory(prefix="egp engine paths ")
         self.addCleanup(self.temporary.cleanup)
-        self.root = Path(self.temporary.name)
+        self.root = Path(self.temporary.name).resolve()
 
     def write(self, name, data=b"engine"):
         path = self.root / name
@@ -32,6 +32,22 @@ class EngineProcessTests(unittest.TestCase):
         launcher = self.write("godot.windows.template_release.x86_64.mono.console.exe")
         engine = self.write("godot.windows.template_release.x86_64.mono.exe")
         self.assertEqual(resolve_engine_process(launcher, "nt")[0], engine)
+
+    def test_alias_path_records_canonical_identity_and_hashes(self):
+        launcher = self.write("godot.windows.editor.dev.x86_64.console.exe", b"launcher")
+        engine = self.write("godot.windows.editor.dev.x86_64.exe")
+        alias = self.root / "directory alias"
+        try:
+            alias.symlink_to(self.root, target_is_directory=True)
+        except OSError:
+            alias.mkdir()
+            alias = alias / ".."
+        actual, proof = resolve_engine_process(alias / launcher.name, "nt")
+        self.assertEqual(actual, engine)
+        self.assertEqual(proof["requested"], str(launcher))
+        self.assertEqual(proof["effective"], str(engine))
+        self.assertEqual(proof["requested_sha256"], hashlib.sha256(b"launcher").hexdigest())
+        self.assertEqual(proof["effective_sha256"], hashlib.sha256(b"engine").hexdigest())
 
     def test_missing_direct_sibling_fails_without_using_launcher(self):
         launcher = self.write("godot.windows.editor.dev.x86_64.console.exe")

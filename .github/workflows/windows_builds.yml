@@ -68,8 +68,8 @@ jobs:
         id: mingw
         uses: msys2/setup-msys2@v2
         with:
-          msystem: MINGW64
-          install: mingw-w64-x86_64-gcc
+          msystem: UCRT64
+          install: mingw-w64-ucrt-x86_64-gcc
 
       - name: Expose MinGW tools to native xmake
         if: matrix.compiler == 'gcc'
@@ -77,7 +77,7 @@ jobs:
         env:
           EGP_MSYS_LOCATION: ${{ steps.mingw.outputs.msys2-location }}
         run: |
-          $mingwRoot = Join-Path $env:EGP_MSYS_LOCATION 'mingw64'
+          $mingwRoot = Join-Path $env:EGP_MSYS_LOCATION 'ucrt64'
           Join-Path $mingwRoot 'bin' | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
           "EGP_MINGW_ROOT=$mingwRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 

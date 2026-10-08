@@ -196,16 +196,32 @@ func run_test() -> void:
 	var source_path := "res://extensions/smoke/src/extension.cpp"
 	var source := FileAccess.get_file_as_string(source_path)
 	var file := FileAccess.open(source_path, FileAccess.WRITE)
-	# GCC echoes source lines beside diagnostics. Adjacent literals preserve the
-	# emitted OSC bytes without making valid source context look like a leak.
-	file.store_string(source + "\n#pragma message(\"\\033\" \"]8;;\" \"https://example.invalid\" \"\\aEGP terminal link fixture\\033]8;;\\a\")\n#error EGP deliberate diagnostic fixture\n")
+	file.store_string(source + "\n#error EGP deliberate diagnostic fixture\n")
 	file.close()
-	if not require(panel.build_extension("smoke", false) == OK, "Failed-build fixture did not start"):
+	# Emit actual terminal controls through the build pipe. Clang quotes controls
+	# in pragma diagnostics, xmake trims earlier warnings, and MSVC stops at #error.
+	var recipe_path := "res://extensions/smoke/xmake.lua"
+	var recipe := FileAccess.get_file_as_string(recipe_path)
+	file = FileAccess.open(recipe_path, FileAccess.WRITE)
+	file.store_string(recipe + "\ntarget(\"extension\")\n    before_build(function ()\n        io.stdout:write(string.char(27) .. \"[31m\" .. string.char(27) .. \"]8;;https://example.invalid\" .. string.char(7) .. \"EGP terminal link fixture\" .. string.char(27) .. \"]8;;\" .. string.char(7) .. string.char(27) .. \"[0m\\n\")\n        io.stdout:flush()\n    end)\n")
+	file.close()
+	var failure_build_started: bool = panel.build_extension("smoke", false) == OK
+	var failure_selection_updated: bool = selector.get_item_text(selector.get_selected()) == "smoke"
+	var failure_build_finished := false
+	if failure_build_started:
+		failure_build_finished = await finish_build()
+	# Restore exact project input before any recovery build or implementation reload.
+	file = FileAccess.open(recipe_path, FileAccess.WRITE)
+	file.store_string(recipe)
+	file.close()
+	if not require(FileAccess.get_file_as_string(recipe_path) == recipe, "Diagnostic fixture did not restore its build recipe"):
 		return
-	if not require(selector.get_item_text(selector.get_selected()) == "smoke",
+	if not require(failure_build_started, "Failed-build fixture did not start"):
+		return
+	if not require(failure_selection_updated,
 			"Public build target did not update the selected extension/source path"):
 		return
-	if not await finish_build():
+	if not failure_build_finished:
 		return
 	if not require(panel.get_status().contains("build failed") and panel.get_status().contains("fix the source")
 			and not debug_button.disabled, "Compile failure lacks persistent recovery guidance"):
