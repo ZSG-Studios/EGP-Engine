@@ -3361,7 +3361,7 @@
 			Specify whether to enable eye tracking for this project. Depending on the platform, additional export configuration may be needed.
 		</member>
 		<member name="xr/openxr/extensions/frame_synthesis" type="bool" setter="" getter="" default="false">
-			If [code]true[/code] the frame synthesis extension will be activated if supported by the platform.
+			Requests the frame synthesis extension when supported by the platform and renderer. Frame synthesis is unsupported by EGP's Forward+ renderer; enabling this setting does not provide frame synthesis in EGP.
 			[b]Note:[/b] This feature should not be enabled in conjunction with Application Space Warp, if supported this replaces ASW.
 		</member>
 		<member name="xr/openxr/extensions/frame_synthesis/flip_y" type="bool" setter="" getter="" default="false">

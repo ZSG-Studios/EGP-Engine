@@ -14,7 +14,7 @@ on:
         options: [default, none]
         default: none
   push:
-    branches: [experimental/visionos-forward-plus]
+    branches: [master, experimental/visionos-forward-plus]
   pull_request:
     paths:
       - 'main/main.cpp'
