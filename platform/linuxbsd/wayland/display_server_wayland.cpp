@@ -2229,7 +2229,6 @@ DisplayServerWayland::DisplayServerWayland(const String &p_rendering_driver, Dis
 	rendering_driver = p_rendering_driver;
 
 	bool driver_found = false;
-	String executable_name = OS::get_singleton()->get_executable_path().get_file();
 
 	if (rendering_driver == "dummy") {
 		RasterizerDummy::make_current();

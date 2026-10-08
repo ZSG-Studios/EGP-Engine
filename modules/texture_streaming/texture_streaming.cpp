@@ -281,8 +281,6 @@ void TextureStreaming::_start_streaming() {
 		return; // Already running.
 	}
 
-	const String rendering_method = OS::get_singleton()->get_current_rendering_method();
-
 	feedback_buffer_thread.start(_feedback_buffer_thread_func, this);
 	texture_reload_thread.start(_texture_reload_thread_func, this);
 

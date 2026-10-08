@@ -7976,6 +7976,7 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Dis
 		RasterizerDummy::make_current();
 	}
 
+	bool main_window_created = false;
 #ifdef RD_ENABLED
 	bool fallback_to_vulkan = GLOBAL_GET("rendering/rendering_device/fallback_to_vulkan");
 	bool fallback_to_d3d12 = GLOBAL_GET("rendering/rendering_device/fallback_to_d3d12");
@@ -8002,7 +8003,6 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Dis
 		}
 	}
 
-	bool main_window_created = false;
 	bool cur_no_redirection_bitmap_value = false;
 
 	for (uint32_t i = 0; i < rendering_driver_count; i++) {
@@ -8037,6 +8037,10 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Dis
 				}
 
 				if (!main_window_created) {
+					if (_create_window(DisplayServerEnums::MAIN_WINDOW_ID, p_mode, p_flags, Rect2i(window_position, p_resolution), false, DisplayServerEnums::INVALID_WINDOW_ID, parent_hwnd, cur_no_redirection_bitmap_value) != OK) {
+						r_error = ERR_UNAVAILABLE;
+						ERR_FAIL_MSG("Failed to create main window.");
+					}
 					main_window_created = true;
 				}
 
@@ -8081,6 +8085,12 @@ DisplayServerWindows::DisplayServerWindows(const String &p_rendering_driver, Dis
 	}
 #endif
 
+	if (!main_window_created) {
+		if (_create_window(DisplayServerEnums::MAIN_WINDOW_ID, p_mode, p_flags, Rect2i(window_position, p_resolution), false, DisplayServerEnums::INVALID_WINDOW_ID, parent_hwnd, false) != OK) {
+			r_error = ERR_UNAVAILABLE;
+			ERR_FAIL_MSG("Failed to create main window.");
+		}
+	}
 	++window_id_counter;
 
 	window_set_vsync_mode(p_vsync_mode, DisplayServerEnums::MAIN_WINDOW_ID);
