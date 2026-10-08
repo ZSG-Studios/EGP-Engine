@@ -147,11 +147,10 @@ private:
 		cp_frame_t current_frame = nullptr;
 		cp_drawable_t current_drawable = nullptr;
 
-		RD::Texture current_color_texture;
-		RID current_color_texture_id;
-		RD::Texture current_depth_texture;
-		RID current_depth_texture_id;
-		RID current_rasterization_rate_map_id;
+		// Keep imports alive for the session: Forward+ caches framebuffer and
+		// cluster-debug bindings that can still refer to earlier swapchain images.
+		HashMap<uint64_t, RID> imported_color_textures;
+		HashMap<uint64_t, RID> imported_depth_textures;
 
 		// Cached render target size, set in pre_render() on the render thread
 		// and read from the game thread via get_render_target_size().
@@ -205,6 +204,7 @@ private:
 		void encode_present(MTL3::MDCommandBuffer *p_cmd_buffer);
 		void end_frame();
 
+		bool prepare_textures();
 		RID get_color_texture();
 		RID get_depth_texture();
 		RID get_vrs_texture();
@@ -271,6 +271,9 @@ public:
 	virtual TypedArray<Transform3D> get_camera_offsets(const StringName &p_tracker_name) override;
 
 	// Methods only called from the render thread
+	virtual bool pre_draw_viewport(RID p_render_target) override {
+		return rt.prepare_textures();
+	}
 	virtual uint32_t get_view_count() override {
 		return rt.get_view_count();
 	}

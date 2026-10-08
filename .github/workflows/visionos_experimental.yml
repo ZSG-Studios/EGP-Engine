@@ -1,0 +1,112 @@
+name: Experimental visionOS Forward+
+on:
+  workflow_dispatch:
+  push:
+    branches: [experimental/visionos-forward-plus]
+  pull_request:
+    paths:
+      - 'platform/visionos/**'
+      - 'modules/visionos_xr/**'
+      - 'servers/rendering/renderer_rd/**'
+      - 'misc/egp/visionos_forward_plus/**'
+      - 'misc/scripts/validate_visionos_forward_plus.py'
+      - '.github/workflows/visionos_experimental.yml'
+permissions:
+  contents: read
+concurrency:
+  group: visionos-experimental-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  device-build:
+    name: visionOS device compilation (not runtime validation)
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/godot-deps
+      - name: Record Apple toolchain
+        run: |
+          mkdir -p .build/visionos-experimental
+          xcodebuild -version | tee .build/visionos-experimental/xcode.txt
+          xcrun --sdk xros --show-sdk-version | tee .build/visionos-experimental/sdk.txt
+      - name: Compile device library including immersive module
+        uses: ./.github/actions/godot-build
+        with:
+          platform: visionos
+          target: template_debug
+          xmake-flags: arch=arm64 dev_mode=yes debug_symbols=no metal=yes vulkan=no module_visionos_xr_enabled=yes
+      - name: Upload device library and toolchain evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visionos-experimental-device
+          path: |
+            bin/
+            .build/visionos-experimental/
+  stereo-vulkan:
+    name: External stereo textures on software Vulkan
+    runs-on: ubuntu-24.04
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/godot-deps
+      - name: Install software graphics dependencies
+        run: sudo apt-get update && sudo apt-get install -y libwayland-bin mesa-vulkan-drivers xvfb
+      - name: Compile editor and export validation
+        uses: ./.github/actions/godot-build
+        with:
+          platform: linuxbsd
+          target: editor
+          xmake-flags: dev_mode=yes debug_symbols=no vulkan=yes module_mono_enabled=no
+      - name: Render and read both eyes and depth, then resize
+        run: |
+          xvfb-run -a python3 misc/scripts/validate_visionos_forward_plus.py --engine bin/godot.linuxbsd.editor.x86_64 --driver vulkan --output .build/visionos-experimental
+      - name: Upload runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visionos-experimental-vulkan
+          path: .build/visionos-experimental/
+  stereo-metal:
+    name: Metal capability and external stereo test
+    runs-on: macos-26
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/godot-deps
+      - name: Compile Metal editor
+        uses: ./.github/actions/godot-build
+        with:
+          platform: macos
+          target: editor
+          xmake-flags: arch=arm64 dev_mode=yes debug_symbols=no metal=yes vulkan=no module_mono_enabled=no
+      - name: Check runner architecture and Metal device
+        id: capability
+        run: |
+          mkdir -p .build/visionos-experimental
+          cat > .build/visionos-experimental/probe.swift <<'SWIFT'
+          import Metal
+          import Foundation
+          if let device = MTLCreateSystemDefaultDevice() {
+              print("METAL_DEVICE=" + device.name)
+          } else {
+              print("METAL_DEVICE_UNAVAILABLE")
+          }
+          SWIFT
+          uname -m | tee .build/visionos-experimental/architecture.txt
+          swift .build/visionos-experimental/probe.swift | tee .build/visionos-experimental/metal-capability.txt
+          if [ "$(uname -m)" = arm64 ] && grep -q '^METAL_DEVICE=' .build/visionos-experimental/metal-capability.txt; then
+            echo 'available=true' >> "$GITHUB_OUTPUT"
+          else
+            echo 'available=false' >> "$GITHUB_OUTPUT"
+            echo 'NOT_RUN: Hosted runner cannot execute the arm64 Metal fixture; physical device validation also pending.' > .build/visionos-experimental/NOT_RUN.txt
+          fi
+      - name: Render on Metal if runner supports it
+        if: steps.capability.outputs.available == 'true'
+        run: python3 misc/scripts/validate_visionos_forward_plus.py --engine bin/godot.macos.editor.arm64 --driver metal --output .build/visionos-experimental
+      - name: Upload Metal capability and runtime evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visionos-experimental-metal
+          path: .build/visionos-experimental/

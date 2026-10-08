@@ -155,7 +155,8 @@ bool VisionOSXRInterface::initialize() {
 
 	// CompositorServices
 	if (cs.enabled) {
-		cs.initialize(xr_server);
+		ERR_FAIL_COND_V_MSG(!bool(GLOBAL_GET("xr/visionos/experimental_forward_plus")), false, "Immersive visionOS requires explicit experimental Forward+ opt-in.");
+		ERR_FAIL_COND_V_MSG(!cs.initialize(xr_server), false, "Could not initialize visionOS Compositor Services.");
 
 		// RenderThread
 		rendering_server = RenderingServer::get_singleton();
@@ -286,15 +287,14 @@ void VisionOSXRInterface::RenderThread::prepare_screen() {
 
 void VisionOSXRInterface::RenderThread::uninitialize() {
 	ERR_NOT_ON_RENDER_THREAD;
-	if (current_color_texture_id != RID()) {
-		rendering_device->free_rid(current_color_texture_id);
+	for (const KeyValue<uint64_t, RID> &entry : imported_color_textures) {
+		rendering_device->free_rid(entry.value);
 	}
-	if (current_depth_texture_id != RID()) {
-		rendering_device->free_rid(current_depth_texture_id);
+	for (const KeyValue<uint64_t, RID> &entry : imported_depth_textures) {
+		rendering_device->free_rid(entry.value);
 	}
-	if (current_rasterization_rate_map_id != RID()) {
-		rendering_device->free_rid(current_rasterization_rate_map_id);
-	}
+	imported_color_textures.clear();
+	imported_depth_textures.clear();
 	initialized = false;
 }
 
@@ -311,12 +311,15 @@ Dictionary VisionOSXRInterface::get_system_info() {
 
 	dict[SNAME("XRRuntimeName")] = String("Godot visionOS XR interface");
 	dict[SNAME("XRRuntimeVersion")] = String("1.0");
+	dict[SNAME("experimental_forward_plus")] = true;
+	dict[SNAME("foveation_enabled")] = false;
+	dict[SNAME("device_validated")] = false;
 
 	return dict;
 }
 
 VisionOSXRInterface::VRSTextureFormat VisionOSXRInterface::get_vrs_texture_format() {
-	return XR_VRS_TEXTURE_FORMAT_RASTERIZATION_RATE_MAP;
+	return XR_VRS_TEXTURE_FORMAT_UNIFIED; // No rasterization rate map in the experimental unfoveated path.
 }
 
 bool VisionOSXRInterface::supports_play_area_mode(XRInterface::PlayAreaMode p_mode) {
@@ -776,7 +779,7 @@ Transform3D VisionOSXRInterface::RenderThread::get_transform_for_view(uint32_t p
 	XRServer *xr_server = XRServer::get_singleton();
 	ERR_FAIL_NULL_V(xr_server, origin_from_eye);
 	if (initialized) {
-		ERR_FAIL_COND_V(p_view > get_view_count(), origin_from_eye);
+		ERR_FAIL_COND_V(p_view >= get_view_count(), origin_from_eye);
 		ERR_FAIL_NULL_V_MSG(current_drawable, origin_from_eye, "Current drawable is nil, pre_render() has probably not been called, using identity transform.");
 
 		cp_view_t view = cp_drawable_get_view(current_drawable, p_view);
@@ -804,7 +807,7 @@ Projection VisionOSXRInterface::RenderThread::get_projection_for_view(uint32_t p
 		return eye_projection;
 	}
 
-	ERR_FAIL_COND_V(p_view > get_view_count(), eye_projection);
+	ERR_FAIL_COND_V(p_view >= get_view_count(), eye_projection);
 	ERR_FAIL_NULL_V_MSG(current_drawable, eye_projection, "Current drawable is nil, pre_render() has probably not been called.");
 
 	XRServer *xr_server = XRServer::get_singleton();
@@ -1016,6 +1019,11 @@ void VisionOSXRInterface::RenderThread::end_frame() {
 	current_frame = nullptr;
 }
 
+bool VisionOSXRInterface::RenderThread::prepare_textures() {
+	ERR_NOT_ON_RENDER_THREAD_V(false);
+	return initialized && get_color_texture().is_valid() && get_depth_texture().is_valid();
+}
+
 RID VisionOSXRInterface::RenderThread::get_color_texture() {
 	ERR_NOT_ON_RENDER_THREAD_V(RID());
 
@@ -1023,14 +1031,15 @@ RID VisionOSXRInterface::RenderThread::get_color_texture() {
 		return RID();
 	}
 
-	if (current_color_texture_id != RID()) {
-		rendering_device->free_rid(current_color_texture_id);
-	}
-
 	ERR_FAIL_NULL_V_MSG(current_drawable, RID(), "Current drawable is nil, pre_render() has probably not been called.");
 
 	id<MTLTexture> color_texture = cp_drawable_get_color_texture(current_drawable, 0);
-	current_color_texture_id = rendering_device->texture_create_from_extension(
+	uint64_t key = (uint64_t)color_texture;
+	if (const RID *cached = imported_color_textures.getptr(key)) {
+		return *cached;
+	}
+	ERR_FAIL_COND_V_MSG(imported_color_textures.size() >= 32, RID(), "Experimental visionOS swapchain import limit reached. Restart the XR session; repeated resize/quality changes are not qualified.");
+	RID imported = rendering_device->texture_create_from_extension(
 			MTL::texture_type_from_metal(color_texture.textureType),
 			pixel_formats->getDataFormat((MTL::PixelFormat)color_texture.pixelFormat),
 			MTL::texture_samples_from_metal(color_texture.sampleCount),
@@ -1042,7 +1051,10 @@ RID VisionOSXRInterface::RenderThread::get_color_texture() {
 			color_texture.arrayLength,
 			color_texture.mipmapLevelCount);
 
-	return current_color_texture_id;
+	if (imported.is_valid()) {
+		imported_color_textures.insert(key, imported);
+	}
+	return imported;
 }
 
 RID VisionOSXRInterface::RenderThread::get_depth_texture() {
@@ -1052,14 +1064,15 @@ RID VisionOSXRInterface::RenderThread::get_depth_texture() {
 		return RID();
 	}
 
-	if (current_depth_texture_id != RID()) {
-		rendering_device->free_rid(current_depth_texture_id);
-	}
-
 	ERR_FAIL_NULL_V_MSG(current_drawable, RID(), "Current drawable is nil, pre_render() has probably not been called.");
 	id<MTLTexture> depth_texture = cp_drawable_get_depth_texture(current_drawable, 0);
 
-	current_depth_texture_id = rendering_device->texture_create_from_extension(
+	uint64_t key = (uint64_t)depth_texture;
+	if (const RID *cached = imported_depth_textures.getptr(key)) {
+		return *cached;
+	}
+	ERR_FAIL_COND_V_MSG(imported_depth_textures.size() >= 32, RID(), "Experimental visionOS swapchain import limit reached. Restart the XR session; repeated resize/quality changes are not qualified.");
+	RID imported = rendering_device->texture_create_from_extension(
 			MTL::texture_type_from_metal(depth_texture.textureType),
 			pixel_formats->getDataFormat((MTL::PixelFormat)depth_texture.pixelFormat),
 			MTL::texture_samples_from_metal(depth_texture.sampleCount),
@@ -1071,41 +1084,15 @@ RID VisionOSXRInterface::RenderThread::get_depth_texture() {
 			depth_texture.arrayLength,
 			depth_texture.mipmapLevelCount);
 
-	return current_depth_texture_id;
+	if (imported.is_valid()) {
+		imported_depth_textures.insert(key, imported);
+	}
+	return imported;
 }
 
 RID VisionOSXRInterface::RenderThread::get_vrs_texture() {
 	ERR_NOT_ON_RENDER_THREAD_V(RID());
-
-	if (!initialized) {
-		return RID();
-	}
-
-	if (current_rasterization_rate_map_id != RID()) {
-		rendering_device->free_rid(current_rasterization_rate_map_id);
-	}
-
-	ERR_FAIL_NULL_V_MSG(current_drawable, RID(), "Current drawable is nil, pre_render() has probably not been called.");
-	size_t count = cp_drawable_get_rasterization_rate_map_count(current_drawable);
-	ERR_FAIL_COND_V_MSG(count == 0, RID(), "No rasterizationRateMaps found.");
-	id<MTLRasterizationRateMap> rasterization_rate_map = cp_drawable_get_rasterization_rate_map(current_drawable, 0);
-	MTLSize logical_size = rasterization_rate_map.screenSize;
-
-	// The type, format and sample count are spoofed. They satisfy
-	// RenderingDevice::_render_pass_create() validation and have no other use.
-	current_rasterization_rate_map_id = rendering_device->texture_create_from_extension(
-			RD::TEXTURE_TYPE_2D_ARRAY,
-			RD::DATA_FORMAT_R8_UINT,
-			RD::TEXTURE_SAMPLES_1,
-			RD::TEXTURE_USAGE_COLOR_ATTACHMENT_BIT | RD::TEXTURE_USAGE_SAMPLING_BIT | RD::TEXTURE_USAGE_STORAGE_BIT | RD::TEXTURE_USAGE_VRS_ATTACHMENT_BIT,
-			(uint64_t)(__bridge void *)rasterization_rate_map,
-			logical_size.width,
-			logical_size.height,
-			1,
-			rasterization_rate_map.layerCount,
-			1);
-
-	return current_rasterization_rate_map_id;
+	return RID(); // Foveation is disabled in ContentStageConfiguration.
 }
 
 void VisionOSXRInterface::trigger_haptic_pulse(const String &p_action_name, const StringName &p_tracker_name, double p_frequency, double p_amplitude, double p_duration_sec, double p_delay_sec) {

@@ -33,7 +33,13 @@
 #import "gc_keyboard_handler.h"
 #import "godot_app_delegate_service_visionos.h"
 
+#include "core/config/project_settings.h"
 #import "core/os/os.h"
+
+#include "modules/modules_enabled.gen.h"
+#ifndef XR_DISABLED
+#include "servers/xr/xr_server.h"
+#endif
 
 DisplayServerVisionOS *DisplayServerVisionOS::get_singleton() {
 	return (DisplayServerVisionOS *)DisplayServerAppleEmbedded::get_singleton();
@@ -60,8 +66,22 @@ DisplayServerVisionOS::~DisplayServerVisionOS() {
 
 DisplayServer *DisplayServerVisionOS::create_func(const String &p_rendering_driver, DisplayServerEnums::WindowMode p_mode, DisplayServerEnums::VSyncMode p_vsync_mode, uint32_t p_flags, const Vector2i *p_position, const Vector2i &p_resolution, int p_screen, DisplayServerEnums::Context p_context, int64_t p_parent_window, Error &r_error) {
 	if (GDTAppDelegateServiceVisionOS.renderMode == GDTRenderModeCompositorServices) {
+#if !defined(MODULE_VISIONOS_XR_ENABLED) || !defined(METAL_ENABLED) || defined(XR_DISABLED)
 		r_error = ERR_UNAVAILABLE;
-		ERR_FAIL_V_MSG(nullptr, "Immersive visionOS applications are unsupported by the Forward+ renderer. Set application/app_role to Window in the export preset.");
+		ERR_FAIL_V_MSG(nullptr, "Experimental immersive visionOS requires the visionOS XR module and Metal.");
+#else
+		if (!bool(GLOBAL_GET("xr/visionos/experimental_forward_plus")) || p_rendering_driver != "metal") {
+			r_error = ERR_UNAVAILABLE;
+			ERR_FAIL_V_MSG(nullptr, "Immersive visionOS requires Metal and explicit xr/visionos/experimental_forward_plus opt-in. Device validation is still required.");
+		}
+		if (XRServer::get_xr_mode() == XRServer::XRMODE_OFF) {
+			r_error = ERR_UNAVAILABLE;
+			ERR_FAIL_V_MSG(nullptr, "Immersive visionOS cannot run with --xr-mode off.");
+		}
+		// Enable multiview shader variants before RendererCompositor is constructed.
+		XRServer::set_xr_mode(XRServer::XRMODE_ON);
+		WARN_PRINT_ONCE("Experimental immersive Forward+ on visionOS: foveation is disabled; physical device validation is pending.");
+#endif
 	}
 	return memnew(DisplayServerVisionOS(p_rendering_driver, p_mode, p_vsync_mode, p_flags, p_position, p_resolution, p_screen, p_context, p_parent_window, r_error));
 }

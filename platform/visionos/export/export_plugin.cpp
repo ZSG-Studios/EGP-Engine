@@ -33,6 +33,7 @@
 #include "logo_svg.gen.h"
 #include "run_icon_svg.gen.h"
 
+#include "core/config/project_settings.h"
 #include "editor/editor_node.h"
 #include "editor/export/editor_export_platform_apple_embedded.h"
 
@@ -58,7 +59,7 @@ void EditorExportPlatformVisionOS::get_export_options(List<ExportOption> *r_opti
 
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "application/min_visionos_version"), get_minimum_deployment_target()));
 
-	r_options->push_back(ExportOption(PropertyInfo(Variant::INT, "application/app_role", PROPERTY_HINT_ENUM, "Window,Immersive (unsupported)"), 0, false, true));
+	r_options->push_back(ExportOption(PropertyInfo(Variant::INT, "application/app_role", PROPERTY_HINT_ENUM, "Window,Immersive (experimental)"), 0, false, true));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::INT, "application/immersion_style", PROPERTY_HINT_ENUM, "Full,Mixed,Progressive"), 1));
 
 	// Front layer falls back to the project icon; middle/back use a black placeholder when unset.
@@ -69,7 +70,9 @@ void EditorExportPlatformVisionOS::get_export_options(List<ExportOption> *r_opti
 
 String EditorExportPlatformVisionOS::get_export_option_warning(const EditorExportPreset *p_preset, const StringName &p_name) const {
 	if (p_name == "application/app_role" && int(p_preset->get("application/app_role")) != 0) {
-		return TTR("Immersive visionOS applications are unsupported by the Forward+ renderer. Select Window as the application role.");
+		if (!bool(GLOBAL_GET("xr/visionos/experimental_forward_plus"))) {
+			return TTR("Enable xr/visionos/experimental_forward_plus to opt in to immersive rendering. This experimental path is not device-qualified.");
+		}
 	}
 	return EditorExportPlatformAppleEmbedded::get_export_option_warning(p_preset, p_name);
 }

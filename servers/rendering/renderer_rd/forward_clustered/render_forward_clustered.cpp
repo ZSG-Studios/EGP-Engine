@@ -1797,6 +1797,15 @@ void RenderForwardClustered::_render_scene(RenderDataRD *p_render_data, const Co
 	bool is_reflection_probe = p_render_data->reflection_probe.is_valid();
 	bool is_multiview = rb->get_view_count() > 1;
 
+#ifdef VISIONOS_ENABLED
+	if (is_multiview && !is_reflection_probe) {
+		ERR_FAIL_COND_MSG(!RendererRD::TextureStorage::get_singleton()->render_target_is_using_hdr(rb->get_render_target()), "Experimental visionOS Forward+ requires HDR 2D.");
+		ERR_FAIL_COND_MSG(rb->get_msaa_3d() != RSE::VIEWPORT_MSAA_DISABLED, "Experimental visionOS Forward+ requires MSAA disabled.");
+		ERR_FAIL_COND_MSG(rb->get_internal_size() != rb->get_target_size(), "Experimental visionOS Forward+ requires 3D scale 1.0.");
+		ERR_FAIL_COND_MSG(rb->get_use_taa() || RSE::scaling_3d_mode_type(rb->get_scaling_3d_mode()) == RSE::VIEWPORT_SCALING_3D_TYPE_TEMPORAL, "Experimental visionOS Forward+ requires temporal AA and temporal upscaling disabled.");
+	}
+#endif
+
 	static const int texture_multisamples[RSE::VIEWPORT_MSAA_MAX] = { 1, 2, 4, 8 };
 
 	//first of all, make a new render pass

@@ -34,6 +34,7 @@ and tooling. Projects that explicitly select a removed renderer must change
 `rendering/renderer/rendering_method` and any mobile override to `forward_plus`.
 Devices below Forward+ requirements cannot fall back to another renderer.
 Web exports are unsupported until a RenderingDevice web backend is available.
+Immersive visionOS has an [experimental, explicitly enabled Forward+ path](doc/egp_visionos_experimental.md); foveation is disabled and device qualification is pending.
 
 ### Physics: consistent integration and explicit simulation
 

@@ -126,7 +126,10 @@ struct ContentStageConfiguration: CompositorLayerConfiguration {
 		configuration.depthFormat = .depth32Float_stencil8
 		configuration.colorFormat = .rgba16Float
 
-		let foveationEnabled = capabilities.supportsFoveation
+		// Forward+ renders through ordinary intermediate textures. Apple's foveated
+		// textures have different logical/physical coordinates, which its compute
+		// and post-process passes do not yet remap. Keep this prototype unfoveated.
+		let foveationEnabled = false
 		configuration.isFoveationEnabled = foveationEnabled
 
 		let options: LayerRenderer.Capabilities.SupportedLayoutsOptions = foveationEnabled ? [.foveationEnabled] : []

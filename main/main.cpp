@@ -2814,6 +2814,7 @@ Error Main::setup(const char *execpath, int argc, char *argv[], bool p_second_ph
 	GLOBAL_DEF_RST_BASIC("xr/openxr/binding_modifiers/dpad_binding", false);
 
 	// visionOS settings
+	GLOBAL_DEF_RST_BASIC("xr/visionos/experimental_forward_plus", false);
 	GLOBAL_DEF_BASIC("xr/visionos/enable_hand_tracking", false);
 	GLOBAL_DEF_BASIC("xr/visionos/enable_controller_tracking", false);
 	// Dynamic render quality, to be used at runtime depending on the complexity of your scene, see https://developer.apple.com/documentation/compositorservices/defining-layer-renderer-quality.

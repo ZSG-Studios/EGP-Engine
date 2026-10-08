@@ -18,7 +18,7 @@
 			[/codeblock]
 		</member>
 		<member name="application/app_role" type="int" setter="" getter="">
-			The application role on the visionOS platform. Use [code skip-lint]Window[/code] to run the project in a 2D window with Forward+ and Metal. The [code skip-lint]Immersive[/code] role is unsupported in EGP.
+			The application role on the visionOS platform. Use [code skip-lint]Window[/code] to run the project in a 2D window with Forward+ and Metal. The [code skip-lint]Immersive[/code] role requires [member ProjectSettings.xr/visionos/experimental_forward_plus] and is experimental, with foveation disabled and physical device validation pending.
 		</member>
 		<member name="application/app_store_team_id" type="String" setter="" getter="">
 			Apple Team ID, unique 10-character string. To locate your Team ID check the "Membership details" section in your Apple developer account dashboard, or "Organizational Unit" of your code signing certificate. See [url=https://developer.apple.com/help/account/manage-your-team/locate-your-team-id]Locate your Team ID[/url].

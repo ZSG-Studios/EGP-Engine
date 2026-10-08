@@ -3472,6 +3472,9 @@
 		<member name="xr/shaders/enabled" type="bool" setter="" getter="" default="false">
 			If [code]true[/code], Godot will compile shaders required for XR.
 		</member>
+		<member name="xr/visionos/experimental_forward_plus" type="bool" setter="" getter="" default="false">
+			Opts in to EGP's experimental immersive visionOS Forward+ path. Requires Metal, the visionOS XR module, HDR 2D, 3D scale 1.0, and disabled MSAA, temporal AA and VRS. Foveation is disabled. Build and software-rendered tests do not establish physical Apple Vision Pro correctness or performance.
+		</member>
 		<member name="xr/visionos/dynamic_render_quality/enable" type="bool" setter="" getter="" default="false">
 			If [code]true[/code], enables Dynamic Render Quality for the visionOS XR module. If enabled, you can dynamically set the render quality according to the complexity of your rendered scene. Higher render qualities increase the resolution of the textures provided by the visionOS XR module.
 		</member>

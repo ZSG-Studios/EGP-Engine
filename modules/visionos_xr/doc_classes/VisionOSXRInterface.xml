@@ -1,14 +1,14 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class name="VisionOSXRInterface" inherits="XRInterface" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
 	<brief_description>
-		visionOS XR interface with hand and controller tracking APIs. Immersive rendering is unsupported in EGP.
+		visionOS XR interface with hand and controller tracking APIs. Immersive Forward+ rendering is experimental and not device-qualified.
 	</brief_description>
 	<description>
 		This is a visionOS XR implementation. It has three modules:
-		- the CompositorServices rendering module, whose immersive path is unsupported in EGP
+		- the CompositorServices rendering module, with an experimental unfoveated Forward+ path
 		- the hand tracking module, using Apple's ARKit
 		- the spatial controller module, using Apple's ARKit and GCController.
-		The tracking modules can be enabled or disabled independently. EGP supports the [code skip-lint]Window[/code] application role with Forward+ and Metal. The CompositorServices rendering module requires the [code]Immersive[/code] application role, which EGP rejects because this path does not support Forward+. See [member EditorExportPlatformVisionOS.application/app_role].
+		The tracking modules can be enabled or disabled independently. EGP supports the [code skip-lint]Window[/code] application role with Forward+ and Metal. The CompositorServices rendering module requires the [code]Immersive[/code] application role and [member ProjectSettings.xr/visionos/experimental_forward_plus]. Use HDR 2D, 3D scale 1.0, and disable MSAA, temporal AA and VRS. Foveation is disabled; physical device correctness and performance remain unverified. See [member EditorExportPlatformVisionOS.application/app_role].
 		Do not initialize the XR interface in the [method Node._process] method, as this will initialize it at some unspecified point in the middle of the frame rendering, possibly causing incorrect visionOS API usage.
 		Enable the hand tracking module with the [member ProjectSettings.xr/visionos/enable_hand_tracking] project setting. It will populate the [code]"/user/hand_tracker/left"[/code] and [code]"/user/hand_tracker/right"[/code] XRHandTrackers.
 		Enable the spatial controller module using the [member ProjectSettings.xr/visionos/enable_controller_tracking] project setting. It will populate the [code]"left_hand"[/code] and [code]"right_hand"[/code] reserved XRController trackers.
@@ -17,7 +17,7 @@
 	</tutorials>
 	<members>
 		<member name="immersion_style" type="int" setter="set_immersion_style" getter="get_immersion_style" enum="VisionOSXRInterface.ImmersionStyle" default="0">
-			Immersion style of the immersive scene. Its initial value comes from the [member EditorExportPlatformVisionOS.application/immersion_style] export setting. Immersive rendering is unsupported in EGP.
+			Immersion style of the immersive scene. Its initial value comes from the [member EditorExportPlatformVisionOS.application/immersion_style] export setting. Immersive Forward+ rendering is experimental and not device-qualified.
 		</member>
 		<member name="persistent_system_overlays" type="int" setter="set_persistent_system_overlays" getter="get_persistent_system_overlays" enum="VisionOSXRInterface.Visibility" default="0">
 			Visibility of the system overlays, such as the Home indicator. Its initial value comes from the [member ProjectSettings.xr/visionos/persistent_system_overlays] project setting. See [url=https://developer.apple.com/documentation/swiftui/view/persistentsystemoverlays(_:)]persistentSystemOverlays(_:)[/url].
