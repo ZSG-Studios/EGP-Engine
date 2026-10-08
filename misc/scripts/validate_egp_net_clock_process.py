@@ -10,6 +10,8 @@ import tempfile
 import time
 from pathlib import Path
 
+from egp_engine_process import resolve_engine_process
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -107,12 +109,13 @@ def main():
     parser.add_argument("--client-language", choices=("csharp", "cpp"), required=True)
     parser.add_argument("--output", type=Path)
     args = parser.parse_args()
-    engine = args.engine.resolve()
+    engine, engine_process = resolve_engine_process(args.engine)
     output = (args.output or ROOT / ".build/egp-net-clock-processes" / str(time.time_ns())).resolve()
     output.mkdir(parents=True, exist_ok=False)
     receipt = {
         "passed": False,
         "engine": str(engine),
+        "engine_process": engine_process,
         "engine_sha256": hashlib.sha256(engine.read_bytes()).hexdigest(),
         "language": args.client_language,
         "processes": [],
@@ -123,6 +126,7 @@ def main():
         "modules/egp_net/samples/trilingual/InteropFixture.cs",
         "modules/egp_net/samples/trilingual/extension/probe.cpp",
         "misc/scripts/validate_egp_net_clock_process.py",
+        "misc/scripts/egp_engine_process.py",
         "misc/scripts/test_egp_net_clock_process.py",
     ):
         receipt["source_sha256"][rel] = hashlib.sha256((ROOT / rel).read_bytes()).hexdigest()

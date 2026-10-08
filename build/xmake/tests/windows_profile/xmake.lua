@@ -105,6 +105,28 @@ target("windows_profile")
         local driver={program=function() return "g++" end,is_plat=function() return false end}
         local directory=path.absolute(import("core.project.config").builddir(),os.projectdir())
         os.mkdir(directory)
+        local accesskit_sdk=path.join(directory,"AccessKit SDK")
+        os.mkdir(path.join(accesskit_sdk,"include"))
+        for _,profile in ipairs(profiles) do
+            local disabled=capture(profile)
+            local selected=capture(table.join(profile,{accesskit=true,accesskit_sdk_path=accesskit_sdk}))
+            local function position(values,name)
+                for index,value in ipairs(values) do if value==name then return index end end
+            end
+            local consumer=position(selected.values.syslinks,"accesskit")
+            local expected=profile.use_mingw and "accesskit,runtimeobject,propsys,oleaut32,user32,userenv,ntdll" or "accesskit,runtimeobject,propsys,userenv"
+            check(table.concat(selected.values.syslinks,",",consumer)==expected,"Complete AccessKit dependency ordering must match the compiler-scoped upstream policy")
+            for _,dependency in ipairs({"oleaut32","user32","ntdll"}) do
+                local index=position(selected.values.syslinks,dependency)
+                check(index and consumer and ((index>consumer)==not not profile.use_mingw),"Only GNU AccessKit must defer its import dependencies until after its archive consumer")
+            end
+            check(position(disabled.values.syslinks,"ntdll")<position(disabled.values.syslinks,"hid"),"AccessKit-disabled base library ordering must remain unchanged")
+            for _,dependency in ipairs({"oleaut32","user32","ntdll"}) do
+                local count=0
+                for _,identity in ipairs(selected.values.syslinks) do if identity==dependency then count=count+1 end end
+                check(count==1,"AccessKit dependency must not rely on duplicated syslinks surviving xmake deduplication")
+            end
+        end
         for _,profile in ipairs(profiles) do
             local probe=capture(table.join(profile,{angle=true,angle_libs=directory}))
             local ordered={}
@@ -193,6 +215,30 @@ target("windows_profile")
             table.insert(link_flags,os.host()=="linux" and "-fuse-ld=bfd" or "-fuse-ld=lld")
             if os.host()=="windows" then table.join2(link_flags,{"-Wl,--warn-backrefs","-Wl,--fatal-warnings"}) end
             local chain_driver={program=function() return chain_compiler.program end,is_plat=function() return false end}
+            local accesskit=path.join(directory,"GNU AccessKit dependency")
+            os.mkdir(accesskit)
+            for name,body in pairs({accesskit="extern int NtWriteFile(void), Ole_probe(void), User_probe(void); int accesskit_probe(void) { return NtWriteFile()+Ole_probe()+User_probe(); }",ntdll="int NtWriteFile(void) { return 14; }",oleaut32="int Ole_probe(void) { return 14; }",user32="int User_probe(void) { return 14; }",main="extern int accesskit_probe(void); int probe_entry(void) { return accesskit_probe()!=42; }"}) do
+                local source,object=path.join(accesskit,name..".c"),path.join(accesskit,name..".o")
+                io.writefile(source,body.."\n")
+                os.iorunv(chain_compiler.program,table.join(chain_common,{"-x","c","-c",source,"-o",object}),{timeout=30000})
+                if name~="main" then os.iorunv(ar.program,{"rcs",path.join(accesskit,"lib"..name..".a"),object},{timeout=30000}) end
+            end
+            local selected_accesskit=capture({use_mingw=true,accesskit=true,accesskit_sdk_path=accesskit_sdk})
+            local fixed_accesskit=table.join(chain_common,{"-nostdlib","-Wl,-e,probe_entry","-L"..accesskit,os.host()=="linux" and "-fuse-ld=bfd" or "-fuse-ld=lld"})
+            if os.host()=="windows" then table.join2(fixed_accesskit,{"-Wl,--warn-backrefs","-Wl,--fatal-warnings"}) end
+            local base_accesskit=table.clone(fixed_accesskit)
+            for _,identity in ipairs(selected_accesskit.values.syslinks) do
+                if identity=="accesskit" or identity=="ntdll" or identity=="oleaut32" or identity=="user32" then table.insert(fixed_accesskit,gcc.nf_syslink(chain_driver,identity)) end
+            end
+            local _,accesskit_argv=gcc.linkargv(chain_driver,{path.join(accesskit,"main.o")},"binary",path.join(accesskit,"fixed.elf"),fixed_accesskit,{rawargs=true})
+            os.iorunv(chain_compiler.program,accesskit_argv,{timeout=30000})
+            check(os.isfile(path.join(accesskit,"fixed.elf")),"Production GNU AccessKit ordering must resolve all later import archives")
+            local _,accesskit_bad=gcc.linkargv(chain_driver,{path.join(accesskit,"main.o")},"binary",path.join(accesskit,"old.elf"),table.join(base_accesskit,{"-loleaut32","-luser32","-lntdll","-laccesskit"}),{rawargs=true})
+            local accesskit_rejected,accesskit_reason=false,""
+            try {function() os.iorunv(chain_compiler.program,accesskit_bad,{timeout=30000}) end,catch {function(errors) accesskit_rejected=true; accesskit_reason=tostring(errors) end}}
+            check(accesskit_rejected and accesskit_reason:find("NtWriteFile",1,true) and accesskit_reason:find("Ole_probe",1,true) and accesskit_reason:find("User_probe",1,true),"Original dependencies-before-AccessKit order must fail all three back-reference controls")
+            io.writefile(path.join(accesskit,"negative-control.log"),accesskit_reason)
+            import("core.base.json").savefile(path.join(accesskit,"receipt.json"),{passed=true,requested_platform="windows",use_mingw=true,compiler=chain_compiler.program,argv=accesskit_argv,old_order_rejected=true,boundary=os.host()=="linux" and "Actual GCC GNU bfd ELF link; real MinGW CI still required" or "Clang ELF lld strict back-reference check; real MinGW CI still required"})
             local fixed=table.clone(link_flags)
             for _,identity in ipairs(identities) do table.insert(fixed,gcc.nf_syslink(chain_driver,identity)) end
             local _,argv=gcc.linkargv(chain_driver,{object},"binary",path.join(chain,"fixed.elf"),fixed,{rawargs=true})

@@ -10,13 +10,15 @@ import tempfile
 import time
 from pathlib import Path
 
+from egp_engine_process import resolve_engine_process
+
 ROOT = Path(__file__).resolve().parents[2]
 parser = argparse.ArgumentParser(description=__doc__)
 parser.add_argument("--engine", type=Path, required=True)
 parser.add_argument("--project", type=Path)
 parser.add_argument("--client-language", choices=("csharp", "gdscript", "cpp"))
 args = parser.parse_args()
-engine = args.engine.resolve()
+engine, engine_process = resolve_engine_process(args.engine)
 base = [str(engine), "--headless", "--max-fps", "60"]
 if args.project:
     base += ["--path", str(args.project.resolve())]
@@ -70,6 +72,7 @@ finally:
         log.close()
     temporary.cleanup()
 results["passed"] = "error" not in results and len(results) == 2
+results["engine_process"] = engine_process
 (output / "receipt.json").write_text(json.dumps(results, indent=2) + "\n", encoding="utf-8")
 print("EGP_NETWORK_PROCESSES " + json.dumps(results))
 raise SystemExit(0 if results["passed"] else 1)

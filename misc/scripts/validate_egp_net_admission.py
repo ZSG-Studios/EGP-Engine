@@ -16,6 +16,8 @@ import subprocess
 import time
 from pathlib import Path
 
+from egp_engine_process import resolve_engine_process
+
 ROOT = Path(__file__).resolve().parents[2]
 MARKER = "EGP_ADMISSION_LIFECYCLE "
 CLOCK_DIAGNOSTIC = "Fixed simulation exceeded its catch-up budget; resynchronization required."
@@ -85,8 +87,8 @@ def main():
     parser.add_argument("--fault", choices=("clock", "graceful", "both"), default="clock")
     parser.add_argument("--output", type=Path, default=ROOT / ".build/egp-admission-lifecycle")
     args = parser.parse_args()
-    engine = args.engine.resolve()
-    editor = args.editor.resolve() if args.editor else engine
+    engine, engine_process = resolve_engine_process(args.engine)
+    editor, editor_process = resolve_engine_process(args.editor or args.engine)
     if not engine.is_file() or not editor.is_file():
         parser.error("Engine and editor must exist")
     output = args.output.resolve() / str(time.time_ns())
@@ -109,11 +111,18 @@ def main():
     receipt = {
         "passed": False,
         "engine": str(engine),
+        "engine_process": engine_process,
+        "editor_process": editor_process,
         "engine_sha256": digest(engine),
         "editor_sha256": digest(editor),
         "source_sha256": {
             str(path.relative_to(ROOT)): digest(path)
-            for path in [source, Path(__file__), *(ROOT / "modules/egp_net/gdscript").glob("*.gd")]
+            for path in [
+                source,
+                Path(__file__),
+                ROOT / "misc/scripts/egp_engine_process.py",
+                *(ROOT / "modules/egp_net/gdscript").glob("*.gd"),
+            ]
         },
         "steps": [],
         "scope": "Local native/GDScript admission timing and listener lifecycle only; fixed test keys stay in memory. No remote authentication/backend revocation or performance qualification.",

@@ -76,6 +76,9 @@ class ProcessClockEvidenceTests(unittest.TestCase):
         self.client["pid"] = 11
         self.assertIsNotNone(self.failure())
 
+    def test_distinct_launcher_pids_cannot_replace_actual_engine_pids(self):
+        self.assertIsNotNone(evidence_failure(self.server, self.client, "cpp", [33, 44]))
+
     def test_missing_fault(self):
         self.server["recoveries"].pop()
         self.assertIsNotNone(self.failure())

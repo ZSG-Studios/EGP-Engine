@@ -260,7 +260,12 @@ function configure(target, options, build_env)
         target:add("defines", "WINDOWS_ENABLED", "WASAPI_ENABLED", "WINMIDI_ENABLED", "NOMINMAX", "WINVER=0x0A00", "_WIN32_WINNT=0x0A00")
         if msvc then target:add("defines", "TYPED_METHOD_BIND", "WIN32") end
         if normalized.arch == "x64" or normalized.arch == "arm64" then target:add("defines", "_WIN64") end
-        target:add("syslinks", "winmm", "dsound", "kernel32", "ole32", "oleaut32", "sapi", "user32", "gdi32", "iphlpapi", "shlwapi", "shcore", "wsock32", "ws2_32", "shell32", "advapi32", "dinput8", "dxguid", "imm32", "bcrypt", "crypt32", "avrt", "dwmapi", "dwrite", "wbemuuid", "ntdll", "hid", "mincore", "psapi", "dbghelp")
+        -- GNU archives are searched left to right. Defer AccessKit's import
+        -- libraries until after its Rust archive; xmake deduplicates syslinks.
+        for _,library in ipairs({"winmm", "dsound", "kernel32", "ole32", "oleaut32", "sapi", "user32", "gdi32", "iphlpapi", "shlwapi", "shcore", "wsock32", "ws2_32", "shell32", "advapi32", "dinput8", "dxguid", "imm32", "bcrypt", "crypt32", "avrt", "dwmapi", "dwrite", "wbemuuid", "ntdll", "hid", "mincore", "psapi", "dbghelp"}) do
+            local deferred=library=="oleaut32" or library=="user32" or library=="ntdll"
+            if msvc or not enabled(options.accesskit) or not deferred then target:add("syslinks",library) end
+        end
         if enabled(options.use_mingw) then
             target:add("defines", "MINGW_ENABLED", "MINGW_HAS_SECURE_API=1")
             target:add("syslinks", "mingw32", "d3d9", "ksuser", "uuid")
@@ -342,7 +347,11 @@ function configure(target, options, build_env)
         if platform == "windows" then
             local compiler = msvc and "msvc" or (enabled(options.use_llvm) and "mingw-llvm" or "mingw")
             target:add("linkdirs", path.join(sdk, "lib", "windows", subarch, compiler, "static"))
-            target:add("syslinks", "accesskit", "runtimeobject", "propsys", "userenv")
+            if msvc then
+                target:add("syslinks", "accesskit", "runtimeobject", "propsys", "userenv")
+            else
+                target:add("syslinks", "accesskit", "runtimeobject", "propsys", "oleaut32", "user32", "userenv", "ntdll")
+            end
         elseif platform == "linuxbsd" or platform == "macos" then
             target:add("linkdirs", path.join(sdk, "lib", platform == "linuxbsd" and "linux" or "macos", subarch, "static"))
             target:add("syslinks", "accesskit")

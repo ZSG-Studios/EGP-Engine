@@ -12,6 +12,8 @@ import sys
 import time
 from pathlib import Path
 
+from egp_engine_process import resolve_engine_process
+
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -148,7 +150,8 @@ def main():
         help="Connect native extension builds using private configured xmake distcc hosts",
     )
     args = parser.parse_args()
-    engine, sdk, packages = args.engine.resolve(), args.sdk.resolve(), args.packages.resolve()
+    engine, engine_process = resolve_engine_process(args.engine)
+    sdk, packages = args.sdk.resolve(), args.packages.resolve()
     output = (args.output or ROOT / ".build/egp-net-languages" / str(time.time_ns())).resolve()
     output.mkdir(parents=True, exist_ok=True)
     private_config = None
@@ -196,6 +199,7 @@ def main():
     checks = []
     receipt = {
         "engine": str(engine),
+        "engine_process": engine_process,
         "engine_sha256": digest(engine),
         "checks": checks,
         "source_sha256": {
@@ -211,6 +215,7 @@ def main():
             "modules/egp_net/samples/trilingual/InteropFixture.cs",
             "modules/egp_net/samples/trilingual/extension/probe.cpp",
             "misc/scripts/validate_egp_net_languages.py",
+            "misc/scripts/egp_engine_process.py",
             "misc/scripts/test_egp_net_language_clock.py",
             "misc/egp/network_lab/process_clock_server.gd",
             "misc/scripts/validate_egp_net_clock_process.py",
