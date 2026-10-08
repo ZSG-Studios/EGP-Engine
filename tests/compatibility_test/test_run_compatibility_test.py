@@ -14,6 +14,8 @@ class ForkCompatibilityTests(unittest.TestCase):
         self.assertTrue(compatibility.is_retired_api("classes/Node/methods/rpc_id"))
         self.assertTrue(compatibility.is_retired_api("classes/Node/methods/get_rpc_config"))
         self.assertTrue(compatibility.is_retired_api("builtin_classes/Callable/methods/rpc"))
+        self.assertTrue(compatibility.is_retired_api("classes/WebXRInterface"))
+        self.assertTrue(compatibility.is_retired_api("classes/WebXRInterface/methods/is_session_supported"))
 
     def test_retained_and_unrecognized_apis_remain_checked(self):
         for path in (
@@ -21,6 +23,8 @@ class ForkCompatibilityTests(unittest.TestCase):
             "classes/Node/methods/rpc_id_new",
             "classes/ENetConnectionNew/methods/create_host",
             "classes/TextServerFallback/methods/get_name",
+            "classes/WebXRInterfaceNew/methods/is_session_supported",
+            "classes/XRInterface/methods/is_initialized",
             "classes/PhysicsServer3D/methods/body_set_state",
             "classes/PhysicsServer3DExtension/methods/_body_test_motion",
             "builtin_classes/Callable/methods/call",
@@ -36,6 +40,8 @@ class ForkCompatibilityTests(unittest.TestCase):
                 {"name": "ENetConnection", "methods": [{"name": "create_host", "hash": 10}]},
                 {"name": "Node", "methods": [{"name": "rpc_id", "hash": 20}, {"name": "call_deferred", "hash": 30}]},
                 {"name": "FutureClass", "methods": [{"name": "future_method", "hash": 40}]},
+                {"name": "WebXRInterface", "methods": [{"name": "is_session_supported", "hash": 80}]},
+                {"name": "WebXRInterfaceNew", "methods": [{"name": "future_method", "hash": 90}]},
             ],
             "builtin_classes": [
                 {"name": "Callable", "methods": [{"name": "rpc", "hash": 50}, {"name": "call", "hash": 60}]}
@@ -55,7 +61,10 @@ class ForkCompatibilityTests(unittest.TestCase):
                 patch.object(compatibility, "UTILITY_FUNCTIONS_FILE", utilities),
             ):
                 compatibility.generate_test_data_files("fixture")
-            self.assertEqual(classes.read_text(), "Node call_deferred 30\nFutureClass future_method 40\n")
+            self.assertEqual(
+                classes.read_text(),
+                "Node call_deferred 30\nFutureClass future_method 40\nWebXRInterfaceNew future_method 90\n",
+            )
             self.assertEqual(builtins.read_text(), "25 call 60\n")
             self.assertEqual(utilities.read_text(), "sin 70\n")
 

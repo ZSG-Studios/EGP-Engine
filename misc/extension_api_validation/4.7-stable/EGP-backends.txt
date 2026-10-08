@@ -189,3 +189,7 @@ Validate extension JSON: Error: Field 'classes/PhysicsServer3DExtension/methods/
 Validate extension JSON: Error: Field 'classes/PhysicsServer3DExtension/methods/_body_test_motion/arguments/6': type changed value in new API, from "bool" to "PhysicsServer3DExtensionMotionResult*".
 Validate extension JSON: Error: Field 'classes/SliderJoint3D/enums/Param/values/PARAM_MAX': value changed value in new API, from 22.0 to 10.
 Validate extension JSON: Error: Hash changed for 'classes/PhysicsServer3DExtension/methods/_body_test_motion', from D836B30A to D18B5C62. This means that the function has changed and no compatibility function was provided.
+
+# The Forward+-only fork retires Web/WebXR instead of providing an OpenGL fallback.
+# WebXRInterface is intentionally unavailable; XRInterface and OpenXR remain checked.
+Validate extension JSON: API was removed: classes/WebXRInterface
