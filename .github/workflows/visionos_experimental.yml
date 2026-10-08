@@ -1,6 +1,12 @@
 name: Experimental visionOS Forward+
 on:
   workflow_dispatch:
+    inputs:
+      source_run_id:
+        description: 'Optional successful native-build run to reuse for export-only changes'
+        required: false
+        type: string
+        default: ''
   push:
     branches: [experimental/visionos-forward-plus]
   pull_request:
@@ -15,11 +21,69 @@ on:
       - '.github/workflows/visionos_experimental.yml'
 permissions:
   contents: read
+  actions: read
 concurrency:
   group: visionos-experimental-${{ github.ref }}
   cancel-in-progress: true
 jobs:
+  reuse-builds:
+    name: Verify unchanged native sources before reusing builds
+    if: inputs.source_run_id != ''
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Verify source run and changed files
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_RUN_ID: ${{ inputs.source_run_id }}
+        run: |
+          python3 - <<'PY'
+          import base64, json, os, re, subprocess
+          from pathlib import Path
+          run_id = os.environ['SOURCE_RUN_ID']
+          assert run_id.isdigit(), 'Source run ID must be numeric'
+          repo = os.environ['GITHUB_REPOSITORY']
+          def api(path):
+              return json.loads(subprocess.check_output(['gh', 'api', f'repos/{repo}/{path}']))
+          source = api(f'actions/runs/{run_id}')
+          assert source['name'] == 'Experimental visionOS Forward+', 'Unexpected source workflow'
+          assert source['status'] == 'completed', 'Source run has not finished'
+          required = {'visionOS device compilation (not runtime validation)',
+                      'Metal capability and external stereo test',
+                      'External stereo textures on software Vulkan'}
+          jobs = api(f'actions/runs/{run_id}/jobs?per_page=100')['jobs']
+          passed = {job['name'] for job in jobs if job['conclusion'] == 'success'}
+          assert required <= passed, 'Native build and stereo checks must have passed'
+          comparison = api(f"compare/{source['head_sha']}...{os.environ['GITHUB_SHA']}")
+          assert comparison['status'] in ('ahead', 'identical'), 'Candidate must descend from source build'
+          files = comparison.get('files', [])
+          assert len(files) < 300, 'Comparison may be truncated'
+          def build_options(ref):
+              data = api(f'contents/.github/workflows/visionos_experimental.yml?ref={ref}')
+              text = base64.b64decode(data['content']).decode()
+              return re.findall(r'^\s+(?:platform|target|xmake-flags):.*$', text, re.M)
+          assert build_options(source['head_sha']) == build_options(os.environ['GITHUB_SHA']), 'Native build options changed'
+          allowed = {'.github/workflows/visionos_experimental.yml',
+                     'misc/scripts/validate_visionos_export.py',
+                     'doc/egp_visionos_experimental.md', 'README.md'}
+          for file in files:
+              assert file['status'] in ('added', 'modified'), 'Renamed or removed files require a rebuild'
+              if file['filename'] == 'misc/egp/visionos_forward_plus/project.godot':
+                  changes = [line for line in file['patch'].splitlines() if line.startswith(('+', '-'))]
+                  assert changes == ['+textures/vram_compression/import_etc2_astc=true'], 'Only the export import setting may change'
+              else:
+                  assert file['filename'] in allowed, f"Native or runtime source changed: {file['filename']}"
+          receipt = {'source_run_id': run_id, 'native_source_commit': source['head_sha'],
+                     'export_source_commit': os.environ['GITHUB_SHA'],
+                     'changed_files': [file['filename'] for file in files], 'device_validated': False}
+          Path('build-reuse.json').write_text(json.dumps(receipt, indent=2) + '\n')
+          print(json.dumps(receipt, indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: visionos-experimental-build-reuse
+          path: build-reuse.json
   device-build:
+    if: inputs.source_run_id == ''
     name: visionOS device compilation (not runtime validation)
     runs-on: macos-26
     timeout-minutes: 120
@@ -62,6 +126,7 @@ jobs:
             bin/
             .build/visionos-experimental/
   stereo-vulkan:
+    if: inputs.source_run_id == ''
     name: External stereo textures on software Vulkan
     runs-on: ubuntu-24.04
     timeout-minutes: 120
@@ -87,6 +152,7 @@ jobs:
           include-hidden-files: true
           path: .build/visionos-experimental/
   stereo-metal:
+    if: inputs.source_run_id == ''
     name: Metal capability and external stereo test
     runs-on: macos-26
     timeout-minutes: 120
@@ -137,7 +203,11 @@ jobs:
           path: .build/visionos-experimental/
   device-app:
     name: Export and link unsigned visionOS device app
-    needs: [device-build, stereo-metal]
+    needs: [device-build, stereo-metal, reuse-builds]
+    if: >-
+      always() &&
+      ((needs.device-build.result == 'success' && needs.stereo-metal.result == 'success') ||
+       needs.reuse-builds.result == 'success')
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -146,10 +216,14 @@ jobs:
         with:
           name: visionos-experimental-device
           path: .build/device-artifact
+          run-id: ${{ inputs.source_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - uses: actions/download-artifact@v4
         with:
           name: visionos-experimental-editor
           path: bin
+          run-id: ${{ inputs.source_run_id || github.run_id }}
+          github-token: ${{ github.token }}
       - name: Import, export and build the immersive sample without signing
         run: |
           chmod +x bin/godot.macos.editor.arm64
