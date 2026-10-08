@@ -150,14 +150,17 @@ bool VisionOSXRInterface::initialize() {
 	hands.enabled = GLOBAL_GET("xr/visionos/enable_hand_tracking");
 	controllers.enabled = GLOBAL_GET("xr/visionos/enable_controller_tracking");
 
+	// Validate the compositor before allocating the ARKit session.
+	if (cs.enabled) {
+		ERR_FAIL_COND_V_MSG(!bool(GLOBAL_GET("xr/visionos/experimental_forward_plus")), false, "Immersive visionOS requires explicit experimental Forward+ opt-in.");
+		ERR_FAIL_COND_V_MSG(!cs.initialize(xr_server), false, "Could not initialize visionOS Compositor Services.");
+	}
+
 	// ARKit session
 	ar_session = ar_session_create();
 
 	// CompositorServices
 	if (cs.enabled) {
-		ERR_FAIL_COND_V_MSG(!bool(GLOBAL_GET("xr/visionos/experimental_forward_plus")), false, "Immersive visionOS requires explicit experimental Forward+ opt-in.");
-		ERR_FAIL_COND_V_MSG(!cs.initialize(xr_server), false, "Could not initialize visionOS Compositor Services.");
-
 		// RenderThread
 		rendering_server = RenderingServer::get_singleton();
 		ERR_FAIL_NULL_V(rendering_server, false);
@@ -1034,7 +1037,7 @@ RID VisionOSXRInterface::RenderThread::get_color_texture() {
 	ERR_FAIL_NULL_V_MSG(current_drawable, RID(), "Current drawable is nil, pre_render() has probably not been called.");
 
 	id<MTLTexture> color_texture = cp_drawable_get_color_texture(current_drawable, 0);
-	uint64_t key = (uint64_t)color_texture;
+	uint64_t key = (uint64_t)(__bridge void *)color_texture;
 	if (const RID *cached = imported_color_textures.getptr(key)) {
 		return *cached;
 	}
@@ -1067,7 +1070,7 @@ RID VisionOSXRInterface::RenderThread::get_depth_texture() {
 	ERR_FAIL_NULL_V_MSG(current_drawable, RID(), "Current drawable is nil, pre_render() has probably not been called.");
 	id<MTLTexture> depth_texture = cp_drawable_get_depth_texture(current_drawable, 0);
 
-	uint64_t key = (uint64_t)depth_texture;
+	uint64_t key = (uint64_t)(__bridge void *)depth_texture;
 	if (const RID *cached = imported_depth_textures.getptr(key)) {
 		return *cached;
 	}

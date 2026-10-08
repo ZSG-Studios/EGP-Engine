@@ -5,6 +5,7 @@ on:
     branches: [experimental/visionos-forward-plus]
   pull_request:
     paths:
+      - 'main/main.cpp'
       - 'platform/visionos/**'
       - 'modules/visionos_xr/**'
       - 'servers/rendering/renderer_rd/**'
@@ -52,7 +53,7 @@ jobs:
       - uses: ./.github/actions/godot-deps
       - name: Install software graphics dependencies
         run: sudo apt-get update && sudo apt-get install -y libwayland-bin mesa-vulkan-drivers xvfb
-      - name: Compile editor and export validation
+      - name: Compile Forward+ editor
         uses: ./.github/actions/godot-build
         with:
           platform: linuxbsd
