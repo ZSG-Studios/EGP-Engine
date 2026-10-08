@@ -35,5 +35,5 @@
 #define GLES_API_ENABLED // Allow using GLES.
 #endif
 
-#include <ES3/gl.h> // IWYU pragma: export.
+#include <OpenGLES/ES3/gl.h> // IWYU pragma: export.
 #endif

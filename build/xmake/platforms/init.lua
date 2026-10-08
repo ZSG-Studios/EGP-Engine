@@ -137,7 +137,7 @@ function configure(target, options, build_env)
         link(target, "/INCREMENTAL:NO")
         cc(target, "/utf-8", "/fp:strict", "/bigobj", "/Zc:__cplusplus", "/permissive-")
         if not enabled(options.disable_exceptions, true) then target:add("cxxflags", "/EHsc", {force = true}) end
-        if enabled(options.use_llvm) then cc(target, "-ffp-contract=off") end
+        if enabled(options.use_llvm) then cc(target, "/clang:-ffp-contract=off") end
     else
         cc(target, "-ffp-contract=off", "-fno-strict-aliasing")
         if enabled(options.disable_exceptions, true) then target:add("cxxflags", "-fno-exceptions", {force = true}) end

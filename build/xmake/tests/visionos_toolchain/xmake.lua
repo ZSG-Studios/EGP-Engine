@@ -39,12 +39,12 @@ target("visionos_configuration_probe")
             end)
             check(instance:check(), "Production visionOS availability check failed")
             check(instance:config("egp_sdkroot") == sdkroot, "SDK root was not retained on the real instance")
-            for _, tool in ipairs({"clang", "clangxx", "ar"}) do
+            for _, tool in ipairs({"clang", "clangxx", "ar", "swiftc"}) do
                 local executable = tool == "clangxx" and "clang++" or tool
                 check(instance:config("egp_" .. tool) == path.join(sdkroot, executable), "Discovered compiler path was not retained")
             end
-            check(discovery_calls == 4, "All four Xcode discovery commands must run")
-            check(instance:check() and discovery_calls == 4, "Repeated availability check must use xmake's cached result")
+            check(discovery_calls == 5, "All five Xcode discovery commands must run")
+            check(instance:check() and discovery_calls == 5, "Repeated availability check must use xmake's cached result")
             instance:load()
             local triple = "arm64-apple-xros26.0" .. (simulator and "-simulator" or "")
             for _, key in ipairs({"cxflags", "mxflags", "ldflags", "shflags"}) do
@@ -52,6 +52,9 @@ target("visionos_configuration_probe")
                 check(table.contains(flags, triple) and table.contains(flags, sdkroot), "Compiler and linker must use the selected visionOS SDK and target")
             end
             check(instance:get("toolset.cxx") == path.join(sdkroot, "clang++"), "Toolchain load must retain the discovered C++ compiler")
+            check(instance:get("toolset.sc") == path.join(sdkroot, "swiftc"), "Swift WMO compilation must resolve its compiler")
+            local swiftflags = table.wrap(instance:get("scflags"))
+            check(table.contains(swiftflags, triple) and table.contains(swiftflags, "-sdk") and table.contains(swiftflags, sdkroot), "Swift must use the selected visionOS SDK and target")
         end
         print("NATIVE_VISIONOS_TOOLCHAIN_CHECKS=" .. checks)
     end)

@@ -5,7 +5,16 @@ function main(graph)
     glob = R.glob
     test_builders = graph:builders("test_builders")
     env = graph:use("env")
-    force_link_sources = (function() local __item1 = {}; for _, __item2 in ipairs(R.iter(glob.glob("*/**/*.cpp", {["recursive"] = true}))) do; local source = __item2; if R.truthy(not R.truthy(R.startswith(R.replace(source, "\\", "/"), "physics/box3d/"))) then; table.insert(__item1, source); end; end; return __item1 end)()
+    force_link_sources = {}
+    for _, source in ipairs(glob.glob("**.cpp")) do
+        -- Native glob paths are absolute; classify relative to the tests directory.
+        local relative = (path.relative(source, graph.current):gsub("\\", "/"))
+        local standalone = false
+        for _, directory in ipairs({"physics/box3d/", "physics/box2d/", "compatibility_test/", "build/"}) do
+            if relative:startswith(directory) then standalone = true; break end
+        end
+        if relative:find("/", 1, true) and not standalone then table.insert(force_link_sources, source) end
+    end
     force_link_header = env:generate("force_link.gen.h", env:value(force_link_sources), env:generator(test_builders.force_link_builder))
     env:depends(force_link_header, "#build/xmake/generators/modules.lua")
     tests_obj = {}

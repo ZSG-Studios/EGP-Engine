@@ -80,6 +80,7 @@ local function configure(target, policy, bootstrap)
     import("generated_objects", {rootdir = os.scriptdir()}).configure(target, generated)
     if bootstrap then target:add("includedirs", bootstrap_directory) end
     target:add("includedirs", generated, os.projectdir())
+    import("generated_headers", {rootdir = os.scriptdir()}).configure(target, graph.options, generated)
     for _, directory in ipairs(policy.CPPPATH or {}) do target:add("includedirs", absolute(directory)) end
     target:add("defines", table.unpack(defines(policy.CPPDEFINES)))
     import("source_flags", {rootdir = os.scriptdir()}).configure(target, policy)

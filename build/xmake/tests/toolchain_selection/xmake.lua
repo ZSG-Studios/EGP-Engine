@@ -72,6 +72,36 @@ for index, options in ipairs(selections) do
                 end
                 print("NATIVE_MACOS_DEPLOYMENT_TARGET=" .. triple)
             end
+            local clang_checks=0
+            local clang_probe={values={}}
+            function clang_probe:set(key,...) self.values[key]={...} end
+            function clang_probe:add(key,...)
+                self.values[key]=self.values[key] or {}
+                for _,value in ipairs({...}) do if type(value)~="table" then table.insert(self.values[key],value) end end
+            end
+            policy.configure(clang_probe,{platform="windows",arch="x86_64",use_llvm=true,werror=true,accesskit=false,angle=false,d3d12=false})
+            assert(table.contains(clang_probe.values.cxflags,"/clang:-ffp-contract=off"),"Clang-cl must receive floating-point contraction policy through its native passthrough")
+            clang_checks=clang_checks+1
+            assert(not table.contains(clang_probe.values.cxflags,"-ffp-contract=off"),"Clang-cl must not receive an unsupported GNU driver argument")
+            clang_checks=clang_checks+1
+            if os.host()=="windows" then
+                local directories={"C:/Program Files/LLVM/bin"}
+                for _, instance in ipairs(os.dirs("C:/Program Files/Microsoft Visual Studio/*/*")) do
+                    table.insert(directories,path.join(instance,"VC/Tools/Llvm/x64/bin"))
+                end
+                local compiler=assert(import("lib.detect.find_program")("clang-cl",{paths=directories}),"The Windows native policy contract requires the installed clang-cl compiler")
+                local source,object=os.tmpfile() .. ".cpp",os.tmpfile() .. ".obj"
+                io.writefile(source,'extern "C" float egp_contract(float a, float b, float c) { return a * b + c; }\n')
+                local arguments={"/c","/WX"}
+                table.join2(arguments,clang_probe.values.cxflags)
+                table.join2(arguments,clang_probe.values.cxxflags or {})
+                table.join2(arguments,{source,"-o",object})
+                os.vrunv(compiler,arguments,{timeout=60000})
+                assert(os.isfile(object),"The actual clang-cl compiler must accept the complete strict Windows platform policy")
+                os.tryrm(source); os.tryrm(object)
+                clang_checks=clang_checks+1
+                print("NATIVE_CLANGCL_PLATFORM_POLICY_COMPILE_PASS")
+            end
             local hosts=import("build.xmake.platforms.host",{rootdir=path.absolute("../../../..",os.scriptdir())})
             local absent=function() return false end
             assert(hosts.select({platform="windows",use_mingw=true},"windows","x64",absent).plat=="mingw")
@@ -85,7 +115,7 @@ for index, options in ipairs(selections) do
             for _, pair in ipairs({{"windows","amd64","x64"},{"windows","i386","x86"},{"android","aarch64","arm64-v8a"},{"linuxbsd","x64","x86_64"},{"linuxbsd","riscv64","riscv64"}}) do
                 assert(policy.normalize({platform=pair[1],arch=pair[2]}).arch==pair[3])
             end
-            print("NATIVE_TOOLCHAIN_SELECTION_CHECKS=" .. (#selections*2+17+apple_checks))
+            print("NATIVE_TOOLCHAIN_SELECTION_CHECKS=" .. (#selections*2+17+apple_checks+clang_checks))
         end)
     target_end()
     end

@@ -10,7 +10,7 @@ function main()
         os.mkdir(directory); io.writefile(path.join(directory, name .. ".log"), stdout .. (stderr or ""))
         return stdout .. (stderr or "")
     end
-    local text = invoke("configure", {"f", "-y", "--toolchain=" .. compiler, "-P", project, "-o", directory, "-m", "debug"})
+    local text = invoke("configure", {"f", "-y", "-p", os.host(), "-a", os.arch(), "--toolchain=" .. compiler, "-P", project, "-o", directory, "-m", "debug"})
     text = invoke("build", {"-P", project, "-b", "-j", "1"})
     assert(text:find("NATIVE_GENERATED_OBJECT_GRAPH_CHECKS=11", 1, true))
     local snapshots = {}
@@ -28,7 +28,7 @@ function main()
         assert(os.mtime(object) == state.mtime and hash.sha256(object) == state.hash, "Warm build unexpectedly rebuilt an object")
     end
     invoke("run", {"run", "-P", project, "egp_generated_object_probe"})
-    invoke("configure-release", {"f", "-y", "--toolchain=" .. compiler, "-P", project, "-o", directory, "-m", "release"})
+    invoke("configure-release", {"f", "-y", "-p", os.host(), "-a", os.arch(), "--toolchain=" .. compiler, "-P", project, "-o", directory, "-m", "release"})
     local release_text = invoke("build-release", {"-P", project, "-b", "-j", "1"})
     assert(release_text:find("NATIVE_GENERATED_OBJECT_GRAPH_CHECKS=11", 1, true))
     local release_objects, compact_count = {}, 0
@@ -80,7 +80,7 @@ function main()
             XMAKE_CONFIGDIR = path.join(directory, "external-config"), XMAKE_GLOBALDIR = envs.XMAKE_GLOBALDIR}, timeout = 120000})
         io.writefile(path.join(directory, name .. ".log"), stdout .. (stderr or ""))
     end
-    deep_invoke("external-configure", {"f", "-y", "--toolchain=" .. compiler, "-P", deep_project, "-o", deep_build, "-m", "debug"})
+    deep_invoke("external-configure", {"f", "-y", "-p", os.host(), "-a", os.arch(), "--toolchain=" .. compiler, "-P", deep_project, "-o", deep_build, "-m", "debug"})
     deep_invoke("external-cold", {"-P", deep_project, "-b", "-j", "1"})
     local external_object = import("core.base.json").loadfile(path.join(deep_build, "object.json")).object
     local external_state = {mtime = os.mtime(external_object), hash = hash.sha256(external_object)}

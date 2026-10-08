@@ -10,7 +10,7 @@ function main()
         os.mkdir(directory); io.writefile(path.join(directory,name .. '.log'),stdout .. (stderr or ''))
         return stdout .. (stderr or '')
     end
-    invoke('configure',{'f','-y','--toolchain=' .. compiler,'-P',project,'-o',directory})
+    invoke('configure',{'f','-y','-p',os.host(),'-a',os.arch(),'--toolchain=' .. compiler,'-P',project,'-o',directory})
     local build=invoke('build',{'-P',project,'-b','-j','1'})
     assert(build:find('NATIVE_COMPILE_VARIANT_GRAPH_CHECKS=6',1,true))
     local snapshots={}

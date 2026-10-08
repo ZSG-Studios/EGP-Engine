@@ -16,8 +16,10 @@ function main(compressor, zipper)
         {'metadata','tests/build/test_xmake_metadata.lua'},
         {'workflows','tests/build/test_xmake_workflows.lua'},
         {'host_sdk','build/xmake/tests/host_sdk.lua',marker='NATIVE_HOST_SDK_CHECKS=(%d+)'},
+        {'generated_headers','build/xmake/tests/generated_headers.lua',marker='NATIVE_GENERATED_HEADER_CHECKS=(%d+)'},
         {'recipe_compat','build/xmake/tests/recipe_compat.lua',marker='LUA_RECIPE_COMPAT_CHECKS=(%d+)'},
         {'recipes','build/xmake/tests/recipes.lua',marker='PLATFORM_PROFILES=(%d+)'},
+        {'engine_tests','build/xmake/tests/engine_tests.lua',marker='NATIVE_ENGINE_TEST_GRAPH_CHECKS=(%d+)'},
         {'platform_defaults','build/xmake/tests/platform_defaults.lua',marker='NATIVE_PLATFORM_DEFAULT_CHECKS=(%d+)'},
         {'managed','build/xmake/tests/managed.lua',marker='NATIVE_MANAGED_CONTRACT_CHECKS=(%d+)'},
         {'generated_objects','build/xmake/tests/generated_objects.lua',marker='NATIVE_GENERATED_OBJECT_CHECKS=(%d+)'},
@@ -29,7 +31,11 @@ function main(compressor, zipper)
     for _, test in ipairs(tests) do
         local args={'lua',path.join(root,test[2])}
         for index=3,#test do table.insert(args,test[index]) end
-        local stdout,stderr=os.iorunv(os.programfile(),args,{curdir=root})
+        local testenvs
+        if test[1]=='host_sdk' then
+            testenvs={XMAKE_CONFIGDIR=path.join(directory,'host-sdk-config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-host-sdk')}
+        end
+        local stdout,stderr=os.iorunv(os.programfile(),args,{curdir=root,envs=testenvs})
         io.writefile(path.join(directory,test[1] .. '.log'),stdout .. (stderr or ''))
         local count=tonumber(stdout:match(test.marker or 'XMAKE_[A-Z_]+_PASS (%d+)'))
         assert(count and count>0,'Native contract fixture did not produce its success receipt: ' .. test[1])
@@ -38,7 +44,7 @@ function main(compressor, zipper)
     end
     local project=path.join(root,'build/xmake/tests/swift_object_graph')
     local output=path.join(directory,'swift-object-graph')
-    local stdout,stderr=os.iorunv(os.programfile(),{'f','-y','--toolchain=' .. hostcompiler,'-P',project,'-o',output},{curdir=project,envs={XMAKE_CONFIGDIR=path.join(output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-swift')}})
+    local stdout,stderr=os.iorunv(os.programfile(),{'f','-y','-p',os.host(),'-a',os.arch(),'--toolchain=' .. hostcompiler,'-P',project,'-o',output},{curdir=project,envs={XMAKE_CONFIGDIR=path.join(output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-swift')}})
     io.writefile(path.join(directory,'swift_object_graph.log'),stdout .. (stderr or ''))
     local sources,objects=stdout:match('NATIVE_SWIFT_OBJECT_GRAPH_PASS%s+(%d+)%s+(%d+)')
     assert(tonumber(sources) and tonumber(sources)>1 and tonumber(objects)==1,'Swift cross-file declarations must produce exactly one WMO object')
@@ -47,14 +53,14 @@ function main(compressor, zipper)
     print('swift_object_graph: PASS ' .. swiftchecks)
     local toolchain_project=path.join(root,'build/xmake/tests/toolchain_selection')
     local toolchain_output=path.join(directory,'toolchain-selection')
-    local toolchain_stdout,toolchain_stderr=os.iorunv(os.programfile(),{'f','-y','--toolchain=' .. hostcompiler,'-P',toolchain_project,'-o',toolchain_output},{curdir=toolchain_project,envs={XMAKE_CONFIGDIR=path.join(toolchain_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-toolchain')}})
+    local toolchain_stdout,toolchain_stderr=os.iorunv(os.programfile(),{'f','-y','-p',os.host(),'-a',os.arch(),'--toolchain=' .. hostcompiler,'-P',toolchain_project,'-o',toolchain_output},{curdir=toolchain_project,envs={XMAKE_CONFIGDIR=path.join(toolchain_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-toolchain')}})
     io.writefile(path.join(directory,'toolchain_selection.log'),toolchain_stdout .. (toolchain_stderr or ''))
     local toolchainchecks=assert(tonumber(toolchain_stdout:match('NATIVE_TOOLCHAIN_SELECTION_CHECKS=(%d+)')))
     table.insert(receipt.tests,{name='toolchain_selection',checks=toolchainchecks,status='PASS'})
     print('toolchain_selection: PASS ' .. toolchainchecks)
     local visionos_project=path.join(root,'build/xmake/tests/visionos_toolchain')
     local visionos_output=path.join(directory,'visionos-toolchain')
-    local visionos_stdout,visionos_stderr=os.iorunv(os.programfile(),{'f','-y','--toolchain=' .. hostcompiler,'-P',visionos_project,'-o',visionos_output},{curdir=visionos_project,envs={XMAKE_CONFIGDIR=path.join(visionos_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-visionos')}})
+    local visionos_stdout,visionos_stderr=os.iorunv(os.programfile(),{'f','-y','-p',os.host(),'-a',os.arch(),'--toolchain=' .. hostcompiler,'-P',visionos_project,'-o',visionos_output},{curdir=visionos_project,envs={XMAKE_CONFIGDIR=path.join(visionos_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-visionos')}})
     io.writefile(path.join(directory,'visionos_toolchain.log'),visionos_stdout .. (visionos_stderr or ''))
     local visionoschecks=assert(tonumber(visionos_stdout:match('NATIVE_VISIONOS_TOOLCHAIN_CHECKS=(%d+)')))
     table.insert(receipt.tests,{name='visionos_toolchain',checks=visionoschecks,status='PASS'})
