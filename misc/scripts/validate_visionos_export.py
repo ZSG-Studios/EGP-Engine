@@ -6,6 +6,7 @@ import json
 import plistlib
 import shutil
 import subprocess
+import xml.etree.ElementTree as ET
 from pathlib import Path
 
 
@@ -46,6 +47,18 @@ def main():
     project = project_dir / "EGPProbe.xcodeproj"
     if not (project / "project.pbxproj").is_file():
         raise RuntimeError("Exporter did not produce the Xcode project")
+    # The initial experimental launch uses the synchronization path qualified
+    # by the Metal fixture. Keep this explicit in the shared Xcode scheme.
+    scheme = project / "xcshareddata/xcschemes/EGPProbe.xcscheme"
+    scheme_tree = ET.parse(scheme)
+    launch = scheme_tree.getroot().find("LaunchAction")
+    if launch is None:
+        raise RuntimeError("Exported scheme has no launch action")
+    environment = launch.find("EnvironmentVariables")
+    if environment is None:
+        environment = ET.SubElement(launch, "EnvironmentVariables")
+    ET.SubElement(environment, "EnvironmentVariable", key="GODOT_MTL_SYNC_MODE", value="none", isEnabled="YES")
+    scheme_tree.write(scheme, encoding="utf-8", xml_declaration=True)
     derived = output / "derived-data"
     build_log = run(
         [
@@ -99,6 +112,7 @@ def main():
         "architectures": architectures,
         "bundle_identifier": info["CFBundleIdentifier"],
         "immersion_style": "Full",
+        "xcode_launch_metal_sync_mode": "none",
         "engine_sha256": hashlib.sha256(engine.read_bytes()).hexdigest(),
         "template_sha256": hashlib.sha256(template.read_bytes()).hexdigest(),
         "executable_sha256": hashlib.sha256(executable.read_bytes()).hexdigest(),

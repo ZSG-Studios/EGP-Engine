@@ -27,6 +27,14 @@ temporal AA/upscaling. The renderer rejects incompatible buffers. Start with a
 simple opaque scene and no post-processing. Mixed/progressive immersion, capture,
 hand/controller interaction and pause/resume remain device follow-up work.
 
+The initial Xcode launch profile sets `GODOT_MTL_SYNC_MODE=none`, selecting Metal's
+native hazard tracking. The hosted Apple paravirtual GPU passed the stereo test
+in this mode; the default manual-barrier path stalled waiting for a GPU fence.
+That failure is retained in the earlier CI evidence. This does not establish
+whether the default path works on a physical Vision Pro. Launch from the provided
+Xcode scheme for the first device test; home-screen launches without that
+environment and the manual-barrier path remain unqualified.
+
 ## Reproduce the automated stereo test
 
 Use an editor built from the same commit as this source:
@@ -72,7 +80,8 @@ visionOS exporter.
    `EGPProbe.xcodeproj` in the `xcode-project` directory, select your development
    team and signing identity, and select your Vision Pro. The unsigned app is
    retained as build evidence; it cannot be installed without signing. The
-   project has no development team preconfigured.
+   project has no development team preconfigured. Keep the shared scheme's
+   `GODOT_MTL_SYNC_MODE=none` launch environment enabled.
    Alternatively, build or download the matching macOS editor from the
    `visionos-experimental-editor` artifact to export it yourself.
    Download `godot_visionos.zip` from the workflow's device artifact. It contains
@@ -85,6 +94,8 @@ visionOS exporter.
    exporting (the exporter requires a team even for project-only exports).
    **Export Project Only** is enabled in this preset. Open the generated Xcode
    project and configure your signing identity and device there.
+   For your own export, add `GODOT_MTL_SYNC_MODE=none` to the scheme's Run action
+   environment variables, matching the provided handoff project.
 3. Run without `--mock-xr`. The project initializes the real visionOS interface.
    Keep the supplied HDR, scale and AA settings. Read the startup warning and
    periodic `EGP_VISIONOS_DEVICE_OBSERVATION` messages; those are liveness signals,

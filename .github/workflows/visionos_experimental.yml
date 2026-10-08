@@ -12,7 +12,7 @@ on:
         required: false
         type: choice
         options: [default, none]
-        default: default
+        default: none
   push:
     branches: [experimental/visionos-forward-plus]
   pull_request:
@@ -202,6 +202,8 @@ jobs:
           path: bin/godot.macos.editor.arm64
       - name: Render on Metal if runner supports it
         if: steps.capability.outputs.available == 'true'
+        env:
+          GODOT_MTL_SYNC_MODE: none
         run: python3 misc/scripts/validate_visionos_forward_plus.py --engine bin/godot.macos.editor.arm64 --driver metal --output .build/visionos-experimental
       - name: Upload Metal capability and runtime evidence
         if: always()

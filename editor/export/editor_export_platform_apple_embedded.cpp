@@ -1949,7 +1949,8 @@ Error EditorExportPlatformAppleEmbedded::_export_project_helper(const Ref<Editor
 	}
 
 	// Generate a unique name for the launch screen to avoid caching.
-	{
+	// visionOS does not expose the iOS storyboard image options.
+	if (p_preset->has("storyboard/custom_image@2x") && p_preset->has("storyboard/custom_image@3x")) {
 		const String custom_launch_image_2x = p_preset->get("storyboard/custom_image@2x");
 		const String custom_launch_image_3x = p_preset->get("storyboard/custom_image@3x");
 
