@@ -1,21 +1,16 @@
 name: Build godot-cpp fixture
-description: Compile the upstream extension fixture against EGP's generated SDK using native xmake.
+description: Compile the pinned upstream extension fixture against EGP's matching SDK using native xmake.
 inputs:
   bin:
     description: Path to the EGP editor.
     required: true
-  godot-cpp-branch:
-    description: Upstream fixture branch.
-    default: master
 runs:
   using: composite
   steps:
-    - name: Checkout upstream fixture
-      uses: actions/checkout@v7
-      with:
-        repository: godotengine/godot-cpp
-        ref: ${{ inputs.godot-cpp-branch }}
-        path: godot-cpp
+    - name: Prepare matching pinned upstream fixture
+      shell: bash
+      run: |
+        xmake lua misc/scripts/prepare_godot_cpp_fixture.lua "${{ github.workspace }}/.build/upstream-cpp-fixture"
     - name: Extract matching API and SDK
       shell: bash
       env:
@@ -23,12 +18,7 @@ runs:
       run: |
         "$EGP_EDITOR" --headless --dump-gdextension-interface --dump-extension-api
         xmake lua misc/scripts/extract_egp_cpp_sdk.lua --api "${{ github.workspace }}/extension_api.json" --output "${{ github.workspace }}/.build/upstream-cpp-sdk"
-    - name: Prepare EGP test fixture
-      shell: bash
-      run: |
-        git -C godot-cpp apply --check "${{ github.workspace }}/.github/actions/godot-cpp-build/egp-test.patch"
-        git -C godot-cpp apply "${{ github.workspace }}/.github/actions/godot-cpp-build/egp-test.patch"
     - name: Build extension with xmake
       shell: bash
       run: |
-        xmake lua misc/scripts/build_egp_cpp_extension.lua --project "${{ github.workspace }}/godot-cpp/test" --sdk "${{ github.workspace }}/.build/upstream-cpp-sdk" --build-dir "${{ github.workspace }}/.build/upstream-cpp-extension" --output-dir "${{ github.workspace }}/godot-cpp/test/project/bin" --name libgdexample.linux.template_debug.x86_64 --sources 'src/**.cpp' --mode debug --platform linux --arch x86_64 --doc-classes "${{ github.workspace }}/godot-cpp/test/doc_classes" --compressor "${{ github.workspace }}/.build/xmake-host-tools/linux-x86_64/bin/egp_compress"
+        xmake lua misc/scripts/build_egp_cpp_extension.lua --project "${{ github.workspace }}/.build/upstream-cpp-fixture/test" --sdk "${{ github.workspace }}/.build/upstream-cpp-sdk" --build-dir "${{ github.workspace }}/.build/upstream-cpp-extension" --output-dir "${{ github.workspace }}/.build/upstream-cpp-fixture/test/project/bin" --name libmytest.linux.template_debug.x86_64 --sources 'src/**.cpp' --mode debug --platform linux --arch x86_64 --doc-classes "${{ github.workspace }}/.build/upstream-cpp-fixture/test/doc_classes" --compressor "${{ github.workspace }}/.build/xmake-host-tools/linux-x86_64/bin/egp_compress"

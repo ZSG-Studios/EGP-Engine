@@ -26,18 +26,7 @@ function main(graph)
         env_d3d12_rdd:add({["CPPDEFINES"] = {"DCOMP_ENABLED"}})
         env:add({["CPPDEFINES"] = {"DCOMP_ENABLED"}})
     end
-    mesa_libs = R.index(env, "mesa_libs")
-    if R.truthy((function() local v = env.msvc; if not R.truthy(v) then return v end; return os.path.exists(R.add(R.add(R.add(R.index(env, "mesa_libs"), "-"), R.index(env, "arch")), "-msvc")) end)()) then
-        mesa_libs = R.add(R.add(R.add(R.index(env, "mesa_libs"), "-"), R.index(env, "arch")), "-msvc")
-    else
-        if R.truthy((function() local v = R.index(env, "use_llvm"); if not R.truthy(v) then return v end; return os.path.exists(R.add(R.add(R.add(R.index(env, "mesa_libs"), "-"), R.index(env, "arch")), "-llvm")) end)()) then
-            mesa_libs = R.add(R.add(R.add(R.index(env, "mesa_libs"), "-"), R.index(env, "arch")), "-llvm")
-        else
-            if R.truthy((function() local v = not R.truthy(R.index(env, "use_llvm")); if not R.truthy(v) then return v end; return os.path.exists(R.add(R.add(R.add(R.index(env, "mesa_libs"), "-"), R.index(env, "arch")), "-gcc")) end)()) then
-                mesa_libs = R.add(R.add(R.add(R.index(env, "mesa_libs"), "-"), R.index(env, "arch")), "-gcc")
-            end
-        end
-    end
+    mesa_libs = import("build.xmake.sdk_paths", {rootdir=graph.root}).resolve(env.options, graph.root).mesa_libs
     mesa_dir = R.replace(R.add(mesa_libs, "/godot-mesa"), "\\", "/")
     mesa_gen_dir = R.replace(R.add(mesa_libs, "/godot-mesa/generated"), "\\", "/")
     mesa_absdir = graph:directory(mesa_dir).abspath
@@ -66,7 +55,7 @@ function main(graph)
         graph:message("print_error", "Direct3D 12 SDK dependencies are missing or outdated. Run xmake lua misc/scripts/install_build_dependencies.lua d3d12.")
         sys.exit(255)
     end
-    extra_defines = R.iadd(extra_defines, {"__STDC_CONSTANT_MACROS", "__STDC_FORMAT_MACROS", "__STDC_LIMIT_MACROS", {"PACKAGE_VERSION", R.add(R.add("\\\"", R.strip(mesa_ver:read_text())), "\\\"")}, {"PACKAGE_BUGREPORT", "\\\"https://gitlab.freedesktop.org/mesa/mesa/-/issues\\\""}, "PIPE_SUBSYSTEM_WINDOWS_USER", {"_Static_assert", "static_assert"}, "HAVE_STRUCT_TIMESPEC"})
+    extra_defines = R.iadd(extra_defines, {"__STDC_CONSTANT_MACROS", "__STDC_FORMAT_MACROS", "__STDC_LIMIT_MACROS", {"PACKAGE_VERSION", R.add(R.add('"', R.strip(mesa_ver:read_text())), '"')}, {"PACKAGE_BUGREPORT", '"https://gitlab.freedesktop.org/mesa/mesa/-/issues"'}, "PIPE_SUBSYSTEM_WINDOWS_USER", {"_Static_assert", "static_assert"}, "HAVE_STRUCT_TIMESPEC"})
     if R.truthy(env.msvc) then
         extra_defines = R.iadd(extra_defines, {"_USE_MATH_DEFINES", "VC_EXTRALEAN", "_CRT_SECURE_NO_WARNINGS", "_CRT_SECURE_NO_DEPRECATE", "_SCL_SECURE_NO_WARNINGS", "_SCL_SECURE_NO_DEPRECATE", "_ALLOW_KEYWORD_MACROS", "NOMINMAX"})
     else

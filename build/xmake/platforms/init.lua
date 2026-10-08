@@ -121,6 +121,8 @@ function configure_macos_vulkan(target, options, sdk_home)
 end
 
 function configure(target, options, build_env)
+    local sdk_paths = import("build.xmake.sdk_paths", {rootdir=path.absolute("../../..", os.scriptdir())})
+    sdk_paths.resolve(options, os.projectdir())
     local normalized = configure_toolchain(target, options, build_env)
     if options.library_type == "shared_library" and normalized.plat ~= "windows" and normalized.plat ~= "mingw" then
         target:add("cxflags", "-fPIC", {force = true})
@@ -184,6 +186,11 @@ function configure(target, options, build_env)
     end
     assert(not (enabled(options.use_tsan) and enabled(options.use_asan)), "ThreadSanitizer and AddressSanitizer cannot be combined")
     if #sanitizer > 0 then
+        -- GCC's sanitizer globals can exceed the x86-64 small-data range.
+        -- Match the upstream Linux policy for both code generation and final links.
+        if platform == "linuxbsd" and normalized.toolchain == "gcc" and normalized.arch == "x86_64" then
+            flags(target, "-mcmodel=medium")
+        end
         if msvc then cc(target, "/fsanitize=address"); link(target, "/INFERASANLIBS")
         else flags(target, "-fsanitize=" .. table.concat(sanitizer, ",")); cc(target, "-fno-omit-frame-pointer") end
     end
@@ -262,7 +269,7 @@ function configure(target, options, build_env)
         if enabled(options.use_closure_compiler) then link(target, "--closure=1") end
     end
     local arch = options.arch or options.egp_arch or (platform == "android" and "arm64" or "x86_64")
-    local deps = os.getenv("LOCALAPPDATA") and not os.getenv("MSYSTEM") and path.join(os.getenv("LOCALAPPDATA"), "Godot", "build_deps") or path.join("bin", "build_deps")
+    local deps = sdk_paths.dependencies(os.projectdir())
     if enabled(options.accesskit) then
         local sdk = sdkpath(options.accesskit_sdk_path, path.join(deps, "accesskit"))
         assert(os.isdir(path.join(sdk, "include")), "AccessKit SDK missing; install it or configure accesskit=n")
@@ -285,9 +292,7 @@ function configure(target, options, build_env)
     end
     if platform == "windows" and enabled(options.d3d12) then
         local compiler = msvc and "msvc" or (enabled(options.use_llvm) and "llvm" or "gcc")
-        local mesa = sdkpath(options.mesa_libs, path.join(deps, "mesa"))
-        local variant = mesa .. "-" .. arch .. "-" .. compiler
-        if os.isdir(variant) then mesa = variant end
+        local mesa = options.mesa_libs
         assert(os.isdir(mesa), "Direct3D12 requires the installed Mesa/NIR SDK; install it or configure d3d12=n")
         target:add("linkdirs", path.join(mesa, "bin"))
         target:add("syslinks", "libNIR.windows." .. arch .. (msvc and enabled(options.use_asan) and ".san" or ""))

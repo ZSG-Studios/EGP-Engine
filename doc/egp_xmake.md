@@ -34,6 +34,46 @@ For a native-only editor, or explicit compiler options:
 .\misc\scripts\build_egp.ps1 -Target template_release -XmakeArgs @('use_mingw=yes')
 ```
 
+Install optional Windows SDKs before enabling their build options:
+
+```powershell
+xmake lua misc/scripts/install_build_dependencies.lua d3d12
+xmake lua misc/scripts/install_build_dependencies.lua angle
+xmake lua misc/scripts/install_build_dependencies.lua accesskit
+.\misc\scripts\build_egp.ps1 -Target editor -XmakeArgs @('d3d12=yes', 'angle=yes', 'accesskit=yes')
+```
+
+The installer and engine share the same dependency root. Set `EGP_BUILD_DEPS`
+to choose it explicitly; otherwise native Windows uses
+`%LOCALAPPDATA%/Godot/build_deps`, while MSYS or hosts without `LOCALAPPDATA` use
+the repository's `bin/build_deps`. Relative overrides resolve from the engine
+repository. For example:
+
+```powershell
+$env:EGP_BUILD_DEPS = 'D:/EGP-SDKs'
+xmake lua misc/scripts/install_build_dependencies.lua d3d12
+.\misc\scripts\build_egp.ps1 -Target editor -XmakeArgs @('d3d12=yes')
+```
+
+`mesa_libs`, `angle_libs`, `agility_sdk_path`, `pix_path` and
+`accesskit_sdk_path` override individual SDK locations. Mesa and ANGLE select
+an installed architecture/compiler variant when given an unsuffixed base;
+an explicit selected directory is retained. Source recipes, linking and DLL
+packaging use these same resolved paths. Clang-cl uses the MSVC SDK variant;
+MinGW uses the GCC or LLVM variant selected by `use_llvm`.
+
+For MinGW with Direct3D12, install `gendef` and a compatible x64 GNU `dlltool`
+or `llvm-dlltool`, then require GNU WinPix import-library conversion:
+
+```powershell
+xmake lua misc/scripts/install_build_dependencies.lua d3d12 install gcc
+.\misc\scripts\build_egp.ps1 -Target template_release -XmakeArgs @('use_mingw=yes', 'd3d12=yes')
+```
+
+The MinGW installer fails if required x64 conversion cannot complete. MSVC and
+clang-cl use the package's native import libraries; unavailable optional GNU
+conversion does not prevent their installation.
+
 After a Mono editor build, its own executable generates matching managed glue;
 the .NET build scripts then compile GodotSharp. `-SkipManaged` skips this final
 stage. Regenerate managed assemblies after changes to exposed native APIs.

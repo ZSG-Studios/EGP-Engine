@@ -36,6 +36,33 @@
 #include <thread>
 using namespace egp::net;
 static int checks = 0;
+static const char *phase = "startup";
+static std::map<Session *, std::chrono::steady_clock::time_point> previous_pump;
+static Result pump_checked(Session &session, const char *name) {
+	const auto started = std::chrono::steady_clock::now();
+	const auto previous = previous_pump.find(&session);
+	const double gap_ms = previous == previous_pump.end() ? 0.0 : std::chrono::duration<double, std::milli>(started - previous->second).count();
+	previous_pump[&session] = started;
+	const auto before = session.statistics();
+	const auto state = session.state();
+	const Result result = session.pump();
+	if (result != Result::Ok) {
+		const auto after = session.statistics();
+		std::cerr << "PUMP_FAILURE phase=" << phase << " session=" << name << " result=" << int(result)
+				  << " before_state=" << state << " after_state=" << session.state()
+				  << " gap_ms=" << gap_ms << " call_ms=" << std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count()
+				  << " catchup_limit_ms=500 tick_before=" << before.tick << " tick_after=" << after.tick
+				  << " server_tick=" << after.server_tick << " rejected_before=" << before.rejected_messages << " rejected_after=" << after.rejected_messages
+				  << " received_messages=" << after.received_messages << " received_bytes=" << after.received_bytes
+				  << " peers=" << after.peers << " entities=" << session.entities().size() << std::endl;
+	}
+	return result;
+}
+static void diagnose(Session &session, const char *name) {
+	session.diagnostic = [name](const std::string &message) {
+		std::cerr << "PUMP_DIAGNOSTIC phase=" << phase << " session=" << name << " reason=" << message << std::endl;
+	};
+}
 static void check(bool ok, const char *text) {
 	if (!ok) {
 		std::cerr << "FAILED: " << text << std::endl;
@@ -44,6 +71,7 @@ static void check(bool ok, const char *text) {
 	++checks;
 }
 int main() {
+	phase = "impaired delta replication";
 	Options options;
 	options.allow_insecure_loopback = true;
 	options.max_players = 3;
@@ -53,11 +81,15 @@ int main() {
 	options.simulated_jitter_ms = 10;
 	options.simulated_loss = 8;
 	Session server(options), first(options), second(options), late(options);
+	diagnose(server, "server");
+	diagnose(first, "first");
+	diagnose(second, "second");
+	diagnose(late, "late");
 	bool connect_late = false;
 	auto until = [&](auto done, int milliseconds = 10000) {
 		const auto end = std::chrono::steady_clock::now() + std::chrono::milliseconds(milliseconds);
 		do {
-			check(server.pump() == Result::Ok && first.pump() == Result::Ok && second.pump() == Result::Ok && (!connect_late || late.pump() == Result::Ok), "native pump remains healthy");
+			check(pump_checked(server, "server") == Result::Ok && pump_checked(first, "first") == Result::Ok && pump_checked(second, "second") == Result::Ok && (!connect_late || pump_checked(late, "late") == Result::Ok), "native pump remains healthy");
 			for (const auto &peer : server.peers()) {
 				auto s = server.replication_statistics(peer.id);
 				check(s && s->baseline_bytes <= Session::MaxDeltaBaselineBytesPerPeer, "retained acknowledged and pending memory bounded");
@@ -135,10 +167,13 @@ int main() {
 	second.stop();
 	late.stop();
 	// Separate no-impairment fill stresses the 1MiB retention cap without claiming WAN capacity.
+	phase = "baseline memory capacity fill";
 	options.simulated_loss = 0;
 	options.simulated_latency_ms = 0;
 	options.simulated_jitter_ms = 0;
 	Session memory_server(options), memory_client(options);
+	diagnose(memory_server, "memory_server");
+	diagnose(memory_client, "memory_client");
 	memory_server.listen(0, "127.0.0.1");
 	memory_client.connect_loopback("127.0.0.1", memory_server.statistics().local_port);
 	std::vector<uint64_t> handles;
@@ -150,13 +185,14 @@ int main() {
 	}
 	const auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(50);
 	while (memory_client.entities().size() != handles.size() && std::chrono::steady_clock::now() < deadline) {
-		check(memory_server.pump() == Result::Ok && memory_client.pump() == Result::Ok, "memory stress pump");
+		check(pump_checked(memory_server, "memory_server") == Result::Ok && pump_checked(memory_client, "memory_client") == Result::Ok, "memory stress pump");
 		for (const auto &p : memory_server.peers()) {
 			check(memory_server.replication_statistics(p.id)->baseline_bytes <= Session::MaxDeltaBaselineBytesPerPeer, "capacity overflow remains bounded");
 		}
 		std::this_thread::sleep_for(std::chrono::milliseconds(2));
 	}
 	check(memory_client.entities().size() == handles.size(), "capacity fallback delivers every full baseline");
+	phase = "baseline memory teardown";
 	for (auto h : handles) {
 		memory_server.despawn(h);
 	}

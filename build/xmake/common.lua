@@ -41,6 +41,7 @@ function configure(env, options, explicit)
     options.arch = options.arch or (platform == "web" and "wasm32" or (table.contains({"android", "ios", "visionos"}, platform) and "arm64" or "x86_64"))
     local arch_aliases = {x64 = "x86_64", amd64 = "x86_64", x86 = "x86_32", aarch64 = "arm64", riscv64 = "rv64"}
     options.arch = arch_aliases[options.arch] or options.arch
+    import("sdk_paths", {rootdir=os.scriptdir()}).resolve(options, env.graph.root)
     env.editor_build, env.dev_build, env.debug_features = target == "editor", options.dev_build, target ~= "template_release"
     assert(not env.editor_build or options.library_type == "executable", "Editor SDK generation requires an executable editor; library_type static_library/shared_library is supported for template targets only")
     env.msvc = platform == "windows" and not options.use_mingw

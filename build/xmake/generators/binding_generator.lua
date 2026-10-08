@@ -1802,6 +1802,7 @@ rt.fn({"api","output_dir","use_template_get_node","hooks"},{rt._missing,rt._miss
                 ::temporary_136::
             end
             rt.call(rt.attr(v_result,"append"),rt.arguments({""}),rt.dict({}))
+            rt.call(rt.attr(v_result,"append"),rt.arguments({"#include <godot_cpp/core/method_ptrcall.hpp>"}),rt.dict({}))
             if rt.truth((((rt.call(v_len,rt.arguments({v_used_classes}),rt.dict({}))>0)))) then
                 v_includes = rt.array({})
                 for temporary_137 in rt.iter(v_used_classes) do
@@ -1819,8 +1820,6 @@ rt.fn({"api","output_dir","use_template_get_node","hooks"},{rt._missing,rt._miss
                     end
                     ::temporary_140::
                 end
-            else
-                rt.call(rt.attr(v_result,"append"),rt.arguments({"#include <godot_cpp/core/method_ptrcall.hpp>"}),rt.dict({}))
             end
             rt.call(rt.attr(v_result,"append"),rt.arguments({""}),rt.dict({}))
             rt.call(rt.attr(v_result,"append"),rt.arguments({"namespace godot {"}),rt.dict({}))

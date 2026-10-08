@@ -27,11 +27,14 @@ toolchain("egp-visionos")
         toolchain:set("toolset", "sh", toolchain:config("egp_clangxx"))
         toolchain:set("toolset", "ar", toolchain:config("egp_ar"))
         toolchain:set("toolset", "sc", toolchain:config("egp_swiftc"))
+        -- Swift source targets select scar, matching xmake's stock Xcode toolchain.
+        toolchain:set("toolset", "scar", toolchain:config("egp_swiftc"))
         local triple = toolchain:arch() .. (toolchain:config("simulator") and "-apple-xros26.0-simulator" or "-apple-xros26.0")
         for _, key in ipairs({"cxflags", "mxflags", "ldflags", "shflags"}) do
             toolchain:add(key, "-target", triple, "-isysroot", toolchain:config("egp_sdkroot"))
         end
         toolchain:add("scflags", "-target", triple, "-sdk", toolchain:config("egp_sdkroot"))
+        toolchain:add("scarflags", "-target", triple, "-sdk", toolchain:config("egp_sdkroot"), "-emit-library", "-static")
         toolchain:add("arflags", "-cr")
     end)
 toolchain_end()

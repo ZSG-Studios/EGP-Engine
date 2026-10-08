@@ -32,9 +32,21 @@ function apply(target, policy, options)
 end
 
 function flags(target, policy)
-    for _, flag in ipairs(policy.LINKFLAGS or {}) do
-        target:add('ldflags',flag,{force=true})
-        target:add('shflags',flag,{force=true})
+    local values, index = policy.LINKFLAGS or {}, 1
+    while index <= #values do
+        local flag = values[index]
+        local grouped = flag == '--js-library' or flag == '--pre-js' or flag == '--post-js'
+        if grouped then
+            local operand = values[index + 1]
+            assert(type(operand) == 'string' and operand ~= '', 'Missing Emscripten operand for ' .. flag)
+            -- Xmake deduplicates flags before splitting them into argv. Keep the option
+            -- and its path atomic so repeated options and quoted paths retain their meaning.
+            flag = {flag, operand}
+            index = index + 1
+        end
+        target:add('ldflags',flag,{force=true,expand=not grouped})
+        target:add('shflags',flag,{force=true,expand=not grouped})
+        index = index + 1
     end
 end
 

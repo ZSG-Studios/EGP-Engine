@@ -94,6 +94,32 @@ target("visionos_configuration_probe")
             check(not accepted and tostring(failure):find("cannot specify", 1, true), "Negative control must reproduce Clang's duplicate deployment rejection")
             check(instance:get("toolset.cxx") == path.join(sdkroot, "clang++"), "Toolchain load must retain the discovered C++ compiler")
             check(instance:get("toolset.sc") == path.join(sdkroot, "swiftc"), "Swift WMO compilation must resolve its compiler")
+            check(instance:get("toolset.scar") == path.join(sdkroot, "swiftc"), "Static Swift libraries must use the discovered Xcode Swift driver")
+            local scarflags = table.wrap(instance:get("scarflags"))
+            check(table.contains(scarflags, triple) and table.contains(scarflags, "-sdk") and table.contains(scarflags, sdkroot), "Static Swift archives must retain the selected SDK and deployment target")
+            check(table.contains(scarflags, "-emit-library") and table.contains(scarflags, "-static"), "Static Swift driver must emit an archive, not an executable")
+            -- Load xmake's actual Swift archive tool. No Swift executable runs on this host;
+            -- Xcode discovery is simulated, while tool selection and archive argv are real.
+            local native_tool = debug.global("require")("tool/tool")
+            local archiver, load_error = native_tool.load("scar", {program=instance:get("toolset.scar"), toolname="swiftc", toolchain_info={plat="cross",arch=profile.arch}})
+            check(archiver ~= nil, tostring(load_error))
+            local object = path.join(sdkroot, "camera Swift object.o")
+            local output = path.join(sdkroot, "camera Swift archive.a")
+            local program, argv = archiver:linkargv({object}, "static", output, scarflags)
+            check(program == instance:get("toolset.scar"), "Actual archive driver must be the selected Swift compiler")
+            check(argv[1] == "-o" and argv[2] == output and argv[3] == object, "Static Swift archive must consume the WMO object exactly once")
+            check(table.contains(argv, "-emit-library") and table.contains(argv, "-static") and table.contains(argv, triple) and table.contains(argv, sdkroot), "Actual Swift archive argv must retain static mode, architecture, SDK and deployment")
+            -- Simulate only the old absent tool mapping; do not let a host Xcode fallback
+            -- mask it on macOS. The native loader produces the real missing-scar diagnostic.
+            local native_platform = debug.global("require")("platform/platform")
+            local original_tool = native_platform.tool
+            native_platform.tool = function (kind)
+                check(kind == "scar", "Negative control must query the Swift archiver")
+                return nil
+            end
+            local missing, missing_error = native_tool.load("scar", {toolchain_info={plat="cross",arch=profile.arch}})
+            native_platform.tool = original_tool
+            check(not missing and tostring(missing_error):find("cannot get program for scar",1,true), "Old missing Swift archiver must reproduce the actual native-tool failure")
             local swiftflags = table.wrap(instance:get("scflags"))
             check(table.contains(swiftflags, triple) and table.contains(swiftflags, "-sdk") and table.contains(swiftflags, sdkroot), "Swift must use the selected visionOS SDK and target")
         end

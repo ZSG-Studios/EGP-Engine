@@ -12,6 +12,9 @@ function main(compressor, zipper)
         {'shaders','tests/build/validate_builders.lua'},
         {'packages','tests/build/test_xmake_packages.lua',zipper},
         {'pix_imports','tests/build/test_pix_imports.lua'},
+        {'sdk_paths','build/xmake/tests/sdk_paths.lua',marker='NATIVE_SDK_PATH_CHECKS=(%d+)'},
+        {'sdk_native_structures','build/xmake/tests/sdk_native_structures.lua',marker='NATIVE_SDK_NATIVE_STRUCTURE_CHECKS=(%d+)'},
+        {'godot_cpp_fixture','tests/build/test_godot_cpp_fixture.lua'},
         {'linking','tests/build/test_xmake_linking.lua'},
         {'link_dependencies','tests/build/test_xmake_link_dependencies.lua'},
         {'api_fence','tests/build/test_xmake_api_fence.lua'},
@@ -60,6 +63,13 @@ function main(compressor, zipper)
     local toolchainchecks=assert(tonumber(toolchain_stdout:match('NATIVE_TOOLCHAIN_SELECTION_CHECKS=(%d+)')))
     table.insert(receipt.tests,{name='toolchain_selection',checks=toolchainchecks,status='PASS'})
     print('toolchain_selection: PASS ' .. toolchainchecks)
+    local sanitizer_project=path.join(root,'build/xmake/tests/linux_sanitizer_model')
+    local sanitizer_output=path.join(directory,'linux-sanitizer-model')
+    local sanitizer_stdout,sanitizer_stderr=os.iorunv(os.programfile(),{'f','-y','-p',os.host(),'-a',os.arch(),'--toolchain=' .. hostcompiler,'-P',sanitizer_project,'-o',sanitizer_output},{curdir=sanitizer_project,envs={XMAKE_CONFIGDIR=path.join(sanitizer_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-linux-sanitizer-model')}})
+    io.writefile(path.join(directory,'linux_sanitizer_model.log'),sanitizer_stdout .. (sanitizer_stderr or ''))
+    local sanitizerchecks=assert(tonumber(sanitizer_stdout:match('NATIVE_LINUX_SANITIZER_MODEL_CHECKS=(%d+)')))
+    table.insert(receipt.tests,{name='linux_sanitizer_model',checks=sanitizerchecks,status='PASS'})
+    print('linux_sanitizer_model: PASS ' .. sanitizerchecks)
     if os.host()=='windows' then
         local exception_project=path.join(root,'build/xmake/tests/windows_exceptions')
         local exception_output=path.join(directory,'windows-exceptions')
@@ -96,6 +106,15 @@ function main(compressor, zipper)
     local web_checks=assert(tonumber(web_stdout:match('NATIVE_WEB_EXPORT_ARGUMENT_CHECKS=(%d+)')))
     table.insert(receipt.tests,{name='web_export_arguments',checks=web_checks,status='PASS'})
     print('web_export_arguments: PASS ' .. web_checks)
+    local web_link_project=path.join(root,'build/xmake/tests/web_link_flags')
+    local web_link_output=path.join(directory,'web-link-flags')
+    local web_link_stdout,web_link_stderr=os.iorunv(os.programfile(),{'f','-y','-p',os.host(),'-a',os.arch(),'--toolchain=' .. hostcompiler,'-P',web_link_project,'-o',web_link_output},{curdir=web_link_project,envs={XMAKE_CONFIGDIR=path.join(web_link_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-web-link-flags')}})
+    io.writefile(path.join(directory,'web_link_flags.log'),web_link_stdout .. (web_link_stderr or ''))
+    local web_link_cases,web_link_checks=0,0
+    for count in web_link_stdout:gmatch('NATIVE_WEB_LINK_FLAG_CHECKS=(%d+)') do web_link_cases=web_link_cases+1; web_link_checks=web_link_checks+tonumber(count) end
+    assert(web_link_cases==2 and web_link_checks>0,'Binary and shared native linker argv must preserve every repeated Emscripten option and operand')
+    table.insert(receipt.tests,{name='web_link_flags',checks=web_link_checks,status='PASS'})
+    print('web_link_flags: PASS ' .. web_link_checks)
     local link_project=path.join(root,'build/xmake/tests/link_environment')
     local link_output=path.join(directory,'link-environment')
     local link_stdout,link_stderr=os.iorunv(os.programfile(),{'f','-y','-p','cross','--toolchain=egp_link_probe','-P',link_project,'-o',link_output},{curdir=link_project,envs={XMAKE_CONFIGDIR=path.join(link_output,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-link-environment')}})

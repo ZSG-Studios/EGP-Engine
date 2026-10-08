@@ -58,7 +58,14 @@ using Microsoft::WRL::ComPtr;
 #define _MSC_VER 1800
 #endif
 #define USE_PIX
+#ifdef __clang__
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wunused-but-set-variable"
+#endif
 #include <WinPixEventRuntime/pix3.h>
+#ifdef __clang__
+#pragma clang diagnostic pop
+#endif
 #if defined(__GNUC__)
 #undef _MSC_VER
 #endif

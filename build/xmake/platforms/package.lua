@@ -218,15 +218,15 @@ function finish(context)
         end
     end
     if platform=='windows' and policy.enabled(options.d3d12) then
-        local deps=os.getenv('LOCALAPPDATA') and not os.getenv('MSYSTEM') and path.join(os.getenv('LOCALAPPDATA'),'Godot/build_deps') or path.join(context.root,'bin/build_deps')
-        local agility=options.agility_sdk_path and options.agility_sdk_path~='' and options.agility_sdk_path or path.join(deps,'agility_sdk')
+        import('build.xmake.sdk_paths', {rootdir=context.root}).resolve(options, context.root)
+        local agility=options.agility_sdk_path
         if os.isdir(agility) then
             local arch=({x86_32='win32',x86_64='x64',arm32='arm',arm64='arm64'})[options.arch]
             local output=policy.enabled(options.agility_sdk_multiarch) and path.join(context.bin_dir,options.arch) or context.bin_dir
             for _, name in ipairs({'D3D12Core.dll','d3d12SDKLayers.dll'}) do copy(path.join(agility,'build/native/bin',assert(arch),name),path.join(output,name)) end
         end
         if policy.enabled(options.use_pix) then
-            local pix=options.pix_path and options.pix_path~='' and options.pix_path or path.join(deps,'pix')
+            local pix=options.pix_path
             copy(path.join(pix,'bin',options.arch=='arm64' and 'arm64' or 'x64','WinPixEventRuntime.dll'),path.join(context.bin_dir,'WinPixEventRuntime.dll'))
         end
     end

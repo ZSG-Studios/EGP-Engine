@@ -196,7 +196,9 @@ func run_test() -> void:
 	var source_path := "res://extensions/smoke/src/extension.cpp"
 	var source := FileAccess.get_file_as_string(source_path)
 	var file := FileAccess.open(source_path, FileAccess.WRITE)
-	file.store_string(source + "\n#pragma message(\"\\033]8;;https://example.invalid\\aEGP terminal link fixture\\033]8;;\\a\")\n#error EGP deliberate diagnostic fixture\n")
+	# GCC echoes source lines beside diagnostics. Adjacent literals preserve the
+	# emitted OSC bytes without making valid source context look like a leak.
+	file.store_string(source + "\n#pragma message(\"\\033\" \"]8;;\" \"https://example.invalid\" \"\\aEGP terminal link fixture\\033]8;;\\a\")\n#error EGP deliberate diagnostic fixture\n")
 	file.close()
 	if not require(panel.build_extension("smoke", false) == OK, "Failed-build fixture did not start"):
 		return

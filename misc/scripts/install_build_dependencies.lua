@@ -37,8 +37,7 @@ function main(component, dryrun, compiler)
     import('utils.archive')
     import('core.base.json')
     local root = path.absolute(path.join(os.scriptdir(),'../..'))
-    local localdata = os.getenv('LOCALAPPDATA')
-    local deps = os.getenv('EGP_BUILD_DEPS') or (localdata and not os.getenv('MSYSTEM') and path.join(localdata,'Godot/build_deps') or path.join(root,'bin/build_deps'))
+    local deps = import('build.xmake.sdk_paths', {rootdir=root}).dependencies(root)
     if dryrun ~= 'dry-run' then os.mkdir(deps) end
     local function install(url, destination, subdirectory)
         if dryrun == 'dry-run' then print(url .. ' -> ' .. destination); return end
