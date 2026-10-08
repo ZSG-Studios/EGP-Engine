@@ -11,6 +11,7 @@ on:
       - 'servers/rendering/renderer_rd/**'
       - 'misc/egp/visionos_forward_plus/**'
       - 'misc/scripts/validate_visionos_forward_plus.py'
+      - 'misc/scripts/validate_visionos_export.py'
       - '.github/workflows/visionos_experimental.yml'
 permissions:
   contents: read
@@ -56,6 +57,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: visionos-experimental-device
+          include-hidden-files: true
           path: |
             bin/
             .build/visionos-experimental/
@@ -82,6 +84,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: visionos-experimental-vulkan
+          include-hidden-files: true
           path: .build/visionos-experimental/
   stereo-metal:
     name: Metal capability and external stereo test
@@ -117,6 +120,11 @@ jobs:
             echo 'available=false' >> "$GITHUB_OUTPUT"
             echo 'NOT_RUN: Hosted runner cannot execute the arm64 Metal fixture; physical device validation also pending.' > .build/visionos-experimental/NOT_RUN.txt
           fi
+      - name: Upload matching macOS editor
+        uses: actions/upload-artifact@v4
+        with:
+          name: visionos-experimental-editor
+          path: bin/godot.macos.editor.arm64
       - name: Render on Metal if runner supports it
         if: steps.capability.outputs.available == 'true'
         run: python3 misc/scripts/validate_visionos_forward_plus.py --engine bin/godot.macos.editor.arm64 --driver metal --output .build/visionos-experimental
@@ -125,4 +133,39 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: visionos-experimental-metal
+          include-hidden-files: true
           path: .build/visionos-experimental/
+  device-app:
+    name: Export and link unsigned visionOS device app
+    needs: [device-build, stereo-metal]
+    runs-on: macos-26
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: visionos-experimental-device
+          path: .build/device-artifact
+      - uses: actions/download-artifact@v4
+        with:
+          name: visionos-experimental-editor
+          path: bin
+      - name: Import, export and build the immersive sample without signing
+        run: |
+          chmod +x bin/godot.macos.editor.arm64
+          python3 misc/scripts/validate_visionos_export.py \
+            --engine bin/godot.macos.editor.arm64 \
+            --template .build/device-artifact/bin/godot_visionos.zip \
+            --output .build/visionos-export
+      - name: Upload device-owner handoff and build evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visionos-experimental-handoff
+          include-hidden-files: true
+          path: |
+            .build/visionos-export/xcode-project/
+            .build/visionos-export/unsigned-app/
+            .build/visionos-export/*.log
+            .build/visionos-export/*.json
+            .build/visionos-export/*.txt

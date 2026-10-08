@@ -50,16 +50,26 @@ The `Experimental visionOS Forward+` workflow builds and packages a debug device
 editors from the candidate commit. Linux runs the stereo test. macOS records GPU
 and architecture capabilities and only runs the Metal test when the hosted
 runner can execute the arm64 Metal editor. A `NOT_RUN.txt` artifact means runtime
-validation was unavailable, not passed. Neither fixture exercises Apple
-Compositor Services, foveation, ARKit or a headset.
+validation was unavailable, not passed. A final macOS job imports and exports the
+sample using those same build artifacts, then runs `xcodebuild` for a generic
+visionOS device with signing disabled. It checks the linked arm64 executable,
+exported project pack, and Full immersive scene manifest. The handoff artifact
+contains the generated Xcode project, unsigned app, logs and hashed receipt.
+Neither fixture exercises Apple Compositor Services, foveation, ARKit or a headset.
 
 ## Hand off to a device owner
 
-1. Build a macOS editor from the same commit, or use your matching local editor.
+1. Download `visionos-experimental-handoff` from a successful workflow run. Open
+   `EGPProbe.xcodeproj` in the `xcode-project` directory, select your development
+   team and signing identity, and select your Vision Pro. The unsigned app is
+   retained as build evidence; it cannot be installed without signing. The
+   project has no development team preconfigured.
+   Alternatively, build or download the matching macOS editor from the
+   `visionos-experimental-editor` artifact to export it yourself.
    Download `godot_visionos.zip` from the workflow's device artifact. It contains
    the debug device template; release and simulator builds are not included.
    This is not a signed, installable app.
-2. Open `misc/egp/visionos_forward_plus/project.godot`. Export using the visionOS
+2. For a fresh export, open `misc/egp/visionos_forward_plus/project.godot`. Export using the visionOS
    preset with application role **Immersive (experimental)**, initially **Full**
    immersion. Set **Custom Template > Debug** to the downloaded ZIP. Set your
    own **App Store Team ID** and bundle identifier in the export preset before
