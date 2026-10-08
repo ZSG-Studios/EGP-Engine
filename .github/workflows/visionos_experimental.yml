@@ -48,11 +48,13 @@ jobs:
           assert source['name'] == 'Experimental visionOS Forward+', 'Unexpected source workflow'
           assert source['status'] == 'completed', 'Source run has not finished'
           required = {'visionOS device compilation (not runtime validation)',
-                      'Metal capability and external stereo test',
                       'External stereo textures on software Vulkan'}
           jobs = api(f'actions/runs/{run_id}/jobs?per_page=100')['jobs']
           passed = {job['name'] for job in jobs if job['conclusion'] == 'success'}
           assert required <= passed, 'Native build and stereo checks must have passed'
+          metal = next(job for job in jobs if job['name'] == 'Metal capability and external stereo test')
+          steps = {step['name'] for step in metal['steps'] if step['conclusion'] == 'success'}
+          assert {'Compile Metal editor', 'Upload matching macOS editor'} <= steps, 'Metal editor build must have passed'
           comparison = api(f"compare/{source['head_sha']}...{os.environ['GITHUB_SHA']}")
           assert comparison['status'] in ('ahead', 'identical'), 'Candidate must descend from source build'
           files = comparison.get('files', [])
@@ -64,6 +66,7 @@ jobs:
           assert build_options(source['head_sha']) == build_options(os.environ['GITHUB_SHA']), 'Native build options changed'
           allowed = {'.github/workflows/visionos_experimental.yml',
                      'misc/scripts/validate_visionos_export.py',
+                     'misc/scripts/validate_visionos_forward_plus.py',
                      'doc/egp_visionos_experimental.md', 'README.md'}
           for file in files:
               assert file['status'] in ('added', 'modified'), 'Renamed or removed files require a rebuild'
@@ -203,11 +206,11 @@ jobs:
           path: .build/visionos-experimental/
   device-app:
     name: Export and link unsigned visionOS device app
-    needs: [device-build, stereo-metal, reuse-builds]
+    needs: [device-build, stereo-metal, reuse-builds, reuse-metal]
     if: >-
       always() &&
       ((needs.device-build.result == 'success' && needs.stereo-metal.result == 'success') ||
-       needs.reuse-builds.result == 'success')
+       (needs.reuse-builds.result == 'success' && needs.reuse-metal.result == 'success'))
     runs-on: macos-26
     timeout-minutes: 30
     steps:
@@ -243,3 +246,28 @@ jobs:
             .build/visionos-export/*.log
             .build/visionos-export/*.json
             .build/visionos-export/*.txt
+  reuse-metal:
+    name: Rerun Metal fixture with verified native editor
+    needs: reuse-builds
+    if: inputs.source_run_id != ''
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          name: visionos-experimental-editor
+          path: bin
+          run-id: ${{ inputs.source_run_id }}
+          github-token: ${{ github.token }}
+      - name: Run Metal stereo fixture
+        run: |
+          chmod +x bin/godot.macos.editor.arm64
+          python3 misc/scripts/validate_visionos_forward_plus.py --engine bin/godot.macos.editor.arm64 --driver metal --output .build/visionos-experimental
+      - name: Upload Metal recheck evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: visionos-experimental-metal
+          include-hidden-files: true
+          path: .build/visionos-experimental/

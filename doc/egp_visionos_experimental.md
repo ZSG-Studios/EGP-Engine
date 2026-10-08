@@ -58,9 +58,10 @@ contains the generated Xcode project, unsigned app, logs and hashed receipt.
 Neither fixture exercises Apple Compositor Services, foveation, ARKit or a headset.
 
 For an export-only correction, a manual run may set `source_run_id` to reuse
-previously successful native builds and stereo checks. The workflow verifies
-the source run and rejects native/runtime changes; it permits only export
-tooling, documentation and the sample's required ETC2/ASTC import setting.
+previously successful native builds. The workflow verifies the source run and
+rejects native source or build-option changes. It permits validation tooling,
+documentation and the sample's required ETC2/ASTC import setting, and reruns the
+Metal fixture before attempting the device app export.
 Its `build-reuse.json` identifies both source commits. Ordinary pushes still
 perform all builds. The sample enables ETC2/ASTC imports as required by the
 visionOS exporter.

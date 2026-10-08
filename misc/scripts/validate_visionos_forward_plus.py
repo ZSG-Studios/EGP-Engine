@@ -44,22 +44,33 @@ def main():
         "60",
         "--resolution",
         "256x256",
-        "--position",
-        "-32000,-32000",
-        "--",
-        "--mock-xr",
     ]
+    # Keep local Windows tests hidden. A hosted Mac needs an on-screen drawable
+    # for CAMetalLayer; an off-screen window can block before the scene starts.
+    if os.name == "nt":
+        command.extend(["--position", "-32000,-32000"])
+    command.extend(["--", "--mock-xr"])
     log_path = output / "stereo.log"
     timed_out = False
     with log_path.open("w", encoding="utf-8") as log:
+        process = subprocess.Popen(command, env=env, stdout=log, stderr=subprocess.STDOUT, startupinfo=startup)
         try:
-            result = subprocess.run(
-                command, env=env, stdout=log, stderr=subprocess.STDOUT, startupinfo=startup, timeout=55, check=False
-            )
-            exit_code = result.returncode
+            exit_code = process.wait(timeout=55)
         except subprocess.TimeoutExpired:
             timed_out = True
             exit_code = -1
+            if sys.platform == "darwin":
+                try:
+                    subprocess.run(
+                        ["sample", str(process.pid), "1", "-file", str(output / "hang-sample.txt")],
+                        capture_output=True,
+                        timeout=5,
+                        check=False,
+                    )
+                except subprocess.TimeoutExpired:
+                    pass
+            process.kill()
+            process.wait()
     text = log_path.read_text(encoding="utf-8", errors="replace")
     marker = "EGP_EXTERNAL_STEREO_PASS "
     passes = [line.split(marker, 1)[1] for line in text.splitlines() if marker in line]
