@@ -30,13 +30,13 @@
 
 package org.godotengine.godot;
 
-import org.godotengine.godot.vulkan.VkRenderer;
 import org.godotengine.godot.io.directory.DirectoryAccessHandler;
 import org.godotengine.godot.io.file.FileAccessHandler;
 import org.godotengine.godot.nativeapi.GodotNativeBridge;
 import org.godotengine.godot.tts.GodotTTS;
 import org.godotengine.godot.utils.GodotNetUtils;
 import org.godotengine.godot.variant.Callable;
+import org.godotengine.godot.vulkan.VkRenderer;
 
 import android.app.Activity;
 import android.content.res.AssetManager;
@@ -46,7 +46,6 @@ import android.view.Surface;
 import android.view.View;
 import android.view.accessibility.AccessibilityNodeInfo;
 import android.view.accessibility.AccessibilityNodeProvider;
-
 
 /**
  * Wrapper for native library

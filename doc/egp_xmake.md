@@ -24,7 +24,7 @@ builds editor, debug template and release template sequentially. Configuration
 and object directories are separated by platform, architecture, target and
 options, so switching variants does not reuse incompatible objects.
 
-The launcher enables Mono and disables optional ANGLE, AccessKit and Direct3D12
+The launcher enables Mono and disables optional AccessKit and Direct3D12
 by default. These dependencies must be installed before enabling their options.
 For a native-only editor, or explicit compiler options:
 
@@ -38,9 +38,8 @@ Install optional Windows SDKs before enabling their build options:
 
 ```powershell
 xmake lua misc/scripts/install_build_dependencies.lua d3d12
-xmake lua misc/scripts/install_build_dependencies.lua angle
 xmake lua misc/scripts/install_build_dependencies.lua accesskit
-.\misc\scripts\build_egp.ps1 -Target editor -XmakeArgs @('d3d12=yes', 'angle=yes', 'accesskit=yes')
+.\misc\scripts\build_egp.ps1 -Target editor -XmakeArgs @('d3d12=yes', 'accesskit=yes')
 ```
 
 The installer and engine share the same dependency root. Set `EGP_BUILD_DEPS`
@@ -55,8 +54,8 @@ xmake lua misc/scripts/install_build_dependencies.lua d3d12
 .\misc\scripts\build_egp.ps1 -Target editor -XmakeArgs @('d3d12=yes')
 ```
 
-`mesa_libs`, `angle_libs`, `agility_sdk_path`, `pix_path` and
-`accesskit_sdk_path` override individual SDK locations. Mesa and ANGLE select
+`mesa_libs`, `agility_sdk_path`, `pix_path` and
+`accesskit_sdk_path` override individual SDK locations. Mesa selects
 an installed architecture/compiler variant when given an unsuffixed base;
 an explicit selected directory is retained. Source recipes, linking and DLL
 packaging use these same resolved paths. Clang-cl uses the MSVC SDK variant;
@@ -78,6 +77,19 @@ After a Mono editor build, its own executable generates matching managed glue;
 the .NET build scripts then compile GodotSharp. `-SkipManaged` skips this final
 stage. Regenerate managed assemblies after changes to exposed native APIs.
 
+## Rendering support
+
+Rendered EGP projects use Forward+ through a supported RenderingDevice driver:
+Vulkan, Direct3D12 or Metal, depending on the platform and enabled build features.
+Compatibility, Mobile, OpenGL/OpenGL ES and ANGLE backends are removed. Existing
+projects must set `rendering/renderer/rendering_method` and its mobile override
+to `forward_plus`. Devices that cannot run a supported RenderingDevice driver
+have no fallback renderer.
+
+Headless servers and tooling retain the dummy backend through `--headless`.
+WebGL and WebXR are removed; Web builds and exports are unsupported until a
+RenderingDevice web backend is available.
+
 ## Platform configuration
 
 The portable command configures and invokes actual native xmake targets:
@@ -88,7 +100,6 @@ xmake lua misc/scripts/build_egp.lua macos editor 8 .build/xmake-cache "arch=arm
 xmake lua misc/scripts/build_egp.lua android template_debug 8 .build/xmake-cache "arch=arm64"
 xmake lua misc/scripts/build_egp.lua ios template_release 8 .build/xmake-cache "arch=arm64"
 xmake lua misc/scripts/build_egp.lua visionos template_release 8 .build/xmake-cache "arch=arm64"
-xmake lua misc/scripts/build_egp.lua web template_release 8 .build/xmake-cache "threads=yes"
 ```
 
 | Engine platform | xmake platform/toolchain | Required SDK |
@@ -99,15 +110,14 @@ xmake lua misc/scripts/build_egp.lua web template_release 8 .build/xmake-cache "
 | Android | android/NDK | Android SDK and NDK 29.0.14206865, API 24 or newer |
 | iOS | iphoneos/Xcode | Xcode iPhoneOS or iPhoneSimulator SDK |
 | visionOS | cross/egp-visionos | Xcode xros/xrsimulator SDK; arm64 |
-| Web | wasm/emcc | Emscripten SDK matching CI |
 
 Platform definitions and build recipes do not by themselves establish successful
 cross-platform compilation or runtime support. Retain receipts from each actual
-platform build. Existing mobile/web CI variants disable the desktop-only EGP
+platform build. Existing mobile CI variants disable the desktop-only EGP
 physics backends explicitly; that capability boundary remains unchanged.
 
 Options retain engine names such as `dev_build`, `debug_symbols`, `precision`,
-`use_asan`, `use_ubsan`, `use_tsan`, `lto`, `vulkan`, `opengl3` and
+`use_asan`, `use_ubsan`, `use_tsan`, `lto`, `vulkan`, `metal`, `d3d12` and
 `module_mono_enabled`. Unknown options fail configuration instead of being
 silently ignored. Sanitizer combinations must be supported by the compiler;
 ThreadSanitizer and AddressSanitizer cannot be combined.

@@ -358,7 +358,6 @@ bool EditorExportPlatformMacOS::get_export_option_visibility(const EditorExportP
 				p_option == "custom_template/debug" ||
 				p_option == "custom_template/release" ||
 				p_option == "application/additional_plist_content" ||
-				p_option == "application/export_angle" ||
 				p_option == "application/icon_interpolation" ||
 				p_option == "application/signature" ||
 				p_option == "display/high_res" ||

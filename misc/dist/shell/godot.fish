@@ -25,15 +25,14 @@
 
 function godot_rendering_method_args
     # Use a function instead of a fixed string to customize the argument descriptions.
-    echo -e "forward_plus\tHigh-end desktop renderer"
-    echo -e "mobile\tHigh-end mobile/desktop renderer"
-    echo -e "gl_compatibility\tLow-end desktop, mobile and web renderer"
+    echo -e "forward_plus\tForward+ renderer"
 end
 
 function godot_rendering_driver_args
     # Use a function instead of a fixed string to customize the argument descriptions.
     echo -e "vulkan\tVulkan renderer"
-    echo -e "opengl3\tOpenGL ES 3.0 renderer"
+    echo -e "d3d12\tDirect3D 12 renderer"
+    echo -e "metal\tMetal renderer"
     echo -e "dummy\tDummy renderer"
 end
 

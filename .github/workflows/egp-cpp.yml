@@ -52,7 +52,7 @@ jobs:
       - name: Build headless validation editor and production templates
         shell: bash
         run: |
-          FLAGS="platform=${{ matrix.platform }} arch=${{ matrix.arch }} debug_symbols=no angle=no accesskit=no vulkan=no opengl3=no module_mono_enabled=no ${{ matrix.flags }}"
+          FLAGS="platform=${{ matrix.platform }} arch=${{ matrix.arch }} debug_symbols=no accesskit=no vulkan=no module_mono_enabled=no ${{ matrix.flags }}"
           xmake lua misc/scripts/build_egp.lua "${{ matrix.platform }}" editor 4 .build/xmake-cache "$FLAGS dev_build=yes"
           xmake lua misc/scripts/build_egp.lua "${{ matrix.platform }}" template_debug 4 .build/xmake-cache "$FLAGS"
           xmake lua misc/scripts/build_egp.lua "${{ matrix.platform }}" template_release 4 .build/xmake-cache "$FLAGS"

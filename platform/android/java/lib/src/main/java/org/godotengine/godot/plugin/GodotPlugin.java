@@ -52,7 +52,6 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-
 /**
  * Base class for Godot Android plugins.
  * <p>

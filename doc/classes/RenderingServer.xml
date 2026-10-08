@@ -1142,7 +1142,7 @@
 			<return type="RenderingDevice" />
 			<description>
 				Creates a RenderingDevice that can be used to do draw and compute operations on a separate thread. Cannot draw to the screen nor share data with the global RenderingDevice.
-				[b]Note:[/b] When using the OpenGL rendering driver or when running in headless mode, this function always returns [code]null[/code].
+				[b]Note:[/b] When running in headless mode, this function always returns [code]null[/code].
 			</description>
 		</method>
 		<method name="debug_canvas_item_get_rect">
@@ -1293,7 +1293,7 @@
 			<param index="0" name="enable" type="bool" />
 			<description>
 				If [param enable] is [code]true[/code], enables bicubic upscaling for glow which improves quality at the cost of performance. Equivalent to [member ProjectSettings.rendering/environment/glow/upscale_mode].
-				[b]Note:[/b] This setting is only effective when using the Forward+ or Mobile rendering methods, as Compatibility uses a different glow implementation.
+				[b]Note:[/b] This setting is effective when using the Forward+ rendering method.
 			</description>
 		</method>
 		<method name="environment_set_adjustment">
@@ -1644,16 +1644,15 @@
 		<method name="get_current_rendering_driver_name" qualifiers="const">
 			<return type="String" />
 			<description>
-				Returns the name of the current rendering driver. This can be [code]vulkan[/code], [code]d3d12[/code], [code]metal[/code], [code]opengl3[/code], [code]opengl3_es[/code], or [code]opengl3_angle[/code]. See also [method get_current_rendering_method].
-				When [member ProjectSettings.rendering/renderer/rendering_method] is [code]forward_plus[/code] or [code]mobile[/code], the rendering driver is determined by [member ProjectSettings.rendering/rendering_device/driver].
-				When [member ProjectSettings.rendering/renderer/rendering_method] is [code]gl_compatibility[/code], the rendering driver is determined by [member ProjectSettings.rendering/gl_compatibility/driver].
+				Returns the name of the current rendering driver. For rendered projects, this can be [code]vulkan[/code], [code]d3d12[/code], or [code]metal[/code]. See also [method get_current_rendering_method].
+				When [member ProjectSettings.rendering/renderer/rendering_method] is [code]forward_plus[/code], the rendering driver is determined by [member ProjectSettings.rendering/rendering_device/driver].
 				The rendering driver is also determined by the [code]--rendering-driver[/code] command line argument that overrides this project setting, or an automatic fallback that is applied depending on the hardware.
 			</description>
 		</method>
 		<method name="get_current_rendering_method" qualifiers="const">
 			<return type="String" />
 			<description>
-				Returns the name of the current rendering method. This can be [code]forward_plus[/code], [code]mobile[/code], or [code]gl_compatibility[/code]. See also [method get_current_rendering_driver_name].
+				Returns the name of the current rendering method. Rendered projects use [code]forward_plus[/code]. See also [method get_current_rendering_driver_name].
 				The rendering method is determined by [member ProjectSettings.rendering/renderer/rendering_method], the [code]--rendering-method[/code] command line argument that overrides this project setting, or an automatic fallback that is applied depending on the hardware.
 			</description>
 		</method>
@@ -1673,7 +1672,7 @@
 			<return type="RenderingDevice" />
 			<description>
 				Returns the global RenderingDevice.
-				[b]Note:[/b] When using the OpenGL rendering driver or when running in headless mode, this function always returns [code]null[/code].
+				[b]Note:[/b] When running in headless mode, this function always returns [code]null[/code].
 			</description>
 		</method>
 		<method name="get_rendering_info">
@@ -1720,7 +1719,7 @@
 		<method name="get_video_adapter_api_version" qualifiers="const">
 			<return type="String" />
 			<description>
-				Returns the version of the graphics video adapter [i]currently in use[/i] (e.g. "1.2.189" for Vulkan, "3.3.0 NVIDIA 510.60.02" for OpenGL). This version may be different from the actual latest version supported by the hardware, as Godot may not always request the latest version. See also [method OS.get_video_adapter_driver_info].
+				Returns the version of the graphics video adapter [i]currently in use[/i] (e.g. "1.2.189" for Vulkan). This version may be different from the actual latest version supported by the hardware, as Godot may not always request the latest version. See also [method OS.get_video_adapter_driver_info].
 				[b]Note:[/b] When running a headless or server binary, this function returns an empty string.
 			</description>
 		</method>
@@ -1736,7 +1735,7 @@
 			<return type="int" enum="RenderingDevice.DeviceType" />
 			<description>
 				Returns the type of the video adapter. Since dedicated graphics cards from a given generation will [i]usually[/i] be significantly faster than integrated graphics made in the same generation, the device type can be used as a basis for automatic graphics settings adjustment. However, this is not always true, so make sure to provide users with a way to manually override graphics settings.
-				[b]Note:[/b] When using the OpenGL rendering driver or when running in headless mode, this function always returns [constant RenderingDevice.DEVICE_TYPE_OTHER].
+				[b]Note:[/b] When running in headless mode, this function always returns [constant RenderingDevice.DEVICE_TYPE_OTHER].
 			</description>
 		</method>
 		<method name="get_video_adapter_vendor" qualifiers="const">
@@ -2433,8 +2432,7 @@
 			<return type="void" />
 			<param index="0" name="enable" type="bool" />
 			<description>
-				When using the Mobile renderer, [method material_set_use_debanding] can be used to enable or disable the debanding feature of 3D materials ([BaseMaterial3D] and [ShaderMaterial]).
-				[method material_set_use_debanding] has no effect when using the Compatibility or Forward+ renderer. In Forward+, [Viewport] debanding can be used instead.
+				This method has no effect in the Forward+ renderer. Use [Viewport] debanding instead.
 				See also [member ProjectSettings.rendering/anti_aliasing/quality/use_debanding] and [method RenderingServer.viewport_set_use_debanding].
 			</description>
 		</method>
@@ -2597,7 +2595,7 @@
 			<description>
 				Returns the [RenderingDevice] [RID] handle of the attribute buffer of the given mesh surface (Color, UV, UV2, Custom0-3). The returned [RID] can be used like any other buffer on the [RenderingDevice], so the surface attributes can be read or written from a compute shader without a CPU round-trip.
 				To bind the buffer as a storage buffer in compute, the surface must have been created with the [constant ARRAY_FLAG_USE_STORAGE_BUFFER] flag set in its format.
-				Returns an invalid [RID] if the surface has no attribute buffer or if the rendering backend does not expose [RenderingDevice] [RID]s (such as the OpenGL backend).
+				Returns an invalid [RID] if the surface has no attribute buffer or if the rendering backend does not expose [RenderingDevice] [RID]s (such as the headless dummy backend).
 			</description>
 		</method>
 		<method name="mesh_surface_get_blend_shape_arrays" qualifiers="const">
@@ -2664,7 +2662,7 @@
 			<description>
 				Returns the [RenderingDevice] [RID] handle of the index buffer of the given mesh surface. The returned [RID] can be used like any other buffer on the [RenderingDevice], so the indices can be read or written from a compute shader without a CPU round-trip.
 				To bind the buffer as a storage buffer in compute, the surface must have been created with the [constant ARRAY_FLAG_USE_STORAGE_BUFFER] flag set in its format.
-				Returns an invalid [RID] if the surface is not indexed or if the rendering backend does not expose [RenderingDevice] [RID]s (such as the OpenGL backend).
+				Returns an invalid [RID] if the surface is not indexed or if the rendering backend does not expose [RenderingDevice] [RID]s (such as the headless dummy backend).
 			</description>
 		</method>
 		<method name="mesh_surface_get_material" qualifiers="const">
@@ -2682,7 +2680,7 @@
 			<description>
 				Returns the [RenderingDevice] [RID] handle of the skin buffer of the given mesh surface (Bones, Weights). The returned [RID] can be used like any other buffer on the [RenderingDevice], so the skin data can be read or written from a compute shader without a CPU round-trip.
 				This buffer is created with the storage-buffer usage bit whenever the surface has skinning data, so it can be bound as a storage buffer in compute even without [constant ARRAY_FLAG_USE_STORAGE_BUFFER].
-				Returns an invalid [RID] if the surface has no skin buffer or if the rendering backend does not expose [RenderingDevice] [RID]s (such as the OpenGL backend).
+				Returns an invalid [RID] if the surface has no skin buffer or if the rendering backend does not expose [RenderingDevice] [RID]s (such as the headless dummy backend).
 			</description>
 		</method>
 		<method name="mesh_surface_get_vertex_buffer_rd_rid" qualifiers="const">
@@ -2692,7 +2690,7 @@
 			<description>
 				Returns the [RenderingDevice] [RID] handle of the vertex buffer of the given mesh surface (Vertex, Normal, Tangent). The returned [RID] can be used like any other buffer on the [RenderingDevice], so the surface vertices can be read or written from a compute shader without a CPU round-trip. This is the [Mesh] equivalent of [method multimesh_get_buffer_rd_rid] and is intended for GPU-driven mesh workflows (procedural meshes, ribbon trails, cloth, hair, grass) implemented from a [GDExtension].
 				To bind the buffer as a storage buffer in compute, the surface must have been created with the [constant ARRAY_FLAG_USE_STORAGE_BUFFER] flag set in its format.
-				Returns an invalid [RID] if the surface has no vertex buffer or if the rendering backend does not expose [RenderingDevice] [RID]s (such as the OpenGL backend).
+				Returns an invalid [RID] if the surface has no vertex buffer or if the rendering backend does not expose [RenderingDevice] [RID]s (such as the headless dummy backend).
 			</description>
 		</method>
 		<method name="mesh_surface_remove">
@@ -3658,8 +3656,7 @@
 			<return type="void" />
 			<param index="0" name="generate" type="bool" />
 			<description>
-				If [param generate] is [code]true[/code], generates debug wireframes for all meshes that are loaded when using the Compatibility renderer. By default, the engine does not generate debug wireframes at runtime, since they slow down loading of assets and take up VRAM.
-				[b]Note:[/b] You must call this method before loading any meshes when using the Compatibility renderer. Otherwise, wireframes will not be used.
+				This method is retained for API compatibility and has no effect in Forward+. To display wireframes, use [constant VIEWPORT_DEBUG_DRAW_WIREFRAME].
 			</description>
 		</method>
 		<method name="set_default_clear_color">
@@ -4031,7 +4028,7 @@
 			<description>
 				Returns the internal graphics handle for this texture object. For use when communicating with third-party APIs mostly with GDExtension.
 				[param srgb] should be [code]true[/code] when the texture uses nonlinear sRGB encoding and [code]false[/code] when the texture uses linear encoding.
-				[b]Note:[/b] This function returns a [code]uint64_t[/code] which internally maps to a [code]GLuint[/code] (OpenGL) or [code]VkImage[/code] (Vulkan).
+				[b]Note:[/b] This function returns a [code]uint64_t[/code] which represents a backend-specific native texture handle, such as a [code]VkImage[/code] on Vulkan.
 			</description>
 		</method>
 		<method name="texture_get_path" qualifiers="const">
@@ -4498,7 +4495,7 @@
 			<description>
 				Affects the final texture sharpness by reading from a lower or higher mipmap (also called "texture LOD bias"). Negative values make mipmapped textures sharper but grainier when viewed at a distance, while positive values make mipmapped textures blurrier (even when up close). To get sharper textures at a distance without introducing too much graininess, set this between [code]-0.75[/code] and [code]0.0[/code]. Enabling temporal antialiasing ([member ProjectSettings.rendering/anti_aliasing/quality/use_taa]) can help reduce the graininess visible when using negative mipmap bias.
 				[b]Note:[/b] When the 3D scaling mode is set to FSR 1.0, this value is used to adjust the automatic mipmap bias which is calculated internally based on the scale factor. The formula for this is [code]-log2(1.0 / scale) + mipmap_bias[/code].
-				[b]Note:[/b] This method is only supported in the Forward+ and Mobile renderers, not Compatibility. In Compatibility, this method is always treated as if [param mipmap_bias] was set to [code]0.0[/code].
+				[b]Note:[/b] This method is supported by the Forward+ renderer.
 			</description>
 		</method>
 		<method name="viewport_set_transparent_background">
@@ -4829,17 +4826,17 @@
 			Back face of a [Cubemap].
 		</constant>
 		<constant name="TEXTURE_DRAWABLE_FORMAT_RGBA8" value="0" enum="TextureDrawableFormat">
-			OpenGL texture format RGBA with four components, each with a bitdepth of 8.
+			RGBA texture format with four components, each with a bitdepth of 8.
 		</constant>
 		<constant name="TEXTURE_DRAWABLE_FORMAT_RGBA8_SRGB" value="1" enum="TextureDrawableFormat">
-			OpenGL texture format RGBA with four components, each with a bitdepth of 8.
+			RGBA texture format with four components, each with a bitdepth of 8.
 			When drawn to, a linear to sRGB color encoding conversion is performed.
 		</constant>
 		<constant name="TEXTURE_DRAWABLE_FORMAT_RGBAH" value="2" enum="TextureDrawableFormat">
-			OpenGL texture format GL_RGBA16F where there are four components, each a 16-bit "half-precision" floating-point value.
+			RGBA16F texture format where there are four components, each a 16-bit "half-precision" floating-point value.
 		</constant>
 		<constant name="TEXTURE_DRAWABLE_FORMAT_RGBAF" value="3" enum="TextureDrawableFormat">
-			OpenGL texture format GL_RGBA32F where there are four components, each a 32-bit floating-point value.
+			RGBA32F texture format where there are four components, each a 32-bit floating-point value.
 		</constant>
 		<constant name="SHADER_SPATIAL" value="0" enum="ShaderMode">
 			Shader is a 3D shader.
@@ -5022,7 +5019,7 @@
 			Flag used to mark that a mesh is using compressed attributes (vertices, normals, tangents, UVs). When this form of compression is enabled, vertex positions will be packed into an RGBA16UNORM attribute and scaled in the vertex shader. The normal and tangent will be packed into an RG16UNORM representing an axis, and a 16-bit float stored in the A-channel of the vertex. UVs will use 16-bit normalized floats instead of full 32-bit signed floats. When using this compression mode you must use either vertices, normals, and tangents or only vertices. You cannot use normals without tangents. Importers will automatically enable this compression if they can.
 		</constant>
 		<constant name="ARRAY_FLAG_USE_STORAGE_BUFFER" value="1073741824" enum="ArrayFormat" is_bitfield="true">
-			Flag used to mark that the surface's vertex, attribute, skin, and index buffers must be created with the storage-buffer usage bit so they can be bound as storage buffers in compute shaders. This is required to write into them from a compute pipeline through the [RID]s returned by [method RenderingServer.mesh_surface_get_vertex_buffer_rd_rid] and the matching methods for the attribute, skin, and index buffers. Has no effect on the OpenGL backend, which does not expose [RenderingDevice] [RID]s.
+			Flag used to mark that the surface's vertex, attribute, skin, and index buffers must be created with the storage-buffer usage bit so they can be bound as storage buffers in compute shaders. This is required to write into them from a compute pipeline through the [RID]s returned by [method RenderingServer.mesh_surface_get_vertex_buffer_rd_rid] and the matching methods for the attribute, skin, and index buffers. The headless dummy backend does not expose [RenderingDevice] [RID]s.
 		</constant>
 		<constant name="ARRAY_FLAG_FORMAT_VERSION_BASE" value="35" enum="ArrayFormat" is_bitfield="true">
 			Flag used to mark the start of the bits used to store the mesh version.
@@ -5595,8 +5592,7 @@
 		</constant>
 		<constant name="VIEWPORT_DEBUG_DRAW_WIREFRAME" value="4" enum="ViewportDebugDraw">
 			Debug draw draws objects in wireframe.
-			[b]Note:[/b] [method set_debug_generate_wireframes] must be called before loading any meshes for wireframes to be visible when using the Compatibility renderer.
-			[b]Note:[/b] In the Compatibility renderer, backfaces are always visible when using wireframe rendering. In the Forward+ and Mobile renderers, wireframes follow the material's backface culling properties instead.
+			[b]Note:[/b] In Forward+, wireframes follow the material's backface culling properties.
 		</constant>
 		<constant name="VIEWPORT_DEBUG_DRAW_NORMAL_BUFFER" value="5" enum="ViewportDebugDraw">
 			Normal buffer is drawn instead of regular scene so you can see the per-pixel normals that will be used by post-processing effects.
@@ -5623,7 +5619,7 @@
 		</constant>
 		<constant name="VIEWPORT_DEBUG_DRAW_SCENE_LUMINANCE" value="11" enum="ViewportDebugDraw">
 			Draws the estimated scene luminance. This is a 1×1 texture that is generated when autoexposure is enabled to control the scene's exposure.
-			[b]Note:[/b] Only supported when using the Forward+ or Mobile rendering methods.
+			[b]Note:[/b] Only supported when using the Forward+ rendering method.
 		</constant>
 		<constant name="VIEWPORT_DEBUG_DRAW_SSAO" value="12" enum="ViewportDebugDraw">
 			Draws the screen space ambient occlusion texture instead of the scene so that you can clearly see how it is affecting objects. In order for this display mode to work, you must have [member Environment.ssao_enabled] set in your [WorldEnvironment].
@@ -5636,11 +5632,11 @@
 		<constant name="VIEWPORT_DEBUG_DRAW_PSSM_SPLITS" value="14" enum="ViewportDebugDraw">
 			Colors each PSSM split for the [DirectionalLight3D]s in the scene a different color so you can see where the splits are. In order (from closest to furthest from the camera), they are colored red, green, blue, and yellow.
 			[b]Note:[/b] When using this debug draw mode, custom shaders are ignored since all materials in the scene temporarily use a debug material. This means the result from custom shader functions (such as vertex displacement) won't be visible anymore when using this debug draw mode.
-			[b]Note:[/b] Only supported when using the Forward+ or Mobile rendering methods.
+			[b]Note:[/b] Only supported when using the Forward+ rendering method.
 		</constant>
 		<constant name="VIEWPORT_DEBUG_DRAW_DECAL_ATLAS" value="15" enum="ViewportDebugDraw">
 			Draws the decal atlas that stores decal textures from [Decal]s.
-			[b]Note:[/b] Only supported when using the Forward+ or Mobile rendering methods.
+			[b]Note:[/b] Only supported when using the Forward+ rendering method.
 		</constant>
 		<constant name="VIEWPORT_DEBUG_DRAW_SDFGI" value="16" enum="ViewportDebugDraw">
 			Draws SDFGI cascade data. This is the data structure that is used to bounce lighting against and create reflections.
@@ -5676,7 +5672,7 @@
 		</constant>
 		<constant name="VIEWPORT_DEBUG_DRAW_OCCLUDERS" value="24" enum="ViewportDebugDraw">
 			Draws the occlusion culling buffer. This low-resolution occlusion culling buffer is rasterized on the CPU and is used to check whether instances are occluded by other objects.
-			[b]Note:[/b] Only supported when using the Forward+ or Mobile rendering methods.
+			[b]Note:[/b] Only supported when using the Forward+ rendering method.
 		</constant>
 		<constant name="VIEWPORT_DEBUG_DRAW_MOTION_VECTORS" value="25" enum="ViewportDebugDraw">
 			Draws the motion vectors buffer. This is used by temporal antialiasing to correct for motion that occurs during gameplay.
@@ -5684,7 +5680,7 @@
 		</constant>
 		<constant name="VIEWPORT_DEBUG_DRAW_INTERNAL_BUFFER" value="26" enum="ViewportDebugDraw">
 			Internal buffer is drawn instead of regular scene so you can see the per-pixel output that will be used by post-processing effects.
-			[b]Note:[/b] Only supported when using the Forward+ or Mobile rendering methods.
+			[b]Note:[/b] Only supported when using the Forward+ rendering method.
 		</constant>
 		<constant name="VIEWPORT_VRS_DISABLED" value="0" enum="ViewportVRSMode">
 			Variable rate shading is disabled.
@@ -6292,7 +6288,7 @@
 			Buffer memory used (in bytes). This includes vertex data, uniform buffers, and many miscellaneous buffer types used internally.
 		</constant>
 		<constant name="RENDERING_INFO_VIDEO_MEM_USED" value="5" enum="RenderingInfo">
-			Video memory used (in bytes). When using the Forward+ or Mobile renderers, this is always greater than the sum of [constant RENDERING_INFO_TEXTURE_MEM_USED] and [constant RENDERING_INFO_BUFFER_MEM_USED], since there is miscellaneous data not accounted for by those two metrics. When using the Compatibility renderer, this is equal to the sum of [constant RENDERING_INFO_TEXTURE_MEM_USED] and [constant RENDERING_INFO_BUFFER_MEM_USED].
+			Video memory used (in bytes). When using the Forward+ renderer, this is always greater than the sum of [constant RENDERING_INFO_TEXTURE_MEM_USED] and [constant RENDERING_INFO_BUFFER_MEM_USED], since there is miscellaneous data not accounted for by those two metrics.
 		</constant>
 		<constant name="RENDERING_INFO_PIPELINE_COMPILATIONS_CANVAS" value="6" enum="RenderingInfo">
 			Number of pipeline compilations that were triggered by the 2D canvas renderer.

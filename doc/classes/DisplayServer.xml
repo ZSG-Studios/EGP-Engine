@@ -2668,7 +2668,6 @@
 			<description>
 				Sets the V-Sync mode of the given window. See also [member ProjectSettings.display/window/vsync/vsync_mode].
 				Depending on the platform and used renderer, the engine will fall back to [constant VSYNC_ENABLED] if the desired mode is not supported.
-				[b]Note:[/b] V-Sync modes other than [constant VSYNC_ENABLED] are only supported in the Forward+ and Mobile rendering methods, not Compatibility.
 			</description>
 		</method>
 		<method name="window_set_window_buttons_offset">
@@ -3481,18 +3480,17 @@
 			Default vertical synchronization mode, the image is displayed only on vertical blanking intervals (no tearing is visible). Framerate is limited by the monitor refresh rate (regardless of [member Engine.max_fps]).
 		</constant>
 		<constant name="VSYNC_ADAPTIVE" value="2" enum="VSyncMode">
-			Behaves like [constant VSYNC_DISABLED] when the framerate drops below the screen's refresh rate to reduce stuttering (tearing may be visible). Otherwise, vertical synchronization is enabled to avoid tearing. Framerate is limited by the monitor refresh rate (regardless of [member Engine.max_fps]). Behaves like [constant VSYNC_ENABLED] when using the Compatibility rendering method.
+			Behaves like [constant VSYNC_DISABLED] when the framerate drops below the screen's refresh rate to reduce stuttering (tearing may be visible). Otherwise, vertical synchronization is enabled to avoid tearing. Framerate is limited by the monitor refresh rate (regardless of [member Engine.max_fps]).
 		</constant>
 		<constant name="VSYNC_MAILBOX" value="3" enum="VSyncMode">
 			Displays the most recent image in the queue on vertical blanking intervals, while rendering to the other images (no tearing is visible). Framerate is unlimited (regardless of [member Engine.max_fps]).
-			Although not guaranteed, the images can be rendered as fast as possible, which may reduce input lag (also called "Fast" V-Sync mode). [constant VSYNC_MAILBOX] works best when at least twice as many frames as the display refresh rate are rendered. Behaves like [constant VSYNC_ENABLED] when using the Compatibility rendering method.
+			Although not guaranteed, the images can be rendered as fast as possible, which may reduce input lag (also called "Fast" V-Sync mode). [constant VSYNC_MAILBOX] works best when at least twice as many frames as the display refresh rate are rendered.
 			[note]Since the framerate may reach very high values, this can lead to audible coil whine depending on the hardware. To avoid this, cap the framerate with [member Engine.max_fps] (lower values result in less coil whine).[/note]
 		</constant>
 		<constant name="DISPLAY_HANDLE" value="0" enum="HandleType">
 			Display handle:
 			- Linux (X11): [code]X11::Display*[/code] for the display.
 			- Linux (Wayland): [code]wl_display[/code] for the display.
-			- Android: [code]EGLDisplay[/code] for the display.
 		</constant>
 		<constant name="WINDOW_HANDLE" value="1" enum="HandleType">
 			Window handle:
@@ -3505,12 +3503,11 @@
 		</constant>
 		<constant name="WINDOW_VIEW" value="2" enum="HandleType">
 			Window view:
-			- Windows: [code]HDC[/code] for the window (only with the Compatibility renderer).
 			- macOS: [code]NSView*[/code] for the window main view.
 			- iOS: [code]UIView*[/code] for the window main view.
 		</constant>
 		<constant name="OPENGL_CONTEXT" value="3" enum="HandleType">
-			OpenGL context (only with the Compatibility renderer):
+			Legacy OpenGL context handle, retained for API compatibility. EGP does not expose this handle. The former OpenGL rendering paths used the following platform types:
 			- Windows: [code]HGLRC[/code] for the window (native GL), or [code]EGLContext[/code] for the window (ANGLE).
 			- Linux (X11): [code]GLXContext*[/code] for the window.
 			- Linux (Wayland): [code]EGLContext[/code] for the window.
@@ -3518,22 +3515,22 @@
 			- Android: [code]EGLContext[/code] for the window.
 		</constant>
 		<constant name="EGL_DISPLAY" value="4" enum="HandleType">
+			Legacy EGL display handle, retained for API compatibility. EGP does not expose this handle. The former EGL rendering paths used the following platform types:
 			- Windows: [code]EGLDisplay[/code] for the window (ANGLE).
 			- macOS: [code]EGLDisplay[/code] for the window (ANGLE).
 			- Linux (Wayland): [code]EGLDisplay[/code] for the window.
 		</constant>
 		<constant name="EGL_CONFIG" value="5" enum="HandleType">
+			Legacy EGL configuration handle, retained for API compatibility. EGP does not expose this handle. The former EGL rendering paths used the following platform types:
 			- Windows: [code]EGLConfig[/code] for the window (ANGLE).
 			- macOS: [code]EGLConfig[/code] for the window (ANGLE).
 			- Linux (Wayland): [code]EGLConfig[/code] for the window.
 		</constant>
 		<constant name="GLX_VISUALID" value="6" enum="HandleType">
-			The GLX [code]VisualID[/code] for the window.
-			[b]Note:[/b] Only available on Linux when using X11.
+			Legacy GLX [code]VisualID[/code] for an X11 window, retained for API compatibility. EGP does not expose this handle.
 		</constant>
 		<constant name="GLX_FBCONFIG" value="7" enum="HandleType">
-			The [code]GLXFBConfig[/code] for the window.
-			[b]Note:[/b] Only available on Linux when using X11.
+			Legacy [code]GLXFBConfig[/code] for an X11 window, retained for API compatibility. EGP does not expose this handle.
 		</constant>
 		<constant name="TTS_UTTERANCE_STARTED" value="0" enum="TTSUtteranceEvent">
 			Utterance has begun to be spoken.

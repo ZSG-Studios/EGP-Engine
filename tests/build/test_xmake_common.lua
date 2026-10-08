@@ -29,6 +29,15 @@ function main()
     check(options.disable_physics_3d and options.disable_xr and table.contains(env.CPPDEFINES,'PHYSICS_3D_DISABLED'),'Disabled dimensions')
     check(not utils.trycall(function() configure({rendering_device=false}) end),'Forward+ requires RenderingDevice')
     check(not utils.trycall(function() configure({platform="web"}) end),'WebGL exports must be rejected')
+    for _, platform in ipairs({'windows','linuxbsd','macos'}) do
+        env,options=configure({platform=platform,vulkan=false,metal=false,d3d12=false})
+        check(options.rendering_device and options.forward_plus_renderer and
+            table.contains(env.CPPDEFINES,'RD_ENABLED') and table.contains(env.CPPDEFINES,'FORWARD_RD_ENABLED') and
+            not options.vulkan and not options.metal and not options.d3d12 and
+            not table.contains(env.CPPDEFINES,'VULKAN_ENABLED') and not table.contains(env.CPPDEFINES,'METAL_ENABLED') and not table.contains(env.CPPDEFINES,'D3D12_ENABLED') and
+            not options.angle and not options.opengl3 and not options.forward_mobile_renderer,
+            platform .. ' headless builds retain Forward+ and need no GPU backend')
+    end
     env,options=configure({platform='linuxbsd',arch='x86'})
     check(options.arch=='x86_32' and table.contains(env.CCFLAGS,'-mfpmath=sse'),'x86 math determinism')
     env,options=configure({target='template_debug',dev_build=true,precision='double',threads=false,use_llvm=true,use_asan=true,extra_suffix='custom'})

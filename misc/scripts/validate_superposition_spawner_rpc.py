@@ -99,7 +99,7 @@ def main():
     shutil.copy2(ROOT / "modules/egp_net/gdscript/egp_net.gd", helper)
     (project / "project.godot").write_text(
         'config_version=5\n[application]\nconfig/name="Superposition Spawner RPC Qualification"\n'
-        '[rendering]\nrenderer/rendering_method="gl_compatibility"\n',
+        '[rendering]\nrenderer/rendering_method="forward_plus"\n',
         encoding="utf-8",
     )
     creationflags = subprocess.CREATE_NO_WINDOW if os.name == "nt" else 0

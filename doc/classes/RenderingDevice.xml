@@ -5,10 +5,10 @@
 	</brief_description>
 	<description>
 		[RenderingDevice] is an abstraction for working with modern low-level graphics APIs such as Vulkan. Compared to [RenderingServer] (which works with Godot's own rendering subsystems), [RenderingDevice] is much lower-level and allows working more directly with the underlying graphics APIs. [RenderingDevice] is used in Godot to provide support for several modern low-level graphics APIs while reducing the amount of code duplication required. [RenderingDevice] can also be used in your own projects to perform things that are not exposed by [RenderingServer] or high-level nodes, such as using compute shaders.
-		On startup, Godot creates a global [RenderingDevice] which can be retrieved using [method RenderingServer.get_rendering_device]. This global [RenderingDevice] performs drawing to the screen.
+		On startup, rendered EGP applications create a global [RenderingDevice] which can be retrieved using [method RenderingServer.get_rendering_device]. This global [RenderingDevice] performs drawing to the screen.
 		[b]Local RenderingDevices:[/b] Using [method RenderingServer.create_local_rendering_device], you can create "secondary" rendering devices to perform drawing and GPU compute operations on separate threads.
 		[b]Note:[/b] [RenderingDevice] assumes intermediate knowledge of modern graphics APIs such as Vulkan, Direct3D 12, Metal or WebGPU. These graphics APIs are lower-level than OpenGL or Direct3D 11, requiring you to perform what was previously done by the graphics driver itself. If you have difficulty understanding the concepts used in this class, follow the [url=https://vulkan-tutorial.com/]Vulkan Tutorial[/url] or [url=https://vkguide.dev/]Vulkan Guide[/url]. It's recommended to have existing modern OpenGL or Direct3D 11 knowledge before attempting to learn a low-level graphics API.
-		[b]Note:[/b] [RenderingDevice] is not available when running in headless mode or when using the Compatibility rendering method.
+		[b]Note:[/b] EGP uses [RenderingDevice] with Forward+ through Vulkan, Direct3D 12, or Metal, depending on the drivers enabled for the target platform. [RenderingDevice] is not available when running in headless mode.
 	</description>
 	<tutorials>
 		<link title="Using compute shaders">$DOCS_URL/tutorials/shaders/compute_shaders.html</link>
@@ -1219,7 +1219,7 @@
 			<param index="0" name="texture" type="RID" />
 			<description>
 				Returns the internal graphics handle for this texture object. For use when communicating with third-party APIs mostly with GDExtension.
-				[b]Note:[/b] This function returns a [code]uint64_t[/code] which internally maps to a [code]GLuint[/code] (OpenGL) or [code]VkImage[/code] (Vulkan).
+				[b]Note:[/b] This function returns a [code]uint64_t[/code] containing a driver-specific texture handle. See [constant DRIVER_RESOURCE_TEXTURE] for the handle types.
 			</description>
 		</method>
 		<method name="texture_is_discardable">
@@ -1413,11 +1413,13 @@
 		<constant name="DRIVER_RESOURCE_TEXTURE" value="5" enum="DriverResource">
 			- Vulkan: [code]VkImage[/code].
 			- D3D12: [code]ID3D12Resource[/code].
+			- Metal: [code]MTLTexture[/code].
 		</constant>
 		<constant name="DRIVER_RESOURCE_TEXTURE_VIEW" value="6" enum="DriverResource">
 			The view of an owned or shared texture.
 			- Vulkan: [code]VkImageView[/code].
 			- D3D12: [code]ID3D12Resource[/code].
+			- Metal: [code]MTLTexture[/code].
 		</constant>
 		<constant name="DRIVER_RESOURCE_TEXTURE_DATA_FORMAT" value="7" enum="DriverResource">
 			The native id of the data format of the texture.
@@ -2851,7 +2853,7 @@
 			Support for high dynamic range (HDR) output.
 		</constant>
 		<constant name="SUPPORTS_RASTERIZATION_RATE_MAP" value="14" enum="Features">
-			Support for rasterization rate maps. The current implementation targets Metal on Apple platforms. This allows for foveated rendering, which is used by the visionOS XR module.
+			Support for rasterization rate maps. The current implementation targets Metal on Apple platforms. These maps can be used for foveated rendering.
 		</constant>
 		<constant name="LIMIT_MAX_BOUND_UNIFORM_SETS" value="0" enum="Limit">
 			Maximum number of uniform sets that can be bound at a given time.

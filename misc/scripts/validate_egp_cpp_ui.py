@@ -74,7 +74,7 @@ def main(argv=None):
         if not args.capture_ui:
             command.insert(1, "--headless")
         else:
-            command.extend(["--rendering-method", "gl_compatibility"])
+            command.extend(["--rendering-method", "forward_plus"])
         launch_options = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
         environment = os.environ.copy()
         environment["EGP_CPP_UI_CACHE_ONLY"] = "1" if args.cache_recovery_only else "0"

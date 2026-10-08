@@ -101,7 +101,7 @@ def main():
     for path in (ROOT / "modules/egp_net/gdscript").glob("*.gd"):
         shutil.copy2(path, helpers / path.name)
     (project / "project.godot").write_text(
-        'config_version=5\n[application]\nconfig/name="EGP Admission Lifecycle"\nrun/main_scene="res://main.tscn"\n[rendering]\nrenderer/rendering_method="gl_compatibility"\n',
+        'config_version=5\n[application]\nconfig/name="EGP Admission Lifecycle"\nrun/main_scene="res://main.tscn"\n[rendering]\nrenderer/rendering_method="forward_plus"\n',
         encoding="utf-8",
     )
     (project / "main.tscn").write_text(

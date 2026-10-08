@@ -9,4 +9,3 @@ project/assembly_name="NetInterop"
 
 [rendering]
 renderer/rendering_method="forward_plus"
-

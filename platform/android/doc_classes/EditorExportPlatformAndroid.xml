@@ -74,7 +74,7 @@
 			If [code]true[/code], Gradle build is used instead of pre-built APK.
 		</member>
 		<member name="graphics/opengl_debug" type="bool" setter="" getter="">
-			If [code]true[/code], OpenGL ES debug context will be created (additional runtime checking, validation, and logging).
+			Retained for compatibility with existing export presets. This option has no effect because the OpenGL ES rendering backend is not available.
 		</member>
 		<member name="keystore/debug" type="String" setter="" getter="">
 			Path of the debug keystore file.
@@ -624,7 +624,7 @@
 			Indicates whether the application supports extra large screen form-factors.
 		</member>
 		<member name="shader_baker/enabled" type="bool" setter="" getter="">
-			If [code]true[/code], shaders will be compiled and embedded in the application. This option is only supported when using the Forward+ or Mobile renderers.
+			If [code]true[/code], shaders will be compiled and embedded in the application.
 			[b]Note:[/b] When exporting as a dedicated server, the shader baker is always disabled since no rendering is performed.
 		</member>
 		<member name="splash_screen/background_color" type="Color" setter="" getter="">

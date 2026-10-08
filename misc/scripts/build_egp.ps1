@@ -35,7 +35,7 @@ try {
     $env:XMAKE_EXE = $tool
     $targets = if ($Target -eq 'all') { @('editor', 'template_debug', 'template_release') } else { @($Target) }
     foreach ($buildTarget in $targets) {
-        $options = @("arch=$Arch", 'module_mono_enabled=yes', 'angle=no', 'accesskit=no', 'd3d12=no')
+        $options = @("arch=$Arch", 'module_mono_enabled=yes', 'accesskit=no', 'd3d12=no')
         if ($buildTarget -eq 'editor') { $options += 'dev_build=yes' }
         $options += $XmakeArgs
         $optionJson = ConvertTo-Json -InputObject @($options) -Compress

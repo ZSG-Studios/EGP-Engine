@@ -58,13 +58,20 @@ void EditorExportPlatformVisionOS::get_export_options(List<ExportOption> *r_opti
 
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "application/min_visionos_version"), get_minimum_deployment_target()));
 
-	r_options->push_back(ExportOption(PropertyInfo(Variant::INT, "application/app_role", PROPERTY_HINT_ENUM, "Window,Immersive"), 0));
+	r_options->push_back(ExportOption(PropertyInfo(Variant::INT, "application/app_role", PROPERTY_HINT_ENUM, "Window,Immersive (unsupported)"), 0, false, true));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::INT, "application/immersion_style", PROPERTY_HINT_ENUM, "Full,Mixed,Progressive"), 1));
 
 	// Front layer falls back to the project icon; middle/back use a black placeholder when unset.
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "icons/icon_front_layer_1024x1024", PROPERTY_HINT_FILE_PATH, "*.svg,*.png,*.webp,*.jpg,*.jpeg"), ""));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "icons/icon_middle_layer_1024x1024", PROPERTY_HINT_FILE_PATH, "*.svg,*.png,*.webp,*.jpg,*.jpeg"), ""));
 	r_options->push_back(ExportOption(PropertyInfo(Variant::STRING, "icons/icon_back_layer_1024x1024", PROPERTY_HINT_FILE_PATH, "*.svg,*.png,*.webp,*.jpg,*.jpeg"), ""));
+}
+
+String EditorExportPlatformVisionOS::get_export_option_warning(const EditorExportPreset *p_preset, const StringName &p_name) const {
+	if (p_name == "application/app_role" && int(p_preset->get("application/app_role")) != 0) {
+		return TTR("Immersive visionOS applications are unsupported by the Forward+ renderer. Select Window as the application role.");
+	}
+	return EditorExportPlatformAppleEmbedded::get_export_option_warning(p_preset, p_name);
 }
 
 Vector<EditorExportPlatformAppleEmbedded::IconInfo> EditorExportPlatformVisionOS::get_icon_infos() const {
