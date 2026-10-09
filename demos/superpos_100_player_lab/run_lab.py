@@ -159,7 +159,12 @@ def live_view(server_report, rows, bots, previous):
     streams = live.get('streams', {})
     totals = live.get('command_totals', {})
     tick = streams.get('tick', 0)
-    acknowledged, sent_bytes, enabled = streams.get('acknowledged', []), streams.get('bytes', []), streams.get('enabled', [])
+    # Packed byte arrays reach JSON as encoded strings ("[0, 1, ...]").
+    def array(key):
+        value = streams.get(key, [])
+        return json.loads(value) if isinstance(value, str) else value
+    acknowledged, sent_bytes, enabled = array('acknowledged'), array('bytes'), array('enabled')
+    repairs, redundancy = array('repairs'), array('redundancy')
     now = live.get('now', 0.0)
     dt = max(now - previous.get('now', now - 1.0), 0.001)
     old = previous.get('bytes', [])
@@ -172,7 +177,9 @@ def live_view(server_report, rows, bots, previous):
         rate = sum(sent_bytes[peer] - (old[peer] if peer < len(old) else 0) for peer in ids if peer < len(sent_bytes))
         cohorts.append(dict(name=profile['name'].split()[0].upper(), count=len(ids), ready=sum(1 for peer in ids if ready.get(peer)),
                             lag_ms_p50=round(lags[len(lags) // 2], 1) if lags else 0.0, lag_ms_max=round(lags[-1], 1) if lags else 0.0,
-                            kBps=round(rate / max(len(ids), 1) / dt / 1000.0, 2) if old else 0.0))
+                            kBps=round(rate / max(len(ids), 1) / dt / 1000.0, 2) if old else 0.0,
+                            repairs=sum(repairs[peer] for peer in ids if peer < len(repairs)),
+                            redundant=sum(1 for peer in ids if peer < len(redundancy) and redundancy[peer] > 0)))
     ticks = max(totals.get('ticks', 0), 1)
     server = dict(tick_rate=live.get('tick_rate', 0), app_ms=live.get('application_ms', [0, 0])[0], app_max_ms=live.get('application_ms', [0, 0])[1],
                   network_ms=live.get('network_ms', [0, 0])[0], physics_ms=live.get('physics_ms', [0, 0])[0],
@@ -195,6 +202,7 @@ def main():
     parser.add_argument('--no-human', action='store_true')
     parser.add_argument('--local-server', action='store_true', help='Run the native dedicated server on this PC over loopback')
     parser.add_argument('--tuning', default='{}', help='JSON transport overrides, e.g. {"human_lanes":2}')
+    parser.add_argument('--engine-build', choices=('opt', 'dev'), default='opt', help='Optimized editor (default) or the dev build, on every peer')
     args = parser.parse_args()
     # 255 bots + the human = 256 clients, the planned per-server limit.
     if not 1<=args.bots<=255 or args.duration<15:
@@ -205,7 +213,9 @@ def main():
         SERVER_IP=CLIENT_IP="127.0.0.1"
     else:
         sync_remote_project()
-    engine = ROOT / 'bin/godot.windows.editor.dev.x86_64.mono.exe'
+    engine = ROOT / ('bin/godot.windows.editor.x86_64.mono.exe' if args.engine_build == 'opt' else 'bin/godot.windows.editor.dev.x86_64.mono.exe')
+    if not engine.exists():
+        sys.exit('LAB_ERROR missing engine build: ' + str(engine))
     count = args.bots+(not args.no_human)
     # The human takes the slot after the bots.
     human_id = args.bots
@@ -216,7 +226,7 @@ def main():
     control_path=OUT/'epochs.json'
     atomic_json(control_path,epochs)
     atomic_json(OUT/'human-network.json',dict(profile=0,offline_until=0))
-    common = dict(total=count,bots=args.bots,human_id=human_id,server_ip=SERVER_IP,client_ip=CLIENT_IP,port_base=BASE,start_unix=start,duration=args.duration,control=str(control_path),local_server=args.local_server,tuning=json.loads(args.tuning),server_location="LOCAL PC" if args.local_server else "REMOTE BUILD PC")
+    common = dict(total=count,bots=args.bots,human_id=human_id,server_ip=SERVER_IP,client_ip=CLIENT_IP,port_base=BASE,start_unix=start,duration=args.duration,control=str(control_path),local_server=args.local_server,tuning=json.loads(args.tuning),engine_build=args.engine_build,server_location="LOCAL PC" if args.local_server else "REMOTE BUILD PC")
     proxy = Proxy(count,start,args.duration)
     proxy.bots = args.bots
     processes, streams = [], []
@@ -329,7 +339,7 @@ def main():
                 if age-last_output>=10:
                     last_output=age
                     human_live = next((report.get('live', {}).get('det', {}) for report in reports if report.get('role') == 'human'), {})
-                    lag_text = ' '.join(f"{k['name']}={k['ready']}/{k['count']},{k['lag_ms_p50']:.0f}/{k['lag_ms_max']:.0f}ms,{k['kBps']:.1f}kB/s" for k in cohort_view)
+                    lag_text = ' '.join(f"{k['name']}={k['ready']}/{k['count']},{k['lag_ms_p50']:.0f}/{k['lag_ms_max']:.0f}ms,{k['kBps']:.1f}kB/s,r{k['repairs']},x{k['redundant']}" for k in cohort_view)
                     print(f"LAB_PROGRESS t={age:.0f}s phase={phase} clients={sum(r['ready'] for r in rows)}/{count} server={server_view['tick_rate']}Hz app={server_view['app_ms']}/{server_view['app_max_ms']}ms {server_view['bytes_per_tick']}B/tick | {lag_text} | human lag={human_live.get('lag_ticks','-')}t buffer={human_live.get('buffered','-')} rtt={human_live.get('srtt_ms','-')}ms",flush=True)
                 for process in processes[1:]:
                     if process.poll() not in (None,0):

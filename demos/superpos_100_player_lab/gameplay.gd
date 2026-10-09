@@ -33,8 +33,13 @@ var movable: Array[int] = []
 var dynamic_count := 0
 var player_ids := PackedInt64Array()
 var movable_ids := PackedInt64Array()
-# Per player: 1 when the latest tick's ground ray hit (jumping, animation flags).
+# Per player: 1 when the latest tick's ground probe hit (jumping, animation flags).
 var on_ground := PackedByteArray()
+# Per player ground-probe depth: capsule half height + radius + reach.
+var ground_depths := PackedFloat32Array()
+# Reused per tick: players driven by velocity (no teleport this tick).
+var drive_ids := PackedInt64Array()
+var drive_velocities := PackedVector3Array()
 
 
 static func configure_players(total: int) -> void:
@@ -124,8 +129,12 @@ func _index_bodies() -> void:
 		movable.append(PLAYGROUND.BASE+i)
 	movable_ids = PackedInt64Array(movable)
 	player_ids.clear()
+	ground_depths.resize(total)
+	on_ground.resize(total)
 	for id in range(total):
 		player_ids.append(PLAYER_BASE+id)
+	for a in actors:
+		ground_depths[int(a.id)] = float(a.collider_height)+0.35+GROUND_REACH
 
 
 # Authoritative creation (server, or a client starting from tick zero).
@@ -197,24 +206,6 @@ func restore(packed: PackedByteArray, workers: int = 1) -> bool:
 	return ok
 
 
-# Ground contact for every player from one batched Box3D ray query: a ray from the
-# capsule centre reaching just past its bottom. Rays ignore the capsule they start in.
-func _update_ground(states: PackedFloat32Array) -> void:
-	var origins := PackedVector3Array()
-	var rays := PackedVector3Array()
-	origins.resize(total)
-	rays.resize(total)
-	for a in actors:
-		var o: int = int(a.id)*13
-		origins[a.id] = Vector3(states[o],states[o+1],states[o+2])
-		rays[a.id] = Vector3(0,-(float(a.collider_height)+0.35+GROUND_REACH),0)
-	var hits: Dictionary = world.cast_rays(origins,rays)
-	var hit: PackedByteArray = hits.hit
-	on_ground.resize(total)
-	for id in range(total):
-		on_ground[id] = 1 if hit[id] == 1 and absf(states[id*13+8]) <= 1.0 else 0
-
-
 # One authoritative tick. inputs[slot] is the 8-byte command input of that player.
 static var profile := [0, 0, 0, 0]
 
@@ -224,9 +215,11 @@ func step(tick: int, inputs: Array) -> void:
 	var props := {}
 	# One native read for every player; one batched write for every upright mover.
 	var states: PackedFloat32Array = world.get_body_states(player_ids)
-	_update_ground(states)
-	var moved_ids := PackedInt64Array()
-	var moved := PackedFloat32Array()
+	# Native ground support for every player in one call (rays ignore their own capsule).
+	var support: PackedByteArray = world.probe_ground(player_ids, ground_depths).hit
+	drive_ids.resize(total)
+	drive_velocities.resize(total)
+	var drives := 0
 	for a in actors:
 		var id: int = a.id
 		var input: PackedByteArray = inputs[id]
@@ -245,6 +238,8 @@ func step(tick: int, inputs: Array) -> void:
 		var o: int = id*13
 		var velocity := Vector3(states[o+7],states[o+8],states[o+9])
 		var p := Vector3(states[o],states[o+1],states[o+2])
+		on_ground[id] = 1 if support[id] == 1 and absf(velocity.y) <= 1.0 else 0
+		var teleport := false
 		# Death persists until an explicit respawn. Chair sitting requires proximity.
 		if not a.stance&256 or flags&1024:
 			a.stance = 0
@@ -260,9 +255,11 @@ func step(tick: int, inputs: Array) -> void:
 			p = spawn(id)
 			velocity = Vector3.ZERO
 			a.stance = 0
+			teleport = true
 		if a.stance&128:
 			p = Vector3(0,0.9,-27)
 			a.facing = 0.0
+			teleport = true
 		var immobilized: bool = (a.stance&(64|128|256)) != 0
 		if immobilized:
 			direction = Vector3.ZERO
@@ -274,6 +271,7 @@ func step(tick: int, inputs: Array) -> void:
 			world.queue_destroy_body(PLAYER_BASE+id,0)
 			world.queue_create_capsule(PLAYER_BASE+id,1,p,0.35,half_height,2,0.85)
 			a.collider_height = half_height
+			ground_depths[id] = half_height+0.35+GROUND_REACH
 			state_sequence = 2
 		var wet := SIMULATION.in_water(p) and p.y < 2.5
 		if wet and not immobilized:
@@ -285,12 +283,14 @@ func step(tick: int, inputs: Array) -> void:
 		if Vector2(p.x-target.x,p.z-target.z).length() < 2:
 			a.score += 1
 			a.goal = (int(a.goal)+1) % 8
-		# Upright authoritative capsules preserve solver position and vertical velocity.
-		if state_sequence == 0:
-			moved_ids.append(PLAYER_BASE+id)
-			moved.append_array(PackedFloat32Array([p.x,p.y,p.z,0,0,0,1,direction.x*move_speed,velocity.y,direction.z*move_speed,0,0,0]))
+		# Movers keep the solver's position and vertical velocity (native drive); only
+		# collider swaps, respawns and seats set a full state.
+		if state_sequence == 0 and not teleport:
+			drive_ids[drives] = PLAYER_BASE+id
+			drive_velocities[drives] = Vector3(direction.x*move_speed,0,direction.z*move_speed)
+			drives += 1
 		else:
-			world.queue_body_state(PLAYER_BASE+id,state_sequence,p,Quaternion.IDENTITY,Vector3(direction.x*move_speed,velocity.y,direction.z*move_speed),Vector3.ZERO)
+			world.queue_body_state(PLAYER_BASE+id,maxi(state_sequence,2),p,Quaternion.IDENTITY,Vector3(direction.x*move_speed,velocity.y,direction.z*move_speed),Vector3.ZERO)
 		if flags&1 and not immobilized and (on_ground[id] == 1 or wet) and tick > a.cooldown:
 			world.queue_impulse(PLAYER_BASE+id,3,Vector3.UP*(mass(a.collider_height)*5.5))
 			a.cooldown = tick+45
@@ -310,7 +310,7 @@ func step(tick: int, inputs: Array) -> void:
 				if away.length() < 7:
 					world.queue_impulse(prop,id+102,away.normalized()*1.0+Vector3.UP*0.8)
 			a.cooldown = tick+120
-	world.queue_body_states(moved_ids,0,moved)
+	world.queue_drive(drive_ids.slice(0,drives),0,drive_velocities.slice(0,drives))
 	var simulation_started := Time.get_ticks_usec()
 	simulation.step(world, actors, float(tick)/TICK_RATE)
 	var native_started := Time.get_ticks_usec()

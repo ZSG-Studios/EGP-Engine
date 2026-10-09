@@ -28,7 +28,8 @@ def read_control():
         except (ValueError,OSError):
             pass
 threading.Thread(target=read_control,daemon=True).start()
-engine = root / 'bin/godot.windows.editor.dev.x86_64.mono.exe'
+# The same build flavour as the clients (optimized by default); deterministic peers must match.
+engine = root / ('bin/godot.windows.editor.x86_64.mono.exe' if config.get('engine_build', 'opt') == 'opt' else 'bin/godot.windows.editor.dev.x86_64.mono.exe')
 with (out / 'server.log').open('w') as stdout, (out / 'server-error.log').open('w') as stderr:
     process = subprocess.Popen([str(engine), '--headless', '--path', str(Path(__file__).parent), '--max-fps', '120'],
                                stdin=subprocess.PIPE, stdout=stdout, stderr=stderr, text=True)
