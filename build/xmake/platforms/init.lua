@@ -161,7 +161,14 @@ function configure(target, options, build_env)
     target:set("languages", "c17", "cxx17")
     target:set("symbols", enabled(options.debug_symbols, true) and "debug" or "none")
     local optimize = options.optimize or (enabled(options.dev_build) and "none" or "speed")
-    target:set("optimize", ({none = "none", debug = "none", speed = "fast", speed_trace = "fast", size = "small", size_extra = "small"})[optimize] or optimize)
+    -- xmake's levels are none, faster, fastest, smallest and aggressive; it has no "fast"
+    -- or "small", for which cl emitted no flag and every optimized build compiled as /Od.
+    -- Godot's policy: MSVC /O2 for speed and speed_trace and /O1 for size; elsewhere -O3
+    -- for speed, -O2 for speed_trace and -Os for size.
+    local levels = msvc and {none = "none", debug = "none", speed = "fastest", speed_trace = "fastest", size = "none", size_extra = "none"}
+        or {none = "none", debug = "none", speed = "fastest", speed_trace = "faster", size = "smallest", size_extra = "smallest"}
+    target:set("optimize", levels[optimize] or optimize)
+    if msvc and (optimize == "size" or optimize == "size_extra") then cc(target, "/O1") end
     if msvc then
         target:set("runtimes", enabled(options.debug_crt) and "MDd" or (enabled(options.use_static_cpp, true) and "MT" or "MD"))
         if not enabled(options.incremental_link) then link(target, "/INCREMENTAL:NO") end

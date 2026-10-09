@@ -134,7 +134,8 @@ local function sources(target, list, bootstrap)
         end
         target:add("files", filename, {includedirs = directories, defines = defines(policy.CPPDEFINES),
             force = import("source_flags", {rootdir = os.scriptdir()}).file(policy, flags), warnings = policy.vendor_warnings == false and "none" or nil,
-            optimize = policy.vendor_optimize and "fast" or nil})
+            -- Vendor code optimized even in debug builds (Godot's force_optimization_on_debug).
+            optimize = policy.vendor_optimize and "fastest" or nil})
     end
 end
 
