@@ -3,7 +3,8 @@ on:
   workflow_call:
     secrets:
       SERVICE_ACCOUNT_KEY:
-        required: true
+        # Only the upstream-only Firebase steps consume this credential.
+        required: false
 
   workflow_dispatch:
 

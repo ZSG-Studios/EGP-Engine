@@ -14,10 +14,18 @@ on:
         options: [default, none]
         default: none
   push:
-    branches: [master, experimental/visionos-forward-plus]
+    branches: [master]
   pull_request:
     paths:
       - 'main/main.cpp'
+      - 'xmake.lua'
+      - 'build/xmake/**'
+      - 'misc/scripts/build_egp.lua'
+      - '.github/actions/godot-build/**'
+      - '.github/actions/godot-deps/**'
+      - 'drivers/metal/**'
+      - 'drivers/apple_embedded/**'
+      - 'servers/xr/**'
       - 'platform/visionos/**'
       - 'modules/visionos_xr/**'
       - 'servers/rendering/renderer_rd/**'

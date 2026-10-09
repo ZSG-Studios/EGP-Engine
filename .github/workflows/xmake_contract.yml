@@ -18,6 +18,7 @@ jobs:
             architecture: x86_64
             suffix: ''
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/godot-deps

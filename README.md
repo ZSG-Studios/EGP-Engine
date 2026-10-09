@@ -129,11 +129,13 @@ platform SDK requirements, compiler choices and current qualification scope.
 - [Box3D physics](doc/egp_box3d.md)
 - [API and runtime reload contracts](doc/egp_api_contract.md)
 - [xmake builds](doc/egp_xmake.md)
+- [Platform structure and validation coverage](doc/egp_platform_validation.md)
+- [Experimental visionOS Forward+](doc/egp_visionos_experimental.md)
 - [Godot documentation](https://docs.godotengine.org)
 
 ## Contributing
 
-Report bugs and suggest changes through [GitHub issues](https://github.com/ZSG-Studios/EGP/issues).
+Find source, build workflows and project history in the [EGP-Engine repository](https://github.com/ZSG-Studios/EGP-Engine).
 See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines.
 
 ## License

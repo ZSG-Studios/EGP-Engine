@@ -18,6 +18,8 @@ MANUALS = {
     "doc/egp_box3d.md": "box3d.md",
     "doc/egp_cpp_extensions.md": "cpp_extensions.md",
     "doc/egp_xmake.md": "xmake.md",
+    "doc/egp_platform_validation.md": "platform_validation.md",
+    "doc/egp_visionos_experimental.md": "visionos_experimental.md",
     "doc/egp_api_contract.md": "api_contract.md",
     "doc/egp_network_lab.md": "network_lab.md",
     "doc/egp_documentation.md": "documentation.md",
@@ -26,7 +28,7 @@ MANUALS = {
     "demos/box3d_arena/README.md": "physics_arena.md",
     "demos/box3d_deterministic/README.md": "deterministic_demo.md",
 }
-SOURCE_URL = "https://github.com/ZSG-Studios/EGP/blob/"
+SOURCE_URL = "https://github.com/ZSG-Studios/EGP-Engine/blob/"
 
 
 def digest(path: Path) -> str:
@@ -207,7 +209,7 @@ def main() -> int:
         expected["egp/helper_reference.rst"] = helper_reference(revision).encode("utf-8")
         manifest = {
             "schema_version": 1,
-            "engine_repository": "ZSG-Studios/EGP",
+            "engine_repository": "ZSG-Studios/EGP-Engine",
             "engine_revision": revision,
             "class_count": len(list(classes.glob("class_*.rst"))),
             "source_sha256": sources,

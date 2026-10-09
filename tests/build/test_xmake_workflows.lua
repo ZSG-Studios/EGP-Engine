@@ -104,6 +104,29 @@ function main()
     count=count+3
     local runner=assert(io.readfile(path.join(root,'.github/workflows/runner.yml')))
     assert(not runner:find('web-build:',1,true),'CI must not build the removed WebGL backend')
+    for _, platform in ipairs({'windows','linux','macos','android','ios','visionos'}) do
+        local workflow='.github/workflows/' .. platform .. '_builds.yml'
+        assert(runner:find('uses: ./' .. workflow,1,true),'Shipping platform missing from the common CI runner: ' .. platform)
+        local text=assert(io.readfile(path.join(root,workflow)))
+        assert(text:find('workflow_call:',1,true) and text:find('uses: ./.github/actions/godot-build',1,true),
+            'Platform must reuse the native build entry point: ' .. platform)
+        assert(text:match('timeout%-minutes:%s*%d+'),'Platform build must have a bounded job: ' .. platform)
+        if platform=='windows' or platform=='linux' or platform=='macos' then
+            assert(text:find('validate_egp_unit_summary.lua',1,true),'Desktop runtime tests need a validated test summary: ' .. platform)
+            count=count+1
+        end
+        count=count+3
+    end
+    local immersive=assert(io.readfile(path.join(root,'.github/workflows/visionos_experimental.yml')))
+    assert(immersive:find('branches: [master]',1,true),'Immersive CI must follow the maintained master branch')
+    for _, filter in ipairs({'build/xmake/**','drivers/metal/**','drivers/apple_embedded/**','servers/xr/**','.github/actions/godot-build/**'}) do
+        assert(immersive:find("'" .. filter .. "'",1,true),'Immersive PR validation omits a native dependency: ' .. filter)
+        count=count+1
+    end
+    local contracts=assert(io.readfile(path.join(root,'.github/workflows/xmake_contract.yml')))
+    assert(contracts:match('timeout%-minutes:%s*%d+'),'Native compiler contract jobs must be bounded')
+    assert(android:find('required: false',1,true),'EGP Android builds must not require upstream-only Firebase credentials')
+    count=count+3
     local windows=assert(io.readfile(path.join(root,'.github/workflows/windows_builds.yml')))
     assert(windows:find('EGP_MINGW_ROOT=$mingwRoot',1,true) and windows:find('$env:GITHUB_ENV',1,true), 'The installed MSYS compiler SDK root must reach isolated engine and host-tool configurations')
     count=count+2
