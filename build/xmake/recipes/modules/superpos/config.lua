@@ -1,7 +1,7 @@
 -- Native Lua module capabilities and documentation metadata.
 local R = import("recipe_compat", {rootdir = path.absolute("../../..", os.scriptdir()), anonymous = true}).new()
 function can_build(env, platform)
-    return (R.contains({"windows", "linuxbsd", "macos"}, platform))
+    return (R.contains({"windows", "linuxbsd", "macos", "android"}, platform))
 end
 function get_opts(platform)
     local BoolVariable

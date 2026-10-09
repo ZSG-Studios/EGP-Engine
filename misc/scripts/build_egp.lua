@@ -1,10 +1,24 @@
 -- Configure and build actual native xmake targets with reusable configuration caches.
 -- Usage: xmake lua misc/scripts/build_egp.lua PLATFORM TARGET JOBS CACHE_DIR "KEY=VALUE ..." [dry-run]
+-- The graph declares the primary product's kind: executables are godot.*, while
+-- shared/static engine libraries (Android, Linux/macOS library_type) carry the
+-- platform library prefix, e.g. libgodot.android.template_debug.arm64.so.
+function valid_program_filename(program)
+    local filename = program and program.filename
+    if type(filename) ~= "string" or filename == "" or filename ~= path.filename(filename) then return false end
+    if filename:find("[/\\]") or filename:find("..", 1, true) then return false end
+    if program.kind == "binary" then return filename:startswith("godot.") end
+    if program.kind == "shared" or program.kind == "static" then
+        return filename:startswith("libgodot.") or filename:startswith("godot.")
+    end
+    return false
+end
+
 function build_result(root, graph)
     local options = assert(graph.options, "Native graph options missing")
     local program = assert(graph.programs and graph.programs[1], "Native graph program missing")
     local filename = assert(program.filename, "Native graph filename missing")
-    assert(filename == path.filename(filename) and filename:startswith("godot."), "Invalid native program filename")
+    assert(valid_program_filename(program), "Invalid native program filename")
     local mono = options.module_mono_enabled == true
     local mono_library = false
     for _, library in ipairs(graph.libraries or {}) do if library.name == "module_mono" then mono_library = true end end

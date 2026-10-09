@@ -30,6 +30,7 @@ function main(compressor, zipper)
         {'engine_tests','build/xmake/tests/engine_tests.lua',marker='NATIVE_ENGINE_TEST_GRAPH_CHECKS=(%d+)'},
         {'platform_defaults','build/xmake/tests/platform_defaults.lua',marker='NATIVE_PLATFORM_DEFAULT_CHECKS=(%d+)'},
         {'managed','build/xmake/tests/managed.lua',marker='NATIVE_MANAGED_CONTRACT_CHECKS=(%d+)'},
+        {'build_result','build/xmake/tests/build_result.lua',marker='NATIVE_BUILD_RESULT_CHECKS=(%d+)'},
         {'generated_objects','build/xmake/tests/generated_objects.lua',marker='NATIVE_GENERATED_OBJECT_CHECKS=(%d+)'},
         {'compile_variants','build/xmake/tests/compile_variants.lua',marker='NATIVE_COMPILE_VARIANT_CHECKS=(%d+)'},
         {'custom_modules','build/xmake/tests/custom_modules.lua',marker='NATIVE_CUSTOM_MODULE_CHECKS=(%d+)'}
