@@ -1,0 +1,62 @@
+diff --git a/modules/csg/csg_shape.cpp b/modules/csg/csg_shape.cpp
+index 9a908d39e2..5b12183dcd 100644
+--- a/modules/csg/csg_shape.cpp
++++ b/modules/csg/csg_shape.cpp
+@@ -240,20 +240,15 @@ float CSGShape3D::get_snap() const {
+ #endif // DISABLE_DEPRECATED
+ 
+ void CSGShape3D::_make_dirty(bool p_parent_removing) {
+-#ifndef PHYSICS_3D_DISABLED
+ 	if ((p_parent_removing || is_root_shape()) && !dirty) {
+ 		callable_mp(this, &CSGShape3D::update_shape).call_deferred(); // Must be deferred; otherwise, is_root_shape() will use the previous parent.
+ 	}
+-#endif // PHYSICS_3D_DISABLED
+ 
+ 	if (!is_root_shape()) {
+ 		parent_shape->_make_dirty();
+-	}
+-#ifndef PHYSICS_3D_DISABLED
+-	else if (!dirty) {
++	} else if (!dirty) {
+ 		callable_mp(this, &CSGShape3D::update_shape).call_deferred();
+ 	}
+-#endif // PHYSICS_3D_DISABLED
+ 
+ 	dirty = true;
+ }
+diff --git a/scene/3d/physics/joints/pin_joint_3d.cpp b/scene/3d/physics/joints/pin_joint_3d.cpp
+index c56c37ad78..95635c3370 100644
+--- a/scene/3d/physics/joints/pin_joint_3d.cpp
++++ b/scene/3d/physics/joints/pin_joint_3d.cpp
+@@ -45,7 +45,7 @@ void PinJoint3D::_bind_methods() {
+ 
+ void PinJoint3D::set_param(Param p_param, real_t p_value) {
+ 	ERR_FAIL_COND(!Math::is_finite(p_value) || p_value < 0);
+-	ERR_FAIL_INDEX(p_param, 2);
++	ERR_FAIL_INDEX(int(p_param), 2);
+ 	params[p_param] = p_value;
+ 	if (is_configured()) {
+ 		PhysicsServer3D::get_singleton()->pin_joint_set_param(get_rid(), PS3DE::PinJointParam(p_param), p_value);
+@@ -53,7 +53,7 @@ void PinJoint3D::set_param(Param p_param, real_t p_value) {
+ }
+ 
+ real_t PinJoint3D::get_param(Param p_param) const {
+-	ERR_FAIL_INDEX_V(p_param, 2, 0);
++	ERR_FAIL_INDEX_V(int(p_param), 2, 0);
+ 	return params[p_param];
+ }
+ 
+diff --git a/scene/debugger/scene_debugger.cpp b/scene/debugger/scene_debugger.cpp
+index a0dd64fef0..6a7ea7b6e0 100644
+--- a/scene/debugger/scene_debugger.cpp
++++ b/scene/debugger/scene_debugger.cpp
+@@ -341,7 +341,9 @@ Error SceneDebugger::_msg_hdr_output_toggle_requested(const Array &p_args) {
+ 
+ Error SceneDebugger::_msg_set_debug_collisions(const Array &p_args) {
+ 	ERR_FAIL_COND_V(p_args.is_empty(), ERR_INVALID_DATA);
++#if !defined(PHYSICS_2D_DISABLED) || !defined(PHYSICS_3D_DISABLED)
+ 	bool enabled = p_args[0];
++#endif
+ #ifndef PHYSICS_2D_DISABLED
+ 	PhysicsServer2D::get_singleton()->debug_set_enabled(enabled);
+ #endif

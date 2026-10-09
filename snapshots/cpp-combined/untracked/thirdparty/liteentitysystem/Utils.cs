@@ -1,0 +1,301 @@
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using System.Text;
+using System.Threading;
+using LiteEntitySystem.Internal;
+
+namespace LiteEntitySystem
+{
+    public struct LESDiagnosticDataEntry
+    {
+        public bool IsRPC;
+        public int Count;
+        public int Size;
+        public string Name;
+
+        public override string ToString() => IsRPC
+            ? $"RPC: {Name}, TotalSize: {Size}, Count: {Count}"
+            : $"Entity: {Name}, TotalSize: {Size}, Count: {Count}";
+    }
+    
+    public static class Utils
+    {
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static float MoveTowards(float current, float target, float maxDelta) =>
+            Math.Abs(target - current) <= maxDelta ? target : current + Math.Sign(target - current) * maxDelta;
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe int WriteStruct<T>(this Span<byte> data, T value) where T : unmanaged
+        {
+            fixed (byte* rawData = data)
+                *(T*) rawData = value;
+            return sizeof(T);
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe int ReadStruct<T>(this ReadOnlySpan<byte> data, out T value) where T : unmanaged
+        {
+            fixed (byte* rawData = data)
+                value = *(T*)rawData;
+            return sizeof(T);
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe T ReadStruct<T>(this ReadOnlySpan<byte> data) where T : unmanaged
+        {
+            fixed (byte* rawData = data) 
+                return *(T*)rawData;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe int SizeOfStruct<T>() where T : unmanaged
+        {
+            return sizeof(T);
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe bool HasFlagFast<T>(this T e, T flag) where T : unmanaged, Enum
+        {
+            switch (sizeof(T))
+            {
+                case 1: return (*(byte*)&e  & *(byte*)&flag)  == *(byte*)&flag;
+                case 2: return (*(short*)&e & *(short*)&flag) == *(short*)&flag;
+                case 4: return (*(int*)&e   & *(int*)&flag)   == *(int*)&flag;
+                case 8: return (*(long*)&e  & *(long*)&flag)  == *(long*)&flag;
+            }
+            return false;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe long GetEnumValue<T>(this T e) where T : unmanaged, Enum
+        {
+            switch (sizeof(T))
+            {
+                case 1: return *(byte*)&e;
+                case 2: return *(short*)&e;
+                case 4: return *(int*)&e;
+                case 8: return *(long*)&e;
+            }
+            return -1;
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe int GetEnumValueInt<T>(this T e) where T : unmanaged, Enum
+        {
+            switch (sizeof(T))
+            {
+                case 1: return *(byte*)&e;
+                case 2: return *(short*)&e;
+                case 4: return *(int*)&e;
+                case 8: throw new Exception("Trying to get int value from long enum");
+            }
+            return -1;
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe bool HasFlagFast<T>(this SyncVar<T> e, T flag) where T : unmanaged, Enum
+        {
+            var v = e.Value;
+            switch (sizeof(T))
+            {
+                case 1: return (*(byte*)&v  & *(byte*)&flag)  == *(byte*)&flag;
+                case 2: return (*(short*)&v & *(short*)&flag) == *(short*)&flag;
+                case 4: return (*(int*)&v   & *(int*)&flag)   == *(int*)&flag;
+                case 8: return (*(long*)&v  & *(long*)&flag)  == *(long*)&flag;
+            }
+            return false;
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe long GetEnumValue<T>(this SyncVar<T> e) where T : unmanaged, Enum
+        {
+            var v = e.Value;
+            switch (sizeof(T))
+            {
+                case 1: return *(byte*)&v;
+                case 2: return *(short*)&v;
+                case 4: return *(int*)&v;
+                case 8: return *(long*)&v;
+            }
+            return -1;
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void ResizeIfFull<T>(ref T[] arr, int count)
+        {
+            if (count >= arr.Length)
+                Array.Resize(ref arr, count*2);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void AddToArrayDynamic<T>(ref T[] arr, ref int count, T value)
+        {
+            if (arr == null)
+                arr = new T[count > 8 ? count : 8];
+            else if (count >= arr.Length)
+                Array.Resize(ref arr, count*2);
+            arr[count] = value;
+            count++;
+        }
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static void ResizeOrCreate<T>(ref T[] arr, int count)
+        {
+            if (arr == null)
+                arr = new T[count > 8 ? count : 8];
+            else if (count >= arr.Length)
+                Array.Resize(ref arr, count*2);
+        }
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static bool IsBitSet(byte[] byteArray, int offset, int bitNumber) =>
+            (byteArray[offset + bitNumber / 8] & (1 << bitNumber % 8)) != 0;
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static unsafe bool IsBitSet(byte* byteArray, int bitNumber) =>
+            (byteArray[bitNumber / 8] & (1 << bitNumber % 8)) != 0;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static float Lerp(float a, float b, float t) => a + (b - a) * t;
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static float InvLerp(float a, float b, float v) => Math.Clamp((v - a) / (b - a), 0f, 1f);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static long Lerp(long a, long b, float t) => (long)(a + (b - a) * t);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int Lerp(int a, int b, float t) => (int)(a + (b - a) * t);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static double Lerp(double a, double b, float t) => a + (b - a) * t;
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static ushort LerpSequence(ushort seq1, ushort seq2, float t) =>
+            (ushort)((seq1 + Math.Floor(SequenceDiff(seq2, seq1) * t)) % MaxSequence);
+
+        private const int MaxSequence = 65536;
+        private const int MaxSeq2 = MaxSequence / 2;
+        private const int MaxSeq15 = MaxSequence + MaxSeq2;
+        
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        public static int SequenceDiff(ushort newer, ushort older) => (newer - older + MaxSeq15) % MaxSequence - MaxSeq2;
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        internal static T CreateDelegateHelper<T>(this MethodInfo method) where T : Delegate => (T)method.CreateDelegate(typeof(T));
+
+        public static string BytesToHexString(ReadOnlySpan<byte> bytes)
+        {
+            StringBuilder sb = new StringBuilder();
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                sb.Append(bytes[i].ToString("X2"));
+                if(i != bytes.Length - 1)
+                    sb.Append('_');
+            }
+            return sb.ToString();
+        }
+        
+        internal static Stack<Type> GetBaseTypes(Type ofType, Type until, bool includeSelf, bool includeLast)
+        {
+            var resultTypes = new Stack<Type>();
+            if(!includeSelf)
+                ofType = ofType.BaseType;
+            while (ofType != until && ofType != null)
+            {
+                resultTypes.Push(ofType);
+                ofType = ofType.BaseType;
+            }
+            if(includeLast)
+                resultTypes.Push(until);
+            return resultTypes;
+        }
+
+        //field flags that used in LES
+        internal static FieldInfo[] GetProcessedFields(Type t)
+        {
+            var fArr = t.GetFields(BindingFlags.Instance |
+                                   BindingFlags.Public |
+                                   BindingFlags.NonPublic |
+                                   BindingFlags.DeclaredOnly |
+                                   BindingFlags.Static);
+            // Sort field names with Ordinal (byte-value) comparison, NOT culture-sensitive InvariantCulture.
+            // The serialized field layout (FixedOffset assignment) is derived from this order and must be identical
+            // on every peer. InvariantCulture is ICU-dependent: a full-ICU peer and an invariant-globalization peer
+            // (e.g. a server published with InvariantGlobalization=true, or any runtime where ICU is absent) can order
+            // underscore-prefixed identifiers (_controller, _controlledEntity, _parentId, ...) differently, producing
+            // mismatched FixedOffsets so a peer reads non-interpolated SyncVars from the wrong wire offset. Ordinal is
+            // environment-independent and is the correct collation for code identifiers.
+            Array.Sort(fArr, (f1, f2) => string.CompareOrdinal(f1.Name, f2.Name));
+            return fArr;
+        }
+
+        internal static bool IsRemoteCallType(Type ft)
+        {
+            if (ft == typeof(RemoteCall))
+                return true;
+            if (!ft.IsGenericType)
+                return false;
+            var genericTypeDef = ft.GetGenericTypeDefinition();
+            return genericTypeDef == typeof(RemoteCall<>) || genericTypeDef == typeof(RemoteCallSpan<>);
+        }
+        
+        private class TestOffset
+        {
+            public readonly uint TestValue = 0xDEADBEEF;
+        }
+        
+        /*
+        Offsets
+        [StructLayout(LayoutKind.Explicit)]
+        public unsafe struct DotnetClassField
+        {
+            [FieldOffset(0)] private readonly void* _pMTOfEnclosingClass;
+            [FieldOffset(8)] private readonly uint _dword1;
+            [FieldOffset(12)] private readonly uint _dword2;
+            public int Offset => (int) (_dword2 & 0x7FFFFFF);
+        }
+
+        public unsafe struct MonoClassField
+        {
+            private void *_type;
+            private void *_name;
+            private	void *_parent_and_flags;
+            public int Offset;
+        }
+        */
+        
+        public static readonly ThreadLocal<UTF8Encoding> Encoding = new (() => new UTF8Encoding(false, true));
+
+        private static readonly int MonoOffset = IntPtr.Size * 3;
+        private static readonly int DotNetOffset = IntPtr.Size + 4;
+        private static readonly bool IsMono;
+
+        internal static int GetFieldOffset(FieldInfo fieldInfo)
+        {
+            //build offsets in runtime metadata
+            if(fieldInfo.DeclaringType != null)
+                RuntimeHelpers.RunClassConstructor(fieldInfo.DeclaringType.TypeHandle);
+            return IsMono
+                ? Marshal.ReadInt32(fieldInfo.FieldHandle.Value + MonoOffset)
+                : (Marshal.ReadInt32(fieldInfo.FieldHandle.Value + DotNetOffset) & 0xFFFFFF) + IntPtr.Size;
+        }
+
+        static Utils()
+        {            
+            IsMono = Type.GetType("Mono.Runtime") != null
+                     || RuntimeInformation.OSDescription.Contains("android")
+                     || RuntimeInformation.OSDescription.Contains("ios");
+            
+            //check field offset
+            var field = typeof(TestOffset).GetField("TestValue");
+            int offset = GetFieldOffset(field);
+            var to = new TestOffset();
+            if (RefMagic.GetFieldValue<uint>(to, offset) != to.TestValue)
+                Logger.LogError("Unknown native field offset");
+        }
+    }
+}

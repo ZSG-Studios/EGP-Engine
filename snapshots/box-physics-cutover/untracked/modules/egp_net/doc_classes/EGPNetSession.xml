@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="EGPNetSession" inherits="RefCounted" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+    <brief_description>Native Yojimbo transport and server-authoritative entity replication.</brief_description>
+    <description>Configure a session, listen as a server, or join using an encrypted connect token. Direct address joins require explicitly enabled loopback development mode. Call poll regularly on the creating thread. Commands expose bounded raw messages, entity replication, peer lists and interest filtering. The EGPNet GDScript helper adds named handlers and registered scene factories. Server peer identifiers refer to a connection generation; reconnects do not inherit ownership.</description>
+    <tutorials></tutorials>
+</class>

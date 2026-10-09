@@ -1,0 +1,22 @@
+--- a/src/spherical_joint.c
++++ b/src/spherical_joint.c
+@@ -39,7 +39,7 @@
+ 
+ void b3SphericalJoint_SetConeLimit( b3JointId jointId, float angleRadians )
+ {
+-	B3_ASSERT( b3IsValidFloat( angleRadians ) && 0 <= angleRadians && angleRadians <= 0.5f * B3_PI );
++	B3_ASSERT( b3IsValidFloat( angleRadians ) && 0 <= angleRadians && angleRadians <= B3_PI );
+ 	b3World* world = b3GetWorld( jointId.world0 );
+ 	B3_REC( world, SphericalJointSetConeLimit, jointId, angleRadians );
+ 	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_sphericalJoint );
+--- a/src/joint.c
++++ b/src/joint.c
+@@ -643,7 +643,7 @@
+ 	joint->sphericalJoint.hertz = def->hertz;
+ 	joint->sphericalJoint.dampingRatio = def->dampingRatio;
+ 	joint->sphericalJoint.targetRotation = def->targetRotation;
+-	joint->sphericalJoint.coneAngle = b3ClampFloat( def->coneAngle, 0.0f, 0.5f * B3_PI );
++	joint->sphericalJoint.coneAngle = b3ClampFloat( def->coneAngle, 0.0f, B3_PI );
+ 
+ 	float lowerAngle = b3MinFloat( def->lowerTwistAngle, def->upperTwistAngle );
+ 	float upperAngle = b3MaxFloat( def->lowerTwistAngle, def->upperTwistAngle );

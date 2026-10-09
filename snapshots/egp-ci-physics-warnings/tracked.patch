@@ -1,0 +1,1300 @@
+diff --git a/modules/box2d/SCsub b/modules/box2d/SCsub
+index a53528a7bf..ed781e9e18 100644
+--- a/modules/box2d/SCsub
++++ b/modules/box2d/SCsub
+@@ -9,11 +9,16 @@ env_box2d.Prepend(CPPPATH=["#thirdparty/box2d/include"])
+ 
+ # Isolate the solver and adapter from global fast math and FMA contraction flags.
+ for key in ("CCFLAGS", "CFLAGS", "CXXFLAGS"):
+-    env_box2d[key] = [flag for flag in env_box2d[key] if not str(flag).startswith(("/fp:", "-ffast-math", "-Ofast", "-ffp-contract=", "-funsafe-math-optimizations"))]
++    env_box2d[key] = [
++        flag
++        for flag in env_box2d[key]
++        if not str(flag).startswith(("/fp:", "-ffast-math", "-Ofast", "-ffp-contract=", "-funsafe-math-optimizations"))
++    ]
+ if env.msvc:
+-    env_box2d.Append(CCFLAGS=["/fp:precise"])
+     if env["use_llvm"]:
+-        env_box2d.Append(CCFLAGS=["/clang:-ffp-contract=off"])
++        env_box2d.Append(CCFLAGS=["/clang:-fno-fast-math", "/clang:-ffp-contract=off"])
++    else:
++        env_box2d.Append(CCFLAGS=["/fp:precise"])
+ else:
+     env_box2d.Append(CCFLAGS=["-fno-fast-math", "-ffp-contract=off"])
+     if env["platform"] not in ("macos", "ios", "windows", "web"):
+diff --git a/modules/box2d/bodies/box2d_area_2d.cpp b/modules/box2d/bodies/box2d_area_2d.cpp
+index 7c0f63df52..f38aa53365 100644
+--- a/modules/box2d/bodies/box2d_area_2d.cpp
++++ b/modules/box2d/bodies/box2d_area_2d.cpp
+@@ -1,3 +1,33 @@
++/**************************************************************************/
++/*  box2d_area_2d.cpp                                                     */
++/**************************************************************************/
++/*                         This file is part of:                          */
++/*                             GODOT ENGINE                               */
++/*                        https://godotengine.org                         */
++/**************************************************************************/
++/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
++/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
++/*                                                                        */
++/* Permission is hereby granted, free of charge, to any person obtaining  */
++/* a copy of this software and associated documentation files (the        */
++/* "Software"), to deal in the Software without restriction, including    */
++/* without limitation the rights to use, copy, modify, merge, publish,    */
++/* distribute, sublicense, and/or sell copies of the Software, and to     */
++/* permit persons to whom the Software is furnished to do so, subject to  */
++/* the following conditions:                                              */
++/*                                                                        */
++/* The above copyright notice and this permission notice shall be         */
++/* included in all copies or substantial portions of the Software.        */
++/*                                                                        */
++/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
++/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
++/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
++/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
++/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
++/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
++/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
++/**************************************************************************/
++
+ // SPDX-License-Identifier: MIT
+ // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
+ #include "box2d_area_2d.h"
+@@ -39,8 +69,8 @@ void Box2DArea2D::on_remove_from_space() {
+ 	// The overrides still have to come off, otherwise a body that was inside a gravity
+ 	// replacement keeps a zero gravity scale forever. Areas that remain reapply theirs
+ 	// at the top of the next step.
+-	for (const auto &[rid, overlap_count] : object_overlap_count) {
+-		auto *object = Box2DPhysicsServer2D::get_singleton()->get_object(rid);
++	for (const auto &[overlap_rid, overlap_count] : object_overlap_count) {
++		auto *object = Box2DPhysicsServer2D::get_singleton()->get_object(overlap_rid);
+ 		if (!object) {
+ 			continue;
+ 		}
+@@ -149,8 +179,8 @@ void Box2DArea2D::update_overlaps() {
+ }
+ 
+ void Box2DArea2D::apply_overrides() {
+-	for (const auto &[rid, overlap_count] : object_overlap_count) {
+-		auto *object = Box2DPhysicsServer2D::get_singleton()->get_object(rid);
++	for (const auto &[overlap_rid, overlap_count] : object_overlap_count) {
++		auto *object = Box2DPhysicsServer2D::get_singleton()->get_object(overlap_rid);
+ 		if (!object) {
+ 			continue;
+ 		}
+@@ -162,7 +192,6 @@ void Box2DArea2D::apply_overrides() {
+ 		Box2DBody2D::AreaOverrideAccumulator &overrides = body->area_overrides;
+ 
+ 		if (!overrides.ignore_remaining_gravity) {
+-			Vector2 original_gravity = overrides.total_gravity;
+ 			overrides.ignore_remaining_gravity = integrate(
+ 					overrides.total_gravity,
+ 					compute_gravity(body->get_center_of_mass_global()),
+@@ -175,7 +204,6 @@ void Box2DArea2D::apply_overrides() {
+ 		}
+ 
+ 		if (!overrides.ignore_remaining_linear_damp) {
+-			real_t original_linear_damp = overrides.total_linear_damp;
+ 			overrides.ignore_remaining_linear_damp = integrate(
+ 					overrides.total_linear_damp,
+ 					linear_damp,
+@@ -187,7 +215,6 @@ void Box2DArea2D::apply_overrides() {
+ 		}
+ 
+ 		if (!overrides.ignore_remaining_angular_damp) {
+-			real_t original_angular_damp = overrides.total_angular_damp;
+ 			overrides.ignore_remaining_angular_damp = integrate(
+ 					overrides.total_angular_damp,
+ 					angular_damp,
+@@ -352,4 +379,4 @@ void Box2DArea2D::set_monitorable(bool p_monitorable) {
+ uint64_t Box2DArea2D::modify_mask_bits(uint32_t p_mask) {
+ 	uint64_t result = (uint64_t)p_mask | AREA_MASK_BIT;
+ 	return result;
+-}
+\ No newline at end of file
++}
+diff --git a/modules/box2d/bodies/box2d_body_2d.cpp b/modules/box2d/bodies/box2d_body_2d.cpp
+index b6065913c1..bce0fb1301 100644
+--- a/modules/box2d/bodies/box2d_body_2d.cpp
++++ b/modules/box2d/bodies/box2d_body_2d.cpp
+@@ -1,3 +1,33 @@
++/**************************************************************************/
++/*  box2d_body_2d.cpp                                                     */
++/**************************************************************************/
++/*                         This file is part of:                          */
++/*                             GODOT ENGINE                               */
++/*                        https://godotengine.org                         */
++/**************************************************************************/
++/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
++/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
++/*                                                                        */
++/* Permission is hereby granted, free of charge, to any person obtaining  */
++/* a copy of this software and associated documentation files (the        */
++/* "Software"), to deal in the Software without restriction, including    */
++/* without limitation the rights to use, copy, modify, merge, publish,    */
++/* distribute, sublicense, and/or sell copies of the Software, and to     */
++/* permit persons to whom the Software is furnished to do so, subject to  */
++/* the following conditions:                                              */
++/*                                                                        */
++/* The above copyright notice and this permission notice shall be         */
++/* included in all copies or substantial portions of the Software.        */
++/*                                                                        */
++/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
++/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
++/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
++/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
++/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
++/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
++/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
++/**************************************************************************/
++
+ // SPDX-License-Identifier: MIT
+ // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
+ #include "box2d_body_2d.h"
+@@ -296,20 +326,6 @@ void Box2DBody2D::set_sleep_enabled(bool p_can_sleep) {
+ 	b2Body_EnableSleep(body_id, p_can_sleep);
+ }
+ 
+-/// Optimized function for updating rotation and position while preserving scale and skew.
+-/// The tradeoff is that values for scale and skew are subject to slight precision loss.
+-static void set_rotation_and_position_fast(Transform2D &p_xf, b2Rot p_rot, Vector2 p_pos) {
+-	TracyZoneScoped("Box2DBody2D::sync_state::set_rotation_and_position (fast)");
+-
+-	b2Rot current = { p_xf.columns[0].x, p_xf.columns[0].y };
+-
+-	real_t delta_angle = b2RelativeAngle(current, p_rot);
+-
+-	p_xf.columns[0] = p_xf.columns[0].rotated(delta_angle);
+-	p_xf.columns[1] = p_xf.columns[1].rotated(delta_angle);
+-	p_xf.columns[2] = p_pos;
+-}
+-
+ /// Slower function for updating rotation and position. Consistent with Godot Physics.
+ static void set_rotation_and_position(Transform2D &p_xf, real_t p_rot, Vector2 p_pos) {
+ 	TracyZoneScoped("Box2DBody2D::sync_state::set_rotation_and_position");
+@@ -430,12 +446,12 @@ void Box2DBody2D::get_contacts(int p_max_count) {
+ 
+ 			contacts.push_back(contact);
+ 
+-			if (contacts.size() >= p_max_count) {
++			if (int64_t(contacts.size()) >= p_max_count) {
+ 				return;
+ 			}
+ 		}
+ 
+-		if (contacts.size() >= p_max_count) {
++		if (int64_t(contacts.size()) >= p_max_count) {
+ 			return;
+ 		}
+ 	}
+@@ -450,63 +466,63 @@ int32_t Box2DBody2D::get_contact_count() {
+ Vector2 Box2DBody2D::get_contact_local_position(int p_contact_idx) {
+ 	ERR_FAIL_COND_V(!in_space(), Vector2());
+ 	update_contacts();
+-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), Vector2());
++	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), Vector2());
+ 	return contacts[p_contact_idx].local_position;
+ }
+ 
+ Vector2 Box2DBody2D::get_contact_local_normal(int p_contact_idx) {
+ 	ERR_FAIL_COND_V(!in_space(), Vector2());
+ 	update_contacts();
+-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), Vector2());
++	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), Vector2());
+ 	return contacts[p_contact_idx].local_normal;
+ }
+ 
+ int Box2DBody2D::get_contact_local_shape(int p_contact_idx) {
+ 	ERR_FAIL_COND_V(!in_space(), -1);
+ 	update_contacts();
+-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), -1);
++	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), -1);
+ 	return contacts[p_contact_idx].local_shape;
+ }
+ 
+ RID Box2DBody2D::get_contact_collider(int p_contact_idx) {
+ 	ERR_FAIL_COND_V(!in_space(), RID());
+ 	update_contacts();
+-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), RID());
++	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), RID());
+ 	return contacts[p_contact_idx].collider;
+ }
+ 
+ Vector2 Box2DBody2D::get_contact_collider_position(int p_contact_idx) {
+ 	ERR_FAIL_COND_V(!in_space(), Vector2());
+ 	update_contacts();
+-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), Vector2());
++	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), Vector2());
+ 	return contacts[p_contact_idx].collider_position;
+ }
+ 
+ uint64_t Box2DBody2D::get_contact_collider_id(int p_contact_idx) {
+ 	ERR_FAIL_COND_V(!in_space(), -1);
+ 	update_contacts();
+-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), -1);
++	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), -1);
+ 	return contacts[p_contact_idx].collider_instance_id;
+ }
+ 
+ int Box2DBody2D::get_contact_collider_shape(int p_contact_idx) {
+ 	ERR_FAIL_COND_V(!in_space(), -1);
+ 	update_contacts();
+-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), -1);
++	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), -1);
+ 	return contacts[p_contact_idx].collider_shape;
+ }
+ 
+ Vector2 Box2DBody2D::get_contact_impulse(int p_contact_idx) {
+ 	ERR_FAIL_COND_V(!in_space(), Vector2());
+ 	update_contacts();
+-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), Vector2());
++	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), Vector2());
+ 	return contacts[p_contact_idx].impulse;
+ }
+ 
+ Vector2 Box2DBody2D::get_contact_collider_velocity_at_position(int p_contact_idx) {
+ 	ERR_FAIL_COND_V(!in_space(), Vector2());
+ 	update_contacts();
+-	ERR_FAIL_INDEX_V(p_contact_idx, contacts.size(), Vector2());
++	ERR_FAIL_INDEX_V(p_contact_idx, int64_t(contacts.size()), Vector2());
+ 	return contacts[p_contact_idx].collider_velocity;
+ }
+ 
+@@ -549,8 +565,8 @@ void Box2DBody2D::rebuild_exception_joints(const Box2DPhysicsServer2D *p_server)
+ 		return;
+ 	}
+ 
+-	for (RID rid : exceptions) {
+-		Box2DBody2D *other = p_server->get_body(rid);
++	for (RID exception_rid : exceptions) {
++		Box2DBody2D *other = p_server->get_body(exception_rid);
+ 		if (!other || other->get_space() != space) {
+ 			continue;
+ 		}
+@@ -568,8 +584,8 @@ TypedArray<RID> Box2DBody2D::get_collision_exceptions() const {
+ 	result.resize(exceptions.size());
+ 
+ 	int index = 0;
+-	for (RID rid : exceptions) {
+-		result[index] = rid;
++	for (RID exception_rid : exceptions) {
++		result[index] = exception_rid;
+ 		index++;
+ 	}
+ 
+@@ -577,7 +593,7 @@ TypedArray<RID> Box2DBody2D::get_collision_exceptions() const {
+ }
+ 
+ void Box2DBody2D::set_shape_one_way_collision(int p_index, bool p_one_way, real_t p_margin, const Vector2 &p_direction) {
+-	ERR_FAIL_INDEX(p_index, shapes.size());
++	ERR_FAIL_INDEX(p_index, int64_t(shapes.size()));
+ 	Box2DShapeInstance &shape = shapes[p_index];
+ 	shape.set_one_way_collision(p_one_way);
+ 	shape.set_one_way_collision_margin(p_margin);
+@@ -585,7 +601,7 @@ void Box2DBody2D::set_shape_one_way_collision(int p_index, bool p_one_way, real_
+ }
+ 
+ bool Box2DBody2D::get_shape_one_way_collision(int p_index) {
+-	ERR_FAIL_INDEX_V(p_index, shapes.size(), false);
++	ERR_FAIL_INDEX_V(p_index, int64_t(shapes.size()), false);
+ 	Box2DShapeInstance &shape = shapes[p_index];
+ 	return shape.has_one_way_collision();
+ }
+diff --git a/modules/box2d/bodies/box2d_body_2d.h b/modules/box2d/bodies/box2d_body_2d.h
+index 3c4d122adc..b7415026ef 100644
+--- a/modules/box2d/bodies/box2d_body_2d.h
++++ b/modules/box2d/bodies/box2d_body_2d.h
+@@ -1,6 +1,37 @@
++/**************************************************************************/
++/*  box2d_body_2d.h                                                       */
++/**************************************************************************/
++/*                         This file is part of:                          */
++/*                             GODOT ENGINE                               */
++/*                        https://godotengine.org                         */
++/**************************************************************************/
++/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
++/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
++/*                                                                        */
++/* Permission is hereby granted, free of charge, to any person obtaining  */
++/* a copy of this software and associated documentation files (the        */
++/* "Software"), to deal in the Software without restriction, including    */
++/* without limitation the rights to use, copy, modify, merge, publish,    */
++/* distribute, sublicense, and/or sell copies of the Software, and to     */
++/* permit persons to whom the Software is furnished to do so, subject to  */
++/* the following conditions:                                              */
++/*                                                                        */
++/* The above copyright notice and this permission notice shall be         */
++/* included in all copies or substantial portions of the Software.        */
++/*                                                                        */
++/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
++/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
++/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
++/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
++/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
++/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
++/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
++/**************************************************************************/
++
++#pragma once
++
+ // SPDX-License-Identifier: MIT
+ // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
+-#pragma once
+ 
+ #include "box2d_collision_object_2d.h"
+ #include "box2d_direct_body_state_2d.h"
+@@ -62,12 +93,12 @@ public:
+ 	void reset_mass();
+ 	real_t get_mass() const { return mass_data.mass; }
+ 	real_t get_inverse_mass() const {
+-		real_t mass = get_mass();
+-		return mass > 0.0 ? 1.0 / mass : 0.0;
++		real_t body_mass = get_mass();
++		return body_mass > 0.0 ? 1.0 / body_mass : 0.0;
+ 	}
+ 	real_t get_inverse_inertia() const {
+-		real_t intertia = get_inertia();
+-		return intertia > 0.0 ? 1.0 / intertia : 0.0;
++		real_t body_inertia = get_inertia();
++		return body_inertia > 0.0 ? 1.0 / body_inertia : 0.0;
+ 	}
+ 	void set_mass(real_t p_mass);
+ 	real_t get_inertia() const { return to_godot(mass_data.rotationalInertia); }
+@@ -232,7 +263,7 @@ protected:
+ 	real_t angular_damping = 0.0;
+ 
+ 	real_t mass = 1.0f;
+-	b2MassData mass_data = b2MassData{ 0 };
++	b2MassData mass_data = b2MassData{};
+ 	bool override_center_of_mass = false;
+ 	Vector2 center_of_mass = Vector2();
+ 	bool override_inertia = false;
+diff --git a/modules/box2d/bodies/box2d_collision_object_2d.cpp b/modules/box2d/bodies/box2d_collision_object_2d.cpp
+index 4e4feea2b0..4b8ec20d73 100644
+--- a/modules/box2d/bodies/box2d_collision_object_2d.cpp
++++ b/modules/box2d/bodies/box2d_collision_object_2d.cpp
+@@ -1,3 +1,33 @@
++/**************************************************************************/
++/*  box2d_collision_object_2d.cpp                                         */
++/**************************************************************************/
++/*                         This file is part of:                          */
++/*                             GODOT ENGINE                               */
++/*                        https://godotengine.org                         */
++/**************************************************************************/
++/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
++/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
++/*                                                                        */
++/* Permission is hereby granted, free of charge, to any person obtaining  */
++/* a copy of this software and associated documentation files (the        */
++/* "Software"), to deal in the Software without restriction, including    */
++/* without limitation the rights to use, copy, modify, merge, publish,    */
++/* distribute, sublicense, and/or sell copies of the Software, and to     */
++/* permit persons to whom the Software is furnished to do so, subject to  */
++/* the following conditions:                                              */
++/*                                                                        */
++/* The above copyright notice and this permission notice shall be         */
++/* included in all copies or substantial portions of the Software.        */
++/*                                                                        */
++/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
++/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
++/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
++/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
++/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
++/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
++/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
++/**************************************************************************/
++
+ // SPDX-License-Identifier: MIT
+ // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
+ #include "box2d_collision_object_2d.h"
+@@ -58,7 +88,6 @@ void Box2DCollisionObject2D::set_mode(PS2DE::BodyMode p_mode) {
+ 		return;
+ 	}
+ 
+-	PS2DE::BodyMode previous_mode = mode;
+ 	mode = p_mode;
+ 
+ 	// Recycled contact points hold friction and presolve results across small motions, which reads
+@@ -182,7 +211,7 @@ void Box2DCollisionObject2D::set_transform(const Transform2D &p_transform, bool
+ }
+ 
+ RID Box2DCollisionObject2D::get_shape_rid(int p_index) const {
+-	ERR_FAIL_INDEX_V(p_index, shapes.size(), RID());
++	ERR_FAIL_INDEX_V(p_index, int64_t(shapes.size()), RID());
+ 	const Box2DShapeInstance &shape = shapes[p_index];
+ 	Box2DShape2D *inst = shape.get_shape();
+ 	ERR_FAIL_COND_V(!inst, RID());
+@@ -190,7 +219,7 @@ RID Box2DCollisionObject2D::get_shape_rid(int p_index) const {
+ }
+ 
+ void Box2DCollisionObject2D::set_shape_disabled(int p_index, bool p_disabled) {
+-	ERR_FAIL_INDEX(p_index, shapes.size());
++	ERR_FAIL_INDEX(p_index, int64_t(shapes.size()));
+ 	Box2DShapeInstance &shape = shapes[p_index];
+ 	if (shape.get_disabled() == p_disabled) {
+ 		return;
+@@ -230,7 +259,7 @@ void Box2DCollisionObject2D::add_shape(Box2DShape2D *p_shape, const Transform2D
+ }
+ 
+ void Box2DCollisionObject2D::set_shape(int p_index, Box2DShape2D *p_shape) {
+-	ERR_FAIL_INDEX(p_index, shapes.size());
++	ERR_FAIL_INDEX(p_index, int64_t(shapes.size()));
+ 	Box2DShapeInstance &shape = shapes[p_index];
+ 	shape.set_shape(p_shape);
+ 	build_shape(shape, true);
+@@ -249,7 +278,7 @@ void Box2DCollisionObject2D::shape_updated(Box2DShape2D *p_shape) {
+ }
+ 
+ void Box2DCollisionObject2D::remove_shape(int p_index) {
+-	ERR_FAIL_INDEX(p_index, shapes.size());
++	ERR_FAIL_INDEX(p_index, int64_t(shapes.size()));
+ 
+ 	shapes.remove_at(p_index);
+ 
+@@ -261,7 +290,7 @@ void Box2DCollisionObject2D::remove_shape(int p_index) {
+ void Box2DCollisionObject2D::remove_shape(Box2DShape2D *p_shape) {
+ 	ERR_FAIL_NULL(p_shape);
+ 
+-	for (int i = 0; i < shapes.size(); i++) {
++	for (uint32_t i = 0; i < shapes.size(); i++) {
+ 		if (shapes[i].get_shape() == p_shape) {
+ 			shapes.remove_at(i);
+ 			i--;
+@@ -287,7 +316,7 @@ void Box2DCollisionObject2D::reindex_all_shapes() {
+ }
+ 
+ void Box2DCollisionObject2D::set_shape_transform(int p_index, const Transform2D &p_transform) {
+-	ERR_FAIL_INDEX(p_index, shapes.size());
++	ERR_FAIL_INDEX(p_index, int64_t(shapes.size()));
+ 	Box2DShapeInstance &shape = shapes[p_index];
+ 	if (shape.get_transform() == p_transform) {
+ 		return;
+@@ -297,7 +326,7 @@ void Box2DCollisionObject2D::set_shape_transform(int p_index, const Transform2D
+ }
+ 
+ Transform2D Box2DCollisionObject2D::get_shape_transform(int p_index) const {
+-	ERR_FAIL_INDEX_V(p_index, shapes.size(), Transform2D());
++	ERR_FAIL_INDEX_V(p_index, int64_t(shapes.size()), Transform2D());
+ 	// TODO: more const references and pointers
+ 	const Box2DShapeInstance &shape = shapes[p_index];
+ 	return shape.get_transform();
+@@ -465,4 +494,4 @@ CharacterCastResult Box2DCollisionObject2D::character_cast(const Transform2D &p_
+ 	}
+ 
+ 	return result;
+-}
+\ No newline at end of file
++}
+diff --git a/modules/box2d/bodies/box2d_collision_object_2d.h b/modules/box2d/bodies/box2d_collision_object_2d.h
+index 37970e84ad..7b96008d0c 100644
+--- a/modules/box2d/bodies/box2d_collision_object_2d.h
++++ b/modules/box2d/bodies/box2d_collision_object_2d.h
+@@ -1,6 +1,37 @@
++/**************************************************************************/
++/*  box2d_collision_object_2d.h                                           */
++/**************************************************************************/
++/*                         This file is part of:                          */
++/*                             GODOT ENGINE                               */
++/*                        https://godotengine.org                         */
++/**************************************************************************/
++/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
++/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
++/*                                                                        */
++/* Permission is hereby granted, free of charge, to any person obtaining  */
++/* a copy of this software and associated documentation files (the        */
++/* "Software"), to deal in the Software without restriction, including    */
++/* without limitation the rights to use, copy, modify, merge, publish,    */
++/* distribute, sublicense, and/or sell copies of the Software, and to     */
++/* permit persons to whom the Software is furnished to do so, subject to  */
++/* the following conditions:                                              */
++/*                                                                        */
++/* The above copyright notice and this permission notice shall be         */
++/* included in all copies or substantial portions of the Software.        */
++/*                                                                        */
++/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
++/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
++/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
++/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
++/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
++/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
++/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
++/**************************************************************************/
++
++#pragma once
++
+ // SPDX-License-Identifier: MIT
+ // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
+-#pragma once
+ 
+ #include "../box2d_globals.h"
+ #include "../box2d_project_settings.h"
+@@ -22,6 +53,7 @@ public:
+ 	};
+ 
+ 	explicit Box2DCollisionObject2D(Type p_type);
++	virtual ~Box2DCollisionObject2D() = default;
+ 
+ 	Type get_type() const { return type; }
+ 
+diff --git a/modules/box2d/box2d_globals.cpp b/modules/box2d/box2d_globals.cpp
+index bea991b0be..baad437579 100644
+--- a/modules/box2d/box2d_globals.cpp
++++ b/modules/box2d/box2d_globals.cpp
+@@ -1,3 +1,33 @@
++/**************************************************************************/
++/*  box2d_globals.cpp                                                     */
++/**************************************************************************/
++/*                         This file is part of:                          */
++/*                             GODOT ENGINE                               */
++/*                        https://godotengine.org                         */
++/**************************************************************************/
++/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
++/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
++/*                                                                        */
++/* Permission is hereby granted, free of charge, to any person obtaining  */
++/* a copy of this software and associated documentation files (the        */
++/* "Software"), to deal in the Software without restriction, including    */
++/* without limitation the rights to use, copy, modify, merge, publish,    */
++/* distribute, sublicense, and/or sell copies of the Software, and to     */
++/* permit persons to whom the Software is furnished to do so, subject to  */
++/* the following conditions:                                              */
++/*                                                                        */
++/* The above copyright notice and this permission notice shall be         */
++/* included in all copies or substantial portions of the Software.        */
++/*                                                                        */
++/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
++/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
++/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
++/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
++/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
++/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
++/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
++/**************************************************************************/
++
+ // SPDX-License-Identifier: MIT
+ // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
+ #include "box2d_globals.h"
+@@ -45,7 +75,7 @@ ShapeCollideResult box2d_collide_shapes(
+ 	// The collide functions work in frame A and want B relative to it.
+ 	b2Transform xf = b2InvMulTransforms(xfa, xfb);
+ 
+-	b2LocalManifold manifold = { 0 };
++	b2LocalManifold manifold = {};
+ 
+ 	switch (type_a) {
+ 		case b2ShapeType::b2_capsuleShape: {
+@@ -143,7 +173,7 @@ ShapeCollideResult box2d_collide_shapes(
+ 			b2ChainSegment a = p_shape_a.chain_segment;
+ 			switch (type_b) {
+ 				case b2ShapeType::b2_capsuleShape: {
+-					b2SimplexCache cache{ 0 };
++					b2SimplexCache cache{};
+ 					manifold = b2CollideChainSegmentAndCapsule(&a, &p_shape_b.capsule, xf, &cache);
+ 					break;
+ 				}
+@@ -152,7 +182,7 @@ ShapeCollideResult box2d_collide_shapes(
+ 					break;
+ 				}
+ 				case b2ShapeType::b2_polygonShape: {
+-					b2SimplexCache cache{ 0 };
++					b2SimplexCache cache{};
+ 					manifold = b2CollideChainSegmentAndPolygon(&a, &p_shape_b.polygon, xf, &cache);
+ 					break;
+ 				}
+diff --git a/modules/box2d/box2d_globals.h b/modules/box2d/box2d_globals.h
+index 7f50016188..41d79dfbda 100644
+--- a/modules/box2d/box2d_globals.h
++++ b/modules/box2d/box2d_globals.h
+@@ -1,6 +1,37 @@
++/**************************************************************************/
++/*  box2d_globals.h                                                       */
++/**************************************************************************/
++/*                         This file is part of:                          */
++/*                             GODOT ENGINE                               */
++/*                        https://godotengine.org                         */
++/**************************************************************************/
++/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
++/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
++/*                                                                        */
++/* Permission is hereby granted, free of charge, to any person obtaining  */
++/* a copy of this software and associated documentation files (the        */
++/* "Software"), to deal in the Software without restriction, including    */
++/* without limitation the rights to use, copy, modify, merge, publish,    */
++/* distribute, sublicense, and/or sell copies of the Software, and to     */
++/* permit persons to whom the Software is furnished to do so, subject to  */
++/* the following conditions:                                              */
++/*                                                                        */
++/* The above copyright notice and this permission notice shall be         */
++/* included in all copies or substantial portions of the Software.        */
++/*                                                                        */
++/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
++/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
++/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
++/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
++/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
++/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
++/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
++/**************************************************************************/
++
++#pragma once
++
+ // SPDX-License-Identifier: MIT
+ // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
+-#pragma once
+ 
+ #include "box2d/box2d.h"
+ #include "box2d/constants.h"
+@@ -65,7 +96,7 @@ _FORCE_INLINE_ b2Transform to_box2d(Transform2D p_transform) {
+ class BodyShapeRange {
+ public:
+ 	explicit BodyShapeRange(b2BodyId body_id) :
+-			body_id(body_id), shape_ids(nullptr) {
++			shape_ids(nullptr) {
+ 		shape_count = b2Body_GetShapeCount(body_id);
+ 		if (shape_count == 0) {
+ 			return;
+@@ -80,8 +111,8 @@ public:
+ 
+ 	class Iterator {
+ 	public:
+-		Iterator(b2ShapeId *ids, int index) :
+-				shape_ids(ids), index(index) {}
++		Iterator(b2ShapeId *p_ids, int p_index) :
++				shape_ids(p_ids), index(p_index) {}
+ 
+ 		b2ShapeId operator*() const {
+ 			return shape_ids[index];
+@@ -110,7 +141,6 @@ public:
+ 	}
+ 
+ private:
+-	b2BodyId body_id;
+ 	b2ShapeId *shape_ids;
+ 	int shape_count = 0;
+ };
+@@ -119,7 +149,7 @@ private:
+ class BodyJointRange {
+ public:
+ 	explicit BodyJointRange(b2BodyId body_id) :
+-			body_id(body_id), joint_ids(nullptr) {
++			joint_ids(nullptr) {
+ 		joint_count = b2Body_GetJointCount(body_id);
+ 		if (joint_count == 0) {
+ 			return;
+@@ -134,8 +164,8 @@ public:
+ 
+ 	class Iterator {
+ 	public:
+-		Iterator(b2JointId *ids, int index) :
+-				joint_ids(ids), index(index) {}
++		Iterator(b2JointId *p_ids, int p_index) :
++				joint_ids(p_ids), index(p_index) {}
+ 
+ 		b2JointId operator*() const {
+ 			return joint_ids[index];
+@@ -164,7 +194,6 @@ public:
+ 	}
+ 
+ private:
+-	b2BodyId body_id;
+ 	b2JointId *joint_ids;
+ 	int joint_count = 0;
+ };
+@@ -201,7 +230,8 @@ struct Box2DShapePrimitive {
+ 		b2ChainSegment chain_segment;
+ 	};
+ 
+-	Box2DShapePrimitive() = default;
++	Box2DShapePrimitive() :
++			capsule{} {}
+ 
+ 	Box2DShapePrimitive(const b2Capsule &p_shape) :
+ 			type(b2ShapeType::b2_capsuleShape), capsule(p_shape) {}
+@@ -260,36 +290,32 @@ struct Box2DShapePrimitive {
+ 			case b2ShapeType::b2_chainSegmentShape:
+ 				return b2MakeProxy(&chain_segment.segment.point1, 2, 0.0f);
+ 			default: {
+-				ERR_FAIL_V_MSG(b2ShapeProxy{ 0 }, "Invalid shape type");
++				ERR_FAIL_V_MSG(b2ShapeProxy{}, "Invalid shape type");
+ 			}
+ 		}
+ 	}
+ 
+ 	Box2DShapePrimitive inflated(real_t p_radius) const {
+-		Box2DShapePrimitive result;
+-
++		Box2DShapePrimitive result = *this;
+ 		switch (type) {
+ 			case b2ShapeType::b2_capsuleShape: {
+-				result = Box2DShapePrimitive(capsule);
+ 				result.capsule.radius += p_radius;
+ 				return result;
+ 			}
+ 			case b2ShapeType::b2_circleShape: {
+-				result = Box2DShapePrimitive(circle);
+ 				result.circle.radius += p_radius;
+ 				return result;
+ 			}
+ 			case b2ShapeType::b2_polygonShape: {
+-				result = Box2DShapePrimitive(polygon);
+ 				result.polygon.radius += p_radius;
+ 				return result;
+ 			}
+ 			case b2ShapeType::b2_segmentShape: {
+-				b2Capsule capsule;
+-				capsule.center1 = segment.point1;
+-				capsule.center2 = segment.point2;
+-				capsule.radius = p_radius;
+-				return Box2DShapePrimitive(capsule);
++				b2Capsule inflated_capsule;
++				inflated_capsule.center1 = segment.point1;
++				inflated_capsule.center2 = segment.point2;
++				inflated_capsule.radius = p_radius;
++				return Box2DShapePrimitive(inflated_capsule);
+ 			}
+ 			case b2ShapeType::b2_chainSegmentShape: {
+ 				ERR_FAIL_V_MSG(Box2DShapePrimitive(chain_segment), "Chain segments cannot have a radius");
+@@ -308,4 +334,4 @@ ShapeCollideResult box2d_collide_shapes(
+ 		const b2Transform &xfa,
+ 		const Box2DShapePrimitive &p_shape_b,
+ 		const b2Transform &xfb,
+-		bool p_swapped = false);
+\ No newline at end of file
++		bool p_swapped = false);
+diff --git a/modules/box2d/box2d_physics_server_2d.cpp b/modules/box2d/box2d_physics_server_2d.cpp
+index 99655900a1..c45dad9c79 100644
+--- a/modules/box2d/box2d_physics_server_2d.cpp
++++ b/modules/box2d/box2d_physics_server_2d.cpp
+@@ -1,3 +1,33 @@
++/**************************************************************************/
++/*  box2d_physics_server_2d.cpp                                           */
++/**************************************************************************/
++/*                         This file is part of:                          */
++/*                             GODOT ENGINE                               */
++/*                        https://godotengine.org                         */
++/**************************************************************************/
++/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
++/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
++/*                                                                        */
++/* Permission is hereby granted, free of charge, to any person obtaining  */
++/* a copy of this software and associated documentation files (the        */
++/* "Software"), to deal in the Software without restriction, including    */
++/* without limitation the rights to use, copy, modify, merge, publish,    */
++/* distribute, sublicense, and/or sell copies of the Software, and to     */
++/* permit persons to whom the Software is furnished to do so, subject to  */
++/* the following conditions:                                              */
++/*                                                                        */
++/* The above copyright notice and this permission notice shall be         */
++/* included in all copies or substantial portions of the Software.        */
++/*                                                                        */
++/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
++/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
++/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
++/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
++/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
++/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
++/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
++/**************************************************************************/
++
+ #include "joints/box2d_configured_joint_2d.h"
+ // SPDX-License-Identifier: MIT
+ // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
+@@ -1302,9 +1332,9 @@ bool Box2DPhysicsServer2D::_body_test_motion_compat(
+ 		p_result->collider = object->get_rid();
+ 		p_result->collider_shape = cast_result.other_shape->get_index();
+ 
+-		Box2DBody2D *body = object->as_body();
+-		if (body) {
+-			p_result->collider_velocity = body->get_velocity_at_point(cast_result.point);
++		Box2DBody2D *collider_body = object->as_body();
++		if (collider_body) {
++			p_result->collider_velocity = collider_body->get_velocity_at_point(cast_result.point);
+ 		} else {
+ 			p_result->collider_velocity = Vector2();
+ 		}
+@@ -1315,13 +1345,9 @@ bool Box2DPhysicsServer2D::_body_test_motion_compat(
+ 
+ 		if (recovered && p_recovery_as_collision) {
+ 			transform.set_origin(transform.get_origin() + p_motion);
+-			int count = body->character_collide(transform, p_margin, character_collide_results);
++			body->character_collide(transform, p_margin, character_collide_results);
+ 
+-			for (int i = 0; i < character_collide_results.size(); i++) {
+-				CharacterCollideResult &collision = character_collide_results[i];
+-				// if (p_motion.length_squared() > 0.0f && p_motion.normalized().dot(collision.normal) >= -CMP_EPSILON) {
+-				// 	continue;
+-				// }
++			for (uint32_t i = 0; i < character_collide_results.size(); i++) {
+ 				if (deepest_index == -1) {
+ 					deepest_index = i;
+ 					continue;
+@@ -1359,9 +1385,9 @@ bool Box2DPhysicsServer2D::_body_test_motion_compat(
+ 		p_result->collider = object->get_rid();
+ 		p_result->collider_shape = rest_collision.other_shape->get_index();
+ 
+-		Box2DBody2D *body = object->as_body();
+-		if (body) {
+-			p_result->collider_velocity = body->get_velocity_at_point(rest_collision.point);
++		Box2DBody2D *collider_body = object->as_body();
++		if (collider_body) {
++			p_result->collider_velocity = collider_body->get_velocity_at_point(rest_collision.point);
+ 		} else {
+ 			p_result->collider_velocity = Vector2();
+ 		}
+diff --git a/modules/box2d/joints/box2d_joint_2d.h b/modules/box2d/joints/box2d_joint_2d.h
+index 7cbe95125e..dd61df2273 100644
+--- a/modules/box2d/joints/box2d_joint_2d.h
++++ b/modules/box2d/joints/box2d_joint_2d.h
+@@ -1,6 +1,37 @@
++/**************************************************************************/
++/*  box2d_joint_2d.h                                                      */
++/**************************************************************************/
++/*                         This file is part of:                          */
++/*                             GODOT ENGINE                               */
++/*                        https://godotengine.org                         */
++/**************************************************************************/
++/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
++/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
++/*                                                                        */
++/* Permission is hereby granted, free of charge, to any person obtaining  */
++/* a copy of this software and associated documentation files (the        */
++/* "Software"), to deal in the Software without restriction, including    */
++/* without limitation the rights to use, copy, modify, merge, publish,    */
++/* distribute, sublicense, and/or sell copies of the Software, and to     */
++/* permit persons to whom the Software is furnished to do so, subject to  */
++/* the following conditions:                                              */
++/*                                                                        */
++/* The above copyright notice and this permission notice shall be         */
++/* included in all copies or substantial portions of the Software.        */
++/*                                                                        */
++/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
++/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
++/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
++/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
++/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
++/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
++/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
++/**************************************************************************/
++
++#pragma once
++
+ // SPDX-License-Identifier: MIT
+ // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
+-#pragma once
+ 
+ #include "../bodies/box2d_body_2d.h"
+ 
+@@ -8,7 +39,7 @@ class Box2DJoint2D {
+ public:
+ 	Box2DJoint2D() = default;
+ 	explicit Box2DJoint2D(PS2DE::JointType p_type, Box2DBody2D *p_body_a, Box2DBody2D *p_body_b) :
+-			type(p_type), body_a(p_body_a), body_b(p_body_b) {}
++			body_a(p_body_a), body_b(p_body_b), type(p_type) {}
+ 
+ 	virtual ~Box2DJoint2D();
+ 
+diff --git a/modules/box2d/shapes/box2d_concave_polygon_shape_2d.cpp b/modules/box2d/shapes/box2d_concave_polygon_shape_2d.cpp
+index 83d4e77182..a11adfce1c 100644
+--- a/modules/box2d/shapes/box2d_concave_polygon_shape_2d.cpp
++++ b/modules/box2d/shapes/box2d_concave_polygon_shape_2d.cpp
+@@ -1,3 +1,33 @@
++/**************************************************************************/
++/*  box2d_concave_polygon_shape_2d.cpp                                    */
++/**************************************************************************/
++/*                         This file is part of:                          */
++/*                             GODOT ENGINE                               */
++/*                        https://godotengine.org                         */
++/**************************************************************************/
++/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
++/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
++/*                                                                        */
++/* Permission is hereby granted, free of charge, to any person obtaining  */
++/* a copy of this software and associated documentation files (the        */
++/* "Software"), to deal in the Software without restriction, including    */
++/* without limitation the rights to use, copy, modify, merge, publish,    */
++/* distribute, sublicense, and/or sell copies of the Software, and to     */
++/* permit persons to whom the Software is furnished to do so, subject to  */
++/* the following conditions:                                              */
++/*                                                                        */
++/* The above copyright notice and this permission notice shall be         */
++/* included in all copies or substantial portions of the Software.        */
++/*                                                                        */
++/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
++/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
++/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
++/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
++/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
++/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
++/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
++/**************************************************************************/
++
+ // SPDX-License-Identifier: MIT
+ // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
+ #include "box2d_concave_polygon_shape_2d.h"
+@@ -49,9 +79,9 @@ int Box2DConcavePolygonShape2D::overlap(const OverlapQuery &p_query, const Trans
+ 	}
+ 
+ 	// De-duplicate overlaps
+-	int i = 0;
++	uint32_t i = 0;
+ 	while (i < results.size()) {
+-		int j = i + 1;
++		uint32_t j = i + 1;
+ 		while (j < results.size()) {
+ 			if (results[j] == results[i]) {
+ 				results.remove_at(j);
+@@ -67,4 +97,4 @@ int Box2DConcavePolygonShape2D::overlap(const OverlapQuery &p_query, const Trans
+ 	}
+ 
+ 	return results.size();
+-}
+\ No newline at end of file
++}
+diff --git a/modules/box2d/spaces/box2d_physics_direct_space_state_2d.cpp b/modules/box2d/spaces/box2d_physics_direct_space_state_2d.cpp
+index 53b784ecd3..5370fd9bbd 100644
+--- a/modules/box2d/spaces/box2d_physics_direct_space_state_2d.cpp
++++ b/modules/box2d/spaces/box2d_physics_direct_space_state_2d.cpp
+@@ -1,3 +1,33 @@
++/**************************************************************************/
++/*  box2d_physics_direct_space_state_2d.cpp                               */
++/**************************************************************************/
++/*                         This file is part of:                          */
++/*                             GODOT ENGINE                               */
++/*                        https://godotengine.org                         */
++/**************************************************************************/
++/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
++/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
++/*                                                                        */
++/* Permission is hereby granted, free of charge, to any person obtaining  */
++/* a copy of this software and associated documentation files (the        */
++/* "Software"), to deal in the Software without restriction, including    */
++/* without limitation the rights to use, copy, modify, merge, publish,    */
++/* distribute, sublicense, and/or sell copies of the Software, and to     */
++/* permit persons to whom the Software is furnished to do so, subject to  */
++/* the following conditions:                                              */
++/*                                                                        */
++/* The above copyright notice and this permission notice shall be         */
++/* included in all copies or substantial portions of the Software.        */
++/*                                                                        */
++/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
++/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
++/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
++/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
++/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
++/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
++/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
++/**************************************************************************/
++
+ // SPDX-License-Identifier: MIT
+ // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
+ 
+@@ -68,9 +98,6 @@ int32_t Box2DDirectSpaceState2D::_intersect_point(
+ 		result.shape = overlap.shape->get_index();
+ 		result.rid = overlap.object->get_rid();
+ 		result.collider_id = ObjectID(overlap.object->get_instance_id());
+-		if (result.collider_id.is_valid()) {
+-			result.collider = get_instance_hack(result.collider_id);
+-		}
+ 	}
+ 
+ 	return collector.count;
+@@ -107,9 +134,6 @@ bool Box2DDirectSpaceState2D::_intersect_ray(
+ 			p_result->shape = overlap.shape->get_index();
+ 			p_result->rid = overlap.object->get_rid();
+ 			p_result->collider_id = ObjectID(overlap.object->get_instance_id());
+-			if (p_result->collider_id.is_valid()) {
+-				p_result->collider = get_instance_hack(p_result->collider_id);
+-			}
+ 			return true;
+ 		}
+ 	}
+@@ -135,9 +159,6 @@ bool Box2DDirectSpaceState2D::_intersect_ray(
+ 	result.shape = hit.shape->get_index();
+ 	result.rid = hit.object->get_rid();
+ 	result.collider_id = ObjectID(hit.object->get_instance_id());
+-	if (result.collider_id.is_valid()) {
+-		result.collider = get_instance_hack(result.collider_id);
+-	}
+ 
+ 	return true;
+ }
+@@ -186,9 +207,6 @@ int32_t Box2DDirectSpaceState2D::_intersect_shape(
+ 		result.shape = hit.shape->get_index();
+ 		result.rid = hit.object->get_rid();
+ 		result.collider_id = ObjectID(hit.object->get_instance_id());
+-		if (result.collider_id.is_valid()) {
+-			result.collider = get_instance_hack(result.collider_id);
+-		}
+ 
+ 		count++;
+ 	}
+diff --git a/modules/box2d/spaces/box2d_physics_direct_space_state_2d.h b/modules/box2d/spaces/box2d_physics_direct_space_state_2d.h
+index 5afac27270..1fe3c7a039 100644
+--- a/modules/box2d/spaces/box2d_physics_direct_space_state_2d.h
++++ b/modules/box2d/spaces/box2d_physics_direct_space_state_2d.h
+@@ -1,6 +1,37 @@
++/**************************************************************************/
++/*  box2d_physics_direct_space_state_2d.h                                 */
++/**************************************************************************/
++/*                         This file is part of:                          */
++/*                             GODOT ENGINE                               */
++/*                        https://godotengine.org                         */
++/**************************************************************************/
++/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
++/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
++/*                                                                        */
++/* Permission is hereby granted, free of charge, to any person obtaining  */
++/* a copy of this software and associated documentation files (the        */
++/* "Software"), to deal in the Software without restriction, including    */
++/* without limitation the rights to use, copy, modify, merge, publish,    */
++/* distribute, sublicense, and/or sell copies of the Software, and to     */
++/* permit persons to whom the Software is furnished to do so, subject to  */
++/* the following conditions:                                              */
++/*                                                                        */
++/* The above copyright notice and this permission notice shall be         */
++/* included in all copies or substantial portions of the Software.        */
++/*                                                                        */
++/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
++/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
++/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
++/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
++/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
++/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
++/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
++/**************************************************************************/
++
++#pragma once
++
+ // SPDX-License-Identifier: MIT
+ // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
+-#pragma once
+ 
+ #include "../box2d_globals.h"
+ 
+@@ -9,8 +40,8 @@
+ using namespace PhysicsServer2DEnums;
+ 
+ class Box2DSpace2D;
+-class CastHit;
+-class ShapeOverlap;
++struct CastHit;
++struct ShapeOverlap;
+ 
+ class Box2DDirectSpaceState2D : public PhysicsDirectSpaceState2D {
+ 	GDCLASS(Box2DDirectSpaceState2D, PhysicsDirectSpaceState2D);
+diff --git a/modules/box2d/spaces/box2d_query.cpp b/modules/box2d/spaces/box2d_query.cpp
+index e30ad20256..cab545a1ba 100644
+--- a/modules/box2d/spaces/box2d_query.cpp
++++ b/modules/box2d/spaces/box2d_query.cpp
+@@ -1,3 +1,33 @@
++/**************************************************************************/
++/*  box2d_query.cpp                                                       */
++/**************************************************************************/
++/*                         This file is part of:                          */
++/*                             GODOT ENGINE                               */
++/*                        https://godotengine.org                         */
++/**************************************************************************/
++/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
++/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
++/*                                                                        */
++/* Permission is hereby granted, free of charge, to any person obtaining  */
++/* a copy of this software and associated documentation files (the        */
++/* "Software"), to deal in the Software without restriction, including    */
++/* without limitation the rights to use, copy, modify, merge, publish,    */
++/* distribute, sublicense, and/or sell copies of the Software, and to     */
++/* permit persons to whom the Software is furnished to do so, subject to  */
++/* the following conditions:                                              */
++/*                                                                        */
++/* The above copyright notice and this permission notice shall be         */
++/* included in all copies or substantial portions of the Software.        */
++/*                                                                        */
++/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
++/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
++/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
++/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
++/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
++/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
++/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
++/**************************************************************************/
++
+ // SPDX-License-Identifier: MIT
+ // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
+ 
+@@ -64,7 +94,7 @@ bool overlap_callback(b2ShapeId shapeId, void *context) {
+ 		collector->count++;
+ 	}
+ 
+-	return collector->results.size() < collector->max_results;
++	return int64_t(collector->results.size()) < collector->max_results;
+ }
+ 
+ /// context = CastQueryCollector
+@@ -108,7 +138,7 @@ real_t cast_callback(b2ShapeId shapeId, b2Pos point, b2Vec2 normal, real_t fract
+ 
+ 	if (collector->find_nearest) {
+ 		return fraction;
+-	} else if (collector->results.size() >= collector->max_results) {
++	} else if (int64_t(collector->results.size()) >= collector->max_results) {
+ 		return 0;
+ 	}
+ 
+@@ -118,7 +148,7 @@ real_t cast_callback(b2ShapeId shapeId, b2Pos point, b2Vec2 normal, real_t fract
+ int find_nearest_cast_hit(LocalVector<CastHit> &p_results) {
+ 	ERR_FAIL_COND_V(p_results.size() == 0, -1);
+ 	int nearest_index = 0;
+-	for (int i = 0; i < p_results.size(); i++) {
++	for (int i = 0; int64_t(i) < p_results.size(); i++) {
+ 		if (p_results[i].fraction < p_results[nearest_index].fraction) {
+ 			nearest_index = i;
+ 		}
+diff --git a/modules/box2d/spaces/box2d_query.h b/modules/box2d/spaces/box2d_query.h
+index dfe0087a6a..56cbebdc94 100644
+--- a/modules/box2d/spaces/box2d_query.h
++++ b/modules/box2d/spaces/box2d_query.h
+@@ -1,6 +1,37 @@
++/**************************************************************************/
++/*  box2d_query.h                                                         */
++/**************************************************************************/
++/*                         This file is part of:                          */
++/*                             GODOT ENGINE                               */
++/*                        https://godotengine.org                         */
++/**************************************************************************/
++/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
++/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
++/*                                                                        */
++/* Permission is hereby granted, free of charge, to any person obtaining  */
++/* a copy of this software and associated documentation files (the        */
++/* "Software"), to deal in the Software without restriction, including    */
++/* without limitation the rights to use, copy, modify, merge, publish,    */
++/* distribute, sublicense, and/or sell copies of the Software, and to     */
++/* permit persons to whom the Software is furnished to do so, subject to  */
++/* the following conditions:                                              */
++/*                                                                        */
++/* The above copyright notice and this permission notice shall be         */
++/* included in all copies or substantial portions of the Software.        */
++/*                                                                        */
++/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
++/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
++/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
++/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
++/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
++/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
++/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
++/**************************************************************************/
++
++#pragma once
++
+ // SPDX-License-Identifier: MIT
+ // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
+-#pragma once
+ 
+ #include "../box2d_globals.h"
+ #include "box2d_physics_direct_space_state_2d.h"
+@@ -27,6 +58,7 @@ public:
+ 	ObjectID canvas_instance_id;
+ 	bool pick_point = false;
+ 	virtual bool is_excluded(const Box2DCollisionObject2D *p_object) const;
++	virtual ~QueryFilter() = default;
+ };
+ 
+ class BodyQueryFilter : public QueryFilter {
+@@ -145,17 +177,17 @@ struct CastQueryCollector {
+ 	Box2DShapePrimitive shape = {};
+ 
+ 	explicit CastQueryCollector(const CastQuery &p_query, LocalVector<CastHit> &p_results, Box2DShapePrimitive p_shape) :
+-			results(p_results),
+ 			max_results(p_query.max_results),
+-			filter(p_query.filter),
+ 			find_nearest(p_query.find_nearest),
+ 			ignore_initial_overlaps(p_query.ignore_intial_overlaps),
++			filter(p_query.filter),
++			results(p_results),
+ 			shape(p_shape) {}
+ 
+ 	/// Ray casts have no shape to build a manifold from, so they always drop initial overlaps.
+ 	/// Godot reports a ray starting inside a shape through hit_from_inside instead.
+ 	explicit CastQueryCollector(int p_max_results, const QueryFilter p_filter, bool p_find_nearest, LocalVector<CastHit> &p_results) :
+-			results(p_results), max_results(p_max_results), filter(p_filter), find_nearest(p_find_nearest), ignore_initial_overlaps(true) {}
++			max_results(p_max_results), find_nearest(p_find_nearest), ignore_initial_overlaps(true), filter(p_filter), results(p_results) {}
+ };
+ 
+ struct OverlapQueryCollector {
+@@ -166,10 +198,10 @@ struct OverlapQueryCollector {
+ 	Box2DShapePrimitive shape = {};
+ 
+ 	explicit OverlapQueryCollector(const OverlapQuery &p_query, LocalVector<ShapeOverlap> &p_results, Box2DShapePrimitive p_shape) :
+-			results(p_results), max_results(p_query.max_results), filter(p_query.filter), shape(p_shape) {}
++			max_results(p_query.max_results), filter(p_query.filter), results(p_results), shape(p_shape) {}
+ 
+ 	explicit OverlapQueryCollector(int p_max_results, const QueryFilter p_filter, LocalVector<ShapeOverlap> &p_results) :
+-			results(p_results), max_results(p_max_results), filter(p_filter) {}
++			max_results(p_max_results), filter(p_filter), results(p_results) {}
+ };
+ 
+ bool overlap_callback(b2ShapeId shapeId, void *context);
+diff --git a/modules/box2d/spaces/box2d_space_2d.cpp b/modules/box2d/spaces/box2d_space_2d.cpp
+index ba63d16dcb..0b6865ff70 100644
+--- a/modules/box2d/spaces/box2d_space_2d.cpp
++++ b/modules/box2d/spaces/box2d_space_2d.cpp
+@@ -1,3 +1,33 @@
++/**************************************************************************/
++/*  box2d_space_2d.cpp                                                    */
++/**************************************************************************/
++/*                         This file is part of:                          */
++/*                             GODOT ENGINE                               */
++/*                        https://godotengine.org                         */
++/**************************************************************************/
++/* Copyright (c) 2014-present Godot Engine contributors (see AUTHORS.md). */
++/* Copyright (c) 2007-2014 Juan Linietsky, Ariel Manzur.                  */
++/*                                                                        */
++/* Permission is hereby granted, free of charge, to any person obtaining  */
++/* a copy of this software and associated documentation files (the        */
++/* "Software"), to deal in the Software without restriction, including    */
++/* without limitation the rights to use, copy, modify, merge, publish,    */
++/* distribute, sublicense, and/or sell copies of the Software, and to     */
++/* permit persons to whom the Software is furnished to do so, subject to  */
++/* the following conditions:                                              */
++/*                                                                        */
++/* The above copyright notice and this permission notice shall be         */
++/* included in all copies or substantial portions of the Software.        */
++/*                                                                        */
++/* THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,        */
++/* EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF     */
++/* MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. */
++/* IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY   */
++/* CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,   */
++/* TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE      */
++/* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
++/**************************************************************************/
++
+ #include "../joints/box2d_joint_2d.h"
+ // SPDX-License-Identifier: MIT
+ // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
+@@ -197,8 +227,8 @@ void Box2DSpace2D::sync_state() {
+ 		integrations.push_back(body->get_rid());
+ 	}
+ 	integrations.sort();
+-	for (RID rid : integrations) {
+-		auto *body = server->get_body(rid);
++	for (RID body_rid : integrations) {
++		auto *body = server->get_body(body_rid);
+ 		if (body && body->get_space() == this) {
+ 			body->call_force_integration_callback();
+ 		}
+diff --git a/modules/csg/csg_shape.cpp b/modules/csg/csg_shape.cpp
+index 5d490084ee..9a908d39e2 100644
+--- a/modules/csg/csg_shape.cpp
++++ b/modules/csg/csg_shape.cpp
+@@ -2674,7 +2674,11 @@ void CSGPolygon3D::_notification(int p_what) {
+ 			path = nullptr;
+ 		}
+ 	} else if (p_what == NOTIFICATION_ENTER_TREE) {
+-		if (mode == MODE_PATH && !is_using_collision()) {
++		if (mode == MODE_PATH
++#ifndef PHYSICS_3D_DISABLED
++				&& !is_using_collision()
++#endif // PHYSICS_3D_DISABLED
++		) {
+ 			// Force an update when the CSGPolygon3D re-enters the tree to make sure it still follows the Path3D's current state.
+ 			// This is not needed when collision is enabled, as having collision
+ 			// enabled will automatically trigger an update.

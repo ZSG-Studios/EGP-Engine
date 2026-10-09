@@ -1,0 +1,85 @@
+extends SceneTree
+
+var failures := 0
+
+func _initialize() -> void:
+	call_deferred("_run")
+
+func _check(value: bool, message: String) -> void:
+	if not value:
+		failures += 1
+		push_error(message)
+
+func _frames(count: int) -> void:
+	for frame in count:
+		await physics_frame
+
+func _run() -> void:
+	var space := PhysicsServer3D.space_create()
+	PhysicsServer3D.space_set_active(space, true)
+	PhysicsServer3D.area_set_param(space, PhysicsServer3D.AREA_PARAM_GRAVITY, 0.0)
+	var anchor := PhysicsServer3D.body_create()
+	PhysicsServer3D.body_set_mode(anchor, PhysicsServer3D.BODY_MODE_STATIC)
+	PhysicsServer3D.body_set_space(anchor, space)
+	var shape := PhysicsServer3D.sphere_shape_create()
+	PhysicsServer3D.shape_set_data(shape, 0.5)
+	var body := PhysicsServer3D.body_create()
+	PhysicsServer3D.body_add_shape(body, shape)
+	PhysicsServer3D.body_set_state(body, PhysicsServer3D.BODY_STATE_CAN_SLEEP, false)
+	PhysicsServer3D.body_set_space(body, space)
+	var joint := PhysicsServer3D.joint_create()
+	PhysicsServer3D.joint_make_generic_6dof(joint, anchor, Transform3D.IDENTITY, body, Transform3D.IDENTITY)
+	_check(PhysicsServer3D.joint_get_type(joint) == PhysicsServer3D.JOINT_TYPE_6DOF, "6DOF is a concrete server joint")
+	PhysicsServer3D.generic_6dof_joint_set_param(joint, Vector3.AXIS_X, PhysicsServer3D.G6DOF_JOINT_LINEAR_LOWER_LIMIT, -0.3)
+	PhysicsServer3D.generic_6dof_joint_set_param(joint, Vector3.AXIS_X, PhysicsServer3D.G6DOF_JOINT_LINEAR_UPPER_LIMIT, 0.3)
+	PhysicsServer3D.body_apply_central_impulse(body, Vector3(5, 0, 0))
+	await _frames(120)
+	var pose: Transform3D = PhysicsServer3D.body_get_state(body, PhysicsServer3D.BODY_STATE_TRANSFORM)
+	_check(absf(pose.origin.x) < 0.34, "6DOF linear limits participate in simulation")
+	PhysicsServer3D.generic_6dof_joint_set_flag(joint, Vector3.AXIS_X, PhysicsServer3D.G6DOF_JOINT_FLAG_ENABLE_LINEAR_LIMIT, false)
+	PhysicsServer3D.generic_6dof_joint_set_flag(joint, Vector3.AXIS_X, PhysicsServer3D.G6DOF_JOINT_FLAG_ENABLE_LINEAR_MOTOR, true)
+	PhysicsServer3D.generic_6dof_joint_set_param(joint, Vector3.AXIS_X, PhysicsServer3D.G6DOF_JOINT_LINEAR_MOTOR_TARGET_VELOCITY, 2.0)
+	PhysicsServer3D.generic_6dof_joint_set_param(joint, Vector3.AXIS_X, PhysicsServer3D.G6DOF_JOINT_LINEAR_MOTOR_FORCE_LIMIT, 20.0)
+	await _frames(120)
+	var velocity: Vector3 = PhysicsServer3D.body_get_state(body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
+	_check(absf(velocity.x - 2.0) < 0.05, "6DOF linear motor reaches its target")
+	PhysicsServer3D.generic_6dof_joint_set_param(joint, Vector3.AXIS_X, PhysicsServer3D.G6DOF_JOINT_LINEAR_DRIVE_FORCE_LIMIT, 0.0)
+	PhysicsServer3D.body_set_state(body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, Vector3.ZERO)
+	await _frames(30)
+	velocity = PhysicsServer3D.body_get_state(body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY)
+	_check(absf(velocity.x) < 0.01, "zero drive force disables the motor's impulse")
+	PhysicsServer3D.generic_6dof_joint_set_flag(joint, Vector3.AXIS_X, PhysicsServer3D.G6DOF_JOINT_FLAG_ENABLE_LINEAR_MOTOR, false)
+	PhysicsServer3D.generic_6dof_joint_set_flag(joint, Vector3.AXIS_X, PhysicsServer3D.G6DOF_JOINT_FLAG_ENABLE_LINEAR_SPRING, true)
+	PhysicsServer3D.generic_6dof_joint_set_param(joint, Vector3.AXIS_X, PhysicsServer3D.G6DOF_JOINT_LINEAR_DRIVE_FORCE_LIMIT, 100.0)
+	PhysicsServer3D.generic_6dof_joint_set_param(joint, Vector3.AXIS_X, PhysicsServer3D.G6DOF_JOINT_LINEAR_SPRING_STIFFNESS, 30.0)
+	PhysicsServer3D.generic_6dof_joint_set_param(joint, Vector3.AXIS_X, PhysicsServer3D.G6DOF_JOINT_LINEAR_SPRING_DAMPING, 8.0)
+	PhysicsServer3D.generic_6dof_joint_set_param(joint, Vector3.AXIS_X, PhysicsServer3D.G6DOF_JOINT_LINEAR_SPRING_EQUILIBRIUM_POINT, 2.0)
+	await _frames(300)
+	pose = PhysicsServer3D.body_get_state(body, PhysicsServer3D.BODY_STATE_TRANSFORM)
+	_check(absf(pose.origin.x - 2.0) < 0.08, "6DOF spring reaches its equilibrium")
+	var target := Quaternion(Vector3.UP, 0.4)
+	PhysicsServer3D.generic_6dof_joint_set_angular_target_rotation(joint, target)
+	_check(PhysicsServer3D.generic_6dof_joint_get_angular_target_rotation(joint).is_equal_approx(target), "angular target rotation round-trips")
+	# Reuse the RID to test replacement and cached parameter reapplication.
+	PhysicsServer3D.joint_make_cone_twist(joint, anchor, Transform3D.IDENTITY, body, Transform3D.IDENTITY)
+	PhysicsServer3D.cone_twist_joint_set_param(joint, PhysicsServer3D.CONE_TWIST_JOINT_SWING_SPAN, 0.35)
+	PhysicsServer3D.cone_twist_joint_set_param(joint, PhysicsServer3D.CONE_TWIST_JOINT_TWIST_SPAN, 0.25)
+	_check(PhysicsServer3D.joint_get_type(joint) == PhysicsServer3D.JOINT_TYPE_CONE_TWIST, "ConeTwist replaces a live 6DOF joint")
+	PhysicsServer3D.body_set_state(body, PhysicsServer3D.BODY_STATE_TRANSFORM, Transform3D.IDENTITY)
+	PhysicsServer3D.body_set_state(body, PhysicsServer3D.BODY_STATE_LINEAR_VELOCITY, Vector3.ZERO)
+	PhysicsServer3D.body_set_state(body, PhysicsServer3D.BODY_STATE_ANGULAR_VELOCITY, Vector3.ZERO)
+	PhysicsServer3D.body_apply_torque_impulse(body, Vector3(1, 1, 0))
+	await _frames(180)
+	pose = PhysicsServer3D.body_get_state(body, PhysicsServer3D.BODY_STATE_TRANSFORM)
+	var swing := acos(clampf(pose.basis.x.dot(Vector3.RIGHT), -1.0, 1.0))
+	_check(swing < 0.4, "ConeTwist enforces the swing cone about Godot's X axis")
+	var q := pose.basis.get_rotation_quaternion()
+	var twist := absf(2.0 * atan2(q.x, q.w))
+	_check(twist < 0.3, "ConeTwist enforces the twist span")
+	PhysicsServer3D.free_rid(joint)
+	PhysicsServer3D.free_rid(body)
+	PhysicsServer3D.free_rid(anchor)
+	PhysicsServer3D.free_rid(shape)
+	PhysicsServer3D.free_rid(space)
+	print("RESULT: PASS - advanced server joints" if failures == 0 else "RESULT: FAIL - advanced server joints")
+	quit(0 if failures == 0 else 1)

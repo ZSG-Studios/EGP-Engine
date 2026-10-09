@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="EGPLiteSession" inherits="RefCounted" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>Native facade for the EGP managed LiteNetLib and LiteEntitySystem runtime.</brief_description>
+	<description>Construct and retain a Godot.EGPLiteRuntime in C# with your entity type map, then pass its Bridge to GDScript or native code. Poll this facade on the owning game thread. It shares the same transport, replication and simulation loop as C#. Node RPC and MultiplayerSynchronizer are not part of this protocol.</description>
+	<tutorials></tutorials>
+	<methods>
+		<method name="attach_runtime"><return type="int" enum="Error" /><param index="0" name="runtime" type="Callable" /><description>Attaches one managed dispatcher. A second attachment fails.</description></method>
+		<method name="detach_runtime"><return type="void" /><description>Stops and releases the managed dispatcher. Dispose the retained EGPLiteRuntime when finished.</description></method>
+		<method name="has_runtime" qualifiers="const"><return type="bool" /><description>Returns whether the managed runtime is attached.</description></method>
+		<method name="listen"><return type="int" enum="Error" /><param index="0" name="port" type="int" default="10515" /><param index="1" name="bind_address" type="String" default="&quot;0.0.0.0&quot;" /><description>Starts an authoritative UDP server. Port zero selects an available port.</description></method>
+		<method name="connect_to_server"><return type="int" enum="Error" /><param index="0" name="host" type="String" /><param index="1" name="port" type="int" default="10515" /><description>Connects after checking the game, replication and simulation fingerprints.</description></method>
+		<method name="poll"><return type="int" enum="Error" /><description>Delivers network events and advances internal fixed ticks and prediction replay.</description></method>
+		<method name="stop"><return type="void" /><description>Closes sockets and resets entity lifetime.</description></method>
+		<method name="get_state"><return type="String" /><description>Returns the managed connection state.</description></method>
+		<method name="get_statistics"><return type="Dictionary" /><description>Returns counters, peer count, tick values and interpolation buffer size.</description></method>
+		<method name="send_application"><return type="int" enum="Error" /><param index="0" name="peer_id" type="int" /><param index="1" name="payload" type="PackedByteArray" /><description>Sends bounded reliable application bytes over channel one. IDs are transport peer IDs.</description></method>
+	</methods>
+	<signals>
+		<signal name="state_changed"><param index="0" name="state" type="String" /><description>Connection lifecycle changed.</description></signal>
+		<signal name="player_joined"><param index="0" name="player_id" type="int" /><description>A replication player was admitted.</description></signal>
+		<signal name="player_left"><param index="0" name="player_id" type="int" /><description>A replication player left.</description></signal>
+		<signal name="application_received"><param index="0" name="peer_id" type="int" /><param index="1" name="payload" type="PackedByteArray" /><description>Reliable application bytes arrived.</description></signal>
+		<signal name="diagnostic"><param index="0" name="message" type="String" /><description>A socket or packet diagnostic occurred.</description></signal>
+	</signals>
+</class>

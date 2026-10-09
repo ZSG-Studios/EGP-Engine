@@ -1,0 +1,164 @@
+diff --git a/modules/enet/config.py b/modules/enet/config.py
+index 9102c74579..85315116eb 100644
+--- a/modules/enet/config.py
++++ b/modules/enet/config.py
+@@ -1,5 +1,5 @@
+ def can_build(env, platform):
+-    return True
++    return not env.get("module_litenet_enabled", False)
+ 
+ 
+ def configure(env):
+diff --git a/modules/mono/build_scripts/build_assemblies.py b/modules/mono/build_scripts/build_assemblies.py
+index 6aa68b5dc5..c8a3934d10 100755
+--- a/modules/mono/build_scripts/build_assemblies.py
++++ b/modules/mono/build_scripts/build_assemblies.py
+@@ -193,6 +193,10 @@ def build_godot_api(msbuild_tool, module_dir, output_dir, push_nupkgs_local, pre
+         "GodotSharp.dll",
+         "GodotSharp.pdb",
+         "GodotSharp.xml",
++        "EGP.Networking.dll",
++        "EGP.Networking.pdb",
++        "RefMagic.dll",
++        "K4os.Compression.LZ4.dll",
+         "GodotSharpEditor.dll",
+         "GodotSharpEditor.pdb",
+         "GodotSharpEditor.xml",
+diff --git a/modules/mono/editor/Godot.NET.Sdk/Godot.NET.Sdk/Sdk/Sdk.targets b/modules/mono/editor/Godot.NET.Sdk/Godot.NET.Sdk/Sdk/Sdk.targets
+index 6eee4de3cb..a9e7c6c2f7 100644
+--- a/modules/mono/editor/Godot.NET.Sdk/Godot.NET.Sdk/Sdk/Sdk.targets
++++ b/modules/mono/editor/Godot.NET.Sdk/Godot.NET.Sdk/Sdk/Sdk.targets
+@@ -29,6 +29,9 @@
+   </PropertyGroup>
+ 
+   <!-- GodotSharp references -->
++  <ItemGroup Condition="'DisableImplicitEGPNetworking' != 'true'">
++    <PackageReference Include="EGP.Networking" IsImplicitlyDefined="true" Version="0.1.0" />
++  </ItemGroup>
+   <ItemGroup Condition=" '$(DisableImplicitGodotGeneratorReferences)' != 'true' ">
+     <PackageReference Include="Godot.SourceGenerators" IsImplicitlyDefined="true" Version="$(PackageVersion_Godot_SourceGenerators)" ReferenceOutputAssembly="false" PrivateAssets="all" />
+   </ItemGroup>
+diff --git a/modules/mono/glue/GodotSharp/GodotPlugins/Main.cs b/modules/mono/glue/GodotSharp/GodotPlugins/Main.cs
+index b1fee8996e..e4f55d77be 100644
+--- a/modules/mono/glue/GodotSharp/GodotPlugins/Main.cs
++++ b/modules/mono/glue/GodotSharp/GodotPlugins/Main.cs
+@@ -101,6 +101,9 @@ namespace GodotPlugins
+                 _dllImportResolver = new GodotDllImportResolver(godotDllHandle).OnResolveDllImport;
+ 
+                 SharedAssemblies.Add(CoreApiAssembly.GetName());
++                // EGPLiteRuntime's public API uses LES types from this assembly.
++                // Projects must share the engine's copy across load contexts.
++                SharedAssemblies.Add(typeof(EGP.Networking.LiteSession).Assembly.GetName());
+                 NativeLibrary.SetDllImportResolver(CoreApiAssembly, _dllImportResolver);
+ 
+                 AlcReloadCfg.Configure(alcReloadEnabled: _editorHint);
+diff --git a/modules/mono/glue/GodotSharp/GodotSharp/GodotSharp.csproj b/modules/mono/glue/GodotSharp/GodotSharp/GodotSharp.csproj
+index ee29cf0b55..2e1d88a85a 100644
+--- a/modules/mono/glue/GodotSharp/GodotSharp/GodotSharp.csproj
++++ b/modules/mono/glue/GodotSharp/GodotSharp/GodotSharp.csproj
+@@ -54,6 +54,8 @@
+ 
+   <!-- Sources -->
+   <ItemGroup>
++    <ProjectReference Include="../../../../litenet/managed/EGP.Networking.csproj" />
++    <Compile Include="Core\EGPLiteRuntime.cs" />
+     <Compile Include="Core\Aabb.cs" />
+     <Compile Include="Core\Attributes\ExportToolButtonAttribute.cs" />
+     <Compile Include="Core\Bridge\Collectors.cs" />
+diff --git a/modules/multiplayer/config.py b/modules/multiplayer/config.py
+index 6dad646d86..6a1d55bfe2 100644
+--- a/modules/multiplayer/config.py
++++ b/modules/multiplayer/config.py
+@@ -1,5 +1,5 @@
+ def can_build(env, platform):
+-    return True
++    return not env.get("module_litenet_enabled", False)
+ 
+ 
+ def configure(env):
+diff --git a/modules/webrtc/config.py b/modules/webrtc/config.py
+index 4ad918833a..e99aea1b30 100644
+--- a/modules/webrtc/config.py
++++ b/modules/webrtc/config.py
+@@ -1,5 +1,5 @@
+ def can_build(env, platform):
+-    return True
++    return not env.get("module_litenet_enabled", False)
+ 
+ 
+ def configure(env):
+diff --git a/modules/websocket/SCsub b/modules/websocket/SCsub
+index acaa0d3ceb..93baafa10b 100644
+--- a/modules/websocket/SCsub
++++ b/modules/websocket/SCsub
+@@ -41,7 +41,10 @@ elif env["builtin_wslay"]:
+ 
+ module_obj = []
+ 
+-env_ws.add_source_files(module_obj, "*.cpp")
++sources = env_ws.Glob("*.cpp")
++if env.get("module_litenet_enabled", False):
++    sources = [source for source in sources if not str(source).endswith("websocket_multiplayer_peer.cpp")]
++env_ws.add_source_files(module_obj, sources)
+ if env.editor_build:
+     env_ws.add_source_files(module_obj, "editor/*.cpp")
+ env.modules_sources += module_obj
+diff --git a/modules/websocket/config.py b/modules/websocket/config.py
+index 9e27a1a0fe..9a16ffd91e 100644
+--- a/modules/websocket/config.py
++++ b/modules/websocket/config.py
+@@ -1,18 +1,25 @@
++use_litenet = False
++
++
+ def can_build(env, platform):
+     return True
+ 
+ 
+ def configure(env):
+-    pass
++    global use_litenet
++    use_litenet = env.get("module_litenet_enabled", False)
+ 
+ 
+ def get_doc_classes():
+-    return [
++    classes = [
+         "WebSocketClient",
+         "WebSocketMultiplayerPeer",
+         "WebSocketPeer",
+         "WebSocketServer",
+     ]
++    if use_litenet:
++        classes.remove("WebSocketMultiplayerPeer")
++    return classes
+ 
+ 
+ def get_doc_path():
+diff --git a/modules/websocket/register_types.cpp b/modules/websocket/register_types.cpp
+index 03f1f419a6..8d75b5599c 100644
+--- a/modules/websocket/register_types.cpp
++++ b/modules/websocket/register_types.cpp
+@@ -29,9 +29,12 @@
+ /**************************************************************************/
+ 
+ #include "register_types.h"
++#include "modules/modules_enabled.gen.h"
+ 
+ #include "remote_debugger_peer_websocket.h"
++#ifndef MODULE_LITENET_ENABLED
+ #include "websocket_multiplayer_peer.h"
++#endif
+ #include "websocket_peer.h"
+ 
+ #ifdef WEB_ENABLED
+@@ -67,7 +70,9 @@ void initialize_websocket_module(ModuleInitializationLevel p_level) {
+ 		WSLPeer::initialize();
+ #endif
+ 
++#ifndef MODULE_LITENET_ENABLED
+ 		GDREGISTER_CLASS(WebSocketMultiplayerPeer);
++#endif
+ 		ClassDB::register_custom_instance_class<WebSocketPeer>();
+ 
+ 		EngineDebugger::register_uri_handler("ws://", RemoteDebuggerPeerWebSocket::create);

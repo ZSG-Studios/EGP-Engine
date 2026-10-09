@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="Box2DPhysicsServer2D" inherits="PhysicsServer2D" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>Native Box2D physics server with body metadata and move events.</brief_description>
+	<description>This backend is provided when the Box2D module is enabled. Obtain the active server or world direct state; do not instantiate this abstract class directly.</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="body_get_user_data" qualifiers="const">
+			<return type="Variant" />
+			<param index="0" name="body" type="RID" />
+			<description>
+				Returns the application metadata assigned with [method body_set_user_data]. An invalid [param body] reports an error and returns [code]null[/code].
+			</description>
+		</method>
+		<method name="body_set_user_data" qualifiers="const">
+			<return type="void" />
+			<param index="0" name="body" type="RID" />
+			<param index="1" name="data" type="Variant" />
+			<description>
+				Associates an arbitrary [Variant] with the valid [param body] RID. This is application metadata returned by [method body_get_user_data] and [method space_get_body_move_events]; it does not replace the native backend's internal body pointer. The Variant is retained until replaced or the body is freed.
+			</description>
+		</method>
+		<method name="space_get_body_move_events" qualifiers="const">
+			<return type="Array" />
+			<param index="0" name="space" type="RID" />
+			<description>
+				Returns a flat [Array] of alternating application user-data and [Transform2D] entries for bodies moved in the most recent native step: [code][data0, transform0, data1, transform1, ...][/code]. Assign metadata with [method body_set_user_data] to identify bodies. Read after stepping, outside locked physics callbacks. An invalid or locked space reports an error and returns an empty array.
+			</description>
+		</method>
+	</methods>
+</class>

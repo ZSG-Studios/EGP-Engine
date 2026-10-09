@@ -1,0 +1,196 @@
+{
+  "upstream_revision": "ddacf9b7a3e821cc052e90c30daf82f0702a6db4",
+  "text_hash_normalization": "cs-il-crlf-to-lf",
+  "files": {
+    "BaseChannel.cs": {
+      "sha256": "e4ffbc3a718ac6d51ccb5b7318ba3204fce11263a66efb30e938d284a03bcb15",
+      "upstream_sha256": "e4ffbc3a718ac6d51ccb5b7318ba3204fce11263a66efb30e938d284a03bcb15",
+      "egp_modified": false
+    },
+    "ConnectionRequest.cs": {
+      "sha256": "92e313008503d537f3ab280d57195e9efcf287abab404530a9a87ec1eba87aac",
+      "upstream_sha256": "92e313008503d537f3ab280d57195e9efcf287abab404530a9a87ec1eba87aac",
+      "egp_modified": false
+    },
+    "INetEventListener.cs": {
+      "sha256": "95a8aa6139e519c943b63521de36dc3dd0699c6b935ad13a84cf4f89c8f45e58",
+      "upstream_sha256": "95a8aa6139e519c943b63521de36dc3dd0699c6b935ad13a84cf4f89c8f45e58",
+      "egp_modified": false
+    },
+    "InternalPackets.cs": {
+      "sha256": "0d6f9c63a8eae14e858a267a6a94b12475f0e0d8f51d194bd224a00c6c3f724a",
+      "upstream_sha256": "0d6f9c63a8eae14e858a267a6a94b12475f0e0d8f51d194bd224a00c6c3f724a",
+      "egp_modified": false
+    },
+    "Layers/Crc32cLayer.cs": {
+      "sha256": "d11fc1f6ffe316a5f66a1b56b012df44000935995c397813b14d4de401e1a807",
+      "upstream_sha256": "d11fc1f6ffe316a5f66a1b56b012df44000935995c397813b14d4de401e1a807",
+      "egp_modified": false
+    },
+    "Layers/PacketLayerBase.cs": {
+      "sha256": "6fdfa1481d975e2b4732481816880c8de75287e444d75b34048e0350b3d9e8e4",
+      "upstream_sha256": "6fdfa1481d975e2b4732481816880c8de75287e444d75b34048e0350b3d9e8e4",
+      "egp_modified": false
+    },
+    "Layers/XorEncryptLayer.cs": {
+      "sha256": "a3f46a0a3ec8f15a60a9b2444ae1398374416275883eb33caac5704ca918d8b0",
+      "upstream_sha256": "a3f46a0a3ec8f15a60a9b2444ae1398374416275883eb33caac5704ca918d8b0",
+      "egp_modified": false
+    },
+    "LiteNetManager.cs": {
+      "sha256": "b006a5af8195d1215e4be72d0df1d56ea530a8389fa95442dafbbdfc1bdde190",
+      "upstream_sha256": "b006a5af8195d1215e4be72d0df1d56ea530a8389fa95442dafbbdfc1bdde190",
+      "egp_modified": false
+    },
+    "LiteNetManager.HashSet.cs": {
+      "sha256": "47e9162bf7be333a6a5033cc33bdc7d1450ea0905aa1d157ff6d2deb0811cb5d",
+      "upstream_sha256": "47e9162bf7be333a6a5033cc33bdc7d1450ea0905aa1d157ff6d2deb0811cb5d",
+      "egp_modified": false
+    },
+    "LiteNetManager.PacketPool.cs": {
+      "sha256": "57d373cc48c29695ae321a6f138241601cf4f21a74ab2ff01ea3a44fc68aaccd",
+      "upstream_sha256": "57d373cc48c29695ae321a6f138241601cf4f21a74ab2ff01ea3a44fc68aaccd",
+      "egp_modified": false
+    },
+    "LiteNetManager.Socket.cs": {
+      "sha256": "0cc0ad4d502a497b7ad1b313ad58b02e0de85473dd6a7d6369b7b91e000ccbc5",
+      "upstream_sha256": "0cc0ad4d502a497b7ad1b313ad58b02e0de85473dd6a7d6369b7b91e000ccbc5",
+      "egp_modified": false
+    },
+    "LiteNetPeer.cs": {
+      "sha256": "dc080cb1146767d482e618ed0131ec948e679015ce97bbd5b483b5342d403c4a",
+      "upstream_sha256": "dc080cb1146767d482e618ed0131ec948e679015ce97bbd5b483b5342d403c4a",
+      "egp_modified": false
+    },
+    "NativeSocket.cs": {
+      "sha256": "658ea731e96e4bd2e243b20da3e133e9bfc4263ee6875bb0b4b28f0dfcc9b9db",
+      "upstream_sha256": "658ea731e96e4bd2e243b20da3e133e9bfc4263ee6875bb0b4b28f0dfcc9b9db",
+      "egp_modified": false
+    },
+    "NatPunchModule.cs": {
+      "sha256": "e1a174fa7ea4036b0d1ffdae4619d56c2ffc3fbd16945c7997e9345ccd5f9db7",
+      "upstream_sha256": "e1a174fa7ea4036b0d1ffdae4619d56c2ffc3fbd16945c7997e9345ccd5f9db7",
+      "egp_modified": false
+    },
+    "NetConstants.cs": {
+      "sha256": "654798f88abbc777b40482f332023b3319b28ff9338df7c69ec4a20e58327330",
+      "upstream_sha256": "654798f88abbc777b40482f332023b3319b28ff9338df7c69ec4a20e58327330",
+      "egp_modified": false
+    },
+    "NetDebug.cs": {
+      "sha256": "7ad63090953ab11b09d6aecfd8988d123dad8f5a3b1de10298c8c4342c2283aa",
+      "upstream_sha256": "7ad63090953ab11b09d6aecfd8988d123dad8f5a3b1de10298c8c4342c2283aa",
+      "egp_modified": false
+    },
+    "NetEvent.cs": {
+      "sha256": "fc22a5f6e7df6a541daf8e34273e1d2300fe469d14ff1a8334d5b51ae6e51923",
+      "upstream_sha256": "fc22a5f6e7df6a541daf8e34273e1d2300fe469d14ff1a8334d5b51ae6e51923",
+      "egp_modified": false
+    },
+    "NetManager.cs": {
+      "sha256": "6461ffe87efc80152f0a4bff735d34113002e27085bd101bc5c07e8fa03fc1f9",
+      "upstream_sha256": "6461ffe87efc80152f0a4bff735d34113002e27085bd101bc5c07e8fa03fc1f9",
+      "egp_modified": false
+    },
+    "NetPacket.cs": {
+      "sha256": "8d3017fdc18b10f3d37014a6f1805912bfe22a5f22b7e988b1244dc83798ddae",
+      "upstream_sha256": "8d3017fdc18b10f3d37014a6f1805912bfe22a5f22b7e988b1244dc83798ddae",
+      "egp_modified": false
+    },
+    "NetPacketReader.cs": {
+      "sha256": "391edebe60c7291e6f4d26f7c40fd3bf030795d4515c9b854e3030ad4a404691",
+      "upstream_sha256": "391edebe60c7291e6f4d26f7c40fd3bf030795d4515c9b854e3030ad4a404691",
+      "egp_modified": false
+    },
+    "NetPeer.cs": {
+      "sha256": "6770b155cf1bb6db687c4eee5eb410757a108d37e1ebfa7ac6ce725e88faa110",
+      "upstream_sha256": "6770b155cf1bb6db687c4eee5eb410757a108d37e1ebfa7ac6ce725e88faa110",
+      "egp_modified": false
+    },
+    "NetStatistics.cs": {
+      "sha256": "1bb4be9a0ffcb2aa6409945bc600db43ed79f364193d6a6346850b2e5708f4c5",
+      "upstream_sha256": "1bb4be9a0ffcb2aa6409945bc600db43ed79f364193d6a6346850b2e5708f4c5",
+      "egp_modified": false
+    },
+    "NetUtils.cs": {
+      "sha256": "a482f259e2f8d8fa2f51a6b674ba7700b181c64af33f75803e50900869737d23",
+      "upstream_sha256": "a482f259e2f8d8fa2f51a6b674ba7700b181c64af33f75803e50900869737d23",
+      "egp_modified": false
+    },
+    "PausedSocketFix.cs": {
+      "sha256": "a8466d07c9e146b218c147ddcf44a93d6d8012597292a57784734a0dfe755868",
+      "upstream_sha256": "a8466d07c9e146b218c147ddcf44a93d6d8012597292a57784734a0dfe755868",
+      "egp_modified": false
+    },
+    "PooledPacket.cs": {
+      "sha256": "5bd02fbbe492513725118725732a3226822cf531079660c1d1eeaf5e7f81a66b",
+      "upstream_sha256": "5bd02fbbe492513725118725732a3226822cf531079660c1d1eeaf5e7f81a66b",
+      "egp_modified": false
+    },
+    "ReliableChannel.cs": {
+      "sha256": "d0c863640c8f02e802c5a27e069d706c32cc4aed66f0076c0e77cc581081ac99",
+      "upstream_sha256": "d0c863640c8f02e802c5a27e069d706c32cc4aed66f0076c0e77cc581081ac99",
+      "egp_modified": false
+    },
+    "SequencedChannel.cs": {
+      "sha256": "92ebce4b89e1d5700501b4b485dc31fafd0e27c3541719ad16b688591b7e3bb8",
+      "upstream_sha256": "92ebce4b89e1d5700501b4b485dc31fafd0e27c3541719ad16b688591b7e3bb8",
+      "egp_modified": false
+    },
+    "Trimming.cs": {
+      "sha256": "009023d4b6f665cbc0d9492217299291b2b1fa25d39a2dfd74833247587a1ed3",
+      "upstream_sha256": "009023d4b6f665cbc0d9492217299291b2b1fa25d39a2dfd74833247587a1ed3",
+      "egp_modified": false
+    },
+    "Utils/CRC32C.cs": {
+      "sha256": "873a7b1e19c8a66d777a2f6c37828d34252defb8c4318ae47ce57a7c85bdddd3",
+      "upstream_sha256": "873a7b1e19c8a66d777a2f6c37828d34252defb8c4318ae47ce57a7c85bdddd3",
+      "egp_modified": false
+    },
+    "Utils/FastBitConverter.cs": {
+      "sha256": "2851f7846f9e7ed02be7f597974234d201bfa59379285e4649bf52745a9b8b79",
+      "upstream_sha256": "2851f7846f9e7ed02be7f597974234d201bfa59379285e4649bf52745a9b8b79",
+      "egp_modified": false
+    },
+    "Utils/INetSerializable.cs": {
+      "sha256": "44115667aa7232eb2a38ba535e6521ca013e4c2cc5a4d258f7e9dc298febc2b6",
+      "upstream_sha256": "44115667aa7232eb2a38ba535e6521ca013e4c2cc5a4d258f7e9dc298febc2b6",
+      "egp_modified": false
+    },
+    "Utils/NetDataReader.cs": {
+      "sha256": "130d37dd86cf23cff4f905b5fb102ee08edc6395c72946b4a0dcc9f3ccc5c92f",
+      "upstream_sha256": "130d37dd86cf23cff4f905b5fb102ee08edc6395c72946b4a0dcc9f3ccc5c92f",
+      "egp_modified": false
+    },
+    "Utils/NetDataWriter.cs": {
+      "sha256": "0f19a919c1e179e307931c6583bf41f067658589425a48432ef606a7edabd49a",
+      "upstream_sha256": "0f19a919c1e179e307931c6583bf41f067658589425a48432ef606a7edabd49a",
+      "egp_modified": false
+    },
+    "Utils/NetPacketProcessor.cs": {
+      "sha256": "e8696ca1af09458d2185c353d811a1c3ba4f4ff90fd558d2fe466d97aa111e39",
+      "upstream_sha256": "e8696ca1af09458d2185c353d811a1c3ba4f4ff90fd558d2fe466d97aa111e39",
+      "egp_modified": false
+    },
+    "Utils/NetSerializer.cs": {
+      "sha256": "16d28b022acad7b2805882cd7484bff6eb1e39a09aaa795849a32ea67bbfff79",
+      "upstream_sha256": "16d28b022acad7b2805882cd7484bff6eb1e39a09aaa795849a32ea67bbfff79",
+      "egp_modified": false
+    },
+    "Utils/NtpPacket.cs": {
+      "sha256": "eaad5cadd4bacefb82c2da7458f649123a426d3271b6001af8d4333909e744cb",
+      "upstream_sha256": "eaad5cadd4bacefb82c2da7458f649123a426d3271b6001af8d4333909e744cb",
+      "egp_modified": false
+    },
+    "Utils/NtpRequest.cs": {
+      "sha256": "f8f64cd181579697bd8adc3afc7d21c55ca63ad3ba46126853596a03ddcea73e",
+      "upstream_sha256": "f8f64cd181579697bd8adc3afc7d21c55ca63ad3ba46126853596a03ddcea73e",
+      "egp_modified": false
+    },
+    "Utils/Preserve.cs": {
+      "sha256": "a873743ee5af0cb4242cd1e8590914912e8e0521ff8a3506b0af56542557025f",
+      "upstream_sha256": "a873743ee5af0cb4242cd1e8590914912e8e0521ff8a3506b0af56542557025f",
+      "egp_modified": false
+    }
+  }
+}

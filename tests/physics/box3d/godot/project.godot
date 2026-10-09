@@ -1,7 +1,0 @@
-config_version=5
-
-[application]
-config/name="EGP Box3D Native Qualification"
-
-[rendering]
-renderer/rendering_method="forward_plus"

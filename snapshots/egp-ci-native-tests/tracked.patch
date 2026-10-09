@@ -1,0 +1,82 @@
+diff --git a/tests/SCsub b/tests/SCsub
+index acf6984943..fd0735c90f 100644
+--- a/tests/SCsub
++++ b/tests/SCsub
+@@ -8,7 +8,13 @@ import test_builders
+ Import("env")
+ 
+ # Sources with tests must be explicitly linked first.
+-force_link_sources = glob.glob("*/**/*.cpp", recursive=True)
++# Box3D's standalone main() fixtures have their own CMake/CTest targets.
++# They are not engine doctests and cannot participate in the force-link runner.
++force_link_sources = [
++    source
++    for source in glob.glob("*/**/*.cpp", recursive=True)
++    if not source.replace("\\", "/").startswith("physics/box3d/")
++]
+ force_link_header = env.CommandNoCache(
+     "force_link.gen.h", env.Value(force_link_sources), env.Run(test_builders.force_link_builder)
+ )
+diff --git a/tests/scene/test_viewport.cpp b/tests/scene/test_viewport.cpp
+index 7ad2ceaccf..a4916b306c 100644
+--- a/tests/scene/test_viewport.cpp
++++ b/tests/scene/test_viewport.cpp
+@@ -46,7 +46,7 @@ TEST_FORCE_LINK(test_viewport)
+ #include "scene/2d/physics/area_2d.h"
+ #include "scene/2d/physics/collision_shape_2d.h"
+ #include "scene/resources/2d/rectangle_shape_2d.h"
+-#include "servers/physics_2d/physics_server_2d_dummy.h"
++#include "servers/physics_2d/physics_server_2d.h"
+ #endif // PHYSICS_2D_DISABLED
+ 
+ namespace TestViewport {
+@@ -1597,11 +1597,7 @@ int TestArea2D::counter = 0;
+ TEST_CASE("[SceneTree][Viewport] Physics Picking 2D") {
+ 	// FIXME: MOUSE_MODE_CAPTURED if-conditions are not testable, because DisplayServerMock doesn't support it.
+ 
+-	// NOTE: This test requires a real physics server.
+-	PhysicsServer2DDummy *physics_server_2d_dummy = Object::cast_to<PhysicsServer2DDummy>(PhysicsServer2D::get_singleton());
+-	if (physics_server_2d_dummy) {
+-		return;
+-	}
++	REQUIRE_MESSAGE(PhysicsServer2D::get_singleton(), "Physics picking requires the configured 2D physics backend.");
+ 
+ 	struct PickingCollider {
+ 		TestArea2D *a;
+diff --git a/tests/test_main.cpp b/tests/test_main.cpp
+index d71d95dc01..4c73eb0672 100644
+--- a/tests/test_main.cpp
++++ b/tests/test_main.cpp
+@@ -66,12 +66,10 @@
+ 
+ #ifndef PHYSICS_2D_DISABLED
+ #include "servers/physics_2d/physics_server_2d.h"
+-#include "servers/physics_2d/physics_server_2d_dummy.h"
+ #include "servers/physics_2d/physics_server_2d_manager.h"
+ #endif // PHYSICS_2D_DISABLED
+ #ifndef PHYSICS_3D_DISABLED
+ #include "servers/physics_3d/physics_server_3d.h"
+-#include "servers/physics_3d/physics_server_3d_dummy.h"
+ #include "servers/physics_3d/physics_server_3d_manager.h"
+ #endif // PHYSICS_3D_DISABLED
+ 
+@@ -208,17 +206,13 @@ struct GodotTestCaseListener : public doctest::IReporter {
+ 
+ #ifndef PHYSICS_3D_DISABLED
+ 			physics_server_3d = PhysicsServer3DManager::get_singleton()->new_default_server();
+-			if (!physics_server_3d) {
+-				physics_server_3d = memnew(PhysicsServer3DDummy);
+-			}
++			CRASH_COND_MSG(!physics_server_3d, "Physics-enabled engine tests require a registered 3D physics backend.");
+ 			physics_server_3d->init();
+ #endif // PHYSICS_3D_DISABLED
+ 
+ #ifndef PHYSICS_2D_DISABLED
+ 			physics_server_2d = PhysicsServer2DManager::get_singleton()->new_default_server();
+-			if (!physics_server_2d) {
+-				physics_server_2d = memnew(PhysicsServer2DDummy);
+-			}
++			CRASH_COND_MSG(!physics_server_2d, "Physics-enabled engine tests require a registered 2D physics backend.");
+ 			physics_server_2d->init();
+ #endif // PHYSICS_2D_DISABLED
+ 

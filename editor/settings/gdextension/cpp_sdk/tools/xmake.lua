@@ -1,8 +1,0 @@
-set_xmakever("3.1.1")
-set_policy("check.auto_ignore_flags", false)
-add_rules("mode.debug", "mode.release")
-target("toolchain-check")
-    set_kind("binary")
-    set_languages("cxx17")
-    add_files("check.cpp")
-target_end()

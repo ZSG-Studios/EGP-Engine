@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="Box2DDirectSpaceState2D" inherits="PhysicsDirectSpaceState2D" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>Native Box2D shape sweeps with hit positions and travel destinations.</brief_description>
+	<description>This backend is provided when the Box2D module is enabled. Obtain the active server or world direct state; do not instantiate this abstract class directly.</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="cast_shape">
+			<return type="Dictionary" />
+			<param index="0" name="parameters" type="PhysicsShapeQueryParameters2D" />
+			<description>
+				Sweeps the shape described by [param parameters] along its motion and returns the nearest hit as a [Dictionary], or an empty dictionary if there is no hit. Keys are [code]point[/code] ([Vector2]), [code]destination[/code] (the query origin at the hit fraction), [code]normal[/code] ([Vector2]), [code]shape[/code] (collider shape index), [code]rid[/code] ([RID]), [code]collider_id[/code], and [code]collider[/code] when a scene object exists. Honors the query collision mask, body/area flags, exclusions, and margin. Use a valid non-null query with a valid shape RID; access the world's direct state during the physics frame.
+			</description>
+		</method>
+		<method name="cast_shape_all">
+			<return type="Dictionary[]" />
+			<param index="0" name="parameters" type="PhysicsShapeQueryParameters2D" />
+			<param index="1" name="max_results" type="int" />
+			<description>
+				Sweeps the query shape along its motion and returns up to [param max_results] hit dictionaries ordered by travel fraction. Dictionary fields match [method cast_shape]. A nonpositive result limit or no hits returns an empty typed array. Supply a valid non-null [param parameters] with a valid shape RID and query during the physics frame.
+			</description>
+		</method>
+	</methods>
+</class>

@@ -1,0 +1,11 @@
+config_version=5
+
+[application]
+config/name="EGP LiteNet and Box3D Qualification"
+run/main_scene="res://Smoke.tscn"
+
+[dotnet]
+project/assembly_name="EGP.NetworkSmoke"
+
+[rendering]
+renderer/rendering_method="gl_compatibility"

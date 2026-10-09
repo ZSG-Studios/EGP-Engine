@@ -1,0 +1,27 @@
+name: EGP networking
+on:
+  push:
+    paths: ["modules/litenet/**", "thirdparty/litenetlib/**", "thirdparty/liteentitysystem/**", "modules/box3d/**", "thirdparty/box3d/**", "misc/scripts/validate_litenet.py", ".github/workflows/egp-networking.yml"]
+  pull_request:
+    paths: ["modules/litenet/**", "thirdparty/litenetlib/**", "thirdparty/liteentitysystem/**", "modules/box3d/**", "thirdparty/box3d/**", "misc/scripts/validate_litenet.py", ".github/workflows/egp-networking.yml"]
+jobs:
+  networking:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: python misc/scripts/validate_litenet.py --native-physics --package-checks
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: networking-${{ matrix.os }}
+          path: .build/litenet-validation

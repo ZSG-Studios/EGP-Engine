@@ -1,0 +1,326 @@
+{
+  "upstream_revision": "d7448a8ac1353259a6feb07c9612d4bfc733f329",
+  "text_hash_normalization": "cs-il-crlf-to-lf",
+  "files": {
+    "AnalyzerBinary/LiteEntitySystemAnalyzer.dll": {
+      "sha256": "5db3eefc1b37c60d96c04424a79c13ac89e7ac2003d77dd14b945a585340e575",
+      "upstream_sha256": "5db3eefc1b37c60d96c04424a79c13ac89e7ac2003d77dd14b945a585340e575",
+      "egp_modified": false
+    },
+    "ClientEntityManager.cs": {
+      "sha256": "e01b153f87a770adaed982aef6e1afb765bcf8b24f3114535bd5d71fe29ccba2",
+      "upstream_sha256": "83435f664064f2a815910fb893ddc89efad0a6c222c5c014b251f5a0784c453f",
+      "egp_modified": true
+    },
+    "Collections/AVLTree.cs": {
+      "sha256": "0708ac8de4d42c8fdbfdef2b7a9766e758d3cbf68eaaeb5da951c16e1ca3c618",
+      "upstream_sha256": "0708ac8de4d42c8fdbfdef2b7a9766e758d3cbf68eaaeb5da951c16e1ca3c618",
+      "egp_modified": false
+    },
+    "Collections/BitSpan.cs": {
+      "sha256": "2b915f6707401686e85dbca4febc5230fe23910b6f871175ae21c5562e67748f",
+      "upstream_sha256": "2b915f6707401686e85dbca4febc5230fe23910b6f871175ae21c5562e67748f",
+      "egp_modified": false
+    },
+    "Collections/CircularBuffer.cs": {
+      "sha256": "fe3e0f901770880eb7354ebca8f0191a42f8e539f41c4a0aa48ab17355bbed1a",
+      "upstream_sha256": "fe3e0f901770880eb7354ebca8f0191a42f8e539f41c4a0aa48ab17355bbed1a",
+      "egp_modified": false
+    },
+    "Collections/SequenceBinaryHeap.cs": {
+      "sha256": "7c93ef1ca6a103d381af7ba6ec0b723159a2d97dd0d4dec622bfd5d624cd882d",
+      "upstream_sha256": "7c93ef1ca6a103d381af7ba6ec0b723159a2d97dd0d4dec622bfd5d624cd882d",
+      "egp_modified": false
+    },
+    "Collections/SparseMap.cs": {
+      "sha256": "a19a1750c920374f9e56439eb87a8d0a13f0366e47a4ba452df3f729789b6513",
+      "upstream_sha256": "a19a1750c920374f9e56439eb87a8d0a13f0366e47a4ba452df3f729789b6513",
+      "egp_modified": false
+    },
+    "ControllerLogic.cs": {
+      "sha256": "6cf7439a9d949efa364c3e1d8ac39c2a839b493d8f86b1688a2e425d85b3368d",
+      "upstream_sha256": "6cf7439a9d949efa364c3e1d8ac39c2a839b493d8f86b1688a2e425d85b3368d",
+      "egp_modified": false
+    },
+    "EntityFilter.cs": {
+      "sha256": "e463a02d48b38944ea93ed7ffbd07a20fa6e3215c90e533bdbd2ee569dac20ff",
+      "upstream_sha256": "e463a02d48b38944ea93ed7ffbd07a20fa6e3215c90e533bdbd2ee569dac20ff",
+      "egp_modified": false
+    },
+    "EntityLogic.cs": {
+      "sha256": "4fc2d9dd3fa801d3bbb5499a55e53565ed7c0396511def6cfc752da71038c2a5",
+      "upstream_sha256": "4fc2d9dd3fa801d3bbb5499a55e53565ed7c0396511def6cfc752da71038c2a5",
+      "egp_modified": false
+    },
+    "EntityManager.cs": {
+      "sha256": "8326484ea7763e13b764217bda387a5bdc99d0692a8c16a2aee1b99f0f0b2041",
+      "upstream_sha256": "f2106cd03c49efec96f9278bcb39150b5dabdfefb18c4d4b25b9eba7cd66d9a6",
+      "egp_modified": true
+    },
+    "EntityParams.cs": {
+      "sha256": "356fdf0a331c43f17a23ecb5b8be75bcdfa9fd8c7229a7f9a34589f4d8f83a38",
+      "upstream_sha256": "356fdf0a331c43f17a23ecb5b8be75bcdfa9fd8c7229a7f9a34589f4d8f83a38",
+      "egp_modified": false
+    },
+    "EntitySharedReference.cs": {
+      "sha256": "dc2bee9ab1efe19b06c4dfd58d592315b2e1ac31bd4d038767c2029626706c02",
+      "upstream_sha256": "dc2bee9ab1efe19b06c4dfd58d592315b2e1ac31bd4d038767c2029626706c02",
+      "egp_modified": false
+    },
+    "EntityTypesMap.cs": {
+      "sha256": "0fac0c90e2a29c1fb3b402162768966303f84430de99b7f736aee2fd48ee239c",
+      "upstream_sha256": "0fac0c90e2a29c1fb3b402162768966303f84430de99b7f736aee2fd48ee239c",
+      "egp_modified": false
+    },
+    "Extensions/FloatAngle.cs": {
+      "sha256": "536549fab0ab79c9cb41007c9916c6c36b1ccdfaf9d095ea2a4652b797f42b3c",
+      "upstream_sha256": "536549fab0ab79c9cb41007c9916c6c36b1ccdfaf9d095ea2a4652b797f42b3c",
+      "egp_modified": false
+    },
+    "Extensions/JsonSyncableField.cs": {
+      "sha256": "9c689ad99265b428fa1911531d9f020820d097178c508437e4302cafeca09cc7",
+      "upstream_sha256": "9c689ad99265b428fa1911531d9f020820d097178c508437e4302cafeca09cc7",
+      "egp_modified": false
+    },
+    "Extensions/LocalMessageBus.cs": {
+      "sha256": "75e73ff46cab5c590947cf282dae37e5f4d9ed36644829f8df3fb08663f6339c",
+      "upstream_sha256": "75e73ff46cab5c590947cf282dae37e5f4d9ed36644829f8df3fb08663f6339c",
+      "egp_modified": false
+    },
+    "Extensions/NetDataExtensions.cs": {
+      "sha256": "b50736597922447ad52044a536c64b56e786ab2c5c99246a75bb6b0a06d6e8d4",
+      "upstream_sha256": "b50736597922447ad52044a536c64b56e786ab2c5c99246a75bb6b0a06d6e8d4",
+      "egp_modified": false
+    },
+    "Extensions/SyncArray.cs": {
+      "sha256": "0c36aa18d418de48c56d716f0ca528a1da1d7b258ec020a4c63c3a31b57c0d4d",
+      "upstream_sha256": "0c36aa18d418de48c56d716f0ca528a1da1d7b258ec020a4c63c3a31b57c0d4d",
+      "egp_modified": false
+    },
+    "Extensions/SyncDict.cs": {
+      "sha256": "6d960c503e22b4077814cac2445752c0898f579202d9391de8edc905ae96c391",
+      "upstream_sha256": "6d960c503e22b4077814cac2445752c0898f579202d9391de8edc905ae96c391",
+      "egp_modified": false
+    },
+    "Extensions/SyncFixedArray.cs": {
+      "sha256": "69a4b17a8341f7795112680f4df738fbc552d611373f170faa95015000d9d6a4",
+      "upstream_sha256": "69a4b17a8341f7795112680f4df738fbc552d611373f170faa95015000d9d6a4",
+      "egp_modified": false
+    },
+    "Extensions/SyncHashSet.cs": {
+      "sha256": "1c7c06a027c85011e297a7b9770bd16e0f720884647b10983e680939a56dd633",
+      "upstream_sha256": "1c7c06a027c85011e297a7b9770bd16e0f720884647b10983e680939a56dd633",
+      "egp_modified": false
+    },
+    "Extensions/SyncList.cs": {
+      "sha256": "393b1289c86cfff4b188ac05997cf66966e8c4f8e45968995fd51bd365aac30b",
+      "upstream_sha256": "393b1289c86cfff4b188ac05997cf66966e8c4f8e45968995fd51bd365aac30b",
+      "egp_modified": false
+    },
+    "Extensions/SyncNetSerializable.cs": {
+      "sha256": "2b7065124af5612b6d90b2213737401c4179d62da4bb9f686bee97bdb9417a1a",
+      "upstream_sha256": "2b7065124af5612b6d90b2213737401c4179d62da4bb9f686bee97bdb9417a1a",
+      "egp_modified": false
+    },
+    "Extensions/SyncPongTimer.cs": {
+      "sha256": "707d7a5be745c5a6e35500df2f2f3ba297b1163cdd983fc71c72babe6934fa96",
+      "upstream_sha256": "707d7a5be745c5a6e35500df2f2f3ba297b1163cdd983fc71c72babe6934fa96",
+      "egp_modified": false
+    },
+    "Extensions/SyncQueue.cs": {
+      "sha256": "abc79428669f364d54492bcc9f86f2d5b986843afe65b1698ec5bf9acca71dc2",
+      "upstream_sha256": "abc79428669f364d54492bcc9f86f2d5b986843afe65b1698ec5bf9acca71dc2",
+      "egp_modified": false
+    },
+    "Extensions/SyncScriptableObject.cs": {
+      "sha256": "14449aa5eea26b79a59fdf78d28253e3299c58954be126200b6288a0d808ab9b",
+      "upstream_sha256": "14449aa5eea26b79a59fdf78d28253e3299c58954be126200b6288a0d808ab9b",
+      "egp_modified": false
+    },
+    "Extensions/SyncSpanSerializable.cs": {
+      "sha256": "6798083cafe97cb0aeccb01636f3f8f314912ff56a0816b51314925303423bd0",
+      "upstream_sha256": "6798083cafe97cb0aeccb01636f3f8f314912ff56a0816b51314925303423bd0",
+      "egp_modified": false
+    },
+    "Extensions/SyncSquare.cs": {
+      "sha256": "eead2d9061a96bf96cd066ea83d3cc25ca73ccd771a7e8ebb46dce90b9421814",
+      "upstream_sha256": "eead2d9061a96bf96cd066ea83d3cc25ca73ccd771a7e8ebb46dce90b9421814",
+      "egp_modified": false
+    },
+    "Extensions/SyncStateMachine.cs": {
+      "sha256": "c4b6dfb62f5f21604475954760893079599d1fbea575e010c51aebb037c5df1a",
+      "upstream_sha256": "c4b6dfb62f5f21604475954760893079599d1fbea575e010c51aebb037c5df1a",
+      "egp_modified": false
+    },
+    "Extensions/SyncString.cs": {
+      "sha256": "811356afe88199e87769fe8bdc59f3c4509b21d4e8dbc9112180c2b82f719ab3",
+      "upstream_sha256": "811356afe88199e87769fe8bdc59f3c4509b21d4e8dbc9112180c2b82f719ab3",
+      "egp_modified": false
+    },
+    "Extensions/SyncTimer.cs": {
+      "sha256": "d0b2228600ea26e6011f7ba64c493dfb1b74ec08b7350d752f23126f185b7068",
+      "upstream_sha256": "d0b2228600ea26e6011f7ba64c493dfb1b74ec08b7350d752f23126f185b7068",
+      "egp_modified": false
+    },
+    "HumanControllerLogic.cs": {
+      "sha256": "98de1f4dcd15adf306a35c26f1e2304ab8720771199616bdc322aab93b6166a3",
+      "upstream_sha256": "98de1f4dcd15adf306a35c26f1e2304ab8720771199616bdc322aab93b6166a3",
+      "egp_modified": false
+    },
+    "IdGenerator.cs": {
+      "sha256": "6357a56b794d3958451404ed7898c56b5489450950ce5fd8e2f2866dc6018dc0",
+      "upstream_sha256": "6357a56b794d3958451404ed7898c56b5489450950ce5fd8e2f2866dc6018dc0",
+      "egp_modified": false
+    },
+    "ILocalSingleton.cs": {
+      "sha256": "00cbc937bfc6e3bce0fb8295bfea1606070c061ca63c2534371e1ed46483eb06",
+      "upstream_sha256": "00cbc937bfc6e3bce0fb8295bfea1606070c061ca63c2534371e1ed46483eb06",
+      "egp_modified": false
+    },
+    "ILPart/RefMagic.dll": {
+      "sha256": "de14443a1f40c35be1b738658818c985970f9c1c0e749fc82feade2458af971f",
+      "upstream_sha256": "de14443a1f40c35be1b738658818c985970f9c1c0e749fc82feade2458af971f",
+      "egp_modified": false
+    },
+    "ILPart/RefMagic.il": {
+      "sha256": "f04ac26a0719680842aee87b8170b4f26230b1db9fcd8ced35b98b0d8e26ddc1",
+      "upstream_sha256": "f04ac26a0719680842aee87b8170b4f26230b1db9fcd8ced35b98b0d8e26ddc1",
+      "egp_modified": false
+    },
+    "Internal/DeltaCompressor.cs": {
+      "sha256": "077221ad37158e0186cf91a80ac9c5e85525e8da1cd883f9bd0aae3f10e6ae69",
+      "upstream_sha256": "077221ad37158e0186cf91a80ac9c5e85525e8da1cd883f9bd0aae3f10e6ae69",
+      "egp_modified": false
+    },
+    "Internal/EntityClassData.cs": {
+      "sha256": "6059985706e7aad834d244be174ceb6386c7bf674ea43a56803075acbeae362a",
+      "upstream_sha256": "6059985706e7aad834d244be174ceb6386c7bf674ea43a56803075acbeae362a",
+      "egp_modified": false
+    },
+    "Internal/EntityFieldInfo.cs": {
+      "sha256": "45fdc01a97cca96c23764c9161a41c3714928269ed2d9e167b3bd5a3c9a69cee",
+      "upstream_sha256": "45fdc01a97cca96c23764c9161a41c3714928269ed2d9e167b3bd5a3c9a69cee",
+      "egp_modified": false
+    },
+    "Internal/InternalBaseClass.cs": {
+      "sha256": "cb3066cefcd2573e1a82d04aa3743657aecd873e8e78bc55712abea3e70ae3d9",
+      "upstream_sha256": "cb3066cefcd2573e1a82d04aa3743657aecd873e8e78bc55712abea3e70ae3d9",
+      "egp_modified": false
+    },
+    "Internal/InternalEntity.cs": {
+      "sha256": "92506dcf19b48b2b005e0d159677517b90475ed95cd2e32eb417e79d351c8be1",
+      "upstream_sha256": "92506dcf19b48b2b005e0d159677517b90475ed95cd2e32eb417e79d351c8be1",
+      "egp_modified": false
+    },
+    "Internal/InternalPackets.cs": {
+      "sha256": "b83e9d7d020d057ba83190a3027c231409f6133d8ee6da8bc1ec90480deaf974",
+      "upstream_sha256": "b83e9d7d020d057ba83190a3027c231409f6133d8ee6da8bc1ec90480deaf974",
+      "egp_modified": false
+    },
+    "Internal/RemoteCallPacket.cs": {
+      "sha256": "afe89c4f72e0225ae64eb2921650110be4c9d7e12557dd33da2963a753a276f0",
+      "upstream_sha256": "afe89c4f72e0225ae64eb2921650110be4c9d7e12557dd33da2963a753a276f0",
+      "egp_modified": false
+    },
+    "Internal/ServerStateData.cs": {
+      "sha256": "6136a1b38b57c201187d4a4bb12e5d36712d8b9ddf3a7b207911bd3b9bedaff7",
+      "upstream_sha256": "a1d7dfba43b7d0df4e0e87f14f33bd341965c40d83fb83e7a0ddac644d200ad5",
+      "egp_modified": true
+    },
+    "Internal/StateSerializer.cs": {
+      "sha256": "6d6db4b9f9ba8106b8c4b1fc6fdc641567ecdc108b1c6a9d4a21f984e4a0ef43",
+      "upstream_sha256": "6d6db4b9f9ba8106b8c4b1fc6fdc641567ecdc108b1c6a9d4a21f984e4a0ef43",
+      "egp_modified": false
+    },
+    "Internal/ValueTypeProcessor.cs": {
+      "sha256": "9ae3ed8380b8faf7efacdd5e6eaf816cbf5c9a58d349360d39a0567703e7fb33",
+      "upstream_sha256": "9ae3ed8380b8faf7efacdd5e6eaf816cbf5c9a58d349360d39a0567703e7fb33",
+      "egp_modified": false
+    },
+    "ISpanSerializable.cs": {
+      "sha256": "df0c0c09905684ce6d04915593f60ac0ed6f94dcc67accdb0805d0acfa669aea",
+      "upstream_sha256": "df0c0c09905684ce6d04915593f60ac0ed6f94dcc67accdb0805d0acfa669aea",
+      "egp_modified": false
+    },
+    "Logger.cs": {
+      "sha256": "ea49f81a978beb0a8816c008502336145f50230fdec0fe073dfd8c31d33920b5",
+      "upstream_sha256": "ea49f81a978beb0a8816c008502336145f50230fdec0fe073dfd8c31d33920b5",
+      "egp_modified": false
+    },
+    "NetPlayer.cs": {
+      "sha256": "fe5df00cc00c0e34b3df5bc8946aa33501b8cef2d08366a40230ce8513043f5e",
+      "upstream_sha256": "fe5df00cc00c0e34b3df5bc8946aa33501b8cef2d08366a40230ce8513043f5e",
+      "egp_modified": false
+    },
+    "PawnLogic.cs": {
+      "sha256": "d6910e162a6ed27fa86e5ac2cea52b578e5464ba097a05e9af52e58965dd28ef",
+      "upstream_sha256": "d6910e162a6ed27fa86e5ac2cea52b578e5464ba097a05e9af52e58965dd28ef",
+      "egp_modified": false
+    },
+    "PredictableEntityLogic.cs": {
+      "sha256": "2554fe2842248e9bfaad14e73ca970f2ed799bb39e1cb75b36c976d4af906231",
+      "upstream_sha256": "2554fe2842248e9bfaad14e73ca970f2ed799bb39e1cb75b36c976d4af906231",
+      "egp_modified": false
+    },
+    "RPCRegistrator.cs": {
+      "sha256": "dbbd1379a1edeff83ec66ad0740051ea96925a3377d77a60fc138edeb34ac8c1",
+      "upstream_sha256": "61d9642eba81e7182d11d73081e2e157efc41c42ba5b7a4c4486706df720862d",
+      "egp_modified": true
+    },
+    "ServerEntityManager.cs": {
+      "sha256": "46111612c02cf304334e9085b3134e7d24fb9878417e8efe759cc7e14acbe247",
+      "upstream_sha256": "57e20e7e73379c84c977ae0d3cf5d1a32f6425ff1bcdb6003919a49519a00bcf",
+      "egp_modified": true
+    },
+    "SingletonEntityLogic.cs": {
+      "sha256": "777c9b4decce127f3db276d76f7dc8830ddcf8b3e095ad6be71481813e504e49",
+      "upstream_sha256": "777c9b4decce127f3db276d76f7dc8830ddcf8b3e095ad6be71481813e504e49",
+      "egp_modified": false
+    },
+    "SpanReader.cs": {
+      "sha256": "686c5f185e318b0e41dab4cbff84531835319204e3b929ba7a0d8879c250d9c5",
+      "upstream_sha256": "686c5f185e318b0e41dab4cbff84531835319204e3b929ba7a0d8879c250d9c5",
+      "egp_modified": false
+    },
+    "SpanWriter.cs": {
+      "sha256": "eaf7607c6f53672018314cbfd969622a07be98940b3b00636339e5b9246dea05",
+      "upstream_sha256": "eaf7607c6f53672018314cbfd969622a07be98940b3b00636339e5b9246dea05",
+      "egp_modified": false
+    },
+    "SyncableField.cs": {
+      "sha256": "8ec7b784cafce59a523282d1900c366e8befb8e6fee5813b63b119d823335ad4",
+      "upstream_sha256": "8ec7b784cafce59a523282d1900c366e8befb8e6fee5813b63b119d823335ad4",
+      "egp_modified": false
+    },
+    "SyncChilds.cs": {
+      "sha256": "4a1ab281e0b1f5d569167c0a01b671d2aad8b8aff6657b68490aa5f4b267d1c8",
+      "upstream_sha256": "4a1ab281e0b1f5d569167c0a01b671d2aad8b8aff6657b68490aa5f4b267d1c8",
+      "egp_modified": false
+    },
+    "SyncGroup.cs": {
+      "sha256": "908a8ed68a3bb7041d2be5c0c2347d7ca9e54a2fa1a3a59dd338bb15c6013c66",
+      "upstream_sha256": "908a8ed68a3bb7041d2be5c0c2347d7ca9e54a2fa1a3a59dd338bb15c6013c66",
+      "egp_modified": false
+    },
+    "SyncVar.cs": {
+      "sha256": "1b26a790ed4ea22930222a7f4e7abf65c5492fe8ecb25a6c6e59d0e5eb99c916",
+      "upstream_sha256": "1b26a790ed4ea22930222a7f4e7abf65c5492fe8ecb25a6c6e59d0e5eb99c916",
+      "egp_modified": false
+    },
+    "Transport/AbstractNetPeer.cs": {
+      "sha256": "4b29d15656f75f650cf1fa2022802cd2fd25742bd321a0bd9f5f2873f7e2b8e2",
+      "upstream_sha256": "4b29d15656f75f650cf1fa2022802cd2fd25742bd321a0bd9f5f2873f7e2b8e2",
+      "egp_modified": false
+    },
+    "Transport/LiteNetLibNetPeer.cs": {
+      "sha256": "4af6af4efaed3bd892c20577db707879c3d3d7427a3157ce946ef02cb427f0d3",
+      "upstream_sha256": "4af6af4efaed3bd892c20577db707879c3d3d7427a3157ce946ef02cb427f0d3",
+      "egp_modified": false
+    },
+    "Utils.cs": {
+      "sha256": "d2b6dd490e410fd47adc45e7b00779bfad05924cbbdd9284abc3863abc524ddd",
+      "upstream_sha256": "d2b6dd490e410fd47adc45e7b00779bfad05924cbbdd9284abc3863abc524ddd",
+      "egp_modified": false
+    }
+  }
+}

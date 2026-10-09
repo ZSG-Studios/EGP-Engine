@@ -1,0 +1,13 @@
+config_version=5
+
+[application]
+config/name="EGP Box3D Scene Regression"
+
+[physics]
+3d/physics_engine="Box3D Physics"
+3d/run_on_separate_thread=false
+common/physics_ticks_per_second=60
+box3d/worker_count=1
+
+[rendering]
+renderer/rendering_method="gl_compatibility"

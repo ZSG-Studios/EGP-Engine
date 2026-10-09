@@ -1,0 +1,200 @@
+using System;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
+using LiteEntitySystem.Internal;
+using ByteSpan = System.ReadOnlySpan<byte>;
+
+namespace LiteEntitySystem
+{
+    /// <summary>
+    /// Synchronization flags. 
+    /// </summary>
+    [Flags]
+    public enum SyncFlags : ushort
+    {
+        None                = 0,
+        
+        /// <summary>
+        /// Is value interpolated inside VisualUpdate and in LagCompensation checks
+        /// best use for Position, Rotation
+        /// </summary>
+        Interpolated        = 1,
+        
+        /// <summary>
+        /// Is value lag compensated (returned in history) when EnableLagCompensation called
+        /// for hit checks on server and on client in rollback state 
+        /// </summary>
+        LagCompensated      = 1 << 1,
+        
+        /// <summary>
+        /// Value synchronized only for non owners
+        /// </summary>
+        OnlyForOtherPlayers = 1 << 2,
+        
+        /// <summary>
+        /// Value synchronized only for owner
+        /// </summary>
+        OnlyForOwner        = 1 << 3,
+        
+        /// <summary>
+        /// Always rollback value even when entity is not owned
+        /// useful for enemy health and damage prediction
+        /// </summary>
+        AlwaysRollback      = 1 << 4,
+        
+        /// <summary>
+        /// Never rollback value even when entity is owned
+        /// </summary>
+        NeverRollBack       = 1 << 5,
+        
+        ///<summary>Toggleable sync group 1. Can include SyncVars and RPCs.</summary>
+        SyncGroup1          = 1 << 6,
+        
+        ///<summary>Toggleable sync group 2. Can include SyncVars and RPCs.</summary>
+        SyncGroup2          = 1 << 7,
+        
+        ///<summary>Toggleable sync group 3. Can include SyncVars and RPCs.</summary>
+        SyncGroup3          = 1 << 8,
+        
+        ///<summary>Toggleable sync group 4. Can include SyncVars and RPCs.</summary>
+        SyncGroup4          = 1 << 9,
+        
+        ///<summary>Toggleable sync group 5. Can include SyncVars and RPCs.</summary>
+        SyncGroup5          = 1 << 10
+    }
+    
+    [AttributeUsage(AttributeTargets.Field | AttributeTargets.Class)]
+    public class SyncVarFlags : Attribute
+    {
+        public readonly SyncFlags Flags;
+        public SyncVarFlags(SyncFlags flags) => Flags = flags;
+    }
+
+    /// <summary>
+    /// Synchronized variable
+    /// </summary>
+    /// <typeparam name="T">Variable type</typeparam>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct SyncVar<T> : ISyncVar<T>, IEquatable<T>, IEquatable<SyncVar<T>> where T : unmanaged
+    {
+        private T _value;
+        private T _interpValue;
+        
+        internal ushort FieldId;
+        internal InternalEntity Container;
+
+        public static readonly int Size;
+
+        unsafe static SyncVar()
+        {
+            Size = sizeof(T);
+        }
+
+        /// <summary>
+        /// Interpolated value on client (on server equals to Value)
+        /// </summary>
+        public T InterpolatedValue => Container == null || Container.IsServer
+            ? _value
+            : Container.ClientManager.GetInterpolatedValue(ref this, _interpValue);
+        
+        //for interpolation
+        void ISyncVar<T>.SvSetInterpValue(T value) => _interpValue = value;
+        void ISyncVar<T>.SvSetInterpValueFromCurrent() => _interpValue = _value;
+        
+        void ISyncVar<T>.SvSetDirect(T value) => _value = value;
+        
+        void ISyncVar<T>.SvSetDirectAndStorePrev(T value, out T prevValue)
+        {
+            prevValue = _value;
+            _value = value;
+        }
+        
+        bool ISyncVar<T>.SvSetFromAndSync(ref T value)
+        {
+            if (!FastEquals(ref _value, ref value))
+            {
+                // ReSharper disable once SwapViaDeconstruction
+                var oldValue = _value;
+                _value = value;
+                value = oldValue;
+                return true;
+            }
+            return false;
+        }
+        
+        /// <summary>
+        /// Actual logical value
+        /// </summary>
+        public T Value
+        {
+            get => _value;
+            set
+            {
+                var oldValue = _value;
+                _value = value;
+                if (Container != null && !FastEquals(ref value, ref oldValue))
+                    Container.EntityManager.EntityFieldChanged(Container, FieldId, ref value, ref oldValue, false);
+            }
+        }
+
+        /// <summary>
+        /// Set value without triggering local OnSync notifications if there is any
+        /// </summary>
+        /// <param name="value"></param>
+        public void SetValueWithoutOnSyncNotification(T value)
+        {
+            var oldValue = _value;
+            _value = value;
+            if (Container != null && !FastEquals(ref value, ref oldValue))
+                Container.EntityManager.EntityFieldChanged(Container, FieldId, ref value, ref oldValue, true);
+        }
+
+        internal void Init(InternalEntity container, ushort fieldId)
+        {
+            Container = container;
+            FieldId = fieldId;
+            T defaultValue = default;
+            if(!FastEquals(ref _value, ref defaultValue))
+                Container.EntityManager.EntityFieldChanged(Container, FieldId, ref _value, ref defaultValue, false);
+        }
+        
+        public static implicit operator T(SyncVar<T> sv) => sv._value;
+
+        public override string ToString() => _value.ToString();
+
+        public override int GetHashCode() => _value.GetHashCode();
+
+        public override bool Equals(object o) => o is SyncVar<T> sv && FastEquals(ref sv._value, ref _value);
+        
+        public static unsafe bool operator==(SyncVar<T> a, SyncVar<T> b) =>
+            new ByteSpan(&a._value, Size).SequenceEqual(new ByteSpan(&b._value, Size));
+
+        public static unsafe bool operator!=(SyncVar<T> a, SyncVar<T> b) =>
+            new ByteSpan(&a._value, Size).SequenceEqual(new ByteSpan(&b._value, Size)) == false;
+        
+        public static unsafe bool operator==(T a, SyncVar<T> b) =>
+            new ByteSpan(&a, Size).SequenceEqual(new ByteSpan(&b._value, Size));
+        
+        public static unsafe bool operator!=(T a, SyncVar<T> b) =>
+            new ByteSpan(&a, Size).SequenceEqual(new ByteSpan(&b._value, Size)) == false;
+        
+        public static unsafe bool operator==(SyncVar<T> a, T b) =>
+            new ByteSpan(&a._value, Size).SequenceEqual(new ByteSpan(&b, Size));
+        
+        public static unsafe bool operator!=(SyncVar<T> a, T b) =>
+            new ByteSpan(&a._value, Size).SequenceEqual(new ByteSpan(&b, Size)) == false;
+
+        public bool Equals(T v) => FastEquals(ref _value, ref v);
+        
+        public bool Equals(SyncVar<T> tv) => FastEquals(ref _value, ref tv._value);
+
+        [MethodImpl(MethodImplOptions.AggressiveInlining)]
+        private static unsafe bool FastEquals(ref T a, ref T b)
+        {
+            fixed (T* ta = &a, tb = &b)
+            {
+                return new ByteSpan((byte*)ta, Size).SequenceEqual(new ByteSpan((byte*)tb, Size));
+            }
+        }
+    }
+}

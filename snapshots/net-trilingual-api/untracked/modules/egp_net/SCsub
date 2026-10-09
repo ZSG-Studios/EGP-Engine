@@ -1,0 +1,21 @@
+#!/usr/bin/env python
+from misc.utility.scons_hints import *
+Import("env")
+Import("env_modules")
+net_env = env_modules.Clone()
+net_env.Prepend(CPPPATH=["#thirdparty/yojimbo/" + path for path in ("", "include", "sodium", "tlsf", "netcode", "reliable", "serialize")])
+for key in ("CCFLAGS", "CFLAGS", "CXXFLAGS"):
+    net_env[key] = [flag for flag in net_env[key] if not str(flag).startswith(("/fp:", "-ffast-math", "-Ofast", "-ffp-contract=", "-funsafe-math-optimizations"))]
+if env.msvc:
+    net_env.Append(CCFLAGS=["/fp:precise"])
+else:
+    net_env.Append(CCFLAGS=["-fno-fast-math", "-ffp-contract=off"])
+if env["platform"] == "windows":
+    # Modules run after Godot normalizes system-library names. Avoid its target suffix.
+    env.AppendUnique(LINKFLAGS=["ws2_32.lib", "iphlpapi.lib"] if env.msvc else ["-lws2_32", "-liphlpapi"])
+vendor_env = net_env.Clone()
+vendor_env.disable_warnings()
+vendor_env.add_source_files(env.modules_sources, "#thirdparty/yojimbo/source/*.cpp")
+for source in ("tlsf/tlsf.c", "sodium/sodium.c", "netcode/netcode.c", "reliable/reliable.c"):
+    vendor_env.add_source_files(env.modules_sources, "#thirdparty/yojimbo/" + source)
+net_env.add_source_files(env.modules_sources, "*.cpp")

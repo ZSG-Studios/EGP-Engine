@@ -1,0 +1,32 @@
+#!/usr/bin/env python
+from misc.utility.scons_hints import *
+
+Import("env")
+Import("env_modules")
+
+env_box2d = env_modules.Clone()
+env_box2d.Prepend(CPPPATH=["#thirdparty/box2d/include"])
+
+# Isolate the solver and adapter from global fast math and FMA contraction flags.
+for key in ("CCFLAGS", "CFLAGS", "CXXFLAGS"):
+    env_box2d[key] = [flag for flag in env_box2d[key] if not str(flag).startswith(("/fp:", "-ffast-math", "-Ofast", "-ffp-contract=", "-funsafe-math-optimizations"))]
+if env.msvc:
+    env_box2d.Append(CCFLAGS=["/fp:precise"])
+    if env["use_llvm"]:
+        env_box2d.Append(CCFLAGS=["/clang:-ffp-contract=off"])
+else:
+    env_box2d.Append(CCFLAGS=["-fno-fast-math", "-ffp-contract=off"])
+    if env["platform"] not in ("macos", "ios", "windows", "web"):
+        env.AppendUnique(LIBS=["m"])
+
+env_thirdparty = env_box2d.Clone()
+env_thirdparty.disable_warnings()
+thirdparty_obj = []
+env_thirdparty.add_source_files(thirdparty_obj, "#thirdparty/box2d/src/*.c")
+env.modules_sources += thirdparty_obj
+
+module_obj = []
+for directory in ("", "bodies/", "joints/", "shapes/", "spaces/"):
+    env_box2d.add_source_files(module_obj, directory + "*.cpp")
+env.modules_sources += module_obj
+env.Depends(module_obj, thirdparty_obj)
