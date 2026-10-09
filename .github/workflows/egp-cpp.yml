@@ -2,9 +2,9 @@ name: EGP C++ editor and exports
 on:
   push:
     branches: [master]
-    paths: ["core/**", "drivers/**", "editor/**", "modules/**", "platform/**", "scene/**", "servers/**", "doc/classes/**", "misc/scripts/*egp_cpp*", "misc/scripts/*egp_generated_api*", "misc/scripts/*egp_net*", "misc/scripts/egp_engine_process.py", "misc/scripts/test_egp_engine_process.py", "misc/egp/network_lab/process_clock_server.gd", "misc/egp/network_lab/admission_lifecycle.gd", "misc/egp/generated_api/**", "misc/egp/api_contract.json", "tests/networking/**", ".github/workflows/egp-cpp.yml", ".github/actions/**", "misc/extension_api_validation/**", "tests/compatibility_test/**", ".gitmodules", "thirdparty/godot-cpp/**", "xmake.lua", "build/xmake/**", "misc/scripts/build_egp.lua"]
+    paths: ["core/**", "drivers/**", "editor/**", "modules/**", "platform/**", "scene/**", "servers/**", "doc/classes/**", "misc/scripts/*egp_cpp*", "misc/scripts/*egp_generated_api*", "misc/scripts/*superpos*", "misc/scripts/egp_engine_process.py", "misc/scripts/test_egp_engine_process.py", "misc/egp/superpos_lab/**", "misc/egp/generated_api/**", "misc/egp/api_contract.json", "tests/networking/**", ".github/workflows/egp-cpp.yml", ".github/actions/**", "misc/extension_api_validation/**", "tests/compatibility_test/**", ".gitmodules", "thirdparty/godot-cpp/**", "xmake.lua", "build/xmake/**", "misc/scripts/build_egp.lua"]
   pull_request:
-    paths: ["core/**", "drivers/**", "editor/**", "modules/**", "platform/**", "scene/**", "servers/**", "doc/classes/**", "misc/scripts/*egp_cpp*", "misc/scripts/*egp_generated_api*", "misc/scripts/*egp_net*", "misc/scripts/egp_engine_process.py", "misc/scripts/test_egp_engine_process.py", "misc/egp/network_lab/process_clock_server.gd", "misc/egp/network_lab/admission_lifecycle.gd", "misc/egp/generated_api/**", "misc/egp/api_contract.json", "tests/networking/**", ".github/workflows/egp-cpp.yml", ".github/actions/**", "misc/extension_api_validation/**", "tests/compatibility_test/**", ".gitmodules", "thirdparty/godot-cpp/**", "xmake.lua", "build/xmake/**", "misc/scripts/build_egp.lua"]
+    paths: ["core/**", "drivers/**", "editor/**", "modules/**", "platform/**", "scene/**", "servers/**", "doc/classes/**", "misc/scripts/*egp_cpp*", "misc/scripts/*egp_generated_api*", "misc/scripts/*superpos*", "misc/scripts/egp_engine_process.py", "misc/scripts/test_egp_engine_process.py", "misc/egp/superpos_lab/**", "misc/egp/generated_api/**", "misc/egp/api_contract.json", "tests/networking/**", ".github/workflows/egp-cpp.yml", ".github/actions/**", "misc/extension_api_validation/**", "tests/compatibility_test/**", ".gitmodules", "thirdparty/godot-cpp/**", "xmake.lua", "build/xmake/**", "misc/scripts/build_egp.lua"]
   workflow_dispatch:
 permissions:
   contents: read
@@ -62,10 +62,10 @@ jobs:
         run: python misc/scripts/validate_egp_cpp_sdk_paths.py --engine ${{ matrix.editor }} --output .build/sdk-object-paths-ci --jobs 4
       - name: Validate CLI and exported games
         run: python misc/scripts/validate_egp_cpp.py --editor ${{ matrix.editor }} --debug-template ${{ matrix.debug }} --release-template ${{ matrix.release }}
-      - name: Compile typed Superposition and interpolation C++ APIs
+      - name: Compile typed Superpos C++ APIs
         run: python misc/scripts/validate_egp_generated_api.py --engine ${{ matrix.editor }} --cpp --output .build/generated-api-cpp
-      - name: Validate engine networking, replication, interpolation and physics replay
-        run: python misc/scripts/validate_egp_net.py --engine ${{ matrix.editor }} --output .build/engine-networking
+      - name: Validate native Superpos API, state and authenticated loopback UDP
+        run: python misc/scripts/validate_superpos.py --engine ${{ matrix.editor }} --output .build/engine-networking
       - name: Validate C++ editor workflow and actionable compiler diagnostics
         run: python misc/scripts/validate_egp_cpp_ui.py --engine ${{ matrix.editor }} --output .build/cpp-ui-ci
       - uses: actions/upload-artifact@v4

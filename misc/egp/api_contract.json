@@ -31,32 +31,6 @@
     ]
   },
   "required": {
-    "EGPNetSession": {
-      "methods": [
-        "configure",
-        "listen",
-        "connect_to_server",
-        "connect_token",
-        "issue_token",
-        "poll",
-        "stop",
-        "close",
-        "get_state",
-        "get_fingerprint",
-        "get_statistics",
-        "send_application",
-        "command"
-      ],
-      "signals": [
-        "state_changed",
-        "peer_connected",
-        "peer_disconnected",
-        "application_received",
-        "packet_received",
-        "simulation_tick",
-        "diagnostic"
-      ]
-    },
     "EGPBox3DWorld": {
       "methods": [
         "configure",
@@ -252,124 +226,30 @@
         "_integrate_forces"
       ]
     },
-    "Superposition": {
-      "methods": [
-        "set_enabled",
-        "is_enabled",
-        "set_target_path",
-        "get_target_path",
-        "set_session_path",
-        "get_session_path",
-        "set_config",
-        "get_config",
-        "set_replication_key",
-        "get_replication_key",
-        "set_entity_kind",
-        "get_entity_kind",
-        "set_session",
-        "get_session",
-        "replicate_now",
-        "capture_state",
-        "apply_state",
-        "set_observer_position",
-        "clear_observer",
-        "get_statistics",
-        "mark_dirty"
-      ],
-      "properties": [
-        "enabled",
-        "target_path",
-        "session_path",
-        "config",
-        "replication_key",
-        "entity_kind"
-      ]
-    },
-    "SuperpositionConfig": {
-      "methods": [
-        "set_properties",
-        "get_properties",
-        "set_update_rate",
-        "get_update_rate",
-        "set_interest_radius",
-        "get_interest_radius",
-        "set_interest_hysteresis",
-        "get_interest_hysteresis",
-        "set_priority",
-        "get_priority",
-        "set_capture_mode",
-        "get_capture_mode",
-        "set_delta_replication",
-        "is_delta_replication"
-      ],
-      "properties": [
-        "properties",
-        "update_rate",
-        "interest_radius",
-        "interest_hysteresis",
-        "priority",
-        "capture_mode",
-        "delta_replication"
-      ]
-    },
-    "SuperpositionProperty": {
-      "methods": [
-        "set_enabled",
-        "is_enabled",
-        "set_property",
-        "get_property",
-        "set_value_type",
-        "get_value_type",
-        "set_quantization",
-        "get_quantization",
-        "set_smoothing",
-        "is_smoothing"
-      ],
-      "properties": [
-        "enabled",
-        "property",
-        "value_type",
-        "quantization",
-        "smoothing"
-      ]
-    },
-    "SuperpositionPrediction": {
-      "methods": ["configure", "predict", "accept", "reset", "get_tick", "get_acknowledged_tick", "get_acknowledged_hash", "get_pending_ticks", "get_history_bytes", "get_statistics"],
-      "signals": ["corrected", "resync_required"]
-    },
-    "SuperpositionWorld": {
-      "methods": ["configure", "start", "start_server", "join_loopback", "join_token", "poll", "stop", "get_session", "get_statistics"],
-      "properties": ["auto_start", "auto_poll", "role", "port", "address", "allow_insecure_loopback", "game_protocol", "simulation_fingerprint", "tick_rate", "max_players", "max_entities"],
-      "signals": ["session_changed", "network_error", "state_changed", "peer_connected", "peer_disconnected", "application_received", "packet_received", "simulation_tick", "diagnostic"]
-    },
-    "SuperpositionScene": {
-      "methods": ["set_prefab_id", "get_prefab_id", "set_scene", "get_scene"],
-      "properties": ["prefab_id", "scene"]
-    },
-    "SuperpositionSpawner": {
-      "methods": ["spawn", "despawn", "set_visible", "synchronize", "get_spawned_node", "get_owner_client_id", "has_entity", "get_entity_for_node", "get_statistics", "get_session"],
-      "properties": ["scenes", "spawn_path", "session_path", "replication_key", "entity_kind", "max_instances"]
-    },
-    "SuperpositionRPCMethod": {
-      "methods": ["set_method_id", "get_method_id", "set_method", "get_method", "set_permission", "get_permission", "set_argument_types", "get_argument_types", "set_calls_per_second", "get_calls_per_second"],
-      "properties": ["method_id", "method", "permission", "argument_types", "calls_per_second"],
-      "constants": ["AUTHORITY", "OWNER", "ANY_PEER"]
-    },
-    "SuperpositionRPC": {
-      "methods": ["send_rpc", "get_method_fingerprint", "get_statistics", "get_spawner"],
-      "properties": ["spawner_path", "methods"]
-    },
-    "EGPNetSnapshotInterpolator": {
+    "SuperposSession": {
       "methods": [
         "configure",
-        "submit",
-        "advance",
-        "sample",
-        "get_statistics",
-        "remove",
-        "clear"
+        "close",
+        "read_tick",
+        "read_authority_epoch",
+        "read_binding_generation",
+        "spawn_object",
+        "read_object",
+        "publish_packed",
+        "configure_udp",
+        "enqueue_packet",
+        "read_packet"
       ],
-      "properties": []
+      "signals": []
+    },
+    "SuperposWorld": {
+      "methods": [
+        "configure",
+        "get_session",
+        "read_session",
+        "close_checked"
+      ],
+      "signals": []
     }
   },
   "removed": {

@@ -1,3 +1,5 @@
+> **Legacy migration source:** this guide and its fixtures use the retired networking module. They are disabled in the default Superpos build and do not qualify Superpos. See ../../doc/egp_superpos.md for the replacement API.
+
 # Superposition
 
 Superposition adds an Inspector workflow for native scene spawning, selected gameplay properties and permitted remote calls. It uses EGP's existing Yojimbo transport and authenticated peer identities. The same native nodes and resources are available in GDScript, C# and the editor's matching C++ SDK.

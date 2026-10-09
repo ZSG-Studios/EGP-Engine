@@ -17,7 +17,6 @@ function main(compressor, zipper)
         {'sdk_paths','build/xmake/tests/sdk_paths.lua',marker='NATIVE_SDK_PATH_CHECKS=(%d+)'},
         {'sdk_native_structures','build/xmake/tests/sdk_native_structures.lua',marker='NATIVE_SDK_NATIVE_STRUCTURE_CHECKS=(%d+)'},
         {'godot_cpp_fixture','tests/build/test_godot_cpp_fixture.lua'},
-        {'helper_install','tests/build/test_install_egp_net_helpers.lua',marker='NATIVE_HELPER_INSTALL_CHECKS=(%d+)'},
         {'linking','tests/build/test_xmake_linking.lua'},
         {'link_dependencies','tests/build/test_xmake_link_dependencies.lua'},
         {'api_fence','tests/build/test_xmake_api_fence.lua'},

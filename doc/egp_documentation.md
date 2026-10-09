@@ -5,8 +5,8 @@ EGP maintains two forks of Godot's official publishing projects:
 - [EGP-docs](https://github.com/ZSG-Studios/EGP-docs): the manual and class reference, built with Sphinx and Godot's existing documentation theme.
 - [EGP-website](https://github.com/ZSG-Studios/EGP-website): the project website, using Godot's Jekyll styles and layouts.
 
-The documentation describes EGP's Box2D/Box3D physics, Yojimbo transport,
-GDScript/C#/C++ networking helpers, C++ extension editor, runtime reload, and
+The documentation describes EGP's Box2D/Box3D physics, native Superpos,
+matching generated GDScript/C#/C++ bindings, C++ extension editor, runtime reload, and
 xmake workflow. Inherited multiplayer and Jolt instructions are replaced
 with migration guidance. Upstream credit and licenses remain intact.
 
@@ -14,7 +14,7 @@ with migration guidance. Upstream credit and licenses remain intact.
 
 Edit native class descriptions in `doc/classes/*.xml` or the corresponding
 module's `doc_classes` directory. Edit system guides in this engine's `doc/`
-directory and the networking guide in `modules/egp_net/README.md`. The website
+directory and the networking guide in `doc/egp_superpos.md`. The website
 fork owns its introductory pages and navigation; the documentation fork owns
 its additional tutorials and migration guides.
 
@@ -28,7 +28,7 @@ python misc/scripts/sync_egp_docs.py --docs ../EGP-docs --check
 
 Synchronization regenerates the entire native class reference with Godot's
 official XML-to-reStructuredText tool, removes retired class pages, publishes
-the canonical guides and networking helper declarations, and records source
+the canonical guides and native Superpos language contracts, and records source
 and output SHA256 hashes in `egp/source_manifest.json`. Review the generated
 diff before committing. Commit engine source first when publishing a snapshot,
 so the manifest identifies a fetchable source revision.

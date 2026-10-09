@@ -23,10 +23,8 @@ MANUALS = {
     "doc/egp_api_contract.md": "api_contract.md",
     "doc/egp_network_lab.md": "network_lab.md",
     "doc/egp_documentation.md": "documentation.md",
-    "modules/egp_net/README.md": "networking_reference.md",
-    "modules/egp_net/SUPERPOSITION.md": "superposition.md",
-    "demos/box3d_arena/README.md": "physics_arena.md",
-    "demos/box3d_deterministic/README.md": "deterministic_demo.md",
+    "doc/egp_superpos.md": "networking_reference.md",
+    "doc/egp_superpos_migration.md": "superpos_migration.md",
 }
 SOURCE_URL = "https://github.com/ZSG-Studios/EGP-Engine/blob/"
 
@@ -44,21 +42,30 @@ def tracked_xml_sources() -> list[Path]:
         .decode("utf-8")
         .split("\0")
     )
-    return sorted(
+    selected = [
         ROOT / name
         for name in tracked
         if name.endswith(".xml")
+        and not name.startswith("modules/egp_net/")
         and (name.startswith("doc/classes/") or "doc_classes" in Path(name).parts)
         and (ROOT / name).is_file()
-    )
+    ]
+    manifest_path = ROOT / "modules/superpos/source_manifest.json"
+    if manifest_path.is_file():
+        manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+        for name in manifest["classes"]:
+            source = ROOT / "modules/superpos/doc_classes" / (name + ".xml")
+            if source.is_file():
+                selected.append(source)
+    return sorted(set(selected))
 
 
 def tracked_sources() -> list[Path]:
     sources = tracked_xml_sources()
     sources.extend(ROOT / name for name in MANUALS)
-    sources.extend((ROOT / "modules/egp_net/gdscript").glob("*.gd"))
-    sources.extend((ROOT / "modules/egp_net/csharp").glob("*.cs"))
-    sources.extend((ROOT / "modules/egp_net/cpp").glob("*.hpp"))
+    sources.extend((ROOT / "modules/superpos").glob("*.h"))
+    sources.extend((ROOT / "modules/superpos").glob("*.cpp"))
+    sources.extend([ROOT / "modules/superpos/source_manifest.json", ROOT / "modules/superpos/core/source_manifest.json"])
     sources.extend([ROOT / "version.lua", ROOT / "doc/tools/make_rst.py", Path(__file__).resolve()])
     return sorted(set(sources))
 
@@ -86,84 +93,23 @@ def manual(source: str, revision: str) -> str:
 
 
 def helper_reference(revision: str) -> str:
-    lines = [
-        ".. _doc_egp_helper_reference:",
-        "",
-        "Networking helper API",
-        "=====================",
-        "",
-        "These declarations are generated from EGP's shipped helper sources. Install them",
-        "with ``xmake lua misc/scripts/install_egp_net_helpers.lua --project /path/to/game``",
-        "before using the high-level APIs. Native",
-        "classes are documented separately in the :ref:`class reference <doc_class_reference>`.",
-        "",
-        "For behavior, ownership, limits and errors, see :doc:`networking_reference`.",
-        "",
-        "GDScript",
-        "--------",
-        "",
-    ]
-    for source in sorted((ROOT / "modules/egp_net/gdscript").glob("*.gd")):
-        text = source.read_text(encoding="utf-8")
-        name = re.search(r"^class_name (\w+)", text, re.M)
-        if not name:
-            continue
-        heading = name[1]
-        lines.extend([heading, "~" * len(heading), ""])
-        lines.extend([f"`Source <{SOURCE_URL}{revision}/{source.relative_to(ROOT).as_posix()}>`__", ""])
-        # Underscore-prefixed hooks belong to the implementation, not the facade.
-        signatures = re.findall(r"^func ((?!_)\w+\([^\n]*?\)(?: -> [^:\n]+)?):", text, re.M)
-        lines.extend([".. code-block:: gdscript", ""] + ["    func " + signature for signature in signatures] + [""])
-        signals = re.findall(r"^signal .+$", text, re.M)
-        if signals:
-            lines.extend(
-                ["Signals:", "", ".. code-block:: gdscript", ""] + ["    " + signal for signal in signals] + [""]
-            )
-    lines.extend([
-        "C#",
-        "--",
-        "",
-        "Use the ``EGP.Networking`` namespace. The source files below declare the typed",
-        "options, events, results, ownership and disposal contracts.",
-        "",
-    ])
-    for source in sorted((ROOT / "modules/egp_net/csharp").glob("*.cs")):
-        if source.name == "Shared.cs":
-            continue
-        heading = source.stem
-        lines.extend([
-            heading,
-            "~" * len(heading),
-            "",
-            f"`Source <{SOURCE_URL}{revision}/{source.relative_to(ROOT).as_posix()}>`__",
-            "",
-        ])
-        signatures = []
-        for line in source.read_text(encoding="utf-8").splitlines():
-            stripped = line.strip()
-            if not stripped.startswith("public ") or " class " in stripped or " enum " in stripped:
-                continue
-            declaration = stripped.split("=>", 1)[0].split("{", 1)[0].rstrip().rstrip(";")
-            if declaration:
-                signatures.append(declaration + ";")
-        lines.extend([".. code-block:: csharp", ""] + ["    " + signature for signature in signatures] + [""])
-    lines.extend([
-        "C++",
-        "---",
-        "",
-        "Include ``addons/egp_net/cpp/egp_net.hpp`` and use ``egp::networking``.",
-        "The header declares ``Options``, ``Session``, ``Net``, ``Prediction``,",
-        "``Box3D``, and 2D/3D presentation helpers. Keep wrappers alive for their",
-        "callbacks; perform calls and destruction on the constructing Godot thread.",
-        "",
-        f"`Complete C++ declarations <{SOURCE_URL}{revision}/modules/egp_net/cpp/egp_net.hpp>`__",
-        "",
-        "Standalone native servers instead include ``modules/egp_net/net_core.h`` and",
-        "use ``egp::net::Session``. This API does not require the GDScript codec.",
-        "",
-    ])
-    return "\n".join(lines)
+    return """.. _doc_egp_helper_reference:
 
+Superpos language API
+=====================
+
+GDScript, generated C# (``Godot.SuperposSession``) and generated godot-cpp
+(``godot::SuperposSession``) call the same native ClassDB implementation.
+Use the matching editor's generated bindings and C++17 extension SDK.
+The independent core's C++23 headers are private engine implementation.
+
+See :doc:`networking_reference` for API usage, checked counters, packet delivery,
+owner retirement and qualification limits. See :doc:`superpos_migration` before
+porting legacy helper users. Superpos does not install GDScript bridge helpers.
+
+The old ``EGP.Networking`` and ``egp::networking`` facades and Superposition
+nodes belong to the retired transport. Their declarations are not this API.
+"""
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)

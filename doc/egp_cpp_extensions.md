@@ -157,7 +157,7 @@ python misc/scripts/validate_egp_generated_api.py --cpp
 python misc/scripts/validate_egp_generated_api.py --managed-assembly bin/GodotSharp/Api/Debug/GodotSharp.dll
 ```
 
-These compile probes cover Superposition resources and nodes, pushed capture,
+Historical compile probes covered the retired networking resources and pushed capture,
 priority and interest settings, and snapshot interpolation. Runtime fixtures
 exercise replication, interpolation, deterministic physics replay, and failure
 paths separately. A successful compile receipt alone does not establish runtime

@@ -4,7 +4,7 @@ set_policy("check.auto_ignore_flags",false)
 local graphs={}
 local components={
     {name="engine",source="core/math/vector3.cpp"},
-    {name="network",source="modules/egp_net/egp_net_session.cpp"},
+    {name="network",source="modules/superpos/superpos_session.cpp"},
     {name="box2d",source="modules/box2d/box2d_physics_server_2d.cpp"},
     {name="box3d",source="modules/box3d/scene_backend/servers/box3d_physics_server_3d.cpp"}
 }
@@ -34,7 +34,7 @@ for _,compiler_name in ipairs({"msvc","clang-cl"}) do
                 local source=assert(target:sourcefiles()[1])
                 local program,arguments=compiler:compargv(source,object,{target=target})
                 import("core.base.json").savefile(object .. ".arguments.json",{source=target:data("egp.fp.source"),compiler=program,arguments=arguments})
-                local strict=component.name=="engine"
+                local strict=component.name=="engine" or component.name=="network"
                 assert(table.contains(arguments,"/fp:strict")==strict,"Only ordinary engine sources must retain the strict floating-point model")
                 assert(table.contains(arguments,"/fp:precise")== (not strict and compiler_name=="msvc"),"MSVC deterministic modules must retain their precise model")
                 assert(table.contains(arguments,"/clang:-ffp-contract=off")== (not strict and compiler_name=="clang-cl"),"Clang-cl deterministic modules must disable contraction without conflicting models")

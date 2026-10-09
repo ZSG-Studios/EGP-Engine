@@ -1,3 +1,5 @@
+> Historical integration evidence: networking receipts below describe the retired transport. They do not qualify Superpos. See [current networking](egp_superpos.md) and `.build/diagnostics/superpos-cutover.json`.
+
 > Historical integration and qualification receipts. Commands below describe their recorded revisions. For current builds, use [the native xmake guide](egp_xmake.md).
 
 # EGP integration and qualification

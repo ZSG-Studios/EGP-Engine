@@ -8,7 +8,6 @@ function main()
         'tests/physics/box3d/determinism.cpp',
         'tests/physics/box3d/joints.cpp',
         'tests/compatibility_test/src/compat_checker.c',
-        'modules/egp_net/tests/core_checks.cpp',
         'build/xmake/tests/generated_objects/ordinary.cpp',
         'thirdparty/box2d/test/main.c'
     }

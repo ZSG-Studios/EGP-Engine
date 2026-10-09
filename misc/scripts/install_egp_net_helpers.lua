@@ -1,3 +1,4 @@
+raise("Legacy networking helper installation is retired. Use native Superpos classes and matching generated bindings.")
 -- Install checked-in networking helpers into an existing game project.
 function install(project, languages, root)
     project = path.absolute(assert(project, "--project is required"))

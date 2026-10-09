@@ -1,3 +1,5 @@
+> **Legacy migration source:** this guide and its fixtures use the retired networking module. They are disabled in the default Superpos build and do not qualify Superpos. See ../../doc/egp_superpos.md for the replacement API.
+
 # EGP Box3D Arena
 
 For physics prediction, solver rollback and canonical-input replay with per-tick hash verification, see the companion [deterministic networking demo](../box3d_deterministic/README.md). The engine also supplies the native `SuperpositionPrediction` journal for GDScript, C# and C++, with an Inspector-configured `EGPNetBox3DPrediction` GDScript adapter. Games must provide deterministic complete-world input callbacks and matching trusted genesis state; the adapter cannot infer gameplay rules. The 52-player arena uses authoritative pose streaming and does not run complete-world client rollback.

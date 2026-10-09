@@ -33,51 +33,12 @@ entity inputs must also be identical for a deterministic simulation.
 
 ## Tick and networking contract
 
-The native class is in `modules/box3d/egp_box3d_world.h`. `configure` runs once;
-`get_tick` initially returns zero. `step_tick(get_tick() + 1)` performs exactly
-one step after validating the full ordered command batch. Wrong ticks, duplicate
-entity sequences, nonexistent bodies, nonfinite inputs and invalid quaternions
-are rejected. `clear_pending_commands` discards a rejected batch.
-
-Bodies can currently be boxes, spheres or Y-axis capsules, with static,
-kinematic or dynamic body type. The command API supports destruction, center
-impulses, linear velocity and pose/velocity corrections. `apply_queued_commands`
-applies an ordered batch without stepping, for baseline creation and authoritative
-state application. Simulation and all reads belong to the constructing thread.
-Entries from independent worlds and managed destruction are serialized around
-Box3D's process-global world slots and replay length scale. Each step can still
-use multiple solver workers; concurrent independent world stepping is not enabled.
-
-The native Yojimbo session and GDScript `EGPNetBox3D` helper share an explicit
-server simulation clock. The helper's simulation-tick callback steps the explicit
-world before publishing body states. Network and physics rates must match;
-the helper checks the immutable profile fingerprint and rate on attachment.
-Network entity lifecycle and command sequence assignment must still be
-authoritative. The physics module does not assign sequences from packet arrival.
-
-For client rollback: restore the local snapshot associated with the processed
-input tick, apply authoritative lifecycle/pose/velocity corrections, flush the
-correction commands, snapshot that boundary, then replay buffered input ticks.
-Read native position, rotation and velocities through `get_body_state` when
-publishing entity state. Rendering interpolation must not feed back into physics.
-
-Full snapshots use Box3D's public recording seed/player APIs, including internal
-contact, island, allocator and warm-start state. A retained player owns the
-restored world and geometry. Body names reconstruct the entity map through
-public handles; the adapter never rewrites opaque ID fields.
-
-Snapshot bytes are trusted local rollback history for a compatible binary/ABI.
-They are not a network wire format, portable save format or authenticated data.
-The 64 MiB cap and checksum detect ordinary damage; they do not make upstream
-deserialization safe for hostile input. Captures/restores require no queued
-commands and restores validate a candidate before replacing the live world.
-
-`get_state_hash` hashes profile, tick, stable IDs, types, awake state, poses and
-velocities. It is a diagnostic, not a digest of all hidden solver state.
-Compare hashes only at matching simulation ticks, profiles and entity topology.
-Authoritative pose/velocity corrections do not reproduce hidden remote contact
-caches. Full client/server convergence under collision corrections remains an
-integration qualification requirement even though exact local replay passes.
+`EGPBox3DWorld` provides explicit fixed ticks and local full-world snapshots.
+These remain independent of Superpos. The previous networking physics adapter
+is retired. Superpos requires a registered native simulation provider; its
+canonical replay fixture does not establish a Box3D solver integration,
+automatic scene rollback, portable recovery or cross-platform determinism.
+See [Superpos networking](egp_superpos.md).
 
 ## Repeatable checks
 
@@ -105,7 +66,7 @@ bin/godot.windows.editor.x86_64.mono.console.exe --headless --path tests/physics
 Match the executable name to the build's `dev_build`/suffix settings. This smoke
 test exercises the actual registered class and snapshot replay. A separately
 compiled object is compilation evidence only; it does not prove editor or
-exported runtime integration. The networking chat owns the combined native Yojimbo/GDScript integration fixture.
+exported runtime integration. Historical transport fixtures do not qualify Superpos.
 Earlier C# and LiteEntitySystem receipts are historical evidence.
 
 Pass `--engine path/to/the/editor.exe` to the validation script to include this
@@ -132,7 +93,7 @@ This scene world has separate ownership from `EGPBox3DWorld`. It does not yet
 implement the stable network entity command and rollback contract for stock
 scene nodes. RID ordering requires identical scene creation order; it does not
 make arbitrary network arrival order deterministic. Use the explicit world for
-authoritative network physics; qualify the current Yojimbo helper separately.
+authoritative network physics; qualify a Superpos native simulation provider separately.
 
 ```powershell
 python misc/scripts/validate_box3d_scene.py --engine path/to/the/editor.exe
@@ -165,7 +126,7 @@ Cylinders use a hull approximation; scaling/geometry behavior needs qualificatio
 | Collision filters, sensors, contact ordering, shape/ray/overlap queries | Basic filters, areas, contacts and exclusions pass; concave visitors, per-shape signals and penetration semantics remain |
 | Godot joints and unsupported constraint semantics | Pin/hinge/slider/ConeTwist/6DOF implemented and covered by focused Windows fixtures; broad parameter and solver parity remain |
 | Soft bodies, vehicles and ragdolls | Focused soft-body Windows fixture passes; broad soft collisions, vehicles and ragdoll parity remain |
-| Authoritative physics under prediction and corrections | Native Yojimbo fixed-clock replication, bounded correction/input replay and packaged separate-process tests pass; scene rollback and broader adverse-network qualification remain |
+| Authoritative physics under prediction and corrections | Superpos native simulation-provider and solver integration require fresh qualification; old transport receipts do not apply |
 | Windows/Linux/macOS, x64/arm64 and export templates | Windows x64 editor and native debug template qualified for tested fixtures; other platforms and release templates remain |
 | Long runs, large scenes, allocation/memory/performance budgets | Measured limits and regressions required |
 | Removal of Jolt and Godot Physics 3D | Source modules, vendor dependency, registrations, build choices and obsolete solver settings removed |

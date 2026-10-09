@@ -6,7 +6,7 @@ function main(root,compiler,output)
     graph:configure()
     local selected={
         ["core/math/vector3.cpp"]=true,
-        ["modules/egp_net/egp_net_session.cpp"]=true,
+        ["modules/superpos/superpos_session.cpp"]=true,
         ["modules/box2d/box2d_physics_server_2d.cpp"]=true,
         ["modules/box3d/scene_backend/servers/box3d_physics_server_3d.cpp"]=true
     }

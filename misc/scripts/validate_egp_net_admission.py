@@ -5,6 +5,9 @@ Retained keys must admit an unused token issued in the restart second. Older
 tokens must fail the transport's start-time gate. Generated keys reject both.
 No key/token material is saved. A missed timestamp boundary fails the run.
 """
+if __name__ == "__main__":
+    raise SystemExit("This networking fixture is retired. Use validate_superpos.py with the current engine; legacy transport results do not qualify Superpos.")
+
 
 import argparse
 import hashlib

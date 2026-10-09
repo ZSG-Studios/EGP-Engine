@@ -1,5 +1,8 @@
 #!/usr/bin/env python3
 """Compile and run the mixed C#/GDScript/C++ networking sample in a fresh project."""
+if __name__ == "__main__":
+    raise SystemExit("This networking fixture is retired. Use validate_superpos.py with the current engine; legacy transport results do not qualify Superpos.")
+
 
 import argparse
 import hashlib

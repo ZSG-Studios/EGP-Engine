@@ -56,7 +56,7 @@ def extract_sdk(output, engine, api_sha256, sdk_header=None):
         archive = zlib.decompress(payload)
         if hashlib.sha256(archive).hexdigest() != expected:
             raise RuntimeError("Compiled SDK archive hash mismatch")
-        output.mkdir(parents=True)
+        output.mkdir(parents=True, exist_ok=True)
         offset = 0
         files = {}
         while offset < len(archive):
@@ -116,8 +116,8 @@ def main():
         parser.error("Select --cpp, --sdk, and/or --managed-assembly")
     if args.cpp and not args.sdk and not args.engine:
         parser.error("Automatic bundled SDK qualification requires --engine pointing to the final editor")
-    output = args.output.resolve() / str(time.time_ns())
-    output.mkdir(parents=True)
+    output = args.output.resolve()
+    output.mkdir(parents=True, exist_ok=True)
     receipt = {
         "passed": False,
         "scope": "Direct typed generated API compilation; runtime is qualified separately.",
@@ -151,7 +151,7 @@ def main():
             receipt["engine"] = str(engine)
             receipt["engine_sha256"] = hashlib.sha256(engine.read_bytes()).hexdigest()
             api_output = output / "engine-api"
-            api_output.mkdir()
+            api_output.mkdir(exist_ok=True)
             with (api_output / "capture.log").open("w", encoding="utf-8") as log:
                 capture = subprocess.run(
                     [str(engine), "--headless", "--dump-extension-api"],
@@ -191,16 +191,8 @@ def main():
             if api_sha256 and receipt["sdk_metadata"]["api_sha256"] != api_sha256:
                 raise RuntimeError("SDK metadata does not match the selected final editor API")
             for name in (
-                "superposition",
-                "superposition_config",
-                "superposition_property",
-                "superposition_world",
-                "superposition_prediction",
-                "superposition_scene",
-                "superposition_spawner",
-                "superposition_rpc_method",
-                "superposition_rpc",
-                "egp_net_snapshot_interpolator",
+                "superpos_session", "superpos_world", "superpos_schema",
+                "superpos_field", "superpos_u_int64", "superpos_simulation_provider",
             ):
                 if not (sdk / "gen/include/godot_cpp/classes" / (name + ".hpp")).is_file():
                     raise RuntimeError("Matching SDK header missing: " + name)

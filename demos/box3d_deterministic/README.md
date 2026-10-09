@@ -1,3 +1,5 @@
+> **Legacy migration source:** this guide and its fixtures use the retired networking module. They are disabled in the default Superpos build and do not qualify Superpos. See ../../doc/egp_superpos.md for the replacement API.
+
 # Deterministic Box3D networking
 
 One dedicated server and two independently authenticated clients simulate the same Box3D world: two players, a mixed physics stack, shockwave impulses, respawning props and a moving kinematic platform. Each client predicts locally, receives canonical tick-stamped inputs, rolls back to its own locally captured solver state when those inputs differ, and replays the complete physics world. Every acknowledged tick must match the server's diagnostic state hash.

@@ -1,34 +1,31 @@
-name: EGP networking
+name: Superpos native networking
 on:
   push:
-    paths: ["modules/egp_net/**", "thirdparty/yojimbo/**", "misc/scripts/validate_egp_net.py", "misc/scripts/egp_engine_process.py", "misc/scripts/test_egp_engine_process.py", "misc/scripts/validate_egp_net_process.py", "misc/scripts/validate_egp_net_clock_process.py", "misc/scripts/test_egp_net_clock_process.py", "misc/scripts/validate_egp_net_admission.py", "misc/scripts/validate_egp_net_languages.py", "misc/egp/network_lab/process_clock_server.gd", "misc/egp/network_lab/admission_lifecycle.gd", ".github/workflows/egp-networking.yml", "xmake.lua", "build/xmake/**", "misc/xmake/**", "misc/scripts/egp_xmake.py", "misc/scripts/test_egp_xmake_qualification.py"]
+    paths: ["modules/superpos/**", "misc/egp/superpos_lab/**", "misc/scripts/validate_superpos.py", "build/xmake/**", "xmake.lua", ".github/workflows/egp-networking.yml"]
   pull_request:
-    paths: ["modules/egp_net/**", "thirdparty/yojimbo/**", "misc/scripts/validate_egp_net.py", "misc/scripts/egp_engine_process.py", "misc/scripts/test_egp_engine_process.py", "misc/scripts/validate_egp_net_process.py", "misc/scripts/validate_egp_net_clock_process.py", "misc/scripts/test_egp_net_clock_process.py", "misc/scripts/validate_egp_net_admission.py", "misc/scripts/validate_egp_net_languages.py", "misc/egp/network_lab/process_clock_server.gd", "misc/egp/network_lab/admission_lifecycle.gd", ".github/workflows/egp-networking.yml", "xmake.lua", "build/xmake/**", "misc/xmake/**", "misc/scripts/egp_xmake.py", "misc/scripts/test_egp_xmake_qualification.py"]
+    paths: ["modules/superpos/**", "misc/egp/superpos_lab/**", "misc/scripts/validate_superpos.py", "build/xmake/**", "xmake.lua", ".github/workflows/egp-networking.yml"]
+  workflow_dispatch:
+permissions:
+  contents: read
 concurrency:
-  group: egp-networking-${{ github.head_ref || github.ref_name }}
+  group: superpos-networking-${{ github.head_ref || github.ref_name }}
   cancel-in-progress: true
 jobs:
-  networking:
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
-        configuration: [Debug, Release]
-    runs-on: ${{ matrix.os }}
+  native-windows:
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
       - uses: ./.github/actions/godot-deps
-      - name: Validate direct engine identity and strict process evidence
+      - name: Build current Superpos native editor
         shell: bash
-        run: |
-          python -m unittest discover -s misc/scripts -p test_egp_engine_process.py
-          python -m unittest discover -s misc/scripts -p test_egp_net_clock_process.py
-      - run: python misc/scripts/validate_egp_net.py --configuration ${{ matrix.configuration }}
+        run: xmake lua misc/scripts/build_egp.lua windows editor 4 .build/xmake-cache "arch=x86_64 dev_build=yes debug_symbols=no module_mono_enabled=no accesskit=no d3d12=no"
+      - name: Check native API, canonical ownership and authenticated loopback
+        run: python misc/scripts/validate_superpos.py --engine bin/godot.windows.editor.dev.x86_64.exe
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: networking-${{ matrix.os }}-${{ matrix.configuration }}
-          path: .build/egp-net-validation
+          name: superpos-native-windows
+          path: .build/diagnostics/superpos

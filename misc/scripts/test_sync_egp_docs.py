@@ -16,12 +16,12 @@ class TrackedDocumentationTest(unittest.TestCase):
             subprocess.run(["git", "init", "--quiet", str(root)], check=True)
             expected = [
                 "doc/classes/Node.xml",
-                "modules/egp_net/doc_classes/SuperpositionWorld.xml",
+                "modules/superpos/doc_classes/SuperposWorld.xml",
                 "platform/windows/doc_classes/EditorExportPlatformWindows.xml",
             ]
             unrelated = [
                 "modules/other_chat/doc_classes/Unfinished.xml",
-                "modules/egp_net/configuration.xml",
+                "modules/superpos/configuration.xml",
             ]
             for name in expected + unrelated:
                 path = root / name

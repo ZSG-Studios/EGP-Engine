@@ -14,7 +14,7 @@
 		To keep track of the scene hierarchy (especially when instantiating scenes into other scenes), an "owner" can be set for the node with the [member owner] property. This keeps track of who instantiated what. This is mostly useful when writing editors and tools, though.
 		Finally, when a node is freed with [method Object.free] or [method queue_free], it will also free all its children.
 		[b]Groups:[/b] Nodes can be added to as many groups as you want to be easy to manage, you could create groups like "enemies" or "collectables" for example, depending on your game. See [method add_to_group], [method is_in_group] and [method remove_from_group]. You can then retrieve all nodes in these groups, iterate them and even call methods on groups via the methods on [SceneTree].
-		[b]Networking with nodes:[/b] EGP uses [EGPNetSession] for native networking. The EGPNet GDScript helper provides explicit message handlers, replicated entity handles, ownership-checked inputs, and registered scene factories. See the EGP networking setup guide for the session and helper contracts.
+		[b]Networking with nodes:[/b] EGP uses [SuperposSession] for native canonical state and packet delivery, and [SuperposWorld] for scene ownership. Declare explicit [SuperposSchema] and [SuperposField] resources. Application scene projection and message dispatch require explicit integration. See the Superpos networking guide for supported contracts and qualification limits.
 		[b]Note:[/b] The [code]script[/code] property is part of the [Object] class, not [Node]. It isn't exposed like most properties but does have a setter and getter (see [method Object.set_script] and [method Object.get_script]).
 	</description>
 	<tutorials>

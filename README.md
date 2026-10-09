@@ -6,8 +6,8 @@ maintained by ZSG-Studios and based on upstream `master`.
 ## Features
 
 - Box2D and Box3D physics.
-- Yojimbo networking with GDScript, C# and C++ APIs.
-- Superposition property replication configured through the Inspector.
+- Native Superpos networking with matching GDScript, C# and C++ APIs.
+- Explicit schemas, canonical state, checked ownership and bounded packet delivery.
 - Built-in C++ extension tools and a bundled godot-cpp SDK.
 - Native xmake builds with platform toolchains and incremental dependencies.
 - Forward+ rendering exclusively, using Vulkan, Direct3D 12 or Metal.
@@ -23,7 +23,7 @@ across GDScript, C# and C++.
 | --- | --- | --- |
 | Godot Physics 2D | Native Box2D integration | Use a pinned solver with an explicit fixed-step profile, substeps and worker settings, while keeping `PhysicsServer2D` and ordinary 2D physics nodes as the game-facing API. |
 | Godot Physics 3D and Jolt, including the Jolt vendor dependency | Native Box3D integration | Use the Box solver family for both dimensions and expose an explicit 3D world with ordered entity commands, fixed ticks and local full-world snapshots for authoritative simulation and replay. |
-| Godot's high-level multiplayer/RPC stack, ENet, WebRTC and `WebSocketMultiplayerPeer` | Native Yojimbo transport with `EGPNetSession` and shared networking helpers | Make encrypted token admission, authoritative entity ownership, interest, replication and bounded traffic part of one explicit protocol, with matching GDScript, C# and C++ APIs. |
+| Godot's high-level multiplayer/RPC stack, ENet, WebRTC and `WebSocketMultiplayerPeer` | Native Superpos core and `SuperposSession` / `SuperposWorld` | Integrate explicit schemas, canonical ownership, authenticated associations and bounded delivery through matching native language APIs. Scene projection and broad gameplay qualification remain separate work. |
 
 ### Rendering: Forward+ only
 
@@ -42,8 +42,8 @@ Box2D is the sole 2D backend and Box3D is the sole 3D backend. Old backend
 selections migrate to the corresponding Box backend. Scene physics continues to
 use Godot's physics clock; `EGPBox3DWorld` separately gives applications control
 over fixed ticks, stable body identities, ordered commands and capture/restore.
-The networking adapter connects that explicit world to the authoritative server
-clock and checks the simulation profile and tick rate.
+Superpos simulation-provider integration must be qualified separately before
+attaching a solver world to an authoritative network clock.
 
 Solver-specific controls from the removed backends are also retired where the
 Box solvers have a different contract. Examples include old solver-bias settings,
@@ -58,30 +58,23 @@ automatic scene rollback. The ordinary Box3D scene adapter remains experimental.
 See the [Box2D guide](doc/egp_box2d.md) and [Box3D guide](doc/egp_box3d.md) for
 supported behavior, unsupported shapes and qualification limits.
 
-### Networking: one native protocol across languages
+### Networking: native Superpos
 
-Yojimbo supplies the native transport, reliable messaging and encrypted admission
-foundation. EGP adds session lifecycle, entity replication, ownership, interest,
-traffic budgets and diagnostics. Higher-level helpers share the same codec,
-prediction and physics adapters across languages; low-level native session APIs
-can operate without those GDScript helpers.
+Superpos is an independent C++23 core integrated directly through
+`modules/superpos`. Native `SuperposField` / `SuperposSchema` resources declare
+bounded schemas; `SuperposSession` owns canonical state and packet delivery,
+and `SuperposWorld` supplies scene ownership and optional physics-phase ticks.
+GDScript, generated C# and generated C++ call the same native implementation.
 
-Superposition adds property selection to the Inspector: add the component beneath
-a gameplay node, point it at the network session and select the properties to
-replicate. It shares the native session's entity lifecycle and validation. Use
-the native snapshot interpolator for fast motion and Superposition for gameplay
-values. See the [Superposition guide](modules/egp_net/SUPERPOSITION.md).
+This replaces the previous Yojimbo transport and its Superposition layer.
+`EGPNetSession`, old language helpers, property components, RPC and spawner
+nodes require application migration. Automatic scene replication, solver
+prediction/recovery, old arena results and production/WAN behavior are not
+qualified by the replacement. The previous module has no active build target or supported public API.
+Physical source removal was rejected by automatic approval.
 
-This is a deliberate API break: existing `Node.rpc`/`rpc_id`, multiplayer
-authority calls, `MultiplayerAPI`, scene replication nodes and legacy multiplayer
-peers need migration to EGP's explicit messages and entity APIs. General-purpose
-HTTP, TCP/UDP and `WebSocketPeer` remain available, including WebSocket support for
-editor debugging. Production accounts, token delivery and game persistence still
-belong to the application/backend. Field deltas, lag compensation, automatic
-client physics rollback and broader scale/platform qualification remain open.
-See the [networking guide](modules/egp_net/README.md),
-[network lab](doc/egp_network_lab.md) and
-[API contracts](doc/egp_api_contract.md) before porting a multiplayer project.
+See [Superpos networking](doc/egp_superpos.md) and
+[networking migration](doc/egp_superpos_migration.md) for actual APIs and limits.
 
 ### C++ tools and builds: extend the existing workflows
 
@@ -120,11 +113,8 @@ platform SDK requirements, compiler choices and current qualification scope.
 - [EGP documentation source and website](doc/egp_documentation.md)
 - [Documentation fork](https://github.com/ZSG-Studios/EGP-docs) · [Website fork](https://github.com/ZSG-Studios/EGP-website)
 - [C++ extensions](doc/egp_cpp_extensions.md)
-- [Networking](modules/egp_net/README.md)
-- [Superposition replication](modules/egp_net/SUPERPOSITION.md)
-- [52-player physics arena](demos/box3d_arena/README.md)
-- [Deterministic prediction and replay demo](demos/box3d_deterministic/README.md)
-- [Network lab](doc/egp_network_lab.md)
+- [Superpos networking](doc/egp_superpos.md)
+- [Networking migration](doc/egp_superpos_migration.md)
 - [Box2D physics](doc/egp_box2d.md)
 - [Box3D physics](doc/egp_box3d.md)
 - [API and runtime reload contracts](doc/egp_api_contract.md)

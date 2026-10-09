@@ -1,3 +1,5 @@
+> **Legacy migration source:** this guide and its fixtures use the retired networking module. They are disabled in the default Superpos build and do not qualify Superpos. See ../../doc/egp_superpos.md for the replacement API.
+
 # EGP native networking
 
 Yojimbo is EGP's single multiplayer transport. Pinned version 1.13.5,
@@ -48,8 +50,8 @@ The editor without Mono remains usable for games that use only GDScript and C++.
 | Explicit Box3D server clock adapter | `EGPNetBox3D` | `NetBox3D` | `Box3D` |
 | Optional 2D/3D presentation interpolation | `EGPNetEntity2D/3D` | `NetEntity2D/3D` | `EntityPresentation2D/3D` |
 
-C# sources live in `csharp/`; the C++ extension faÃƒÂ§ade is the header
-`cpp/egp_net.hpp`. Both high-level faÃƒÂ§ades execute the shared GDScript codec,
+C# sources live in `csharp/`; the C++ extension faÃ§ade is the header
+`cpp/egp_net.hpp`. Both high-level faÃ§ades execute the shared GDScript codec,
 prediction and physics adapters. All three languages therefore use the same
 envelope validation and wire format. The low-level session APIs do not need
 GDScript. C++ extension authors include the installed header and link the
@@ -320,19 +322,19 @@ Configuration defaults and principal limits:
 
 | Option | Default | Contract |
 | --- | --- | --- |
-| `tick_rate` | 60 | 1Ã¢â‚¬â€œ240; equal at both endpoints |
-| `max_players` | 32 | 1Ã¢â‚¬â€œ64 with this pinned Yojimbo version |
-| `max_entities` | 1024 | 1Ã¢â‚¬â€œ4096 live entities |
+| `tick_rate` | 60 | 1â€“240; equal at both endpoints |
+| `max_players` | 32 | 1â€“64 with this pinned Yojimbo version |
+| `max_entities` | 1024 | 1â€“4096 live entities |
 | `game_protocol` | `egp-game-v1` | Nonempty string, up to 256 UTF-8 bytes |
 | `simulation_fingerprint` | `script-state-v1` | Nonempty string, up to 256 UTF-8 bytes; use the configured Box3D fingerprint for physics |
 | `messages_per_second` | 1000 | At least 32, incoming/outgoing per-peer budget |
 | `bytes_per_second` | 4194304 | At least 8192, incoming/outgoing per-peer budget |
-| `timeout_seconds` | 5 | Connection timeout, 1Ã¢â‚¬â€œ60 seconds |
-| `token_lifetime_seconds` | 30 | Admission token expiry, 1Ã¢â‚¬â€œ120 seconds |
+| `timeout_seconds` | 5 | Connection timeout, 1â€“60 seconds |
+| `token_lifetime_seconds` | 30 | Admission token expiry, 1â€“120 seconds |
 | `private_key` | Generated | Optional server-only 32-byte `PackedByteArray` |
 | `allow_insecure_loopback` | false | Explicit development-only direct connection |
-| `simulated_loss` | 0 | Packet loss percentage, 0Ã¢â‚¬â€œ100 |
-| `simulated_latency_ms`, `simulated_jitter_ms` | 0 | Each 0Ã¢â‚¬â€œ5000 ms, development network simulation |
+| `simulated_loss` | 0 | Packet loss percentage, 0â€“100 |
+| `simulated_latency_ms`, `simulated_jitter_ms` | 0 | Each 0â€“5000 ms, development network simulation |
 
 Poll automatically through the helper's Node processing, or set `auto_poll=false`
 and call `poll()` once from your main-thread loop. Connect `diagnostic` to your
@@ -389,7 +391,7 @@ For custom codecs, instantiate `EGPNetSession` and call `command()` directly:
 | `despawn` | `entity` | Error |
 | `set_visible` | `entity`, `peer`, `visible` | Error |
 | `disconnect` | `peer` | Error |
-| `send_packet` | `peer`, raw `payload`, `channel` (0Ã¢â‚¬â€œ3), `delivery` (2 or 4) | Error |
+| `send_packet` | `peer`, raw `payload`, `channel` (0â€“3), `delivery` (2 or 4) | Error |
 
 Native `send_application()` is the helper's named-message lane. Use the same
 envelope codec if mixing it with `EGPNet`, or use raw packet channels for your
