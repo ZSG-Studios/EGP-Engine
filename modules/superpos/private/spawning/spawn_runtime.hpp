@@ -59,7 +59,7 @@ class SuperposSpawnRuntime final : public RefCounted {
     // reenters from its setters, constructor or tree callbacks invalidates the
     // ticket immediately but defers deleting that root until the frame unwinds.
     ObjectID projecting_root_, deferred_delete_;
-    uint64_t binding_{}, session_binding_{};
+    uint64_t binding_{}, session_binding_{}, spawn_timeout_us_{15000000};
     bool initialized_{}, stopping_{}, projecting_{};
     void finish_deferred_delete() noexcept;
     Slot *find(lifecycle::Ticket) noexcept;
@@ -71,7 +71,7 @@ protected:
 public:
     static Ref<SuperposSpawnRuntime> create();
     Error initialize(superpos::BudgetAllocator &, SuperposSpawnCatalog::Snapshot,
-        SuperposSpawner &, SuperposSession &, uint64_t, uint64_t, uint32_t, size_t);
+        SuperposSpawner &, SuperposSession &, uint64_t, uint64_t, uint32_t, size_t, uint64_t spawn_timeout_ms = 15000);
     superpos::Status registrations(std::span<lifecycle_engine::Registration>) noexcept;
     Dictionary project(uint32_t);
     Dictionary status() const;

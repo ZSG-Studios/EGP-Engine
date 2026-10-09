@@ -58,7 +58,7 @@ struct Run {
     Ref<SuperposReplicaView> old_view;
     Ref<SuperposSpawnCatalog> catalog;
     SuperposSpawner *spawner{};
-    unsigned scenario{}, stage{}, baseline_nodes{}, baseline_live{}, wait_frames{};
+    unsigned scenario{}, stage{}, baseline_nodes{}, baseline_live{}, wait_frames{}, timed_out{};
     bool failed{};
     std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds(15);
     size_t baseline{};
@@ -92,7 +92,9 @@ struct Run {
         return true;
     }
     Dictionary configuration() {
-        Dictionary config; config["replica_epoch"] = 9; config["maximum_active"] = 4; config["maximum_transitions"] = 4; config["native_bytes"] = 1 << 20; return config;
+        Dictionary config; config["replica_epoch"] = 9; config["maximum_active"] = 4; config["maximum_transitions"] = 4; config["native_bytes"] = 1 << 20;
+        if (scenario == 6) config["spawn_timeout_ms"] = 100;
+        return config;
     }
     bool send(superpos::ReplicaWireMessage message, unsigned channel) {
         message.context = {7, 8, 9}; std::array<std::byte, 8192> bytes;
@@ -100,13 +102,18 @@ struct Run {
         PackedByteArray packet; VERIFY(packet.resize(*encoded) == OK); std::memcpy(packet.ptrw(), bytes.data(), *encoded);
         VERIFY(int(sessions[0]->enqueue_packet(packet, channel)["error"]) == OK); return true;
     }
+    bool offer_state() {
+        const superpos::ReplicaKey key{1, 1, 7, 8, 9, 1};
+        std::array<std::byte, 8> bytes{}; bytes[0] = std::byte{42}; bytes[4] = std::byte{52};
+        superpos::ReplicaWireMessage message; message.kind = superpos::ReplicaWireKind::BaselineOffer; message.sequence = 1;
+        message.baseline = {key, 0, 1, 1, bytes}; message.tick = 1; VERIFY(send(message, 2));
+        return true;
+    }
     bool bind(bool state = true) {
         const superpos::ReplicaKey key{1, 1, 7, 8, 9, 1};
         superpos::ReplicaWireMessage message; message.kind = superpos::ReplicaWireKind::Bind;
         message.binding = {key, superpos::ObjectHandle::from_parts(70, 1), 19, 2, 1, 1}; VERIFY(send(message, 0));
-        if (state) { std::array<std::byte, 8> bytes{}; bytes[0] = std::byte{42}; bytes[4] = std::byte{52};
-            message = {}; message.kind = superpos::ReplicaWireKind::BaselineOffer; message.sequence = 1;
-            message.baseline = {key, 0, 1, 1, bytes}; message.tick = 1; VERIFY(send(message, 2)); }
+        if (state) VERIFY(offer_state());
         return true;
     }
     bool cleanup() {
@@ -136,9 +143,43 @@ struct Run {
             if (sessions[0]->get_state() != String("NetworkReady") || sessions[1]->get_state() != String("NetworkReady")) return false;
             Dictionary invalid = configuration(); invalid["resource_id"] = 999; VERIFY(spawner->start(invalid) == ERR_INVALID_PARAMETER);
             invalid = configuration(); invalid["atomic_scene"] = 1; VERIFY(spawner->start(invalid) == ERR_INVALID_PARAMETER);
+            invalid = configuration(); invalid["spawn_timeout_ms"] = 0; VERIFY(spawner->start(invalid) == ERR_INVALID_PARAMETER);
+            invalid = configuration(); invalid["spawn_timeout_ms"] = 60001; VERIFY(spawner->start(invalid) == ERR_INVALID_PARAMETER);
             VERIFY(spawner->start(configuration()) == OK); spawner->set_process(false);
             VERIFY(int(sessions[1]->read_packet(0)["error"]) == ERR_BUSY);
-            VERIFY(bind(scenario != 2)); stage = 2;
+            VERIFY(int(spawner->read_status()["spawn_timeout_ms"]) == (scenario == 6 ? 100 : 15000));
+            VERIFY(bind(scenario != 2 && scenario != 6)); stage = 2;
+        }
+        if (stage == 2 && scenario == 6) {
+            // Readiness deadline: the bound replica never receives its initial
+            // state in time. Expiry is typed metadata; no scene is constructed.
+            const Dictionary progress = spawner->project_pending(); VERIFY(int(progress["error"]) == OK);
+            timed_out += unsigned(int(progress["timed_out"]));
+            if (int(spawner->read_status()["spawn_timed_out"]) == 0) return false;
+            VERIFY(timed_out == 1 && int(spawner->read_status()["spawn_timed_out"]) == 1);
+            VERIFY(int(spawner->project_pending()["timed_out"]) == 0);
+            VERIFY(constructed == baseline_nodes && spawner->get_child_count() == 0 && spawner->get_replicas().is_empty());
+            VERIFY(offer_state()); stage = 7; return false;
+        }
+        if (stage == 7) {
+            auto views = spawner->get_replicas(); if (views.is_empty()) return false;
+            Ref<SuperposReplicaView> late = views[0];
+            Dictionary status = late->read_status(); VERIFY(int(status["error"]) == OK && bool(status["canonical_ready"]));
+            Dictionary scene = status["scene"];
+            VERIFY(String(scene["scene_phase"]) == String("failed") && bool(scene["spawn_timed_out"]) &&
+                    unsigned(int(scene["projection_error"])) == unsigned(superpos::Error::Timeout) && int(scene["completed_fields"]) == 0);
+            // A late initial state is canonical but stays withheld from the scene.
+            VERIFY(int(spawner->project_pending()["completed"]) == 0 && spawner->get_child_count() == 0 && constructed == baseline_nodes);
+            PackedInt64Array ids; ids.append(1); ids.append(2); const Dictionary image = late->read_fields(ids);
+            VERIFY(int(image["error"]) == OK); const Dictionary values = image["values"]; VERIFY(int(values[int64_t(1)]) == 42 && int(values[int64_t(2)]) == 52);
+            VERIFY(late->retry_projection() == OK);
+            VERIFY(int(spawner->project_pending()["completed"]) == 1);
+            status = late->read_status(); scene = status["scene"];
+            VERIFY(String(scene["scene_phase"]) == String("ready") && !bool(scene["spawn_timed_out"]) && int(scene["completed_fields"]) == 2);
+            VERIFY(spawner->get_child_count() == 1 && int(spawner->get_child(0)->get("value")) == 42 && int(spawner->get_child(0)->get("second")) == 52);
+            VERIFY(int(spawner->read_status()["spawn_timed_out"]) == 0);
+            VERIFY(spawner->stop() == OK && spawner->get_child_count() == 0 && int(late->read_status()["error"]) != OK);
+            stage = 6;
         }
         if (stage == 2) {
             if (scenario == 2) {
@@ -196,7 +237,7 @@ struct Run {
             if (++wait_frames < 3) return false;
             VERIFY(spawner->get_replicas().is_empty() && spawner->get_child_count() == 0 && constructed == baseline_nodes); stage = 6;
         }
-        if (stage == 6) { VERIFY(cleanup()); stage = 0; wait_frames = 0; if (++scenario == 6) return true; }
+        if (stage == 6) { VERIFY(cleanup()); stage = 0; wait_frames = 0; timed_out = 0; if (++scenario == 7) return true; }
         return false;
     }
 };
@@ -208,7 +249,7 @@ void idle() {
     if (finished) return;
     if (!run) run = memnew(Run);
     if (run->step()) { finished = true; memdelete(run); run = nullptr;
-        std::printf("EGP_PUBLIC_SPAWNER_OK checks=%u cases=6 canonical_before_scene=1 retry=1 stale_rebind=1 destroy_pending=1 construction_reentry=1 setter_reentry=1 stop_reentry=1 mock_carrier=1\n", lifecycle_engine::fixture::checks);
+        std::printf("EGP_PUBLIC_SPAWNER_OK checks=%u cases=7 canonical_before_scene=1 retry=1 stale_rebind=1 destroy_pending=1 construction_reentry=1 setter_reentry=1 stop_reentry=1 spawn_timeout=1 mock_carrier=1\n", lifecycle_engine::fixture::checks);
         std::fflush(stdout); SceneTree::get_singleton()->quit(0); }
 }
 }

@@ -2,6 +2,7 @@
 #include "spawn_runtime.hpp"
 #include "receiver_public_access.hpp"
 #include "superpos_spawner.h"
+#include "core/os/os.h"
 #include "core/os/thread.h"
 #include "core/object/class_db.h"
 #include <cstring>
@@ -33,8 +34,10 @@ Ref<SuperposSpawnRuntime> SuperposSpawnRuntime::create() { return new_native<Sup
 
 Error SuperposSpawnRuntime::initialize(superpos::BudgetAllocator &backing,
         SuperposSpawnCatalog::Snapshot catalog, SuperposSpawner &spawner,
-        SuperposSession &session, uint64_t binding, uint64_t session_binding, uint32_t capacity, size_t native_limit) {
-    if (!Thread::is_main_thread() || initialized_ || !binding || !session_binding || !capacity || capacity > 1064 || !native_limit || native_limit > (64u << 20)) return ERR_INVALID_PARAMETER;
+        SuperposSession &session, uint64_t binding, uint64_t session_binding, uint32_t capacity, size_t native_limit, uint64_t spawn_timeout_ms) {
+    if (!Thread::is_main_thread() || initialized_ || !binding || !session_binding || !capacity || capacity > 1064 || !native_limit || native_limit > (64u << 20) ||
+            !spawn_timeout_ms || spawn_timeout_ms > 60000) return ERR_INVALID_PARAMETER;
+    spawn_timeout_us_ = spawn_timeout_ms * 1000;
     superpos::MemoryPlan plan; plan.limits.fill(0);
     plan.limits[unsigned(superpos::MemoryDomain::Replication)] = native_limit;
     auto bound = quota_.bind(backing, plan); if (!bound) return engine_error(bound.error());
@@ -99,7 +102,7 @@ superpos::Status SuperposSpawnFactory::begin(const lifecycle::Construction &work
     if (runtime_.is_null() || !ObjectDB::get_instance(runtime_->spawner_) || catalog_ >= runtime_->catalog_.entry_count) return superpos::fail(superpos::Error::NotReady);
     const auto &entry = runtime_->catalog_.entries[catalog_];
     if (entry.resource != work.resource || entry.schema != work.schema || runtime_->find(work.ticket)) return superpos::fail(superpos::Error::InvalidArgument);
-    auto reserved = runtime_->queue_.reserve(catalog_, work.handle); if (!reserved) return superpos::fail(reserved.error());
+    auto reserved = runtime_->queue_.reserve(catalog_, work.handle, OS::get_singleton()->get_ticks_usec()); if (!reserved) return superpos::fail(reserved.error());
     auto &slot = runtime_->slots_[reserved->slot]; slot.used = true; slot.construction = work.ticket; slot.projection = *reserved;
     runtime_->proxies_[reserved->slot]->ticket = *reserved;
     return {};
@@ -215,6 +218,8 @@ Dictionary SuperposSpawnRuntime::project(uint32_t budget) {
     Ref<SuperposSpawnRuntime> keep_alive(this);
     projecting_ = true; struct Guard { bool &value; ~Guard() { value = false; } } guard{projecting_};
     result["error"] = OK;
+    // Readiness expiry precedes projection; it changes fixed metadata only.
+    result["timed_out"] = queue_.expire(OS::get_singleton()->get_ticks_usec(), spawn_timeout_us_);
     uint32_t completed = 0, failed = 0;
     for (uint32_t n = 0; n < budget && !stopping_; ++n) {
         auto job = queue_.take(); if (!job) { if (job.error() != superpos::Error::NotReady) result["error"] = engine_error(job.error()); break; }
@@ -238,9 +243,10 @@ Dictionary SuperposSpawnRuntime::status() const {
     Dictionary result;
     if (!Thread::is_main_thread()) { result["error"] = ERR_BUSY; return result; }
     result["error"] = initialized_ ? OK : ERR_UNCONFIGURED;
-    uint32_t canonical = 0, ready = 0, failed = 0;
-    for (const auto &row : rows_.span()) if (row.occupied) { canonical += row.canonical_ready; ready += row.scene == ScenePhase::Ready; failed += row.scene == ScenePhase::Failed; }
+    uint32_t canonical = 0, ready = 0, failed = 0, timed_out = 0;
+    for (const auto &row : rows_.span()) if (row.occupied) { canonical += row.canonical_ready; ready += row.scene == ScenePhase::Ready; failed += row.scene == ScenePhase::Failed; timed_out += row.timed_out; }
     result["canonical_ready"] = canonical; result["scene_ready"] = ready; result["scene_failed"] = failed;
+    result["spawn_timed_out"] = timed_out; result["spawn_timeout_ms"] = int64_t(spawn_timeout_us_ / 1000);
     result["stopping"] = stopping_; result["owned_native_bytes"] = int64_t(quota_.total()); result["scene_projection"] = "sequential";
     return result;
 }
@@ -265,6 +271,7 @@ Dictionary SuperposSpawnRuntime::projection_status(uint64_t handle, const superp
         result["scene_phase"] = phases[unsigned(row.scene)];
         result["completed_fields"] = row.completed_fields;
         result["projection_error"] = unsigned(row.projection_error);
+        result["spawn_timed_out"] = row.timed_out;
         int64_t revision; std::memcpy(&revision, &row.projected_revision, sizeof(revision));
         result["projected_revision"] = revision;
         result["scene_projection"] = "sequential";

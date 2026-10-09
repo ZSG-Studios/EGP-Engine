@@ -64,8 +64,8 @@ Error SuperposReceiverPublicAccess::attach(SuperposSession &owner,
     if (owner.owner_retired || owner.closing || owner.managed_reload_paused || owner.callbacks_in_flight ||
             owner.simulation_in_flight || !owner.impl || !owner.impl->network || !owner.impl->registry) return ERR_UNCONFIGURED;
     if (spawner.runtime_id.is_valid() || spawner.catalog.is_null() || spawner.session.ptr() != &owner) return ERR_INVALID_PARAMETER;
-    static const std::array<StringName, 10> allowed{ "authority_epoch", "connection_epoch", "replica_epoch", "peer",
-        "maximum_active", "maximum_transitions", "control_channel", "state_channel", "bulk_channel", "native_bytes" };
+    static const std::array<StringName, 11> allowed{ "authority_epoch", "connection_epoch", "replica_epoch", "peer",
+        "maximum_active", "maximum_transitions", "control_channel", "state_channel", "bulk_channel", "native_bytes", "spawn_timeout_ms" };
     for (int i = 0; i < configuration.size(); ++i) {
         const Variant key = configuration.get_key_at_index(i);
         if (key.get_type() != Variant::STRING && key.get_type() != Variant::STRING_NAME) return ERR_INVALID_PARAMETER;
@@ -84,9 +84,11 @@ Error SuperposReceiverPublicAccess::attach(SuperposSession &owner,
     config.maximum_transitions = value("maximum_transitions", 64);
     const size_t native_bytes = value("native_bytes", 64u << 20);
     const uint64_t control = value("control_channel", 0), state = value("state_channel", 1), bulk = value("bulk_channel", 2);
+    const uint64_t spawn_timeout_ms = value("spawn_timeout_ms", 15000);
     if (!config.authority_epoch || !config.connection_epoch || !config.replica_epoch || !config.peer ||
             !config.maximum_active || config.maximum_active > 1000 || !config.maximum_transitions || config.maximum_transitions > 64 ||
-            !native_bytes || native_bytes > (64u << 20) || control >= 32 || state >= 32 || bulk >= 32) return ERR_INVALID_PARAMETER;
+            !native_bytes || native_bytes > (64u << 20) || control >= 32 || state >= 32 || bulk >= 32 ||
+            !spawn_timeout_ms || spawn_timeout_ms > 60000) return ERR_INVALID_PARAMETER;
     SuperposSpawnCatalog::Snapshot catalog;
     Ref<SuperposSpawnCatalog> catalog_source = spawner.catalog;
     if (ObjectDB::get_instance(spawner_id) != &spawner || catalog_source.is_null() || spawner.catalog != catalog_source) return ERR_UNCONFIGURED;
@@ -110,7 +112,7 @@ Error SuperposReceiverPublicAccess::attach(SuperposSession &owner,
     if (!receiver_binding) return translate(receiver_binding.error());
     next_spawn_binding = *receiver_binding;
     const Error initialized = runtime->initialize(superpos_egp::module_backing(), std::move(catalog), spawner, owner,
-        *receiver_binding, owner.impl->binding_generation, uint32_t(config.maximum_active + config.maximum_transitions), native_bytes);
+        *receiver_binding, owner.impl->binding_generation, uint32_t(config.maximum_active + config.maximum_transitions), native_bytes, spawn_timeout_ms);
     if (initialized != OK) return initialized;
     std::array<superpos_egp::lifecycle_engine::Registration, 64> registrations;
     const auto prepared = runtime->registrations(std::span(registrations).first(count));

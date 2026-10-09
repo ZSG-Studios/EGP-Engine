@@ -20,11 +20,11 @@
 		</method>
 		<method name="read_status" qualifiers="const">
 			<return type="Dictionary" />
-			<description>Returns [code]error[/code], [code]canonical_ready[/code], [code]revision[/code], [code]binding_generation[/code], [code]handle[/code] and, while the spawner runtime is attached, [code]scene[/code]. The [code]scene[/code] Dictionary reports [code]scene_phase[/code] ([code]"pending"[/code], [code]"ready"[/code], [code]"failed"[/code] or [code]"retiring"[/code]), [code]completed_fields[/code], [code]projection_error[/code] and [code]projected_revision[/code]. Canonical readiness and scene projection are reported separately.</description>
+			<description>Returns [code]error[/code], [code]canonical_ready[/code], [code]revision[/code], [code]binding_generation[/code], [code]handle[/code] and, while the spawner runtime is attached, [code]scene[/code]. The [code]scene[/code] Dictionary reports [code]scene_phase[/code] ([code]"pending"[/code], [code]"ready"[/code], [code]"failed"[/code] or [code]"retiring"[/code]), [code]completed_fields[/code], [code]projection_error[/code], [code]projected_revision[/code] and [code]spawn_timed_out[/code]. A replica whose initial state missed the spawn readiness timeout reports the failed phase with [code]spawn_timed_out[/code] set. Canonical readiness and scene projection are reported separately.</description>
 		</method>
 		<method name="retry_projection" qualifiers="const">
 			<return type="int" enum="Error" />
-			<description>Requeues a failed scene projection for a canonical-ready replica. Returns [constant ERR_BUSY] when the projection is not in the failed phase or a projection is running, and an error for a stale view.</description>
+			<description>Requeues a failed scene projection for a canonical-ready replica, including one held after a spawn readiness timeout. Returns [constant ERR_BUSY] when the projection is not in the failed phase or a projection is running, and an error for a stale view.</description>
 		</method>
 	</methods>
 </class>

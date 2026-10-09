@@ -32,6 +32,11 @@ struct Record {
     superpos::Error projection_error{};
     ScenePhase scene{ScenePhase::Pending};
     bool staged_destroy{};
+    // Spawn readiness: monotonic microseconds at construction reservation. A
+    // never-published row past its deadline is held as Failed/Timeout after a
+    // late initial state, until an explicit retry clears the hold.
+    bool timed_out{};
+    uint64_t pending_since{};
 };
 
 // Exactly one intrusive job cell per admitted proxy. Preparation/publication
@@ -85,14 +90,14 @@ public:
         for (auto &row : rows) { row = Record{}; row.generation = generation; }
         rows_ = rows; initialized_ = true; return {};
     }
-    superpos::Result<Ticket> reserve(uint32_t catalog, superpos::ObjectHandle handle) noexcept {
+    superpos::Result<Ticket> reserve(uint32_t catalog, superpos::ObjectHandle handle, uint64_t now = 0) noexcept {
         if (!owner()) return superpos::fail(superpos::Error::Busy);
         if (poisoned_) return superpos::fail(superpos::Error::ProtocolViolation);
         if (!initialized_ || !handle) return superpos::fail(superpos::Error::InvalidArgument);
         for (uint32_t slot = 0; slot < rows_.size(); ++slot) {
             auto &row = rows_[slot];
             if (row.occupied || row.exhausted) continue;
-            row.occupied = true; row.catalog = catalog; row.handle = handle;
+            row.occupied = true; row.catalog = catalog; row.handle = handle; row.pending_since = now;
             return Ticket{slot, row.generation, identity_};
         }
         return superpos::fail(superpos::Error::CapacityExceeded);
@@ -120,16 +125,34 @@ public:
         if (!row || !row->prepared) { poisoned_ = true; return; }
         row->prepared = false; row->key = row->staged_key; row->revision = row->staged_revision;
         row->canonical_ready = !row->staged_destroy;
-        row->scene = row->staged_destroy ? ScenePhase::Retiring : ScenePhase::Pending;
         row->completed_fields = 0; row->projection_error = superpos::Error{};
+        if (row->timed_out && !row->staged_destroy) {
+            // Canonical state stays consistent with the sender; only scene
+            // projection is withheld. No queue cell is consumed.
+            row->scene = ScenePhase::Failed; row->projection_error = superpos::Error::Timeout;
+            return;
+        }
+        row->scene = row->staged_destroy ? ScenePhase::Retiring : ScenePhase::Pending;
         enqueue(ticket.slot);
+    }
+    // Bounded by the fixed rows. Marks never-published, still-pending rows whose
+    // readiness deadline has passed. Returns the number newly timed out.
+    uint32_t expire(uint64_t now, uint64_t timeout) noexcept {
+        if (!owner() || !initialized_ || poisoned_ || !timeout) return 0;
+        uint32_t expired = 0;
+        for (auto &row : rows_) {
+            if (!row.occupied || row.timed_out || row.prepared || row.canonical_ready || row.revision ||
+                    row.scene != ScenePhase::Pending || now < row.pending_since || now - row.pending_since < timeout) continue;
+            row.timed_out = true; ++expired;
+        }
+        return expired;
     }
     superpos::Status retry(Ticket ticket) noexcept {
         auto *row = find(ticket);
         if (!row) return superpos::fail(superpos::Error::StaleGeneration);
         if (poisoned_ || row->projecting || !row->canonical_ready || row->scene != ScenePhase::Failed)
             return superpos::fail(superpos::Error::Busy);
-        row->scene = ScenePhase::Pending; row->completed_fields = 0; row->projection_error = {};
+        row->scene = ScenePhase::Pending; row->completed_fields = 0; row->projection_error = {}; row->timed_out = false;
         enqueue(ticket.slot); return {};
     }
     superpos::Result<Projection> take() noexcept {
