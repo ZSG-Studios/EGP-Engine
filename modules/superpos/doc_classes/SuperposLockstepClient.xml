@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposLockstepClient" inherits="RefCounted" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
 	<brief_description>Client half of deterministic input streaming: redundant tick inputs out, relayed command stream in.</brief_description>
-	<description>Records exactly one fixed-width input per simulation tick and packs every input the server has not yet reported received, so inputs survive loss on an unreliable [SuperposSession] channel. In the other direction it applies the server's delta-compressed command stream (one input per player slot per tick) strictly in order, letting the client advance the same deterministic world as the server, for example an [EGPBox3DWorld]. Each packed input batch also reports the newest command tick applied here, which tells the server where to start the next command batch.
+	<description>Records exactly one fixed-width input per simulation tick and packs every input the server has not yet reported received, so inputs survive loss on an unreliable [SuperposSession] channel. In the other direction it applies the server's delta-compressed command stream (one input per player slot per tick) strictly in order, letting the client advance the same deterministic world as the server, for example an [EGPBox3DWorld]. Each packed input batch also reports the newest command tick received here in order, which tells the server which ticks it no longer needs to resend.
 		[codeblock]
 		var lockstep := SuperposLockstepClient.new()
 		lockstep.configure(4, 101)                 # 4-byte inputs, 101 player slots

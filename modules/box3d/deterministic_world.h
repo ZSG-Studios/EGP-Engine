@@ -31,7 +31,14 @@ enum class Operation { CREATE_BOX,
 	DESTROY,
 	IMPULSE,
 	VELOCITY,
-	BODY_STATE };
+	BODY_STATE,
+	CREATE_JOINT,
+	DESTROY_JOINT };
+
+// Deterministic joint kinds. Frames are body-local; bodies are created unrotated.
+enum class JointKind : uint32_t { DISTANCE,
+	SPHERICAL,
+	PRISMATIC };
 
 struct Command {
 	uint64_t entity = 0;
@@ -44,12 +51,35 @@ struct Command {
 	b3Quat rotation = { {}, 1.0f };
 	b3Vec3 linear_velocity = {};
 	b3Vec3 angular_velocity = {};
+	// CREATE_JOINT only: entity is the joint identifier (a separate namespace from bodies).
+	JointKind joint_kind = JointKind::DISTANCE;
+	uint64_t body_a = 0;
+	uint64_t body_b = 0;
+	b3Vec3 anchor_a = {};
+	b3Vec3 anchor_b = {};
+	b3Vec3 axis = { 1.0f, 0.0f, 0.0f };
+	float length = 1.0f;
+	float hertz = 0.0f;
+	float damping_ratio = 0.0f;
+	float lower = 0.0f;
+	float upper = 0.0f;
+	bool enable_spring = false;
+	bool enable_limit = false;
+	bool collide_connected = false;
 };
 
 class DeterministicWorld {
 	b3WorldId world = {};
 	b3RecPlayer *snapshot_owner = nullptr;
 	std::map<uint64_t, b3BodyId> bodies;
+	struct JointRecord {
+		b3JointId id = b3_nullJointId;
+		uint64_t body_a = 0;
+		uint64_t body_b = 0;
+		uint32_t kind = 0;
+	};
+	std::map<uint64_t, JointRecord> joints;
+	void create_joint(const Command &p_command);
 	std::vector<Command> pending;
 	std::set<std::pair<uint64_t, uint32_t>> pending_keys;
 	uint64_t tick = 0;
@@ -79,6 +109,7 @@ public:
 	Result restore_snapshot(const std::vector<uint8_t> &p_bytes);
 	uint64_t get_tick() const { return tick; }
 	size_t get_body_count() const { return bodies.size(); }
+	size_t get_joint_count() const { return joints.size(); }
 	bool get_body_state(uint64_t p_entity, b3WorldTransform &r_transform, b3Vec3 &r_linear, b3Vec3 &r_angular) const;
 	// Diagnostic hash of tick, profile, stable IDs, poses, velocities, body type and awake state.
 	// It is not a cryptographic digest or a hash of every latent solver field.

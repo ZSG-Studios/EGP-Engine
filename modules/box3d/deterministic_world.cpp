@@ -17,6 +17,9 @@ namespace {
 constexpr uint64_t FNV_OFFSET = 14695981039346656037ull;
 constexpr uint64_t FNV_PRIME = 1099511628211ull;
 constexpr uint64_t SNAPSHOT_MAGIC = 0x3150414E53334745ull; // EG3SNAP1, little endian.
+// EG3SNAP2 appends a joint table (count, then id/body A/body B/kind per joint) so joint
+// identifiers survive restore and joints take part in the state hash.
+constexpr uint64_t SNAPSHOT_MAGIC_JOINTS = 0x3250414E53334745ull;
 constexpr uint64_t PROFILE_ID = 0xe77352cd606dc1a3ull;
 // Box3D world-slot allocation and replay length-scale updates are process globals.
 // Serialize entry from independent owners and managed finalizers. Solver workers
@@ -81,6 +84,20 @@ bool parse_entity(const char *name, uint64_t &entity) {
 bool creates(Operation op) {
 	return op == Operation::CREATE_BOX || op == Operation::CREATE_SPHERE || op == Operation::CREATE_CAPSULE;
 }
+bool finite_scalar(float v) {
+	return std::isfinite(v);
+}
+// Rotation taking the body-local +X axis onto a unit axis (prismatic joint frames).
+b3Quat axis_frame(b3Vec3 axis) {
+	const float length = std::sqrt(axis.x * axis.x + axis.y * axis.y + axis.z * axis.z);
+	const b3Vec3 unit = { axis.x / length, axis.y / length, axis.z / length };
+	if (unit.x < -0.999999f) {
+		return { { 0.0f, 1.0f, 0.0f }, 0.0f };
+	}
+	b3Quat q = { { 0.0f, -unit.z, unit.y }, 1.0f + unit.x };
+	const float norm = std::sqrt(q.v.x * q.v.x + q.v.y * q.v.y + q.v.z * q.v.z + q.s * q.s);
+	return { { q.v.x / norm, q.v.y / norm, q.v.z / norm }, q.s / norm };
+}
 } // namespace
 
 DeterministicWorld::~DeterministicWorld() {
@@ -129,8 +146,16 @@ Result DeterministicWorld::queue(const Command &c) {
 	if (c.entity == 0 || c.entity > uint64_t(INT64_MAX) || !finite(c.value) || !finite(c.size) || !std::isfinite(c.density)) {
 		return Result::INVALID_ARGUMENT;
 	}
-	if (c.operation < Operation::CREATE_BOX || c.operation > Operation::BODY_STATE) {
+	if (c.operation < Operation::CREATE_BOX || c.operation > Operation::DESTROY_JOINT) {
 		return Result::INVALID_ARGUMENT;
+	}
+	if (c.operation == Operation::CREATE_JOINT) {
+		const float axis_length = c.axis.x * c.axis.x + c.axis.y * c.axis.y + c.axis.z * c.axis.z;
+		if (c.joint_kind > JointKind::PRISMATIC || c.body_a == 0 || c.body_b == 0 || c.body_a == c.body_b || c.body_a > uint64_t(INT64_MAX) || c.body_b > uint64_t(INT64_MAX) ||
+				!finite(c.anchor_a) || !finite(c.anchor_b) || !finite(c.axis) || !finite_scalar(c.length) || !finite_scalar(c.hertz) || !finite_scalar(c.damping_ratio) || !finite_scalar(c.lower) || !finite_scalar(c.upper) ||
+				c.hertz < 0.0f || c.damping_ratio < 0.0f || c.lower > c.upper || (c.joint_kind == JointKind::DISTANCE && c.length <= 0.0f) || (c.joint_kind == JointKind::PRISMATIC && axis_length < 1.0e-6f)) {
+			return Result::INVALID_ARGUMENT;
+		}
 	}
 	if (c.operation == Operation::BODY_STATE) {
 		float norm = c.rotation.v.x * c.rotation.v.x + c.rotation.v.y * c.rotation.v.y + c.rotation.v.z * c.rotation.v.z + c.rotation.s * c.rotation.s;
@@ -165,7 +190,38 @@ Result DeterministicWorld::apply_queued_commands() {
 	size_t live_count = bodies.size();
 	uint64_t current_entity = 0;
 	bool entity_live = false;
+	std::set<uint64_t> created, destroyed, new_joints;
 	for (const Command &c : pending) {
+		if (c.operation == Operation::CREATE_JOINT) {
+			continue;
+		}
+		if (creates(c.operation)) {
+			created.insert(c.entity);
+		} else if (c.operation == Operation::DESTROY) {
+			destroyed.insert(c.entity);
+		}
+	}
+	auto body_live = [&](uint64_t entity) {
+		return !destroyed.count(entity) && (bodies.count(entity) || created.count(entity));
+	};
+	for (const Command &c : pending) {
+		if (c.operation != Operation::CREATE_JOINT) {
+			continue;
+		}
+		if (joints.count(c.entity) || !new_joints.insert(c.entity).second || !body_live(c.body_a) || !body_live(c.body_b)) {
+			return Result::INVALID_BATCH;
+		}
+	}
+	std::set<uint64_t> removed_joints;
+	for (const Command &c : pending) {
+		if (c.operation == Operation::DESTROY_JOINT && (!joints.count(c.entity) || !removed_joints.insert(c.entity).second)) {
+			return Result::INVALID_BATCH;
+		}
+	}
+	for (const Command &c : pending) {
+		if (c.operation == Operation::CREATE_JOINT || c.operation == Operation::DESTROY_JOINT) {
+			continue;
+		}
 		if (current_entity != c.entity) {
 			current_entity = c.entity;
 			entity_live = bodies.find(c.entity) != bodies.end();
@@ -188,7 +244,23 @@ Result DeterministicWorld::apply_queued_commands() {
 			}
 		}
 	}
+	// Joint removals first, then body commands, then joint creation: a batch can rebuild
+	// a constraint graph in one deterministic step.
 	for (const Command &c : pending) {
+		if (c.operation == Operation::DESTROY_JOINT) {
+			auto joint = joints.find(c.entity);
+			if (joint != joints.end()) {
+				if (b3Joint_IsValid(joint->second.id)) {
+					b3DestroyJoint(joint->second.id, true);
+				}
+				joints.erase(joint);
+			}
+		}
+	}
+	for (const Command &c : pending) {
+		if (c.operation == Operation::CREATE_JOINT || c.operation == Operation::DESTROY_JOINT) {
+			continue;
+		}
 		if (creates(c.operation)) {
 			char name[32];
 			std::snprintf(name, sizeof(name), "egp:%llu", static_cast<unsigned long long>(c.entity));
@@ -213,6 +285,10 @@ Result DeterministicWorld::apply_queued_commands() {
 		} else {
 			b3BodyId body = bodies.find(c.entity)->second;
 			if (c.operation == Operation::DESTROY) {
+				// Box3D destroys attached joints with the body; forget them deterministically.
+				for (auto joint = joints.begin(); joint != joints.end();) {
+					joint = joint->second.body_a == c.entity || joint->second.body_b == c.entity ? joints.erase(joint) : std::next(joint);
+				}
 				b3DestroyBody(body);
 				bodies.erase(c.entity);
 			} else if (c.operation == Operation::IMPULSE) {
@@ -226,8 +302,62 @@ Result DeterministicWorld::apply_queued_commands() {
 			}
 		}
 	}
+	for (const Command &c : pending) {
+		if (c.operation == Operation::CREATE_JOINT) {
+			create_joint(c);
+		}
+	}
 	clear_pending_commands();
 	return Result::OK;
+}
+
+void DeterministicWorld::create_joint(const Command &c) {
+	const b3BodyId a = bodies.find(c.body_a)->second;
+	const b3BodyId b = bodies.find(c.body_b)->second;
+	b3JointId id = b3_nullJointId;
+	if (c.joint_kind == JointKind::DISTANCE) {
+		b3DistanceJointDef def = b3DefaultDistanceJointDef();
+		def.base.bodyIdA = a;
+		def.base.bodyIdB = b;
+		def.base.localFrameA.p = c.anchor_a;
+		def.base.localFrameB.p = c.anchor_b;
+		def.base.collideConnected = c.collide_connected;
+		def.length = c.length;
+		def.enableSpring = c.enable_spring;
+		def.hertz = c.hertz;
+		def.dampingRatio = c.damping_ratio;
+		def.enableLimit = c.enable_limit;
+		def.minLength = c.enable_limit ? c.lower : def.minLength;
+		def.maxLength = c.enable_limit ? c.upper : def.maxLength;
+		id = b3CreateDistanceJoint(world, &def);
+	} else if (c.joint_kind == JointKind::SPHERICAL) {
+		b3SphericalJointDef def = b3DefaultSphericalJointDef();
+		def.base.bodyIdA = a;
+		def.base.bodyIdB = b;
+		def.base.localFrameA.p = c.anchor_a;
+		def.base.localFrameB.p = c.anchor_b;
+		def.base.collideConnected = c.collide_connected;
+		def.enableSpring = c.enable_spring;
+		def.hertz = c.hertz;
+		def.dampingRatio = c.damping_ratio;
+		id = b3CreateSphericalJoint(world, &def);
+	} else {
+		b3PrismaticJointDef def = b3DefaultPrismaticJointDef();
+		def.base.bodyIdA = a;
+		def.base.bodyIdB = b;
+		const b3Quat frame = axis_frame(c.axis);
+		def.base.localFrameA = { c.anchor_a, frame };
+		def.base.localFrameB = { c.anchor_b, frame };
+		def.base.collideConnected = c.collide_connected;
+		def.enableSpring = c.enable_spring;
+		def.hertz = c.hertz;
+		def.dampingRatio = c.damping_ratio;
+		def.enableLimit = c.enable_limit;
+		def.lowerTranslation = c.lower;
+		def.upperTranslation = c.upper;
+		id = b3CreatePrismaticJoint(world, &def);
+	}
+	joints[c.entity] = { id, c.body_a, c.body_b, uint32_t(c.joint_kind) };
 }
 
 Result DeterministicWorld::step_tick(uint64_t expected) {
@@ -270,7 +400,7 @@ Result DeterministicWorld::capture_snapshot(std::vector<uint8_t> &out) {
 		return Result::LIMIT_REACHED;
 	}
 	out.clear();
-	append_u64(out, SNAPSHOT_MAGIC);
+	append_u64(out, joints.empty() ? SNAPSHOT_MAGIC : SNAPSHOT_MAGIC_JOINTS);
 	append_u64(out, PROFILE_ID);
 	append_u64(out, tick);
 	append_u64(out, tick_rate);
@@ -282,6 +412,15 @@ Result DeterministicWorld::capture_snapshot(std::vector<uint8_t> &out) {
 	append_u64(out, size);
 	const uint8_t *data = b3Recording_GetData(recording);
 	out.insert(out.end(), data, data + size);
+	if (!joints.empty()) {
+		append_u64(out, joints.size());
+		for (const auto &joint : joints) {
+			append_u64(out, joint.first);
+			append_u64(out, joint.second.body_a);
+			append_u64(out, joint.second.body_b);
+			append_u64(out, joint.second.kind);
+		}
+	}
 	append_u64(out, checksum(out, out.size()));
 	b3DestroyRecording(recording);
 	return Result::OK;
@@ -295,14 +434,19 @@ Result DeterministicWorld::restore_snapshot(const std::vector<uint8_t> &bytes) {
 	if (!pending.empty()) {
 		return Result::PENDING_COMMANDS;
 	}
-	if (bytes.size() < 89 || bytes.size() > MAX_SNAPSHOT_BYTES || read_u64(bytes, 0) != SNAPSHOT_MAGIC || read_u64(bytes, 8) != PROFILE_ID || read_u64(bytes, 24) != tick_rate || read_u64(bytes, 32) != substeps || read_u64(bytes, 40) != float_bits(gravity.x) || read_u64(bytes, 48) != float_bits(gravity.y) || read_u64(bytes, 56) != float_bits(gravity.z) || read_u64(bytes, 16) > uint64_t(INT64_MAX) || read_u64(bytes, 64) > MAX_BODIES || read_u64(bytes, 72) != bytes.size() - 88 || read_u64(bytes, bytes.size() - 8) != checksum(bytes, bytes.size() - 8)) {
+	const bool joint_table = bytes.size() >= 8 && read_u64(bytes, 0) == SNAPSHOT_MAGIC_JOINTS;
+	const uint64_t recording_size = bytes.size() >= 80 ? read_u64(bytes, 72) : 0;
+	const uint64_t table_offset = 80 + recording_size;
+	const uint64_t joint_count = joint_table && bytes.size() >= table_offset + 16 ? read_u64(bytes, table_offset) : 0;
+	const uint64_t expected_size = 88 + recording_size + (joint_table ? 8 + joint_count * 32 : 0);
+	if (bytes.size() < 89 || bytes.size() > MAX_SNAPSHOT_BYTES || (read_u64(bytes, 0) != SNAPSHOT_MAGIC && !joint_table) || recording_size > MAX_SNAPSHOT_BYTES || joint_count > MAX_COMMANDS || read_u64(bytes, 8) != PROFILE_ID || read_u64(bytes, 24) != tick_rate || read_u64(bytes, 32) != substeps || read_u64(bytes, 40) != float_bits(gravity.x) || read_u64(bytes, 48) != float_bits(gravity.y) || read_u64(bytes, 56) != float_bits(gravity.z) || read_u64(bytes, 16) > uint64_t(INT64_MAX) || read_u64(bytes, 64) > MAX_BODIES || expected_size != bytes.size() || read_u64(bytes, bytes.size() - 8) != checksum(bytes, bytes.size() - 8)) {
 		return Result::INVALID_SNAPSHOT;
 	}
 	if (b3GetWorldCount() >= 127) {
 		return Result::LIMIT_REACHED;
 	}
 	// The recording player owns geometry and the restored world. Keep it alive while simulating.
-	b3RecPlayer *candidate = b3CreatePlayer(bytes.data() + 80, int(bytes.size() - 88), int(workers));
+	b3RecPlayer *candidate = b3CreatePlayer(bytes.data() + 80, int(recording_size), int(workers));
 	if (!candidate) {
 		return Result::INVALID_SNAPSHOT;
 	}
@@ -323,10 +467,47 @@ Result DeterministicWorld::restore_snapshot(const std::vector<uint8_t> &bytes) {
 		b3DestroyPlayer(candidate);
 		return Result::INVALID_SNAPSHOT;
 	}
+	// Rebind recorded joints to their identifiers through the body pairs they connect.
+	std::map<uint64_t, JointRecord> restored_joints;
+	std::set<std::pair<uint64_t, uint64_t>> claimed;
+	for (uint64_t i = 0; valid && i < joint_count; ++i) {
+		const size_t at = size_t(table_offset + 8 + i * 32);
+		JointRecord record;
+		const uint64_t id = read_u64(bytes, at);
+		record.body_a = read_u64(bytes, at + 8);
+		record.body_b = read_u64(bytes, at + 16);
+		record.kind = uint32_t(read_u64(bytes, at + 24));
+		auto a = restored.find(record.body_a);
+		auto b = restored.find(record.body_b);
+		if (a == restored.end() || b == restored.end() || restored_joints.count(id)) {
+			valid = false;
+			break;
+		}
+		std::vector<b3JointId> attached(size_t(b3Body_GetJointCount(a->second)));
+		b3Body_GetJoints(a->second, attached.data(), int(attached.size()));
+		bool found = false;
+		for (const b3JointId joint : attached) {
+			const b3BodyId other = B3_ID_EQUALS(b3Joint_GetBodyA(joint), a->second) ? b3Joint_GetBodyB(joint) : b3Joint_GetBodyA(joint);
+			const auto key = std::make_pair(uint64_t(joint.index1), uint64_t(joint.generation));
+			if (B3_ID_EQUALS(other, b->second) && !claimed.count(key)) {
+				claimed.insert(key);
+				record.id = joint;
+				found = true;
+				break;
+			}
+		}
+		valid = found;
+		restored_joints[id] = record;
+	}
+	if (!valid) {
+		b3DestroyPlayer(candidate);
+		return Result::INVALID_SNAPSHOT;
+	}
 	release_world();
 	snapshot_owner = candidate;
 	world = b3RecPlayer_GetWorldId(candidate);
 	bodies = std::move(restored);
+	joints = std::move(restored_joints);
 	tick = read_u64(bytes, 16);
 	return Result::OK;
 }
@@ -365,6 +546,16 @@ uint64_t DeterministicWorld::get_state_hash() const {
 		hash_float(h, t.q.s);
 		hash_vector(h, b3Body_GetLinearVelocity(entry.second));
 		hash_vector(h, b3Body_GetAngularVelocity(entry.second));
+	}
+	hash_u64(h, joints.size());
+	for (const auto &joint : joints) {
+		hash_u64(h, joint.first);
+		hash_u64(h, joint.second.body_a);
+		hash_u64(h, joint.second.body_b);
+		hash_u64(h, joint.second.kind);
+		if (b3Joint_IsValid(joint.second.id)) {
+			hash_vector(h, b3Joint_GetConstraintForce(joint.second.id));
+		}
 	}
 	return h;
 }

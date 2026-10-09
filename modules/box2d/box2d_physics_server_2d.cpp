@@ -874,7 +874,7 @@ PS2DE::CCDMode Box2DPhysicsServer2D::body_get_continuous_collision_detection_mod
 	std::lock_guard<std::recursive_mutex> guard(egp::box2d::get_simulation_mutex());
 	Box2DBody2D *body = body_owner.get_or_null(p_body);
 	ERR_FAIL_NULL_V(body, CCDMode::CCD_MODE_DISABLED);
-	return body->get_bullet() ? CCDMode::CCD_MODE_DISABLED : CCDMode::CCD_MODE_CAST_SHAPE;
+	return body->get_bullet() ? CCDMode::CCD_MODE_CAST_SHAPE : CCDMode::CCD_MODE_DISABLED;
 }
 
 void Box2DPhysicsServer2D::body_set_collision_layer(RID p_body, uint32_t p_layer) {

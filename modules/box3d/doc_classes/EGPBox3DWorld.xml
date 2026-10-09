@@ -52,6 +52,37 @@
 				Returns position, rotation, linear_velocity and angular_velocity, or an empty dictionary if the entity is absent.
 			</description>
 		</method>
+		<method name="get_body_states" qualifiers="const">
+			<return type="PackedFloat32Array" />
+			<param index="0" name="entity_ids" type="PackedInt64Array" />
+			<description>
+				Reads many bodies in one call. Each body produces 13 floats: position xyz, rotation xyzw, linear velocity xyz and angular velocity xyz, in the order of [param entity_ids]. Unknown bodies read as NaN. Prefer this over per-body [method get_body_state] for crowds and per-tick gameplay.
+			</description>
+		</method>
+		<method name="queue_body_states">
+			<return type="int" enum="Error" />
+			<param index="0" name="entity_ids" type="PackedInt64Array" />
+			<param index="1" name="sequence" type="int" />
+			<param index="2" name="records" type="PackedFloat32Array" />
+			<description>
+				Batched [method queue_body_state]: [param records] holds 13 floats per body in the [method get_body_states] layout. Stops at the first rejected body and returns its error.
+			</description>
+		</method>
+		<method name="queue_impulses">
+			<return type="int" enum="Error" />
+			<param index="0" name="entity_ids" type="PackedInt64Array" />
+			<param index="1" name="sequence" type="int" />
+			<param index="2" name="impulses" type="PackedFloat32Array" />
+			<description>
+				Batched [method queue_impulse]: [param impulses] holds 3 floats per body.
+			</description>
+		</method>
+		<method name="get_joint_count" qualifiers="const">
+			<return type="int" />
+			<description>
+				Returns the number of live joints. Snapshots carry a joint table, so joint identifiers survive [method restore_snapshot]; joints also take part in [method get_state_hash].
+			</description>
+		</method>
 		<method name="get_simulation_fingerprint" qualifiers="const">
 			<return type="String" />
 			<description>
@@ -107,6 +138,36 @@
 				Queues a Y-axis capsule. Half height is the positive half length of its central segment.
 			</description>
 		</method>
+		<method name="queue_create_joint">
+			<return type="int" enum="Error" />
+			<param index="0" name="joint_id" type="int" />
+			<param index="1" name="sequence" type="int" />
+			<param index="2" name="kind" type="int" enum="EGPBox3DWorld.JointKind" />
+			<param index="3" name="body_a" type="int" />
+			<param index="4" name="body_b" type="int" />
+			<param index="5" name="anchor_a" type="Vector3" />
+			<param index="6" name="anchor_b" type="Vector3" />
+			<param index="7" name="options" type="Dictionary" default="{}" />
+			<description>
+				Queues a deterministic Box3D joint between two bodies. [param anchor_a] and [param anchor_b] are body-local; bodies are created unrotated. Joint identifiers form their own namespace. Bodies may be created in the same batch; joints are applied after every body command, in joint identifier order, so all peers build identical constraint graphs. Destroying a body removes its joints.
+				[param options] accepts [code]length[/code] (distance rest length, default 1), [code]hertz[/code] and [code]damping_ratio[/code] (spring stiffness and damping), [code]enable_spring[/code], [code]enable_limit[/code] with [code]lower[/code]/[code]upper[/code] (distance range or prismatic translation), [code]axis[/code] (prismatic slide axis, default +X) and [code]collide_connected[/code]. Unknown keys return [constant ERR_INVALID_PARAMETER].
+				[codeblock]
+				# Cloth: particle spheres linked by distance joints.
+				world.queue_create_joint(1, 0, EGPBox3DWorld.JOINT_DISTANCE, 10, 11, Vector3.ZERO, Vector3.ZERO, {"length": 0.5})
+				# Spring slider along X, limited to +/-2 m.
+				world.queue_create_joint(2, 0, EGPBox3DWorld.JOINT_PRISMATIC, 20, 21, Vector3.ZERO, Vector3.ZERO,
+						{"enable_spring": true, "hertz": 1.5, "damping_ratio": 0.1, "enable_limit": true, "lower": -2.0, "upper": 2.0})
+				[/codeblock]
+			</description>
+		</method>
+		<method name="queue_destroy_joint">
+			<return type="int" enum="Error" />
+			<param index="0" name="joint_id" type="int" />
+			<param index="1" name="sequence" type="int" />
+			<description>
+				Queues removal of a joint created by [method queue_create_joint]. Removals apply before body commands and joint creation in the same batch.
+			</description>
+		</method>
 		<method name="queue_create_sphere">
 			<return type="int" enum="Error" />
 			<param index="0" name="entity_id" type="int" />
@@ -160,4 +221,15 @@
 			</description>
 		</method>
 	</methods>
+	<constants>
+		<constant name="JOINT_DISTANCE" value="0" enum="JointKind">
+			Distance joint: keeps two anchors at a rest length, optionally as a spring or within a length range.
+		</constant>
+		<constant name="JOINT_SPHERICAL" value="1" enum="JointKind">
+			Spherical (ball) joint: the anchors coincide; rotation is free unless a spring is enabled.
+		</constant>
+		<constant name="JOINT_PRISMATIC" value="2" enum="JointKind">
+			Prismatic joint: translation only along [code]axis[/code], optionally sprung and limited.
+		</constant>
+	</constants>
 </class>

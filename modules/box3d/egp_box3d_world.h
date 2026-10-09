@@ -32,6 +32,7 @@
 #include "deterministic_world.h"
 
 #include "core/object/ref_counted.h"
+#include "core/variant/binder_common.h"
 #include "core/os/thread.h"
 #include "core/variant/dictionary.h"
 
@@ -62,6 +63,20 @@ public:
 	Error queue_impulse(int64_t p_entity, int64_t p_sequence, const Vector3 &p_impulse);
 	Error queue_linear_velocity(int64_t p_entity, int64_t p_sequence, const Vector3 &p_velocity);
 	Error queue_body_state(int64_t p_entity, int64_t p_sequence, const Vector3 &p_position, const Quaternion &p_rotation, const Vector3 &p_linear_velocity, const Vector3 &p_angular_velocity);
+	enum JointKind {
+		JOINT_DISTANCE,
+		JOINT_SPHERICAL,
+		JOINT_PRISMATIC,
+	};
+	Error queue_create_joint(int64_t p_joint, int64_t p_sequence, int64_t p_kind, int64_t p_body_a, int64_t p_body_b, const Vector3 &p_anchor_a, const Vector3 &p_anchor_b, const Dictionary &p_options = Dictionary());
+	int64_t get_joint_count() const;
+	Error queue_destroy_joint(int64_t p_joint, int64_t p_sequence);
+	// Batched access: one native call per tick instead of one per body. Each record is
+	// 13 floats: position xyz, rotation xyzw, linear velocity xyz, angular velocity xyz.
+	static constexpr int BODY_RECORD = 13;
+	PackedFloat32Array get_body_states(const PackedInt64Array &p_entities) const;
+	Error queue_body_states(const PackedInt64Array &p_entities, int64_t p_sequence, const PackedFloat32Array &p_records);
+	Error queue_impulses(const PackedInt64Array &p_entities, int64_t p_sequence, const PackedFloat32Array &p_impulses);
 	Error apply_queued_commands();
 	void clear_pending_commands();
 	Error step_tick(int64_t p_expected_tick);
@@ -73,3 +88,5 @@ public:
 	String get_state_hash() const;
 	String get_simulation_fingerprint() const;
 };
+
+VARIANT_ENUM_CAST(EGPBox3DWorld::JointKind);

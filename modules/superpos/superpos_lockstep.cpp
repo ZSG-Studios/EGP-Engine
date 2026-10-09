@@ -72,7 +72,9 @@ Error SuperposLockstepClient::acknowledge_inputs(int64_t p_tick) {
 PackedByteArray SuperposLockstepClient::pack_inputs(int64_t p_max_ticks, int64_t p_max_bytes) const {
     if (Thread::get_caller_id() != owner_thread || !impl->history || p_max_ticks < 0 || p_max_bytes < 8 || p_max_bytes > wire_ceiling) { return PackedByteArray(); }
     std::array<std::byte, wire_ceiling> buffer{};
-    auto encoded = impl->history->encode(impl->commands->applied(), size_t(p_max_ticks), std::span(buffer).first(size_t(p_max_bytes)));
+    // Acknowledge the newest command tick received in order (not merely applied), so the
+    // server never resends ticks already buffered here.
+    auto encoded = impl->history->encode(impl->commands->newest(), size_t(p_max_ticks), std::span(buffer).first(size_t(p_max_bytes)));
     return encoded ? packed(std::span<const std::byte>(buffer).first(*encoded)) : PackedByteArray();
 }
 Error SuperposLockstepClient::accept_commands(const PackedByteArray &p_payload) {
