@@ -49,7 +49,8 @@
 				The elements in the array returned from this method are displayed as warnings in the Scene dock if the script that overrides it is a [code]tool[/code] script.
 				Returning an empty array produces no warnings.
 				Call [method update_configuration_warnings] when the warnings need to be updated for this node.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				@export var energy = 0:
 					set(value):
 						energy = value
@@ -60,7 +61,19 @@
 						return ["Energy must be 0 or greater."]
 					else:
 						return []
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				private int energy;
+				[Export]
+				public int Energy
+				{
+				    get =&gt; energy;
+				    set { energy = value; UpdateConfigurationWarnings(); }
+				}
+				public override string[] _GetConfigurationWarnings()
+				    =&gt; energy &lt; 0 ? new[] { "Energy must be 0 or greater." } : System.Array.Empty&lt;string&gt;();
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="_get_focused_accessibility_element" qualifiers="virtual const">
@@ -335,15 +348,24 @@
 			<description>
 				Fetches a child node by its index. Each child node has an index relative to its siblings (see [method get_index]). The first child is at index 0. Negative values can also be used to start from the end of the list. This method can be used in combination with [method get_child_count] to iterate over this node's children. If no child exists at the given index, this method returns [code]null[/code] and an error is generated.
 				If [param include_internal] is [code]false[/code], internal children are ignored (see [method add_child]'s [code]internal[/code] parameter).
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				# Assuming the following are children of this node, in order:
 				# First, Middle, Last.
 
 				var a = get_child(0).name  # a is "First"
 				var b = get_child(1).name  # b is "Middle"
-				var b = get_child(2).name  # b is "Last"
+				var last = get_child(2).name  # b is "Last"
 				var c = get_child(-1).name # c is "Last"
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				// Children in order: First, Middle, Last.
+				StringName first = GetChild(0).Name;
+				StringName middle = GetChild(1).Name;
+				StringName last = GetChild(2).Name;
+				StringName fromEnd = GetChild(-1).Name; // Last.
+				[/csharp]
+				[/codeblocks]
 				[b]Note:[/b] To fetch a node by [NodePath], use [method get_node].
 			</description>
 		</method>
@@ -1224,13 +1246,26 @@
 		<constant name="NOTIFICATION_TRANSLATION_CHANGED" value="2010">
 			Notification received when translations may have changed. Can be triggered by the user changing the locale, changing [member auto_translate_mode] or when the node enters the scene tree. Can be used to respond to language changes, for example to change the UI strings on the fly. Useful when working with the built-in translation support, like [method Object.tr].
 			[b]Note:[/b] This notification is received alongside [constant NOTIFICATION_ENTER_TREE], so if you are instantiating a scene, the child nodes will not be initialized yet. You can use it to setup translations for this node, child nodes created from script, or if you want to access child nodes added in the editor, make sure the node is ready using [method is_node_ready].
-			[codeblock]
+			[codeblocks]
+			[gdscript]
 			func _notification(what):
 				if what == NOTIFICATION_TRANSLATION_CHANGED:
 					if not is_node_ready():
 						await ready # Wait until ready signal.
 					$Label.text = atr("%d Bananas") % banana_counter
-			[/codeblock]
+			[/gdscript]
+			[csharp]
+			public override async void _Notification(int what)
+			{
+			    if (what == NotificationTranslationChanged)
+			    {
+			        if (!IsNodeReady())
+			            await ToSignal(this, SignalName.Ready);
+			        GetNode&lt;Label&gt;("Label").Text = Atr("%d Bananas").Replace("%d", bananaCounter.ToString());
+			    }
+			}
+			[/csharp]
+			[/codeblocks]
 		</constant>
 		<constant name="NOTIFICATION_WM_ABOUT" value="2011">
 			Notification received from the OS when a request for "About" information is sent.
@@ -1335,10 +1370,15 @@
 		</constant>
 		<constant name="DUPLICATE_DEFAULT" value="15" enum="DuplicateFlags">
 			Duplicate using default flags. This constant is useful to add or remove a single flag.
-			[codeblock]
+			[codeblocks]
+			[gdscript]
 			# Duplicate non-exported variables.
 			var dupe = duplicate(DUPLICATE_DEFAULT | DUPLICATE_INTERNAL_STATE)
-			[/codeblock]
+			[/gdscript]
+			[csharp]
+			Node dupe = Duplicate((int)(DuplicateFlags.Default | DuplicateFlags.InternalState));
+			[/csharp]
+			[/codeblocks]
 		</constant>
 		<constant name="INTERNAL_MODE_DISABLED" value="0" enum="InternalMode">
 			The node will not be internal.

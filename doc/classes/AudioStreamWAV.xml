@@ -29,20 +29,40 @@
 				Creates a new [AudioStreamWAV] instance from the given file path. The file must be in WAV format.
 				The keys and values of [param options] match the properties of [ResourceImporterWAV].
 				[b]Example:[/b] Load the first file dropped as a WAV and play it:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				@onready var audio_player = $AudioStreamPlayer
 
 				func _ready():
 					get_window().files_dropped.connect(_on_files_dropped)
 
 				func _on_files_dropped(files):
-					if files[0].get_extension() == "wav":
+					if not files.is_empty() and files[0].get_extension() == "wav":
 						audio_player.stream = AudioStreamWAV.load_from_file(files[0], {
 								"force/max_rate": true,
 								"force/max_rate_hz": 11025
 							})
 						audio_player.play()
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override void _Ready()
+				{
+				    GetWindow().FilesDropped += OnFilesDropped;
+				}
+				private void OnFilesDropped(string[] files)
+				{
+				    if (files.Length == 0 || files[0].GetExtension() != "wav")
+				        return;
+				    var player = GetNode&lt;AudioStreamPlayer&gt;("AudioStreamPlayer");
+				    player.Stream = AudioStreamWav.LoadFromFile(files[0], new Godot.Collections.Dictionary
+				    {
+				        { "force/max_rate", true },
+				        { "force/max_rate_hz", 11025 },
+				    });
+				    player.Play();
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="save_to_wav">

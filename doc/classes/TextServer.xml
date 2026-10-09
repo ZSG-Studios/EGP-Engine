@@ -1974,10 +1974,16 @@
 			<param index="1" name="language" type="String" default="&quot;&quot;" />
 			<description>
 				Returns array of the composite character boundaries.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				var ts = TextServerManager.get_primary_interface()
 				print(ts.string_get_character_breaks("Test ❤️‍🔥 Test")) # Prints [1, 2, 3, 4, 5, 9, 10, 11, 12, 13, 14]
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				var textServer = TextServerManager.GetPrimaryInterface();
+				GD.Print(textServer.StringGetCharacterBreaks("Test ❤️‍🔥 Test"));
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="string_get_word_breaks" qualifiers="const">
@@ -1988,7 +1994,8 @@
 			<description>
 				Returns an array of the word break boundaries. Elements in the returned array are the offsets of the start and end of words. Therefore the length of the array is always even.
 				When [param chars_per_line] is greater than zero, line break boundaries are returned instead.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				var ts = TextServerManager.get_primary_interface()
 				# Corresponds to the substrings "The", "Godot", "Engine", and "4".
 				print(ts.string_get_word_breaks("The Godot Engine, 4")) # Prints [0, 3, 4, 9, 10, 16, 18, 19]
@@ -1996,7 +2003,14 @@
 				print(ts.string_get_word_breaks("The Godot Engine, 4", "en", 5)) # Prints [0, 3, 4, 9, 10, 15, 15, 19]
 				# Corresponds to the substrings "The Godot" and "Engine, 4".
 				print(ts.string_get_word_breaks("The Godot Engine, 4", "en", 10)) # Prints [0, 9, 10, 19]
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				var textServer = TextServerManager.GetPrimaryInterface();
+				GD.Print(textServer.StringGetWordBreaks("The Godot Engine, 4"));
+				GD.Print(textServer.StringGetWordBreaks("The Godot Engine, 4", "en", 5));
+				GD.Print(textServer.StringGetWordBreaks("The Godot Engine, 4", "en", 10));
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="string_to_lower" qualifiers="const">

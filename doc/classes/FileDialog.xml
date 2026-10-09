@@ -153,7 +153,8 @@
 			<description>
 				Sets the callback used by the [FileDialog] nodes to get a file icon, when [constant DISPLAY_THUMBNAILS] mode is used. The callback should take a single [String] argument (file path), and return a [Texture2D]. If an invalid texture is returned, the [theme_item file_thumbnail] icon will be used instead.
 				Thumbnails are usually more complex and may take a while to load. To avoid stalling the application, you can use [ImageTexture] to asynchronously create the thumbnail.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _ready():
 					FileDialog.set_get_thumbnail_callback(thumbnail_method)
 
@@ -165,7 +166,25 @@
 				func make_thumbnail_async(path, image_texture):
 					var thumbnail_texture = await generate_thumbnail(path) # Some method that generates a thumbnail.
 					image_texture.set_image(thumbnail_texture.get_image())
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override void _Ready()
+				{
+				    FileDialog.SetGetThumbnailCallback(Callable.From&lt;string, Texture2D&gt;(ThumbnailMethod));
+				}
+				private Texture2D ThumbnailMethod(string path)
+				{
+				    var texture = new ImageTexture();
+				    MakeThumbnailAsync(path, texture);
+				    return texture;
+				}
+				private async void MakeThumbnailAsync(string path, ImageTexture texture)
+				{
+				    Texture2D thumbnail = await GenerateThumbnail(path); // Application-provided async method.
+				    texture.SetImage(thumbnail.GetImage());
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="set_option_default">

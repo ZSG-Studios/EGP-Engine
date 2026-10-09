@@ -21,9 +21,14 @@
 			<return type="Control" />
 			<description>
 				Returns the drag area [Control]. For example, you can move a pre-configured button into the drag area [Control] so that it rides along with the split bar. Try setting the [Button] anchors to [code]center[/code] prior to the [code]reparent()[/code] call.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				$BarnacleButton.reparent($SplitContainer.get_drag_area_control())
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				GetNode&lt;Button&gt;("BarnacleButton").Reparent(GetNode&lt;SplitContainer&gt;("SplitContainer").GetDragAreaControl());
+				[/csharp]
+				[/codeblocks]
 				[b]Note:[/b] The drag area [Control] is drawn over the [SplitContainer]'s children, so [CanvasItem] draw objects called from the [Control] and children added to the [Control] will also appear over the [SplitContainer]'s children. Try setting [member Control.mouse_filter] of custom children to [constant Control.MOUSE_FILTER_IGNORE] to prevent blocking the mouse from dragging if desired.
 				[b]Warning:[/b] This is a required internal node, removing and freeing it may cause a crash.
 			</description>
@@ -32,9 +37,14 @@
 			<return type="Control[]" />
 			<description>
 				Returns an [Array] of the drag area [Control]s. These are the interactable [Control] nodes between each child. For example, this can be used to add a pre-configured button to a drag area [Control] so that it rides along with the split bar. Try setting the [Button] anchors to [code]center[/code] prior to the [method Node.reparent] call.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				$BarnacleButton.reparent($SplitContainer.get_drag_area_controls()[0])
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				GetNode&lt;Button&gt;("BarnacleButton").Reparent(GetNode&lt;SplitContainer&gt;("SplitContainer").GetDragAreaControls()[0]);
+				[/csharp]
+				[/codeblocks]
 				[b]Note:[/b] The drag area [Control]s are drawn over the [SplitContainer]'s children, so [CanvasItem] draw objects called from a drag area and children added to it will also appear over the [SplitContainer]'s children. Try setting [member Control.mouse_filter] of custom children to [constant Control.MOUSE_FILTER_IGNORE] to prevent blocking the mouse from dragging if desired.
 				[b]Warning:[/b] These are required internal nodes, removing or freeing them may cause a crash.
 			</description>

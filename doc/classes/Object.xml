@@ -11,13 +11,25 @@
 		Inside a [Script], [method _get_property_list] may be overridden to customize properties in several ways. This allows them to be available to the editor, display as lists of options, sub-divide into groups, save on disk, etc. Scripting languages offer easier ways to customize properties, such as with the [annotation @GDScript.@export] annotation.
 		Godot is very dynamic. An object's script, and therefore its properties, methods and signals, can be changed at run-time. Because of this, there can be occasions where, for example, a property required by a method may not exist. To prevent run-time errors, see methods such as [method set], [method get], [method call], [method has_method], [method has_signal], etc. Note that these methods are [b]much[/b] slower than direct references.
 		In GDScript, you can also check if a given property, method, or signal name exists in an object with the [code]in[/code] operator:
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		var node = Node.new()
 		print("name" in node)         # Prints true
 		print("get_parent" in node)   # Prints true
 		print("tree_entered" in node) # Prints true
 		print("unknown" in node)      # Prints false
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		var node = new Node();
+		bool hasName = false;
+		foreach (Godot.Collections.Dictionary property in node.GetPropertyList())
+		    hasName |= property["name"].AsString() == "name";
+		GD.Print(hasName);                    // True.
+		GD.Print(node.HasMethod("get_parent")); // True.
+		GD.Print(node.HasSignal("tree_entered")); // True.
+		GD.Print(node.HasMethod("unknown"));   // False.
+		[/csharp]
+		[/codeblocks]
 		Notifications are [int] constants commonly sent and received by objects. For example, on every rendered frame, the [SceneTree] notifies nodes inside the tree with a [constant Node.NOTIFICATION_PROCESS]. The nodes receive it and may call [method Node._process] to update. To make use of notifications, see [method notification] and [method _notification].
 		Lastly, every object can also contain metadata (data about data). [method set_meta] can be useful to store information that the object itself does not depend on. To keep your code clean, making excessive use of metadata is discouraged.
 		[b]Note:[/b] Unlike references to a [RefCounted], references to an object stored in a variable can become invalid without being set to [code]null[/code]. To check if an object has been deleted, do [i]not[/i] compare it against [code]null[/code]. Instead, use [method @GlobalScope.is_instance_valid]. It's also recommended to inherit from [RefCounted] for classes storing data instead of [Object].
@@ -213,7 +225,8 @@
 			<param index="0" name="iter" type="Array" />
 			<description>
 				Initializes the iterator. [param iter] stores the iteration state. Since GDScript does not support passing arguments by reference, a single-element array is used as a wrapper. This array should not be resized. Returns [code]true[/code] so long as the iterator has not reached the end.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				class MyRange:
 					var _from
 					var _to
@@ -238,7 +251,28 @@
 					var my_range = MyRange.new(2, 5)
 					for x in my_range:
 						print(x) # Prints 2, 3, 4.
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				// Idiomatic C# iteration uses IEnumerable rather than GDScript's iterator hooks.
+				public sealed class MyRange : System.Collections.Generic.IEnumerable&lt;int&gt;
+				{
+				    private readonly int from, to;
+				    public MyRange(int from, int to)
+				    {
+				        if (from &gt; to) throw new System.ArgumentException("from must not exceed to");
+				        this.from = from;
+				        this.to = to;
+				    }
+				    public System.Collections.Generic.IEnumerator&lt;int&gt; GetEnumerator()
+				    {
+				        for (int i = from; i &lt; to; i++) yield return i;
+				    }
+				    System.Collections.IEnumerator System.Collections.IEnumerable.GetEnumerator() =&gt; GetEnumerator();
+				}
+				// In _Ready():
+				foreach (int x in new MyRange(2, 5)) GD.Print(x); // 2, 3, 4.
+				[/csharp]
+				[/codeblocks]
 				[b]Note:[/b] Avoid storing iterator state in a member variable, use the [param iter] parameter instead. Otherwise, you won't be able to reuse the same iterator instance in nested loops.
 				See also [url=$DOCS_URL/tutorials/scripting/gdscript/gdscript_advanced.html#custom-iterators]online docs[/url].
 			</description>
@@ -352,14 +386,24 @@
 			<return type="String" />
 			<description>
 				Override this method to customize the return value of [method to_string], and therefore the object's representation as a [String].
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _to_string():
 					return "Welcome to Godot 4!"
 
 				func _init():
 					print(self)       # Prints "Welcome to Godot 4!"
 					var a = str(self) # a is "Welcome to Godot 4!"
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override string ToString() =&gt; "Welcome to Godot 4!";
+				public override void _Ready()
+				{
+				    GD.Print(this);
+				    string text = ToString();
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="_validate_property" qualifiers="virtual">
@@ -485,14 +529,21 @@
 				See also [method Callable.call_deferred].
 				[b]Note:[/b] In C#, [param method] must be in snake_case when referring to built-in Godot methods. Prefer using the names exposed in the [code]MethodName[/code] class to avoid allocating a new [StringName] on each call.
 				[b]Note:[/b] If you're looking to delay the function call by a frame, refer to the [signal SceneTree.process_frame] and [signal SceneTree.physics_frame] signals.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				var node = Node3D.new()
 				# Make a Callable and bind the arguments to the node's rotate() call.
 				var callable = node.rotate.bind(Vector3(1.0, 0.0, 0.0), 1.571)
 				# Connect the callable to the process_frame signal, so it gets called in the next process frame.
 				# CONNECT_ONE_SHOT makes sure it only gets called once instead of every frame.
 				get_tree().process_frame.connect(callable, CONNECT_ONE_SHOT)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				var node = new Node3D();
+				Callable callable = Callable.From(() =&gt; node.Rotate(Vector3.Right, 1.571f));
+				GetTree().Connect(SceneTree.SignalName.ProcessFrame, callable, (uint)ConnectFlags.OneShot);
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="callv">
@@ -1058,16 +1109,28 @@
 		</constant>
 		<constant name="CONNECT_APPEND_SOURCE_OBJECT" value="16" enum="ConnectFlags" is_bitfield="true">
 			On signal emission, the source object is automatically appended after the original arguments of the signal, regardless of the connected [Callable]'s unbinds which affect only the original arguments of the signal (see [method Callable.unbind], [method Callable.get_unbound_arguments_count]).
-			[codeblock]
+			[codeblocks]
+			[gdscript]
 			extends Object
 
-			signal test_signal
+			signal test_signal(first, second)
 
 			func test():
 				print(self) # Prints e.g. &lt;Object#35332818393&gt;
 				test_signal.connect(prints.unbind(1), CONNECT_APPEND_SOURCE_OBJECT)
 				test_signal.emit("emit_arg_1", "emit_arg_2") # Prints emit_arg_1 &lt;Object#35332818393&gt;
-			[/codeblock]
+			[/gdscript]
+			[csharp]
+			[Signal] public delegate void TestSignalEventHandler(string first, string second);
+			public void Test()
+			{
+			    GD.Print(this);
+			    var callback = Callable.From&lt;string, GodotObject&gt;((first, source) =&gt; GD.Print(first, " ", source));
+			    Connect(SignalName.TestSignal, callback.Unbind(1), (uint)ConnectFlags.AppendSourceObject);
+			    EmitSignal(SignalName.TestSignal, "emit_arg_1", "emit_arg_2");
+			}
+			[/csharp]
+			[/codeblocks]
 		</constant>
 	</constants>
 </class>

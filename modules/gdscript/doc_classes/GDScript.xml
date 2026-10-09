@@ -16,11 +16,18 @@
 			<return type="Variant" />
 			<description>
 				Returns a new instance of the script.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				var MyClass = load("myclass.gd")
 				var instance = MyClass.new()
 				print(instance.get_script() == MyClass) # Prints true
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				var script = GD.Load&lt;GDScript&gt;("res://myclass.gd");
+				GodotObject instance = script.Call("new").AsGodotObject();
+				GD.Print(instance.GetScript().AsGodotObject() == script); // True.
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 	</methods>

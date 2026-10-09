@@ -8,11 +8,19 @@
 		Inherit this when creating animation nodes mainly for use in [AnimationNodeBlendTree], otherwise [AnimationRootNode] should be used instead.
 		You can access the time information as read-only parameter which is processed and stored in the previous frame for all nodes except [AnimationNodeOutput].
 		[b]Note:[/b] If multiple inputs exist in the [AnimationNode], which time information takes precedence depends on the type of [AnimationNode].
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		var current_length = $AnimationTree["parameters/AnimationNodeName/current_length"]
 		var current_position = $AnimationTree["parameters/AnimationNodeName/current_position"]
 		var current_delta = $AnimationTree["parameters/AnimationNodeName/current_delta"]
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		var tree = GetNode&lt;AnimationTree&gt;("AnimationTree");
+		double currentLength = tree.Get("parameters/AnimationNodeName/current_length").AsDouble();
+		double currentPosition = tree.Get("parameters/AnimationNodeName/current_position").AsDouble();
+		double currentDelta = tree.Get("parameters/AnimationNodeName/current_delta").AsDouble();
+		[/csharp]
+		[/codeblocks]
 	</description>
 	<tutorials>
 		<link title="Using AnimationTree">$DOCS_URL/tutorials/animation/animation_tree.html</link>

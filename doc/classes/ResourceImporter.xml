@@ -15,7 +15,8 @@
 			<param index="0" name="path" type="String" />
 			<description>
 				Called when the engine compilation profile editor wants to check what build options an imported resource needs. For example, [ResourceImporterDynamicFont] has a property called [member ResourceImporterDynamicFont.multichannel_signed_distance_field], that depends on the engine to be build with the "msdfgen" module. If that resource happened to be a custom one, it would be handled like this:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _get_build_dependencies(path):
 					var resource = load(path)
 					var dependencies = PackedStringArray()
@@ -24,7 +25,16 @@
 						dependencies.push_back("module_msdfgen_enabled")
 
 					return dependencies
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override string[] _GetBuildDependencies(string path)
+				{
+				    FontFile font = GD.Load&lt;FontFile&gt;(path);
+				    return font.MultichannelSignedDistanceField
+				        ? new[] { "module_msdfgen_enabled" } : System.Array.Empty&lt;string&gt;();
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 	</methods>

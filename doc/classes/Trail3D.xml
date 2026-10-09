@@ -47,7 +47,7 @@
 		<member name="material" type="ShaderMaterial" setter="set_material" getter="get_material">
 			The material to assign to the trail mesh when [member material_mode] is [constant Line3D.MATERIAL_MODE_CUSTOM].
 			[b]Tip:[/b] To preserve billboarding, use the following shader as a base:
-			[codeblock]
+			[codeblock lang=glsl]
 			shader_type spatial;
 			render_mode blend_mix, depth_draw_never, unshaded, skip_vertex_transform, cull_disabled;
 

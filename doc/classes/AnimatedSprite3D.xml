@@ -62,6 +62,12 @@
 				animated_sprite.play("walk_another_skin")
 				animated_sprite.set_frame_and_progress(current_frame, current_progress)
 				[/gdscript]
+				[csharp]
+				int currentFrame = animatedSprite.Frame;
+				float currentProgress = animatedSprite.FrameProgress;
+				animatedSprite.Play("walk_another_skin");
+				animatedSprite.SetFrameAndProgress(currentFrame, currentProgress);
+				[/csharp]
 				[/codeblocks]
 			</description>
 		</method>

@@ -152,6 +152,8 @@
 					# Color must be linear-encoded to use math operations.
 					var linear_color = srgb_color.srgb_to_linear()
 					var max_rgb_value = maxf(linear_color.r, maxf(linear_color.g, linear_color.b))
+					if max_rgb_value &lt;= 0:
+						return srgb_color
 					var brightness_scale = max_linear_value / max_rgb_value
 					linear_color *= brightness_scale
 					# Undo changes to the alpha channel, which should not be modified.
@@ -160,6 +162,22 @@
 					# Godot unless stated otherwise.
 					return linear_color.linear_to_srgb()
 				[/gdscript]
+				[csharp]
+				public override void _Process(double delta)
+				{
+				    float maximum = GetWindow().GetOutputMaxLinearValue();
+				    Color brightColor = NormalizeColor(Colors.Purple, maximum);
+				}
+				private static Color NormalizeColor(Color srgb, float maximum = 1.0f)
+				{
+				    Color linear = srgb.SrgbToLinear();
+				    float largest = Mathf.Max(linear.R, Mathf.Max(linear.G, linear.B));
+				    if (largest &lt;= 0) return srgb; // Black cannot be normalized by division.
+				    linear *= maximum / largest;
+				    linear.A = srgb.A;
+				    return linear.LinearToSrgb();
+				}
+				[/csharp]
 				[/codeblocks]
 				[b]Note:[/b] You will need to convert sRGB colors to linear before multiplying by this value to get correct results.
 			</description>
@@ -873,13 +891,19 @@
 			<param index="0" name="files" type="PackedStringArray" />
 			<description>
 				Emitted when files are dragged from the OS file manager and dropped in the game window. The argument is a list of file paths.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _ready():
 					get_window().files_dropped.connect(on_files_dropped)
 
 				func on_files_dropped(files):
 					print(files)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override void _Ready() =&gt; GetWindow().FilesDropped += OnFilesDropped;
+				private void OnFilesDropped(string[] files) =&gt; GD.Print(files);
+				[/csharp]
+				[/codeblocks]
 				[b]Note:[/b] This signal only works with native windows, i.e. the main window and [Window]-derived nodes when [member Viewport.gui_embed_subwindows] is disabled in the main viewport.
 				[b]Note:[/b] On the web platform, the files are dropped to a temporary folder and will be removed automatically after the signal is emitted. Process them immediately, or move them to a separate possibly persistent location (e.g. [code]user://[/code]) to preserve them.
 			</description>

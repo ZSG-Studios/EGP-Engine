@@ -87,14 +87,19 @@
 				Asynchronous version of [method buffer_get_data]. RenderingDevice will call [param callback] in a certain amount of frames with the data the buffer had at the time of the request.
 				[b]Note:[/b] At the moment, the delay corresponds to the amount of frames specified by [member ProjectSettings.rendering/rendering_device/vsync/frame_queue_size].
 				[b]Note:[/b] Downloading large buffers can have a prohibitive cost for real-time even when using the asynchronous method due to hardware bandwidth limitations. When dealing with large resources, you can adjust settings such as [member ProjectSettings.rendering/rendering_device/staging_buffer/block_size_kb] to improve the transfer speed at the cost of extra memory.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _buffer_get_data_callback(array):
 					value = array.decode_u32(0)
 
 				...
 
 				rd.buffer_get_data_async(buffer, _buffer_get_data_callback)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				rd.BufferGetDataAsync(buffer, Callable.From&lt;byte[]&gt;(bytes =&gt; value = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(bytes)));
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="buffer_get_device_address">
@@ -139,8 +144,9 @@
 				Starts a list of compute commands created with the [code]compute_*[/code] methods. The returned value should be passed to other [code]compute_list_*[/code] functions.
 				Multiple compute lists cannot be created at the same time; you must finish the previous compute list first using [method compute_list_end].
 				A simple compute operation might look like this (code is not a complete example):
-				[codeblock]
-				var rd = RenderingDevice.new()
+				[codeblocks]
+				[gdscript]
+				var rd = RenderingServer.create_local_rendering_device()
 				var compute_list = rd.compute_list_begin()
 
 				rd.compute_list_bind_compute_pipeline(compute_list, compute_shader_dilate_pipeline)
@@ -153,7 +159,21 @@
 					# No barrier, let them run all together.
 
 				rd.compute_list_end()
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				var rd = RenderingServer.CreateLocalRenderingDevice();
+				long list = rd.ComputeListBegin();
+				rd.ComputeListBindComputePipeline(list, computeShaderDilatePipeline);
+				rd.ComputeListBindUniformSet(list, computeBaseUniformSet, 0);
+				rd.ComputeListBindUniformSet(list, dilateUniformSet, 1);
+				for (int i = 0; i &lt; atlasSlices; i++)
+				{
+				    rd.ComputeListSetPushConstant(list, pushConstant, (uint)pushConstant.Length);
+				    rd.ComputeListDispatch(list, (uint)groupSize.X, (uint)groupSize.Y, (uint)groupSize.Z);
+				}
+				rd.ComputeListEnd();
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="compute_list_bind_compute_pipeline">
@@ -266,10 +286,11 @@
 				Starts a list of raster drawing commands created with the [code]draw_*[/code] methods. The returned value should be passed to other [code]draw_list_*[/code] functions.
 				Multiple draw lists cannot be created at the same time; you must finish the previous draw list first using [method draw_list_end].
 				A simple drawing operation might look like this (code is not a complete example):
-				[codeblock]
-				var rd = RenderingDevice.new()
+				[codeblocks]
+				[gdscript]
+				var rd = RenderingServer.create_local_rendering_device()
 				var clear_colors = PackedColorArray([Color(0, 0, 0, 0), Color(0, 0, 0, 0), Color(0, 0, 0, 0)])
-				var draw_list = rd.draw_list_begin(framebuffers[i], RenderingDevice.CLEAR_COLOR_ALL, clear_colors, true, 1.0f, true, 0, Rect2(), RenderingDevice.OPAQUE_PASS)
+				var draw_list = rd.draw_list_begin(framebuffers[i], RenderingDevice.DRAW_CLEAR_COLOR_ALL | RenderingDevice.DRAW_CLEAR_DEPTH | RenderingDevice.DRAW_CLEAR_STENCIL, clear_colors, 1.0, 0, Rect2(), RenderingDevice.OPAQUE_PASS)
 
 				# Draw opaque.
 				rd.draw_list_bind_render_pipeline(draw_list, raster_pipeline)
@@ -283,13 +304,35 @@
 				rd.draw_list_draw(draw_list, false, 1, slice_triangle_count[i] * 3)
 
 				rd.draw_list_end()
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				var rd = RenderingServer.CreateLocalRenderingDevice();
+				Color[] clearColors = { new(0, 0, 0, 0), new(0, 0, 0, 0), new(0, 0, 0, 0) };
+				long list = rd.DrawListBegin(framebuffers[i], RenderingDevice.DrawFlags.ClearColorAll | RenderingDevice.DrawFlags.ClearDepth | RenderingDevice.DrawFlags.ClearStencil, clearColors, 1.0f, 0,
+				    new Rect2(), (uint)RenderingDevice.BreadcrumbMarker.OpaquePass);
+				rd.DrawListBindRenderPipeline(list, rasterPipeline);
+				rd.DrawListBindUniformSet(list, rasterBaseUniform, 0);
+				rd.DrawListSetPushConstant(list, rasterPushConstant, (uint)rasterPushConstant.Length);
+				rd.DrawListDraw(list, false, 1, (uint)(sliceTriangleCount[i] * 3));
+				rd.DrawListBindRenderPipeline(list, rasterPipelineWire);
+				rd.DrawListBindUniformSet(list, rasterBaseUniform, 0);
+				rd.DrawListSetPushConstant(list, rasterPushConstant, (uint)rasterPushConstant.Length);
+				rd.DrawListDraw(list, false, 1, (uint)(sliceTriangleCount[i] * 3));
+				rd.DrawListEnd();
+				[/csharp]
+				[/codeblocks]
 				The [param draw_flags] indicates if the texture attachments of the framebuffer should be cleared or ignored. Only one of the two flags can be used for each individual attachment. Ignoring an attachment means that any contents that existed before the draw list will be completely discarded, reducing the memory bandwidth used by the render pass but producing garbage results if the pixels aren't replaced. The default behavior allows the engine to figure out the right operation to use if the texture is discardable, which can result in increased performance. See [RDTextureFormat] or [method texture_set_discardable].
 				The [param breadcrumb] parameter can be an arbitrary 32-bit integer that is useful to diagnose GPU crashes. If Godot is built in dev or debug mode; when the GPU crashes Godot will dump all shaders that were being executed at the time of the crash and the breadcrumb is useful to diagnose what passes did those shaders belong to.
 				It does not affect rendering behavior and can be set to 0. It is recommended to use [enum BreadcrumbMarker] enumerations for consistency but it's not required. It is also possible to use bitwise operations to add extra data. e.g.
-				[codeblock]
-				rd.draw_list_begin(fb[i], RenderingDevice.CLEAR_COLOR_ALL, clear_colors, true, 1.0f, true, 0, Rect2(), RenderingDevice.OPAQUE_PASS | 5)
-				[/codeblock]
+				[codeblocks]
+				[gdscript]
+				rd.draw_list_begin(fb[i], RenderingDevice.DRAW_CLEAR_COLOR_ALL | RenderingDevice.DRAW_CLEAR_DEPTH | RenderingDevice.DRAW_CLEAR_STENCIL, clear_colors, 1.0, 0, Rect2(), RenderingDevice.OPAQUE_PASS | 5)
+				[/gdscript]
+				[csharp]
+				rd.DrawListBegin(framebuffers[i], RenderingDevice.DrawFlags.ClearColorAll | RenderingDevice.DrawFlags.ClearDepth | RenderingDevice.DrawFlags.ClearStencil, clearColors, 1.0f, 0,
+				    new Rect2(), (uint)RenderingDevice.BreadcrumbMarker.OpaquePass | 5u);
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="draw_list_begin_for_screen">
@@ -737,12 +780,12 @@
 				The returned value should be assigned to [member RDAccelerationStructureInstance.hit_sbt_range].
 				During ray traversal, hit group index is computed as:
 					(geometry index in [member RDAccelerationStructureInstance.blas])
-					× (SBT stride used in [code]traceRayEXT[/code])
+					Ãƒâ€” (SBT stride used in [code]traceRayEXT[/code])
 					+ (SBT offset used in [code]traceRayEXT[/code])
 					+ (range offset)
 				[param hit_group_count] must be large enough to cover all SBT entries that may be indexed by this equation. This typically corresponds to:
 					(geometry count in [member RDAccelerationStructureInstance.blas])
-					× (SBT stride used in [code]traceRayEXT[/code])
+					Ãƒâ€” (SBT stride used in [code]traceRayEXT[/code])
 				The allocated range is uninitialized and must be filled using [method hit_sbt_range_update].
 			</description>
 		</method>
@@ -816,7 +859,7 @@
 				A simple raytracing operation might look like this (code is not a complete example):
 				[codeblocks]
 				[gdscript]
-				var rd = RenderingDevice.new()
+				var rd = RenderingServer.create_local_rendering_device()
 				assert(rd.has_feature(RenderingDevice.SUPPORTS_RAYTRACING_PIPELINE))
 
 				# Create a BLAS for a mesh.
@@ -853,12 +896,40 @@
 				rd.raytracing_list_bind_uniform_set(raylist, uniform_set, 0)
 
 				# Trace rays.
-				var width = get_viewport().size.x
-				var height = get_viewport().size.y
+				var width = get_viewport().get_visible_rect().size.x
+				var height = get_viewport().get_visible_rect().size.y
 				rd.raytracing_list_trace_rays(raylist, 0, hit_sbt, width, height, 1)
 
 				rd.raytracing_list_end()
 				[/gdscript]
+				[csharp]
+				var rd = RenderingServer.CreateLocalRenderingDevice();
+				if (!rd.HasFeature(RenderingDevice.Features.RaytracingPipeline))
+				    return;
+				var geometry = new RDAccelerationStructureGeometry
+				{
+				    Flags = RenderingDevice.AccelerationStructureGeometryFlagBits.OpaqueBit,
+				    VertexBuffer = vertexBuffer,
+				    VertexStride = 12,
+				    VertexFormat = RenderingDevice.DataFormat.R32G32B32Sfloat,
+				    VertexCount = 3,
+				    IndexBuffer = indexBuffer,
+				    IndexCount = 3,
+				};
+				Rid blas = rd.BlasCreate(new Godot.Collections.Array&lt;RDAccelerationStructureGeometry&gt; { geometry }, 0);
+				Rid tlas = rd.TlasCreate(1, 0);
+				rd.BlasBuild(blas);
+				var instance = new RDAccelerationStructureInstance { Blas = blas };
+				instance.HitSbtRange = rd.HitSbtRangeAlloc(hitSbt, 1);
+				rd.HitSbtRangeUpdate(hitSbt, instance.HitSbtRange, 0, new int[] { 0 });
+				rd.TlasBuild(tlas, new Godot.Collections.Array&lt;RDAccelerationStructureInstance&gt; { instance });
+				long list = rd.RaytracingListBegin();
+				rd.RaytracingListBindRaytracingPipeline(list, raytracingPipeline);
+				rd.RaytracingListBindUniformSet(list, uniformSet, 0);
+				Vector2 size = GetViewport().GetVisibleRect().Size;
+				rd.RaytracingListTraceRays(list, 0, hitSbt, (uint)size.X, (uint)size.Y, 1);
+				rd.RaytracingListEnd();
+				[/csharp]
 				[/codeblocks]
 			</description>
 		</method>
@@ -903,7 +974,7 @@
 			<param index="4" name="height" type="int" />
 			<param index="5" name="depth" type="int" />
 			<description>
-				Initializes a raytracing dispatch for [param raytracing_list], launching [param width] × [param height] × [param depth] rays.
+				Initializes a raytracing dispatch for [param raytracing_list], launching [param width] Ãƒâ€” [param height] Ãƒâ€” [param depth] rays.
 				[param raygen_shader_index] selects the ray generation shader from the pipeline bound with [method raytracing_list_bind_raytracing_pipeline].
 				[param hit_sbt] must use the same pipeline bound to [param raytracing_list].
 			</description>
@@ -1197,14 +1268,19 @@
 				Asynchronous version of [method texture_get_data]. RenderingDevice will call [param callback] in a certain amount of frames with the data the texture had at the time of the request.
 				[b]Note:[/b] At the moment, the delay corresponds to the amount of frames specified by [member ProjectSettings.rendering/rendering_device/vsync/frame_queue_size].
 				[b]Note:[/b] Downloading large textures can have a prohibitive cost for real-time even when using the asynchronous method due to hardware bandwidth limitations. When dealing with large resources, you can adjust settings such as [member ProjectSettings.rendering/rendering_device/staging_buffer/texture_download_region_size_px] and [member ProjectSettings.rendering/rendering_device/staging_buffer/block_size_kb] to improve the transfer speed at the cost of extra memory.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _texture_get_data_callback(array):
 					value = array.decode_u32(0)
 
 				...
 
 				rd.texture_get_data_async(texture, 0, _texture_get_data_callback)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				rd.TextureGetDataAsync(texture, 0, Callable.From&lt;byte[]&gt;(bytes =&gt; value = System.Buffers.Binary.BinaryPrimitives.ReadUInt32LittleEndian(bytes)));
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="texture_get_format">
@@ -1941,82 +2017,82 @@
 			11-bit VRAM-compressed signed red/green channel data format with normalized value. Values are in the [code][-1.0, 1.0][/code] range. Using ETC2 texture compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_4x4_UNORM_BLOCK" value="156" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value, packed in 4×4 blocks (highest quality). Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value, packed in 4Ãƒâ€”4 blocks (highest quality). Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_4x4_SRGB_BLOCK" value="157" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 4×4 blocks (highest quality). Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 4Ãƒâ€”4 blocks (highest quality). Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_5x4_UNORM_BLOCK" value="158" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value, packed in 5×4 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value, packed in 5Ãƒâ€”4 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_5x4_SRGB_BLOCK" value="159" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 5×4 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 5Ãƒâ€”4 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_5x5_UNORM_BLOCK" value="160" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value, packed in 5×5 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value, packed in 5Ãƒâ€”5 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_5x5_SRGB_BLOCK" value="161" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 5×5 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 5Ãƒâ€”5 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_6x5_UNORM_BLOCK" value="162" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value, packed in 6×5 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value, packed in 6Ãƒâ€”5 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_6x5_SRGB_BLOCK" value="163" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 6×5 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 6Ãƒâ€”5 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_6x6_UNORM_BLOCK" value="164" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value, packed in 6×6 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value, packed in 6Ãƒâ€”6 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_6x6_SRGB_BLOCK" value="165" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 6×6 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 6Ãƒâ€”6 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_8x5_UNORM_BLOCK" value="166" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value, packed in 8×5 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value, packed in 8Ãƒâ€”5 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_8x5_SRGB_BLOCK" value="167" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 8×5 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 8Ãƒâ€”5 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_8x6_UNORM_BLOCK" value="168" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value, packed in 8×6 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value, packed in 8Ãƒâ€”6 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_8x6_SRGB_BLOCK" value="169" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 8×6 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 8Ãƒâ€”6 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_8x8_UNORM_BLOCK" value="170" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value, packed in 8×8 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value, packed in 8Ãƒâ€”8 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_8x8_SRGB_BLOCK" value="171" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 8×8 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 8Ãƒâ€”8 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_10x5_UNORM_BLOCK" value="172" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value, packed in 10×5 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value, packed in 10Ãƒâ€”5 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_10x5_SRGB_BLOCK" value="173" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 10×5 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 10Ãƒâ€”5 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_10x6_UNORM_BLOCK" value="174" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value, packed in 10×6 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value, packed in 10Ãƒâ€”6 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_10x6_SRGB_BLOCK" value="175" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 10×6 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 10Ãƒâ€”6 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_10x8_UNORM_BLOCK" value="176" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value, packed in 10×8 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value, packed in 10Ãƒâ€”8 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_10x8_SRGB_BLOCK" value="177" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 10×8 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 10Ãƒâ€”8 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_10x10_UNORM_BLOCK" value="178" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value, packed in 10×10 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value, packed in 10Ãƒâ€”10 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_10x10_SRGB_BLOCK" value="179" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 10×10 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 10Ãƒâ€”10 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_12x10_UNORM_BLOCK" value="180" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value, packed in 12×10 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value, packed in 12Ãƒâ€”10 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_12x10_SRGB_BLOCK" value="181" enum="DataFormat">
-			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 12×10 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
+			VRAM-compressed unsigned floating-point data format with normalized value and nonlinear sRGB encoding, packed in 12Ãƒâ€”10 blocks. Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
 		</constant>
 		<constant name="DATA_FORMAT_ASTC_12x12_UNORM_BLOCK" value="182" enum="DataFormat">
 			VRAM-compressed unsigned floating-point data format with normalized value, packed in 12 blocks (lowest quality). Values are in the [code][0.0, 1.0][/code] range. Using ASTC compression.
@@ -2031,10 +2107,10 @@
 			8-bit-per-channel unsigned floating-point blue/green/red channel data format with normalized value. Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel).
 		</constant>
 		<constant name="DATA_FORMAT_G8_B8_R8_3PLANE_420_UNORM" value="186" enum="DataFormat">
-			8-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, stored across 3 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal and vertical resolution (i.e. 2×2 adjacent pixels will share the same value for the blue/red channel).
+			8-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, stored across 3 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal and vertical resolution (i.e. 2Ãƒâ€”2 adjacent pixels will share the same value for the blue/red channel).
 		</constant>
 		<constant name="DATA_FORMAT_G8_B8R8_2PLANE_420_UNORM" value="187" enum="DataFormat">
-			8-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, stored across 2 separate planes (green + blue/red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal and vertical resolution (i.e. 2×2 adjacent pixels will share the same value for the blue/red channel).
+			8-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, stored across 2 separate planes (green + blue/red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal and vertical resolution (i.e. 2Ãƒâ€”2 adjacent pixels will share the same value for the blue/red channel).
 		</constant>
 		<constant name="DATA_FORMAT_G8_B8_R8_3PLANE_422_UNORM" value="188" enum="DataFormat">
 			8-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, stored across 2 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel).
@@ -2049,61 +2125,61 @@
 			10-bit-per-channel unsigned floating-point red channel data with normalized value, plus 6 unused bits, packed in 16 bits. Values are in the [code][0.0, 1.0][/code] range.
 		</constant>
 		<constant name="DATA_FORMAT_R10X6G10X6_UNORM_2PACK16" value="192" enum="DataFormat">
-			10-bit-per-channel unsigned floating-point red/green channel data with normalized value, plus 6 unused bits after each channel, packed in 2×16 bits. Values are in the [code][0.0, 1.0][/code] range.
+			10-bit-per-channel unsigned floating-point red/green channel data with normalized value, plus 6 unused bits after each channel, packed in 2Ãƒâ€”16 bits. Values are in the [code][0.0, 1.0][/code] range.
 		</constant>
 		<constant name="DATA_FORMAT_R10X6G10X6B10X6A10X6_UNORM_4PACK16" value="193" enum="DataFormat">
-			10-bit-per-channel unsigned floating-point red/green/blue/alpha channel data with normalized value, plus 6 unused bits after each channel, packed in 4×16 bits. Values are in the [code][0.0, 1.0][/code] range.
+			10-bit-per-channel unsigned floating-point red/green/blue/alpha channel data with normalized value, plus 6 unused bits after each channel, packed in 4Ãƒâ€”16 bits. Values are in the [code][0.0, 1.0][/code] range.
 		</constant>
 		<constant name="DATA_FORMAT_G10X6B10X6G10X6R10X6_422_UNORM_4PACK16" value="194" enum="DataFormat">
-			10-bit-per-channel unsigned floating-point green/blue/green/red channel data with normalized value, plus 6 unused bits after each channel, packed in 4×16 bits. Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel). The green channel is listed twice, but contains different values to allow it to be represented at full resolution.
+			10-bit-per-channel unsigned floating-point green/blue/green/red channel data with normalized value, plus 6 unused bits after each channel, packed in 4Ãƒâ€”16 bits. Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel). The green channel is listed twice, but contains different values to allow it to be represented at full resolution.
 		</constant>
 		<constant name="DATA_FORMAT_B10X6G10X6R10X6G10X6_422_UNORM_4PACK16" value="195" enum="DataFormat">
-			10-bit-per-channel unsigned floating-point blue/green/red/green channel data with normalized value, plus 6 unused bits after each channel, packed in 4×16 bits. Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel). The green channel is listed twice, but contains different values to allow it to be represented at full resolution.
+			10-bit-per-channel unsigned floating-point blue/green/red/green channel data with normalized value, plus 6 unused bits after each channel, packed in 4Ãƒâ€”16 bits. Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel). The green channel is listed twice, but contains different values to allow it to be represented at full resolution.
 		</constant>
 		<constant name="DATA_FORMAT_G10X6_B10X6_R10X6_3PLANE_420_UNORM_3PACK16" value="196" enum="DataFormat">
-			10-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3×16 bits and stored across 2 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal and vertical resolution (i.e. 2×2 adjacent pixels will share the same value for the blue/red channel).
+			10-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3Ãƒâ€”16 bits and stored across 2 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal and vertical resolution (i.e. 2Ãƒâ€”2 adjacent pixels will share the same value for the blue/red channel).
 		</constant>
 		<constant name="DATA_FORMAT_G10X6_B10X6R10X6_2PLANE_420_UNORM_3PACK16" value="197" enum="DataFormat">
-			10-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3×16 bits and stored across 2 separate planes (green + blue/red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal and vertical resolution (i.e. 2×2 adjacent pixels will share the same value for the blue/red channel).
+			10-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3Ãƒâ€”16 bits and stored across 2 separate planes (green + blue/red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal and vertical resolution (i.e. 2Ãƒâ€”2 adjacent pixels will share the same value for the blue/red channel).
 		</constant>
 		<constant name="DATA_FORMAT_G10X6_B10X6_R10X6_3PLANE_422_UNORM_3PACK16" value="198" enum="DataFormat">
-			10-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3×16 bits and stored across 3 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel).
+			10-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3Ãƒâ€”16 bits and stored across 3 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel).
 		</constant>
 		<constant name="DATA_FORMAT_G10X6_B10X6R10X6_2PLANE_422_UNORM_3PACK16" value="199" enum="DataFormat">
-			10-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3×16 bits and stored across 3 separate planes (green + blue/red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel).
+			10-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3Ãƒâ€”16 bits and stored across 3 separate planes (green + blue/red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel).
 		</constant>
 		<constant name="DATA_FORMAT_G10X6_B10X6_R10X6_3PLANE_444_UNORM_3PACK16" value="200" enum="DataFormat">
-			10-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3×16 bits and stored across 3 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range.
+			10-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3Ãƒâ€”16 bits and stored across 3 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range.
 		</constant>
 		<constant name="DATA_FORMAT_R12X4_UNORM_PACK16" value="201" enum="DataFormat">
 			12-bit-per-channel unsigned floating-point red channel data with normalized value, plus 6 unused bits, packed in 16 bits. Values are in the [code][0.0, 1.0][/code] range.
 		</constant>
 		<constant name="DATA_FORMAT_R12X4G12X4_UNORM_2PACK16" value="202" enum="DataFormat">
-			12-bit-per-channel unsigned floating-point red/green channel data with normalized value, plus 6 unused bits after each channel, packed in 2×16 bits. Values are in the [code][0.0, 1.0][/code] range.
+			12-bit-per-channel unsigned floating-point red/green channel data with normalized value, plus 6 unused bits after each channel, packed in 2Ãƒâ€”16 bits. Values are in the [code][0.0, 1.0][/code] range.
 		</constant>
 		<constant name="DATA_FORMAT_R12X4G12X4B12X4A12X4_UNORM_4PACK16" value="203" enum="DataFormat">
-			12-bit-per-channel unsigned floating-point red/green/blue/alpha channel data with normalized value, plus 6 unused bits after each channel, packed in 4×16 bits. Values are in the [code][0.0, 1.0][/code] range.
+			12-bit-per-channel unsigned floating-point red/green/blue/alpha channel data with normalized value, plus 6 unused bits after each channel, packed in 4Ãƒâ€”16 bits. Values are in the [code][0.0, 1.0][/code] range.
 		</constant>
 		<constant name="DATA_FORMAT_G12X4B12X4G12X4R12X4_422_UNORM_4PACK16" value="204" enum="DataFormat">
-			12-bit-per-channel unsigned floating-point green/blue/green/red channel data with normalized value, plus 6 unused bits after each channel, packed in 4×16 bits. Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel). The green channel is listed twice, but contains different values to allow it to be represented at full resolution.
+			12-bit-per-channel unsigned floating-point green/blue/green/red channel data with normalized value, plus 6 unused bits after each channel, packed in 4Ãƒâ€”16 bits. Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel). The green channel is listed twice, but contains different values to allow it to be represented at full resolution.
 		</constant>
 		<constant name="DATA_FORMAT_B12X4G12X4R12X4G12X4_422_UNORM_4PACK16" value="205" enum="DataFormat">
-			12-bit-per-channel unsigned floating-point blue/green/red/green channel data with normalized value, plus 6 unused bits after each channel, packed in 4×16 bits. Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel). The green channel is listed twice, but contains different values to allow it to be represented at full resolution.
+			12-bit-per-channel unsigned floating-point blue/green/red/green channel data with normalized value, plus 6 unused bits after each channel, packed in 4Ãƒâ€”16 bits. Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel). The green channel is listed twice, but contains different values to allow it to be represented at full resolution.
 		</constant>
 		<constant name="DATA_FORMAT_G12X4_B12X4_R12X4_3PLANE_420_UNORM_3PACK16" value="206" enum="DataFormat">
-			12-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3×16 bits and stored across 2 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal and vertical resolution (i.e. 2×2 adjacent pixels will share the same value for the blue/red channel).
+			12-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3Ãƒâ€”16 bits and stored across 2 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal and vertical resolution (i.e. 2Ãƒâ€”2 adjacent pixels will share the same value for the blue/red channel).
 		</constant>
 		<constant name="DATA_FORMAT_G12X4_B12X4R12X4_2PLANE_420_UNORM_3PACK16" value="207" enum="DataFormat">
-			12-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3×16 bits and stored across 2 separate planes (green + blue/red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal and vertical resolution (i.e. 2×2 adjacent pixels will share the same value for the blue/red channel).
+			12-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3Ãƒâ€”16 bits and stored across 2 separate planes (green + blue/red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal and vertical resolution (i.e. 2Ãƒâ€”2 adjacent pixels will share the same value for the blue/red channel).
 		</constant>
 		<constant name="DATA_FORMAT_G12X4_B12X4_R12X4_3PLANE_422_UNORM_3PACK16" value="208" enum="DataFormat">
-			12-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3×16 bits and stored across 3 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel).
+			12-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3Ãƒâ€”16 bits and stored across 3 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel).
 		</constant>
 		<constant name="DATA_FORMAT_G12X4_B12X4R12X4_2PLANE_422_UNORM_3PACK16" value="209" enum="DataFormat">
-			12-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3×16 bits and stored across 3 separate planes (green + blue/red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel).
+			12-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3Ãƒâ€”16 bits and stored across 3 separate planes (green + blue/red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel).
 		</constant>
 		<constant name="DATA_FORMAT_G12X4_B12X4_R12X4_3PLANE_444_UNORM_3PACK16" value="210" enum="DataFormat">
-			12-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3×16 bits and stored across 3 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range.
+			12-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Packed in 3Ãƒâ€”16 bits and stored across 3 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range.
 		</constant>
 		<constant name="DATA_FORMAT_G16B16G16R16_422_UNORM" value="211" enum="DataFormat">
 			16-bit-per-channel unsigned floating-point green/blue/red channel data format with normalized value. Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel).
@@ -2112,10 +2188,10 @@
 			16-bit-per-channel unsigned floating-point blue/green/red channel data format with normalized value. Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel).
 		</constant>
 		<constant name="DATA_FORMAT_G16_B16_R16_3PLANE_420_UNORM" value="213" enum="DataFormat">
-			16-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Stored across 2 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal and vertical resolution (i.e. 2×2 adjacent pixels will share the same value for the blue/red channel).
+			16-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Stored across 2 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal and vertical resolution (i.e. 2Ãƒâ€”2 adjacent pixels will share the same value for the blue/red channel).
 		</constant>
 		<constant name="DATA_FORMAT_G16_B16R16_2PLANE_420_UNORM" value="214" enum="DataFormat">
-			16-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Stored across 2 separate planes (green + blue/red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal and vertical resolution (i.e. 2×2 adjacent pixels will share the same value for the blue/red channel).
+			16-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Stored across 2 separate planes (green + blue/red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal and vertical resolution (i.e. 2Ãƒâ€”2 adjacent pixels will share the same value for the blue/red channel).
 		</constant>
 		<constant name="DATA_FORMAT_G16_B16_R16_3PLANE_422_UNORM" value="215" enum="DataFormat">
 			16-bit-per-channel unsigned floating-point green/blue/red channel data with normalized value, plus 6 unused bits after each channel. Stored across 3 separate planes (green + blue + red). Values are in the [code][0.0, 1.0][/code] range. Blue and red channel data is stored at halved horizontal resolution (i.e. 2 horizontally adjacent pixels will share the same value for the blue/red channel).
@@ -2361,9 +2437,18 @@
 			rd = RenderingServer.get_rendering_device()
 
 			if rd.has_feature(RenderingDevice.SUPPORTS_BUFFER_DEVICE_ADDRESS):
-				storage_buffer = rd.storage_buffer_create(bytes.size(), bytes, RenderingDevice.STORAGE_BUFFER_USAGE_SHADER_DEVICE_ADDRESS)
+				storage_buffer = rd.storage_buffer_create(bytes.size(), bytes, 0, RenderingDevice.BUFFER_CREATION_DEVICE_ADDRESS_BIT)
 				storage_buffer_address = rd.buffer_get_device_address(storage_buffer)
 			[/gdscript]
+			[csharp]
+			var rd = RenderingServer.GetRenderingDevice();
+			if (rd.HasFeature(RenderingDevice.Features.BufferDeviceAddress))
+			{
+			    Rid storageBuffer = rd.StorageBufferCreate((uint)bytes.Length, bytes, 0,
+			        RenderingDevice.BufferCreationBits.DeviceAddressBit);
+			    ulong storageBufferAddress = rd.BufferGetDeviceAddress(storageBuffer);
+			}
+			[/csharp]
 			[/codeblocks]
 		</constant>
 		<constant name="BUFFER_CREATION_AS_STORAGE_BIT" value="2" enum="BufferCreationBits" is_bitfield="true">
@@ -2376,8 +2461,16 @@
 			rd = RenderingServer.get_rendering_device()
 
 			if rd.has_feature(RenderingDevice.SUPPORTS_RAYTRACING_PIPELINE):
-				storage_buffer = rd.storage_buffer_create(bytes.size(), bytes, RenderingDevice.BUFFER_CREATION_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT)
+				storage_buffer = rd.storage_buffer_create(bytes.size(), bytes, 0, RenderingDevice.BUFFER_CREATION_ACCELERATION_STRUCTURE_BUILD_INPUT_READ_ONLY_BIT)
 			[/gdscript]
+			[csharp]
+			var rd = RenderingServer.GetRenderingDevice();
+			if (rd.HasFeature(RenderingDevice.Features.RaytracingPipeline))
+			{
+			    Rid storageBuffer = rd.StorageBufferCreate((uint)bytes.Length, bytes, 0,
+			        RenderingDevice.BufferCreationBits.AccelerationStructureBuildInputReadOnlyBit);
+			}
+			[/csharp]
 			[/codeblocks]
 		</constant>
 		<constant name="ACCELERATION_STRUCTURE_ALLOW_UPDATE_BIT" value="1" enum="AccelerationStructureFlagBits" is_bitfield="true" experimental="">

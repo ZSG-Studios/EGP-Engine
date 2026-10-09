@@ -38,14 +38,23 @@
 			<description>
 				Override this method to customize the newly duplicated resource created from [method PackedScene.instantiate], if the original's [member resource_local_to_scene] is set to [code]true[/code].
 				[b]Example:[/b] Set a random [code]damage[/code] value to every local resource from an instantiated scene:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				extends Resource
 
 				var damage = 0
 
 				func _setup_local_to_scene():
 					damage = randi_range(10, 40)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public partial class LocalDamage : Resource
+				{
+				    public int Damage { get; private set; }
+				    public override void _SetupLocalToScene() =&gt; Damage = GD.RandRange(10, 40);
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="copy_from_resource">
@@ -81,13 +90,28 @@
 			<description>
 				Emits the [signal changed] signal. This method is called automatically for some built-in resources.
 				[b]Note:[/b] For custom resources, it's recommended to call this method whenever a meaningful change occurs, such as a modified property. This ensures that custom [Object]s depending on the resource are properly updated.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				var damage:
 					set(new_value):
 						if damage != new_value:
 							damage = new_value
 							emit_changed()
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				private int damage;
+				public int Damage
+				{
+				    get =&gt; damage;
+				    set
+				    {
+				        if (damage == value) return;
+				        damage = value;
+				        EmitChanged();
+				    }
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="generate_scene_unique_id" qualifiers="static">

@@ -81,7 +81,8 @@
 				- [code]"category/name"[/code] (single slash): Displays as [code]name[/code] in the [code]category[/code] section.
 				- [code]"category/name/extra"[/code] (multiple slashes): Extra path components are ignored, so this behaves the same as [code]"category/name"[/code].
 				[b]Note:[/b] Shortcuts are only saved to the editor settings if they differ from their original/default state. This means empty shortcuts that were originally empty will not persist between editor sessions and must be re-added. If a shortcut with the same [param path] already exists, this method will update it with the new [param shortcut] instead of creating a duplicate.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				# Add a custom shortcut for a plugin action.
 				var my_shortcut = Shortcut.new()
 				var input_event = InputEventKey.new()
@@ -94,7 +95,15 @@
 
 				# This will appear under the "Test Action" category as "Test Action".
 				EditorInterface.get_editor_settings().add_shortcut("test_action", my_shortcut)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				var inputEvent = new InputEventKey { Keycode = Key.F5, CtrlPressed = true };
+				var shortcut = new Shortcut { Events = new Godot.Collections.Array&lt;InputEvent&gt; { inputEvent } };
+				EditorSettings settings = EditorInterface.Singleton.GetEditorSettings();
+				settings.AddShortcut("my_plugin/reload_data", shortcut);
+				settings.AddShortcut("test_action", shortcut);
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="check_changed_settings_in_group" qualifiers="const">
@@ -1352,10 +1361,7 @@
 		</member>
 		<member name="network/language_server/enable_smart_resolve" type="bool" setter="" getter="">
 			If [code]true[/code] the language server will try to provide additional results when resolving symbols at the cost of showing wrong results. All symbols in the project are checked and resolved just based on their name, without taking context into account.
-			[codeblock]
-			func untyped(param):
-				param.print() # Will resolve to the global print method for e.g. hover hints.
-			[/codeblock]
+			For example, within [code]func untyped(param):[/code], an untyped [code]param.print()[/code] call can resolve to the global [method @GlobalScope.print] for hover hints. This language-server behavior is specific to GDScript.
 			When using static typing it is recommended to disable this setting, since it will mostly add false positives for typed code.
 			[b]Note:[/b] This setting also influences how symbols are resolved when using renaming capabilities.
 			[b]Note:[/b] The default value of this setting might change in future versions.

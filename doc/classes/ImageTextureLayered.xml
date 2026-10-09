@@ -15,7 +15,8 @@
 			<description>
 				Creates an [ImageTextureLayered] from an array of [Image]s. See [method Image.create] for the expected data format. The first image decides the width, height, image format and mipmapping setting. The other images [i]must[/i] have the same width, height, image format and mipmapping setting.
 				Each [Image] represents one [code]layer[/code].
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				# Fill in an array of Images with different colors.
 				var images = []
 				const LAYERS = 6
@@ -47,7 +48,28 @@
 				var cubemap_array = CubemapArray.new()
 				cubemap_array.create_from_images(images)
 				ResourceSaver.save(cubemap_array, "res://cubemap_array.res", ResourceSaver.FLAG_COMPRESS)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				var images = new Godot.Collections.Array&lt;Image&gt;();
+				for (int i = 0; i &lt; 6; i++)
+				{
+				    Image image = Image.CreateEmpty(128, 128, false, Image.Format.Rgb8);
+				    image.Fill(i % 3 == 0 ? Colors.Red : i % 3 == 1 ? Colors.Green : Colors.Blue);
+				    images.Add(image);
+				}
+				var textureArray = new Texture2DArray();
+				textureArray.CreateFromImages(images);
+				ResourceSaver.Save(textureArray, "res://texture_2d_array.res", ResourceSaver.SaverFlags.Compress);
+				// Cubemap face order: X+, X-, Y+, Y-, Z+, Z-.
+				var cubemap = new Cubemap();
+				cubemap.CreateFromImages(images);
+				ResourceSaver.Save(cubemap, "res://cubemap.res", ResourceSaver.SaverFlags.Compress);
+				// Cubemap arrays require a multiple of six images, in the same face order.
+				var cubemapArray = new CubemapArray();
+				cubemapArray.CreateFromImages(images);
+				ResourceSaver.Save(cubemapArray, "res://cubemap_array.res", ResourceSaver.SaverFlags.Compress);
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="update_layer">

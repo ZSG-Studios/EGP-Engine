@@ -6,17 +6,39 @@
 	<description>
 		[PackedDataContainer] can be used to efficiently store data from untyped containers. The data is packed into raw bytes and can be saved to file. Only [Array] and [Dictionary] can be stored this way.
 		You can retrieve the data by iterating on the container, which will work as if iterating on the packed data itself. If the packed container is a [Dictionary], the data can be retrieved by key names ([String]/[StringName] only).
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		var data = { "key": "value", "another_key": 123, "lock": Vector2() }
 		var packed = PackedDataContainer.new()
 		packed.pack(data)
 		ResourceSaver.save(packed, "packed_data.res")
-		[/codeblock]
-		[codeblock]
+		[/gdscript]
+		[csharp]
+		var data = new Godot.Collections.Dictionary { { "key", "value" }, { "another_key", 123 }, { "lock", Vector2.Zero } };
+		var packed = new PackedDataContainer();
+		packed.Pack(data);
+		ResourceSaver.Save(packed, "res://packed_data.res");
+		[/csharp]
+		[/codeblocks]
+		[codeblocks]
+		[gdscript]
 		var container = load("packed_data.res")
 		for key in container:
 			prints(key, container[key])
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		var container = GD.Load&lt;PackedDataContainer&gt;("res://packed_data.res");
+		// Native iteration hooks are accessible through dynamic calls.
+		var iterator = new Godot.Collections.Array { 0 };
+		bool valid = container.Call("_iter_init", iterator).AsBool();
+		while (valid)
+		{
+		    Variant key = container.Call("_iter_get", iterator[0]);
+		    GD.Print(key, " ", container.Get(key.AsString()));
+		    valid = container.Call("_iter_next", iterator).AsBool();
+		}
+		[/csharp]
+		[/codeblocks]
 		Prints:
 		[codeblock lang=text]
 		key value

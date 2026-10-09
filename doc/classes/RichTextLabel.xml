@@ -319,7 +319,8 @@
 			<description>
 				Installs a custom effect. This can also be done in the Inspector through the [member custom_effects] property. [param effect] should be a valid [RichTextEffect].
 				[b]Example:[/b] With the following script extending from [RichTextEffect]:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				# effect.gd
 				class_name MyCustomEffect
 				extends RichTextEffect
@@ -327,9 +328,19 @@
 				var bbcode = "my_custom_effect"
 
 				# ...
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				[GlobalClass]
+				public partial class MyCustomEffect : RichTextEffect
+				{
+				    public string bbcode = "my_custom_effect";
+				    // Override _ProcessCustomFX here.
+				}
+				[/csharp]
+				[/codeblocks]
 				The above effect can be installed in [RichTextLabel] from a script:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				# rich_text_label.gd
 				extends RichTextLabel
 
@@ -338,7 +349,17 @@
 
 					# Alternatively, if not using `class_name` in the script that extends RichTextEffect:
 					install_effect(preload("res://effect.gd").new())
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override void _Ready()
+				{
+				    InstallEffect(new MyCustomEffect());
+				    // A GDScript effect can also be instantiated explicitly:
+				    var script = GD.Load&lt;GDScript&gt;("res://effect.gd");
+				    InstallEffect(script.Call("new"));
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="invalidate_paragraph">
@@ -853,6 +874,12 @@
 					# `meta` is of Variant type, so convert it to a String to avoid script errors at run-time.
 					OS.shell_open(str(meta))
 				[/gdscript]
+				[csharp]
+				private void OnMetaClicked(Variant meta)
+				{
+				    OS.ShellOpen(meta.ToString());
+				}
+				[/csharp]
 				[/codeblocks]
 			</description>
 		</signal>

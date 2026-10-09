@@ -6,11 +6,20 @@
 	<description>
 		By inheriting this class you can create a custom [VisualShader] script addon which will be automatically added to the Visual Shader Editor. The [VisualShaderNode]'s behavior is defined by overriding the provided virtual methods.
 		In order for the node to be registered as an editor addon, you must use the [code]@tool[/code] annotation and provide a [code]class_name[/code] for your custom script. For example:
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		@tool
 		extends VisualShaderNodeCustom
 		class_name VisualShaderNodeNoise
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		[Tool, GlobalClass]
+		public partial class VisualShaderNodeNoise : VisualShaderNodeCustom
+		{
+		    // Override the required shader-node virtual methods.
+		}
+		[/csharp]
+		[/codeblocks]
 	</description>
 	<tutorials>
 		<link title="Visual Shader plugins">$DOCS_URL/tutorials/plugins/editor/visual_shader_plugins.html</link>

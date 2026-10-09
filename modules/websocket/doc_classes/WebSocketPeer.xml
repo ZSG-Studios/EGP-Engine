@@ -31,6 +31,26 @@
 				print("WebSocket closed with code: %d, reason %s. Clean: %s" % [code, reason, code != -1])
 				set_process(false) # Stop processing.
 		[/gdscript]
+		[csharp]
+		private readonly WebSocketPeer socket = new();
+		public override void _Ready() =&gt; socket.ConnectToUrl("wss://example.com");
+		public override void _Process(double delta)
+		{
+		    socket.Poll();
+		    var state = socket.GetReadyState();
+		    if (state == WebSocketPeer.State.Open)
+		    {
+		        while (socket.GetAvailablePacketCount() &gt; 0) GD.Print("Packet: ", socket.GetPacket());
+		    }
+		    else if (state == WebSocketPeer.State.Closed)
+		    {
+		        int code = socket.GetCloseCode();
+		        GD.Print($"WebSocket closed with code: {code}, reason {socket.GetCloseReason()}. Clean: {code != -1}");
+		        SetProcess(false);
+		    }
+		    // Keep polling while Closing to finish the close handshake.
+		}
+		[/csharp]
 		[/codeblocks]
 		To use the peer as part of a WebSocket server refer to [method accept_stream] and the online tutorial.
 	</description>

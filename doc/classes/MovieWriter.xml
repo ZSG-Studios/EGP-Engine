@@ -41,12 +41,18 @@
 			<param index="0" name="path" type="String" />
 			<description>
 				Called when the engine determines whether this [MovieWriter] is able to handle the file at [param path]. Must return [code]true[/code] if this [MovieWriter] is able to handle the given file path, [code]false[/code] otherwise. Typically, [method _handles_file] is overridden as follows to allow the user to record a file at any path with a given file extension:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _handles_file(path):
 					# Allows specifying an output file with a `.mkv` file extension (case-insensitive),
 					# either in the Project Settings or with the `--write-movie &lt;path&gt;` command line argument.
 					return path.get_extension().to_lower() == "mkv"
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override bool _HandlesFile(string path)
+				    =&gt; path.GetExtension().ToLowerInvariant() == "mkv";
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="_write_begin" qualifiers="virtual required">

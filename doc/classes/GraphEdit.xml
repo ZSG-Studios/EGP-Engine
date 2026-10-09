@@ -29,14 +29,25 @@
 				Returns whether the [param mouse_position] is in the input hot zone.
 				By default, a hot zone is a [Rect2] positioned such that its center is at [param in_node].[method GraphNode.get_input_port_position]([param in_port]) (For output's case, call [method GraphNode.get_output_port_position] instead). The hot zone's width is twice the Theme Property [code]port_grab_distance_horizontal[/code], and its height is twice the [code]port_grab_distance_vertical[/code].
 				Below is a sample code to help get started:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _is_in_input_hotzone(in_node, in_port, mouse_position):
 					var port_size = Vector2(get_theme_constant("port_grab_distance_horizontal"), get_theme_constant("port_grab_distance_vertical"))
 					var port_pos = in_node.get_position() + in_node.get_input_port_position(in_port) - port_size / 2
 					var rect = Rect2(port_pos, port_size)
 
 					return rect.has_point(mouse_position)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override bool _IsInInputHotzone(GodotObject inNode, int inPort, Vector2 mousePosition)
+				{
+				    var node = (GraphNode)inNode;
+				    var size = new Vector2(GetThemeConstant("port_grab_distance_horizontal"), GetThemeConstant("port_grab_distance_vertical"));
+				    Vector2 position = node.Position + node.GetInputPortPosition(inPort) - size / 2;
+				    return new Rect2(position, size).HasPoint(mousePosition);
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="_is_in_output_hotzone" qualifiers="virtual">
@@ -47,14 +58,25 @@
 			<description>
 				Returns whether the [param mouse_position] is in the output hot zone. For more information on hot zones, see [method _is_in_input_hotzone].
 				Below is a sample code to help get started:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _is_in_output_hotzone(in_node, in_port, mouse_position):
 					var port_size = Vector2(get_theme_constant("port_grab_distance_horizontal"), get_theme_constant("port_grab_distance_vertical"))
 					var port_pos = in_node.get_position() + in_node.get_output_port_position(in_port) - port_size / 2
 					var rect = Rect2(port_pos, port_size)
 
 					return rect.has_point(mouse_position)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override bool _IsInOutputHotzone(GodotObject inNode, int inPort, Vector2 mousePosition)
+				{
+				    var node = (GraphNode)inNode;
+				    var size = new Vector2(GetThemeConstant("port_grab_distance_horizontal"), GetThemeConstant("port_grab_distance_vertical"));
+				    Vector2 position = node.Position + node.GetOutputPortPosition(inPort) - size / 2;
+				    return new Rect2(position, size).HasPoint(mousePosition);
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="_is_node_hover_valid" qualifiers="virtual">
@@ -175,7 +197,7 @@
 			<description>
 				Returns the closest connection to the given point in screen space. If no connection is found within [param max_distance] pixels, an empty [Dictionary] is returned.
 				A connection is represented as a [Dictionary] in the form of:
-				[codeblock]
+				[codeblock lang=text]
 				{
 					from_node: StringName,
 					from_port: int,
@@ -189,6 +211,9 @@
 				[gdscript]
 				var connection = get_closest_connection_at_point(mouse_event.get_position())
 				[/gdscript]
+				[csharp]
+				var connection = GetClosestConnectionAtPoint(mouseEvent.Position);
+				[/csharp]
 				[/codeblocks]
 			</description>
 		</method>
@@ -214,7 +239,7 @@
 			<description>
 				Returns an [Array] containing a list of all connections for [param node].
 				A connection is represented as a [Dictionary] in the form of:
-				[codeblock]
+				[codeblock lang=text]
 				{
 					from_node: StringName,
 					from_port: int,
@@ -224,7 +249,8 @@
 				}
 				[/codeblock]
 				[b]Example:[/b] Get all connections on a specific port:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func get_connection_list_from_port(node, port):
 					var connections = get_connection_list_from_node(node)
 					var result = []
@@ -241,7 +267,22 @@
 							dict["type"] = "right"
 							result.push_back(dict)
 					return result
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				private Godot.Collections.Array&lt;Godot.Collections.Dictionary&gt; GetConnectionListFromPort(StringName node, int port)
+				{
+				    var result = new Godot.Collections.Array&lt;Godot.Collections.Dictionary&gt;();
+				    foreach (var connection in GetConnectionListFromNode(node))
+				    {
+				        if (connection["from_node"].AsStringName() == node &amp;&amp; connection["from_port"].AsInt32() == port)
+				            result.Add(new() { { "node", connection["to_node"] }, { "port", connection["to_port"] }, { "type", "left" } });
+				        else if (connection["to_node"].AsStringName() == node &amp;&amp; connection["to_port"].AsInt32() == port)
+				            result.Add(new() { { "node", connection["from_node"] }, { "port", connection["from_port"] }, { "type", "right" } });
+				    }
+				    return result;
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="get_connections_intersecting_with_rect" qualifiers="const">
@@ -250,7 +291,7 @@
 			<description>
 				Returns an [Array] containing the list of connections that intersect with the given [Rect2].
 				A connection is represented as a [Dictionary] in the form of:
-				[codeblock]
+				[codeblock lang=text]
 				{
 					from_node: StringName,
 					from_port: int,
@@ -350,7 +391,7 @@
 		<member name="connections" type="Dictionary[]" setter="set_connections" getter="get_connection_list" default="[]">
 			The connections between [GraphNode]s.
 			A connection is represented as a [Dictionary] in the form of:
-			[codeblock]
+			[codeblock lang=text]
 			{
 				from_node: StringName,
 				from_port: int,

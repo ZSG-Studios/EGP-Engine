@@ -100,15 +100,27 @@
 			<description>
 				Sets the exposure values that will be used by the renderers. The normalization amount is used to bake a given Exposure Value (EV) into rendering calculations to reduce the dynamic range of the scene.
 				The normalization factor can be calculated from exposure value (EV100) as follows:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func get_exposure_normalization(ev100: float):
 					return 1.0 / (pow(2.0, ev100) * 1.2)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				private static double GetExposureNormalization(double ev100)
+				    =&gt; 1.0 / (System.Math.Pow(2.0, ev100) * 1.2);
+				[/csharp]
+				[/codeblocks]
 				The exposure value can be calculated from aperture (in f-stops), shutter speed (in seconds), and sensitivity (in ISO) as follows:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func get_exposure(aperture: float, shutter_speed: float, sensitivity: float):
 					return log((aperture * aperture) / shutter_speed * (100.0 / sensitivity)) / log(2)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				private static double GetExposure(double aperture, double shutterSpeed, double sensitivity)
+				    =&gt; System.Math.Log2(aperture * aperture / shutterSpeed * (100.0 / sensitivity));
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="camera_create">
@@ -1682,13 +1694,22 @@
 				Returns a statistic about the rendering engine which can be used for performance profiling. See also [method viewport_get_render_info], which returns information specific to a viewport.
 				[b]Note:[/b] Only 3D rendering is currently taken into account by some of these values, such as the number of draw calls.
 				[b]Note:[/b] Rendering information is not available until at least 2 frames have been rendered by the engine. If rendering information is not available, [method get_rendering_info] returns [code]0[/code]. To print rendering information in [code]_ready()[/code] successfully, use the following:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _ready():
 					for _i in 2:
 						await get_tree().process_frame
 
 					print(RenderingServer.get_rendering_info(RENDERING_INFO_TOTAL_DRAW_CALLS_IN_FRAME))
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override async void _Ready()
+				{
+				    for (int i = 0; i &lt; 2; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+				    GD.Print(RenderingServer.GetRenderingInfo(RenderingServer.RenderingInfo.TotalDrawCallsInFrame));
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="get_shader_parameter_list" qualifiers="const">
@@ -1709,11 +1730,18 @@
 			<description>
 				Returns the RID of a 256×256 texture with a testing pattern on it (in [constant Image.FORMAT_RGB8] format). This texture will be created and returned on the first call to [method get_test_texture], then it will be cached for subsequent calls. See also [method get_white_texture].
 				[b]Example:[/b] Get the test texture and apply it to a [Sprite2D] node:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				var texture_rid = RenderingServer.get_test_texture()
 				var texture = ImageTexture.create_from_image(RenderingServer.texture_2d_get(texture_rid))
 				$Sprite2D.texture = texture
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				Rid textureRid = RenderingServer.GetTestTexture();
+				var texture = ImageTexture.CreateFromImage(RenderingServer.Texture2DGet(textureRid));
+				GetNode&lt;Sprite2D&gt;("Sprite2D").Texture = texture;
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="get_video_adapter_api_version" qualifiers="const">
@@ -1750,11 +1778,18 @@
 			<description>
 				Returns the ID of a 4×4 white texture (in [constant Image.FORMAT_RGB8] format). This texture will be created and returned on the first call to [method get_white_texture], then it will be cached for subsequent calls. See also [method get_test_texture].
 				[b]Example:[/b] Get the white texture and apply it to a [Sprite2D] node:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				var texture_rid = RenderingServer.get_white_texture()
 				var texture = ImageTexture.create_from_image(RenderingServer.texture_2d_get(texture_rid))
 				$Sprite2D.texture = texture
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				Rid textureRid = RenderingServer.GetWhiteTexture();
+				var texture = ImageTexture.CreateFromImage(RenderingServer.Texture2DGet(textureRid));
+				GetNode&lt;Sprite2D&gt;("Sprite2D").Texture = texture;
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="gi_set_use_half_resolution">
@@ -2442,7 +2477,7 @@
 			<param index="1" name="surface" type="Dictionary" />
 			<description>
 				Creates a new surface on the given [param mesh]. Equivalent to [method mesh_add_surface_from_arrays], but takes a single [Dictionary] argument instead of separate arguments. The dictionary must follow this structure:
-				[codeblock]
+				[codeblock lang=text]
 				{
 					# Required:
 					"primitive": RenderingServer.PrimitiveType,
@@ -3873,11 +3908,18 @@
 			<description>
 				Returns an [Image] instance from the given [param texture] [RID].
 				[b]Example:[/b] Get the test texture from [method get_test_texture] and apply it to a [Sprite2D] node:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				var texture_rid = RenderingServer.get_test_texture()
 				var texture = ImageTexture.create_from_image(RenderingServer.texture_2d_get(texture_rid))
 				$Sprite2D.texture = texture
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				Rid textureRid = RenderingServer.GetTestTexture();
+				var texture = ImageTexture.CreateFromImage(RenderingServer.Texture2DGet(textureRid));
+				GetNode&lt;Sprite2D&gt;("Sprite2D").Texture = texture;
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="texture_2d_layer_get" qualifiers="const">
@@ -4146,6 +4188,13 @@
 					RenderingServer.viewport_attach_to_screen(get_viewport().get_viewport_rid(), Rect2())
 					RenderingServer.viewport_attach_to_screen($Viewport.get_viewport_rid(), Rect2(0, 0, 600, 600))
 				[/gdscript]
+				[csharp]
+				public override void _Ready()
+				{
+				    RenderingServer.ViewportAttachToScreen(GetViewport().GetViewportRid(), new Rect2());
+				    RenderingServer.ViewportAttachToScreen(GetNode&lt;SubViewport&gt;("Viewport").GetViewportRid(), new Rect2(0, 0, 600, 600));
+				}
+				[/csharp]
 				[/codeblocks]
 				Using this can result in significant optimization, especially on lower-end devices. However, it comes at the cost of having to manage your viewports manually. For further optimization, see [method viewport_set_render_direct_to_screen].
 			</description>
@@ -4184,7 +4233,8 @@
 				Returns a statistic about the rendering engine which can be used for performance profiling. This is separated into render pass [param type]s, each of them having the same [param info]s you can query (different passes will return different values).
 				See also [method get_rendering_info], which returns global information across all viewports.
 				[b]Note:[/b] Viewport rendering information is not available until at least 2 frames have been rendered by the engine. If rendering information is not available, [method viewport_get_render_info] returns [code]0[/code]. To print rendering information in [code]_ready()[/code] successfully, use the following:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _ready():
 					for _i in 2:
 						await get_tree().process_frame
@@ -4194,7 +4244,16 @@
 							RenderingServer.VIEWPORT_RENDER_INFO_TYPE_VISIBLE,
 							RenderingServer.VIEWPORT_RENDER_INFO_DRAW_CALLS_IN_FRAME)
 					)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override async void _Ready()
+				{
+				    for (int i = 0; i &lt; 2; i++) await ToSignal(GetTree(), SceneTree.SignalName.ProcessFrame);
+				    GD.Print(RenderingServer.ViewportGetRenderInfo(GetViewport().GetViewportRid(),
+				        RenderingServer.ViewportRenderInfoType.Visible, RenderingServer.ViewportRenderInfo.DrawCallsInFrame));
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="viewport_get_render_target" qualifiers="const">

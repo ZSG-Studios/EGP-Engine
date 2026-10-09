@@ -18,6 +18,11 @@
 				[gdscript]
 				var playing_clip_name = stream.get_clip_name(get_stream_playback().get_current_clip_index())
 				[/gdscript]
+				[csharp]
+				var playback = (AudioStreamPlaybackInteractive)GetStreamPlayback();
+				var interactiveStream = (AudioStreamInteractive)Stream;
+				StringName playingClipName = interactiveStream.GetClipName(playback.GetCurrentClipIndex());
+				[/csharp]
 				[/codeblocks]
 			</description>
 		</method>

@@ -7,7 +7,8 @@
 		Controls how blending between source and destination fragments is performed when using [RenderingDevice].
 		For reference, this is how common user-facing blend modes are implemented in Godot's 2D renderer:
 		[b]Mix:[/b]
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		var attachment = RDPipelineColorBlendStateAttachment.new()
 		attachment.enable_blend = true
 		attachment.color_blend_op = RenderingDevice.BLEND_OP_ADD
@@ -16,9 +17,21 @@
 		attachment.alpha_blend_op = RenderingDevice.BLEND_OP_ADD
 		attachment.src_alpha_blend_factor = RenderingDevice.BLEND_FACTOR_ONE
 		attachment.dst_alpha_blend_factor = RenderingDevice.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		var attachment = new RDPipelineColorBlendStateAttachment();
+		attachment.EnableBlend = true;
+		attachment.ColorBlendOp = RenderingDevice.BlendOperation.Add;
+		attachment.SrcColorBlendFactor = RenderingDevice.BlendFactor.SrcAlpha;
+		attachment.DstColorBlendFactor = RenderingDevice.BlendFactor.OneMinusSrcAlpha;
+		attachment.AlphaBlendOp = RenderingDevice.BlendOperation.Add;
+		attachment.SrcAlphaBlendFactor = RenderingDevice.BlendFactor.One;
+		attachment.DstAlphaBlendFactor = RenderingDevice.BlendFactor.OneMinusSrcAlpha;
+		[/csharp]
+		[/codeblocks]
 		[b]Add:[/b]
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		var attachment = RDPipelineColorBlendStateAttachment.new()
 		attachment.enable_blend = true
 		attachment.alpha_blend_op = RenderingDevice.BLEND_OP_ADD
@@ -27,9 +40,21 @@
 		attachment.dst_color_blend_factor = RenderingDevice.BLEND_FACTOR_ONE
 		attachment.src_alpha_blend_factor = RenderingDevice.BLEND_FACTOR_SRC_ALPHA
 		attachment.dst_alpha_blend_factor = RenderingDevice.BLEND_FACTOR_ONE
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		var attachment = new RDPipelineColorBlendStateAttachment();
+		attachment.EnableBlend = true;
+		attachment.AlphaBlendOp = RenderingDevice.BlendOperation.Add;
+		attachment.ColorBlendOp = RenderingDevice.BlendOperation.Add;
+		attachment.SrcColorBlendFactor = RenderingDevice.BlendFactor.SrcAlpha;
+		attachment.DstColorBlendFactor = RenderingDevice.BlendFactor.One;
+		attachment.SrcAlphaBlendFactor = RenderingDevice.BlendFactor.SrcAlpha;
+		attachment.DstAlphaBlendFactor = RenderingDevice.BlendFactor.One;
+		[/csharp]
+		[/codeblocks]
 		[b]Subtract:[/b]
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		var attachment = RDPipelineColorBlendStateAttachment.new()
 		attachment.enable_blend = true
 		attachment.alpha_blend_op = RenderingDevice.BLEND_OP_REVERSE_SUBTRACT
@@ -38,9 +63,21 @@
 		attachment.dst_color_blend_factor = RenderingDevice.BLEND_FACTOR_ONE
 		attachment.src_alpha_blend_factor = RenderingDevice.BLEND_FACTOR_SRC_ALPHA
 		attachment.dst_alpha_blend_factor = RenderingDevice.BLEND_FACTOR_ONE
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		var attachment = new RDPipelineColorBlendStateAttachment();
+		attachment.EnableBlend = true;
+		attachment.AlphaBlendOp = RenderingDevice.BlendOperation.ReverseSubtract;
+		attachment.ColorBlendOp = RenderingDevice.BlendOperation.ReverseSubtract;
+		attachment.SrcColorBlendFactor = RenderingDevice.BlendFactor.SrcAlpha;
+		attachment.DstColorBlendFactor = RenderingDevice.BlendFactor.One;
+		attachment.SrcAlphaBlendFactor = RenderingDevice.BlendFactor.SrcAlpha;
+		attachment.DstAlphaBlendFactor = RenderingDevice.BlendFactor.One;
+		[/csharp]
+		[/codeblocks]
 		[b]Multiply:[/b]
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		var attachment = RDPipelineColorBlendStateAttachment.new()
 		attachment.enable_blend = true
 		attachment.alpha_blend_op = RenderingDevice.BLEND_OP_ADD
@@ -49,9 +86,21 @@
 		attachment.dst_color_blend_factor = RenderingDevice.BLEND_FACTOR_ZERO
 		attachment.src_alpha_blend_factor = RenderingDevice.BLEND_FACTOR_DST_ALPHA
 		attachment.dst_alpha_blend_factor = RenderingDevice.BLEND_FACTOR_ZERO
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		var attachment = new RDPipelineColorBlendStateAttachment();
+		attachment.EnableBlend = true;
+		attachment.AlphaBlendOp = RenderingDevice.BlendOperation.Add;
+		attachment.ColorBlendOp = RenderingDevice.BlendOperation.Add;
+		attachment.SrcColorBlendFactor = RenderingDevice.BlendFactor.DstColor;
+		attachment.DstColorBlendFactor = RenderingDevice.BlendFactor.Zero;
+		attachment.SrcAlphaBlendFactor = RenderingDevice.BlendFactor.DstAlpha;
+		attachment.DstAlphaBlendFactor = RenderingDevice.BlendFactor.Zero;
+		[/csharp]
+		[/codeblocks]
 		[b]Pre-multiplied alpha:[/b]
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		var attachment = RDPipelineColorBlendStateAttachment.new()
 		attachment.enable_blend = true
 		attachment.alpha_blend_op = RenderingDevice.BLEND_OP_ADD
@@ -60,7 +109,18 @@
 		attachment.dst_color_blend_factor = RenderingDevice.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
 		attachment.src_alpha_blend_factor = RenderingDevice.BLEND_FACTOR_ONE
 		attachment.dst_alpha_blend_factor = RenderingDevice.BLEND_FACTOR_ONE_MINUS_SRC_ALPHA
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		var attachment = new RDPipelineColorBlendStateAttachment();
+		attachment.EnableBlend = true;
+		attachment.AlphaBlendOp = RenderingDevice.BlendOperation.Add;
+		attachment.ColorBlendOp = RenderingDevice.BlendOperation.Add;
+		attachment.SrcColorBlendFactor = RenderingDevice.BlendFactor.One;
+		attachment.DstColorBlendFactor = RenderingDevice.BlendFactor.OneMinusSrcAlpha;
+		attachment.SrcAlphaBlendFactor = RenderingDevice.BlendFactor.One;
+		attachment.DstAlphaBlendFactor = RenderingDevice.BlendFactor.OneMinusSrcAlpha;
+		[/csharp]
+		[/codeblocks]
 	</description>
 	<tutorials>
 	</tutorials>

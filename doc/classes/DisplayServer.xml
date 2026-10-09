@@ -797,11 +797,17 @@
 				To avoid opening the file picker again after each app restart, you can take persistable URI permission as follows:
 				[codeblocks]
 				[gdscript]
-				val uri = "content://com.android..." # URI of the selected file or folder.
-				val persist = true # Set to false to release the persistable permission.
+				var uri = "content://com.android..." # URI of the selected file or folder.
+				var persist = true # Set to false to release the persistable permission.
 				var android_runtime = Engine.get_singleton("AndroidRuntime")
 				android_runtime.updatePersistableUriPermission(uri, persist)
 				[/gdscript]
+				[csharp]
+				string uri = "content://com.android..."; // Selected file/folder URI.
+				bool persist = true; // Use false to release the permission.
+				GodotObject androidRuntime = Engine.GetSingleton("AndroidRuntime");
+				androidRuntime.Call("updatePersistableUriPermission", uri, persist);
+				[/csharp]
 				[/codeblocks]
 				The persistable URI permission remains valid across app restarts as long as the directory is not moved, renamed, or deleted.
 			</description>
@@ -1844,11 +1850,18 @@
 			<description>
 				Returns the current refresh rate of the specified screen. When V-Sync is enabled, this returns the maximum framerate the project can effectively reach. Returns [code]-1.0[/code] if [param screen] is invalid or the [DisplayServer] fails to find the refresh rate for the specified screen.
 				To fallback to a default refresh rate if the method fails, try:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				var refresh_rate = DisplayServer.screen_get_refresh_rate()
 				if refresh_rate &lt; 0:
 					refresh_rate = 60.0
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				float refreshRate = DisplayServer.ScreenGetRefreshRate();
+				if (refreshRate &lt; 0)
+				    refreshRate = 60.0f;
+				[/csharp]
+				[/codeblocks]
 				[b]Note:[/b] One of the following constants can be used as [param screen]: [constant SCREEN_OF_MAIN_WINDOW], [constant SCREEN_PRIMARY], [constant SCREEN_WITH_MOUSE_FOCUS], or [constant SCREEN_WITH_KEYBOARD_FOCUS].
 				[b]Note:[/b] This method is implemented on Android, iOS, macOS, Linux (X11 and Wayland), and Windows. On other platforms, this method always returns [code]-1.0[/code].
 			</description>

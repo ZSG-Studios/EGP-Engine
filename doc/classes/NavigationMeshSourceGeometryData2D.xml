@@ -108,12 +108,10 @@
 			<param index="0" name="projected_obstructions" type="Array" />
 			<description>
 				Sets the projected obstructions with an Array of Dictionaries with the following key value pairs:
-				[codeblocks]
-				[gdscript]
+				[codeblock lang=text]
 				"vertices" : PackedFloat32Array
 				"carve" : bool
-				[/gdscript]
-				[/codeblocks]
+				[/codeblock]
 			</description>
 		</method>
 		<method name="set_traversable_outlines">

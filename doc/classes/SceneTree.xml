@@ -30,12 +30,17 @@
 			<param index="2" name="method" type="StringName" />
 			<description>
 				Calls the given [param method] on each node inside this tree added to the given [param group]. Use [param flags] to customize this method's behavior (see [enum GroupCallFlags]). Additional arguments for [param method] can be passed at the end of this method. Nodes that cannot call [param method] (either because the method doesn't exist or the arguments do not match) are ignored.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				# Calls "hide" to all nodes of the "enemies" group, at the end of the frame and in reverse tree order.
 				get_tree().call_group_flags(
 						SceneTree.GROUP_CALL_DEFERRED | SceneTree.GROUP_CALL_REVERSE,
 						"enemies", "hide")
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				GetTree().CallGroupFlags((uint)(SceneTree.GroupCallFlags.Deferred | SceneTree.GroupCallFlags.Reverse), "enemies", "hide");
+				[/csharp]
+				[/codeblocks]
 				[b]Note:[/b] In C#, [param method] must be in snake_case when referring to built-in Godot methods. Prefer using the names exposed in the [code]MethodName[/code] class to avoid allocating a new [StringName] on each call.
 			</description>
 		</method>
@@ -318,12 +323,20 @@
 		<signal name="scene_changed">
 			<description>
 				Emitted after the new scene is added to scene tree and initialized. Can be used to reliably access [member current_scene] when changing scenes.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				# This code should be inside an autoload.
 				get_tree().change_scene_to_file(other_scene_path)
 				await get_tree().scene_changed
 				print(get_tree().current_scene) # Prints the new scene.
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				// In an async method of an autoload:
+				GetTree().ChangeSceneToFile(otherScenePath);
+				await ToSignal(GetTree(), SceneTree.SignalName.SceneChanged);
+				GD.Print(GetTree().CurrentScene);
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</signal>
 		<signal name="tree_changed">

@@ -94,12 +94,21 @@
 		<member name="velocity" type="int" setter="set_velocity" getter="get_velocity" default="0">
 			The velocity of the MIDI message. This value ranges from [code]0[/code] to [code]127[/code]. For a musical keyboard, this corresponds to how quickly the key was pressed, and is rarely above [code]110[/code] in practice.
 			[b]Note:[/b] Some MIDI devices may send a [constant MIDI_MESSAGE_NOTE_ON] message with [code]0[/code] velocity and expect it to be treated the same as a [constant MIDI_MESSAGE_NOTE_OFF] message. If necessary, this can be handled with a few lines of code:
-			[codeblock]
+			[codeblocks]
+			[gdscript]
 			func _input(event):
 				if event is InputEventMIDI:
 					if event.message == MIDI_MESSAGE_NOTE_ON and event.velocity &gt; 0:
 						print("Note pressed!")
-			[/codeblock]
+			[/gdscript]
+			[csharp]
+			public override void _Input(InputEvent inputEvent)
+			{
+			    if (inputEvent is InputEventMidi midi &amp;&amp; midi.Message == MidiMessage.NoteOn &amp;&amp; midi.Velocity &gt; 0)
+			        GD.Print("Note pressed!");
+			}
+			[/csharp]
+			[/codeblocks]
 		</member>
 	</members>
 </class>

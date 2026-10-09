@@ -16,31 +16,31 @@
 	<constants>
 		<constant name="OP_SCREEN" value="0" enum="Operator">
 			Produce a screen effect with the following formula:
-			[codeblock]
+			[codeblock lang=glsl]
 			result = vec3(1.0) - (vec3(1.0) - a) * (vec3(1.0) - b);
 			[/codeblock]
 		</constant>
 		<constant name="OP_DIFFERENCE" value="1" enum="Operator">
 			Produce a difference effect with the following formula:
-			[codeblock]
+			[codeblock lang=glsl]
 			result = abs(a - b);
 			[/codeblock]
 		</constant>
 		<constant name="OP_DARKEN" value="2" enum="Operator">
 			Produce a darken effect with the following formula:
-			[codeblock]
+			[codeblock lang=glsl]
 			result = min(a, b);
 			[/codeblock]
 		</constant>
 		<constant name="OP_LIGHTEN" value="3" enum="Operator">
 			Produce a lighten effect with the following formula:
-			[codeblock]
+			[codeblock lang=glsl]
 			result = max(a, b);
 			[/codeblock]
 		</constant>
 		<constant name="OP_OVERLAY" value="4" enum="Operator">
 			Produce an overlay effect with the following formula:
-			[codeblock]
+			[codeblock lang=glsl]
 			for (int i = 0; i &lt; 3; i++) {
 				float base = a[i];
 				float blend = b[i];
@@ -54,19 +54,19 @@
 		</constant>
 		<constant name="OP_DODGE" value="5" enum="Operator">
 			Produce a dodge effect with the following formula:
-			[codeblock]
+			[codeblock lang=glsl]
 			result = a / (vec3(1.0) - b);
 			[/codeblock]
 		</constant>
 		<constant name="OP_BURN" value="6" enum="Operator">
 			Produce a burn effect with the following formula:
-			[codeblock]
+			[codeblock lang=glsl]
 			result = vec3(1.0) - (vec3(1.0) - a) / b;
 			[/codeblock]
 		</constant>
 		<constant name="OP_SOFT_LIGHT" value="7" enum="Operator">
 			Produce a soft light effect with the following formula:
-			[codeblock]
+			[codeblock lang=glsl]
 			for (int i = 0; i &lt; 3; i++) {
 				float base = a[i];
 				float blend = b[i];
@@ -80,7 +80,7 @@
 		</constant>
 		<constant name="OP_HARD_LIGHT" value="8" enum="Operator">
 			Produce a hard light effect with the following formula:
-			[codeblock]
+			[codeblock lang=glsl]
 			for (int i = 0; i &lt; 3; i++) {
 				float base = a[i];
 				float blend = b[i];

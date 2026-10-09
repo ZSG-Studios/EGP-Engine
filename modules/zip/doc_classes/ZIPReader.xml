@@ -5,43 +5,90 @@
 	</brief_description>
 	<description>
 		This class implements a reader that can extract the content of individual files inside a ZIP archive. See also [ZIPPacker].
-		[codeblock]
-		# Read a single file from a ZIP archive.
+		[codeblocks]
+		[gdscript]
+		# Read one file from a ZIP archive.
 		func read_zip_file():
 			var reader = ZIPReader.new()
-			var err = reader.open("user://archive.zip")
-			if err != OK:
+			if reader.open("user://archive.zip") != OK:
 				return PackedByteArray()
-			var res = reader.read_file("hello.txt")
+			var contents = reader.read_file("hello.txt")
 			reader.close()
-			return res
+			return contents
 
-		# Extract all files from a ZIP archive, preserving the directories within.
-		# This acts like the "Extract all" functionality from most archive managers.
+		# Extract beneath user://; reject archive names that escape the destination.
 		func extract_all_from_zip():
 			var reader = ZIPReader.new()
-			reader.open("res://archive.zip")
-
-			# Destination directory for the extracted files (this folder must exist before extraction).
-			# Not all ZIP archives put everything in a single root folder,
-			# which means several files/folders may be created in `root_dir` after extraction.
+			var error = reader.open("res://archive.zip")
+			if error != OK:
+				return error
 			var root_dir = DirAccess.open("user://")
-
-			var files = reader.get_files()
-			for file_path in files:
-				# If the current entry is a directory.
-				if file_path.ends_with("/"):
-					root_dir.make_dir_recursive(file_path)
-					continue
-
-				# Write file contents, creating folders automatically when needed.
-				# Not all ZIP archives are strictly ordered, so we need to do this in case
-				# the file entry comes before the folder entry.
-				root_dir.make_dir_recursive(root_dir.get_current_dir().path_join(file_path).get_base_dir())
-				var file = FileAccess.open(root_dir.get_current_dir().path_join(file_path), FileAccess.WRITE)
-				var buffer = reader.read_file(file_path)
-				file.store_buffer(buffer)
-		[/codeblock]
+			if root_dir == null:
+				reader.close()
+				return ERR_CANT_OPEN
+			for entry in reader.get_files():
+				if entry.begins_with("/") or entry.contains(":") or entry.contains("\\") or ".." in entry.split("/"):
+					reader.close()
+					return ERR_INVALID_DATA
+				var target = root_dir.get_current_dir().path_join(entry)
+				if entry.ends_with("/"):
+					error = DirAccess.make_dir_recursive_absolute(target)
+				else:
+					error = DirAccess.make_dir_recursive_absolute(target.get_base_dir())
+					if error != OK:
+						reader.close()
+						return error
+					var file = FileAccess.open(target, FileAccess.WRITE)
+					if file == null:
+						reader.close()
+						return FileAccess.get_open_error()
+					file.store_buffer(reader.read_file(entry))
+					error = file.get_error()
+					file.close()
+				if error != OK:
+					reader.close()
+					return error
+			return reader.close()
+		[/gdscript]
+		[csharp]
+		private byte[] ReadZipFile()
+		{
+		    using var reader = new ZipReader();
+		    if (reader.Open("user://archive.zip") != Error.Ok) return System.Array.Empty&lt;byte&gt;();
+		    byte[] contents = reader.ReadFile("hello.txt");
+		    reader.Close();
+		    return contents;
+		}
+		private Error ExtractAllFromZip()
+		{
+		    using var reader = new ZipReader();
+		    Error error = reader.Open("res://archive.zip");
+		    if (error != Error.Ok) return error;
+		    using var root = DirAccess.Open("user://");
+		    if (root == null) { reader.Close(); return Error.CantOpen; }
+		    foreach (string entry in reader.GetFiles())
+		    {
+		        // Reject paths that could escape the extraction root, on every OS.
+		        if (entry.StartsWith("/") || entry.Contains(':') || entry.Contains('\\') ||
+		            System.Array.Exists(entry.Split('/'), part =&gt; part == ".."))
+		        { reader.Close(); return Error.InvalidData; }
+		        string target = root.GetCurrentDir().PathJoin(entry);
+		        if (entry.EndsWith("/")) error = DirAccess.MakeDirRecursiveAbsolute(target);
+		        else
+		        {
+		            error = DirAccess.MakeDirRecursiveAbsolute(target.GetBaseDir());
+		            if (error != Error.Ok) { reader.Close(); return error; }
+		            using var file = FileAccess.Open(target, FileAccess.ModeFlags.Write);
+		            if (file == null) { reader.Close(); return FileAccess.GetOpenError(); }
+		            file.StoreBuffer(reader.ReadFile(entry));
+		            error = file.GetError();
+		        }
+		        if (error != Error.Ok) { reader.Close(); return error; }
+		    }
+		    return reader.Close();
+		}
+		[/csharp]
+		[/codeblocks]
 	</description>
 	<tutorials>
 	</tutorials>

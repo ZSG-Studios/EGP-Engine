@@ -34,7 +34,7 @@
 			<description>
 				Returns all network adapters as an array.
 				Each adapter is a dictionary of the form:
-				[codeblock]
+				[codeblock lang=text]
 				{
 					"index": "1", # Interface index.
 					"name": "eth0", # Interface name.

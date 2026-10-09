@@ -5,20 +5,36 @@
 	</brief_description>
 	<description>
 		This class implements a writer that allows storing the multiple blobs in a ZIP archive. See also [ZIPReader] and [PCKPacker].
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		# Create a ZIP archive with a single file at its root.
 		func write_zip_file():
 			var writer = ZIPPacker.new()
 			var err = writer.open("user://archive.zip")
 			if err != OK:
 				return err
-			writer.start_file("hello.txt")
-			writer.write_file("Hello World".to_utf8_buffer())
-			writer.close_file()
-
-			writer.close()
-			return OK
-		[/codeblock]
+			err = writer.start_file("hello.txt")
+			if err == OK:
+				err = writer.write_file("Hello World".to_utf8_buffer())
+			if err == OK:
+				err = writer.close_file()
+			var close_err = writer.close()
+			return err if err != OK else close_err
+		[/gdscript]
+		[csharp]
+		private Error WriteZipFile()
+		{
+		    using var writer = new ZipPacker();
+		    Error error = writer.Open("user://archive.zip");
+		    if (error != Error.Ok) return error;
+		    error = writer.StartFile("hello.txt");
+		    if (error == Error.Ok) error = writer.WriteFile("Hello World".ToUtf8Buffer());
+		    if (error == Error.Ok) error = writer.CloseFile();
+		    Error closeError = writer.Close();
+		    return error != Error.Ok ? error : closeError;
+		}
+		[/csharp]
+		[/codeblocks]
 	</description>
 	<tutorials>
 	</tutorials>

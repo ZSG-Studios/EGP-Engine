@@ -98,10 +98,16 @@
 			<description>
 				Returns [code]true[/code] if the an animation is currently active. An animation is active if it was played by calling [method play] and was not finished yet, or was stopped by calling [method stop].
 				This can be used to check whether an animation is currently paused or stopped.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				var is_paused = not is_playing() and is_animation_active()
 				var is_stopped = not is_playing() and not is_animation_active()
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				bool isPaused = !IsPlaying() &amp;&amp; IsAnimationActive();
+				bool isStopped = !IsPlaying() &amp;&amp; !IsAnimationActive();
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="is_playing" qualifiers="const">
@@ -200,10 +206,16 @@
 			<description>
 				See also [method AnimationMixer.capture].
 				You can use this method to use more detailed options for capture than those performed by [member playback_auto_capture]. When [member playback_auto_capture] is [code]false[/code], this method is almost the same as the following:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				capture(name, duration, trans_type, ease_type)
 				play(name, custom_blend, custom_speed, from_end)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				Capture(name, duration, transType, easeType);
+				Play(name, customBlend, customSpeed, fromEnd);
+				[/csharp]
+				[/codeblocks]
 				If [param name] is blank, it specifies [member assigned_animation].
 				If [param duration] is a negative value, the duration is set to the interval between the current position and the first key, when [param from_end] is [code]true[/code], uses the interval between the current position and the last key instead.
 				[b]Note:[/b] The [param duration] takes [member speed_scale] into account, but [param custom_speed] does not, because the capture cache is interpolated with the blend result and the result may contain multiple animations.

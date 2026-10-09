@@ -21,6 +21,19 @@
 			ptex.create_from_image(itex.get_image(), PortableCompressedTexture2D.COMPRESSION_MODE_LOSSLESS)
 			return ptex
 		[/gdscript]
+		[csharp]
+		public partial class MyConversionPlugin : EditorResourceConversionPlugin
+		{
+		    public override bool _Handles(Resource resource) =&gt; resource is ImageTexture;
+		    public override string _ConvertsTo() =&gt; "PortableCompressedTexture2D";
+		    public override Resource _Convert(Resource resource)
+		    {
+		        var texture = new PortableCompressedTexture2D();
+		        texture.CreateFromImage(((ImageTexture)resource).GetImage(), PortableCompressedTexture2D.CompressionMode.Lossless);
+		        return texture;
+		    }
+		}
+		[/csharp]
 		[/codeblocks]
 		To use an [EditorResourceConversionPlugin], register it using the [method EditorPlugin.add_resource_conversion_plugin] method first.
 	</description>

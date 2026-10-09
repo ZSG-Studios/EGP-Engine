@@ -260,7 +260,8 @@
 			<return type="bool" />
 			<description>
 				Returns [code]true[/code] if the engine is inside the fixed physics process step of the main loop.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _enter_tree():
 					# Depending on when the node is added to the tree,
 					# prints either "true" or "false".
@@ -271,7 +272,13 @@
 
 				func _physics_process(delta):
 					print(Engine.is_in_physics_frame()) # Prints true
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override void _EnterTree() =&gt; GD.Print(Engine.IsInPhysicsFrame());
+				public override void _Process(double delta) =&gt; GD.Print(Engine.IsInPhysicsFrame()); // False.
+				public override void _PhysicsProcess(double delta) =&gt; GD.Print(Engine.IsInPhysicsFrame()); // True.
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="register_script_language">

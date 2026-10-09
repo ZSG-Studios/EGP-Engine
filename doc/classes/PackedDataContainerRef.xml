@@ -5,7 +5,8 @@
 	</brief_description>
 	<description>
 		When packing nested containers using [PackedDataContainer], they are recursively packed into [PackedDataContainerRef] (only applies to [Array] and [Dictionary]). Their data can be retrieved the same way as from [PackedDataContainer].
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		var packed = PackedDataContainer.new()
 		packed.pack([1, 2, 3, ["nested1", "nested2"], 4, 5, 6])
 
@@ -15,7 +16,28 @@
 					print("::", subelement)
 			else:
 				print(element)
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		var packed = new PackedDataContainer();
+		packed.Pack(new Godot.Collections.Array { 1, 2, 3, new Godot.Collections.Array { "nested1", "nested2" }, 4, 5, 6 });
+		// PackedDataContainer exposes native iterator hooks, rather than IEnumerable.
+		void PrintContainer(GodotObject container, string prefix)
+		{
+		    var iterator = new Godot.Collections.Array { 0 };
+		    bool valid = container.Call("_iter_init", iterator).AsBool();
+		    while (valid)
+		    {
+		        Variant element = container.Call("_iter_get", iterator[0]);
+		        if (element.VariantType == Variant.Type.Object &amp;&amp; element.AsGodotObject() is PackedDataContainerRef nested)
+		            PrintContainer(nested, "::");
+		        else
+		            GD.Print(prefix, element);
+		        valid = container.Call("_iter_next", iterator).AsBool();
+		    }
+		}
+		PrintContainer(packed, "");
+		[/csharp]
+		[/codeblocks]
 		Prints:
 		[codeblock lang=text]
 		1

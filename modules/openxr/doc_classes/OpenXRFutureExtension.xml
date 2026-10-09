@@ -30,13 +30,23 @@
 				Register an OpenXR Future object so we monitor for completion. [param future] must be an [code]XrFutureEXT[/code] value previously returned by an API that started an asynchronous function.
 				You can optionally specify [param on_success], it will be invoked on successful completion of the future.
 				Or you can use the returned [OpenXRFutureResult] object to [code]await[/code] its [signal OpenXRFutureResult.completed] signal.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				var future_result = OpenXRFutureExtension.register_future(future)
 				await future_result.completed
 				if future_result.get_status() == OpenXRFutureResult.RESULT_FINISHED:
 					# Handle your success
 					pass
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				OpenXRFutureResult result = OpenXRFutureExtension.RegisterFuture(future);
+				await ToSignal(result, OpenXRFutureResult.SignalName.Completed);
+				if (result.GetStatus() == OpenXRFutureResult.ResultStatus.Finished)
+				{
+				    // Handle success.
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 	</methods>

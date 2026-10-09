@@ -17,10 +17,16 @@
 			<param index="3" name="exclude" type="RID[]" default="[]" />
 			<description>
 				Returns a new, pre-configured [PhysicsRayQueryParameters3D] object. Use it to quickly create query parameters using the most common options.
-				[codeblock]
-				var query = PhysicsRayQueryParameters3D.create(position, position + Vector3(0, -10, 0))
+				[codeblocks]
+				[gdscript]
+				var query = PhysicsRayQueryParameters3D.create(global_position, global_position + Vector3(0, -10, 0))
 				var collision = get_world_3d().direct_space_state.intersect_ray(query)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				var query = PhysicsRayQueryParameters3D.Create(GlobalPosition, GlobalPosition + new Vector3(0, -10, 0));
+				var collision = GetWorld3D().DirectSpaceState.IntersectRay(query);
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 	</methods>

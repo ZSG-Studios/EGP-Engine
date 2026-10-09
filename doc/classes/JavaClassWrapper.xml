@@ -6,7 +6,8 @@
 	<description>
 		The JavaClassWrapper singleton provides a way for the Godot application to send and receive data through the [url=https://developer.android.com/training/articles/perf-jni]Java Native Interface[/url] (JNI).
 		[b]Note:[/b] This singleton is only available in Android builds.
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		var LocalDateTime = JavaClassWrapper.wrap("java.time.LocalDateTime")
 		var DateTimeFormatter = JavaClassWrapper.wrap("java.time.format.DateTimeFormatter")
 
@@ -14,7 +15,15 @@
 		var formatter = DateTimeFormatter.ofPattern("dd-MM-yyyy HH:mm:ss")
 
 		print(datetime.format(formatter))
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		GodotObject localDateTime = JavaClassWrapper.Wrap("java.time.LocalDateTime");
+		GodotObject dateTimeFormatter = JavaClassWrapper.Wrap("java.time.format.DateTimeFormatter");
+		GodotObject dateTime = localDateTime.Call("now").AsGodotObject();
+		GodotObject formatter = dateTimeFormatter.Call("ofPattern", "dd-MM-yyyy HH:mm:ss").AsGodotObject();
+		GD.Print(dateTime.Call("format", formatter));
+		[/csharp]
+		[/codeblocks]
 		[b]Warning:[/b] When calling Java methods, be sure to check [method JavaClassWrapper.get_exception] to check if the method threw an exception.
 	</description>
 	<tutorials>
@@ -28,7 +37,8 @@
 			<description>
 				Creates a [JavaObject] implementing the given Java interfaces using the given [Object] as the implementation.
 				The [param object] must contain methods signatures matching the methods signatures from the passed Java [param interfaces]. Invoking methods from the Java [param interfaces] will route to the matching [param object] method.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				class PrintProxy:
 					func println(content: String) -&gt; void:
 						print(content)
@@ -36,7 +46,19 @@
 				var print_proxy = PrintProxy.new()
 				var printer_object = JavaClassWrapper.create_proxy(print_proxy, ["android.util.Printer"])
 				printer_object.println("Hello Godot World!")
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public partial class PrintProxy : RefCounted
+				{
+				    // Java proxy dispatch uses this exact method name.
+				    public void println(string content) =&gt; GD.Print(content);
+				}
+				// In the calling script:
+				var printProxy = new PrintProxy();
+				GodotObject printer = JavaClassWrapper.CreateProxy(printProxy, new[] { "android.util.Printer" });
+				printer.Call("println", "Hello Godot World!");
+				[/csharp]
+				[/codeblocks]
 				[b]Note:[/b] This method only works on Android. On every other platform, this method will always return [code]null[/code].
 			</description>
 		</method>
@@ -48,12 +70,19 @@
 				Creates a [JavaObject] implementing the Java Single Abstract Method (SAM) interface using the Godot [Callable] as the implementation.
 				The [param sam_interface] [b]must be[/b] a Java SAM interface, meaning it must only have a single abstract method to implement.
 				The [param callable] must be able to handle the same parameter types as the SAM interface method, and must provide the same return type. The [param callable] will be invoked as a callback, passing the arguments from the Java SAM interface method.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				var cb = func (content: String) -&gt; void:
 					print(content)
 				var callback = JavaClassWrapper.create_sam_callback("android.util.Printer", cb)
 				callback.println("Hello Godot World!")
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				Callable callback = Callable.From&lt;string&gt;(content =&gt; GD.Print(content));
+				GodotObject printer = JavaClassWrapper.CreateSamCallback("android.util.Printer", callback);
+				printer.Call("println", "Hello Godot World!");
+				[/csharp]
+				[/codeblocks]
 				[b]Note:[/b] This method only works on Android. On every other platform, this method will always return [code]null[/code].
 			</description>
 		</method>
@@ -71,10 +100,16 @@
 				Wraps a class defined in Java, and returns it as a [JavaClass] [Object] type that Godot can interact with.
 				When wrapping inner (nested) classes, use [code]$[/code] instead of [code].[/code] to separate them. For example, [code]JavaClassWrapper.wrap("android.view.WindowManager$LayoutParams")[/code] wraps the [b]WindowManager.LayoutParams[/b] class.
 				[b]Note:[/b] To invoke a constructor, call a method with the same name as the class. For example:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				var Intent = JavaClassWrapper.wrap("android.content.Intent")
 				var intent = Intent.Intent()
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				GodotObject intentClass = JavaClassWrapper.Wrap("android.content.Intent");
+				GodotObject intent = intentClass.Call("Intent").AsGodotObject();
+				[/csharp]
+				[/codeblocks]
 				[b]Note:[/b] This method only works on Android. On every other platform, this method does nothing and returns an empty [JavaClass].
 			</description>
 		</method>

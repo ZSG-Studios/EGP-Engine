@@ -6,12 +6,19 @@
 	<description>
 		Uses the [FastNoiseLite] library or other noise generators to fill the texture data of your desired size.
 		The class uses [Thread]s to generate the texture data internally, so [method Texture3D.get_data] may return [code]null[/code] if the generation process has not completed yet. In that case, you need to wait for the texture to be generated before accessing the image:
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		var texture = NoiseTexture3D.new()
 		texture.noise = FastNoiseLite.new()
 		await texture.changed
 		var data = texture.get_data()
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		var texture = new NoiseTexture3D { Noise = new FastNoiseLite() };
+		await ToSignal(texture, Resource.SignalName.Changed);
+		var data = texture.GetData();
+		[/csharp]
+		[/codeblocks]
 	</description>
 	<tutorials>
 	</tutorials>

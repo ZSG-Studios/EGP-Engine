@@ -7,13 +7,20 @@
 		This class is used to manage directories and their content, even outside of the project folder.
 		[DirAccess] can't be instantiated directly. Instead it is created with a static method that takes a path for which it will be opened.
 		Most of the methods have a static alternative that can be used without creating a [DirAccess]. Static methods only support absolute paths (including [code]res://[/code] and [code]user://[/code]).
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		# Standard
 		var dir = DirAccess.open("user://levels")
 		dir.make_dir("world1")
 		# Static
 		DirAccess.make_dir_absolute("user://levels/world1")
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		using var dir = DirAccess.Open("user://levels");
+		dir.MakeDir("world1");
+		DirAccess.MakeDirAbsolute("user://levels/world1");
+		[/csharp]
+		[/codeblocks]
 		[b]Note:[/b] Accessing project ("res://") directories once exported may behave unexpectedly as some files are converted to engine-specific formats and their original source files may not be present in the expected PCK package. Because of this, to access resources in an exported project, it is recommended to use [ResourceLoader] instead of [FileAccess].
 		Here is an example on how to iterate through the files of a directory:
 		[codeblocks]

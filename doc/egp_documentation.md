@@ -33,6 +33,22 @@ and output SHA256 hashes in `egp/source_manifest.json`. Review the generated
 diff before committing. Commit engine source first when publishing a snapshot,
 so the manifest identifies a fetchable source revision.
 
+## Code examples and language parity
+
+Use `[codeblocks]` with both `[gdscript]` and `[csharp]` sections for scripting
+API examples. Translate the actual API contract: C# property names, enum members,
+Variant conversions and value-type assignments can differ from GDScript syntax.
+Label shared output, data layouts and formulas as `[codeblock lang=text]`;
+label shader, XML, CSV and INI examples with their actual languages. These
+blocks do not require a second scripting-language translation. An explicit
+`lang=gdscript` or `lang=csharp` still requires paired scripting examples.
+
+Run the generator's `--dry-run --verbose` check and the parity regressions with
+`python -m unittest discover -s doc/tools/tests -p test_script_language_parity.py`.
+These checks validate reference markup and language coverage. Syntax parsing
+and generated-binding inspection are separate from compiled or runtime sample
+qualification; excerpts with application-defined fields are not complete games.
+
 ## Build and verify the documentation
 
 The maintained workspace currently requires every build, including Sphinx

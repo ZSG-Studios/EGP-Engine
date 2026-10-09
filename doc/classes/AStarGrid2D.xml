@@ -205,7 +205,7 @@
 	<constants>
 		<constant name="HEURISTIC_EUCLIDEAN" value="0" enum="Heuristic">
 			The [url=https://en.wikipedia.org/wiki/Euclidean_distance]Euclidean heuristic[/url] to be used for the pathfinding using the following formula:
-			[codeblock]
+			[codeblock lang=text]
 			dx = abs(to_id.x - from_id.x)
 			dy = abs(to_id.y - from_id.y)
 			result = sqrt(dx * dx + dy * dy)
@@ -214,7 +214,7 @@
 		</constant>
 		<constant name="HEURISTIC_MANHATTAN" value="1" enum="Heuristic">
 			The [url=https://en.wikipedia.org/wiki/Taxicab_geometry]Manhattan heuristic[/url] to be used for the pathfinding using the following formula:
-			[codeblock]
+			[codeblock lang=text]
 			dx = abs(to_id.x - from_id.x)
 			dy = abs(to_id.y - from_id.y)
 			result = dx + dy
@@ -223,7 +223,7 @@
 		</constant>
 		<constant name="HEURISTIC_OCTILE" value="2" enum="Heuristic">
 			The Octile heuristic to be used for the pathfinding using the following formula:
-			[codeblock]
+			[codeblock lang=text]
 			dx = abs(to_id.x - from_id.x)
 			dy = abs(to_id.y - from_id.y)
 			f = sqrt(2) - 1
@@ -232,7 +232,7 @@
 		</constant>
 		<constant name="HEURISTIC_CHEBYSHEV" value="3" enum="Heuristic">
 			The [url=https://en.wikipedia.org/wiki/Chebyshev_distance]Chebyshev heuristic[/url] to be used for the pathfinding using the following formula:
-			[codeblock]
+			[codeblock lang=text]
 			dx = abs(to_id.x - from_id.x)
 			dy = abs(to_id.y - from_id.y)
 			result = max(dx, dy)

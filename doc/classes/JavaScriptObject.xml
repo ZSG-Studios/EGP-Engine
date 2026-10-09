@@ -5,7 +5,8 @@
 	</brief_description>
 	<description>
 		JavaScriptObject is used to interact with JavaScript objects retrieved or created via [method JavaScriptBridge.get_interface], [method JavaScriptBridge.create_object], or [method JavaScriptBridge.create_callback].
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		extends Node
 
 		var _my_js_callback = JavaScriptBridge.create_callback(myCallback) # This reference must be kept
@@ -31,7 +32,25 @@
 			# ...
 			# [0, 9, [JavaScriptObject:1180]]
 			print(args)
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		// This inherited browser example requires a supported web export runtime.
+		private JavaScriptObject callback; // Retain the native callback wrapper.
+		public override void _Ready()
+		{
+		    callback = JavaScriptBridge.CreateCallback(Callable.From&lt;Godot.Collections.Array&gt;(OnCallback));
+		    var console = JavaScriptBridge.GetInterface("console");
+		    var buffer = JavaScriptBridge.CreateObject("ArrayBuffer", 10);
+		    var bytes = JavaScriptBridge.CreateObject("Uint8Array", buffer);
+		    bytes.Set("1", 255);
+		    GD.Print(bytes.Get("1"), " ", bytes.Get("byteLength"));
+		    console.Call("log", bytes);
+		    var array = JavaScriptBridge.GetInterface("Array").Call("from", bytes).As&lt;JavaScriptObject&gt;();
+		    array.Call("forEach", callback);
+		}
+		private void OnCallback(Godot.Collections.Array args) =&gt; GD.Print(args);
+		[/csharp]
+		[/codeblocks]
 		[b]Note:[/b] Only available in the Web platform.
 	</description>
 	<tutorials>

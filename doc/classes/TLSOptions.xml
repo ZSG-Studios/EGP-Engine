@@ -17,6 +17,13 @@
 		var server_key = load("res://my_server_key.key")
 		var server_tls_options = TLSOptions.server(server_key, server_certs)
 		[/gdscript]
+		[csharp]
+		var trustedCas = GD.Load&lt;X509Certificate&gt;("res://my_trusted_cas.crt");
+		TLSOptions clientOptions = TLSOptions.Client(trustedCas);
+		var serverCerts = GD.Load&lt;X509Certificate&gt;("res://my_server_cas.crt");
+		var serverKey = GD.Load&lt;CryptoKey&gt;("res://my_server_key.key");
+		TLSOptions serverOptions = TLSOptions.Server(serverKey, serverCerts);
+		[/csharp]
 		[/codeblocks]
 	</description>
 	<tutorials>

@@ -6,7 +6,8 @@
 	<description>
 		UDP packet peer. Can be used to send and receive raw UDP packets as well as [Variant]s.
 		[b]Example:[/b] Send a packet:
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		var peer = PacketPeerUDP.new()
 
 		# Optionally, you can select the local port used to send the packet.
@@ -14,9 +15,17 @@
 
 		peer.set_dest_address("1.1.1.1", 4433)
 		peer.put_packet("hello".to_utf8_buffer())
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		var peer = new PacketPeerUdp();
+		peer.Bind(4444); // Optional local source port.
+		peer.SetDestAddress("1.1.1.1", 4433);
+		peer.PutPacket("hello".ToUtf8Buffer());
+		[/csharp]
+		[/codeblocks]
 		[b]Example:[/b] Listen for packets:
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		var peer
 
 		func _ready():
@@ -29,7 +38,21 @@
 				var array_bytes = peer.get_packet()
 				var packet_string = array_bytes.get_string_from_ascii()
 				print("Received message: ", packet_string)
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		private PacketPeerUdp peer;
+		public override void _Ready()
+		{
+		    peer = new PacketPeerUdp();
+		    peer.Bind(4433);
+		}
+		public override void _Process(double delta)
+		{
+		    if (peer.GetAvailablePacketCount() &gt; 0)
+		        GD.Print("Received message: ", peer.GetPacket().GetStringFromAscii());
+		}
+		[/csharp]
+		[/codeblocks]
 		[b]Note:[/b] When exporting to Android, make sure to enable the [code]INTERNET[/code] permission in the Android export preset before exporting the project or using remote deploy. Otherwise, network communication of any kind will be blocked by Android.
 	</description>
 	<tutorials>

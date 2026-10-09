@@ -109,7 +109,8 @@
 			<param index="0" name="strings" type="PackedStringArray[]" />
 			<description>
 				Called after parsing all files. You can modify the [param strings] array to add or remove entries from the final list of strings, then return it after modifications. Each entry is a [PackedStringArray] like explained in the [EditorTranslationParserPlugin]'s description.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				@tool
 				extends EditorTranslationParserPlugin
 
@@ -121,7 +122,23 @@
 					strings = strings.filter(func(s): return not s[0].begins_with("$"))
 
 					return strings
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				[Tool]
+				public partial class MyTranslationParser : EditorTranslationParserPlugin
+				{
+				    public override Godot.Collections.Array&lt;string[]&gt; _CustomizeStrings(Godot.Collections.Array&lt;string[]&gt; strings)
+				    {
+				        var result = new Godot.Collections.Array&lt;string[]&gt;();
+				        strings.Add(new[] { "Test 1", "context", "test 1 plurals", "test 1 comment" });
+				        foreach (string[] entry in strings)
+				            if (!entry[0].StartsWith("$", System.StringComparison.Ordinal))
+				                result.Add(entry);
+				        return result;
+				    }
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="_get_recognized_extensions" qualifiers="virtual const">

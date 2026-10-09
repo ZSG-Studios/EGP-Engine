@@ -6,7 +6,8 @@
 	<description>
 		EditorDock is a [Container] node that can be docked in one of the editor's dock slots. Docks are added by plugins to provide space for controls related to an [EditorPlugin]. The editor comes with a few built-in docks, such as the Scene dock, FileSystem dock, etc.
 		You can add a dock by using [method EditorPlugin.add_dock]. The dock can be customized by changing its properties.
-		[codeblock]
+		[codeblocks]
+		[gdscript]
 		@tool
 		extends EditorPlugin
 
@@ -28,7 +29,32 @@
 			remove_dock(dock)
 			dock.queue_free()
 			dock = null
-		[/codeblock]
+		[/gdscript]
+		[csharp]
+		[Tool]
+		public partial class MyDockPlugin : EditorPlugin
+		{
+		    private EditorDock dock;
+		    public override void _EnterTree()
+		    {
+		        dock = new EditorDock
+		        {
+		            Title = "My Dock",
+		            DockIcon = GD.Load&lt;Texture2D&gt;("res://addons/my_plugin/dock_icon.png"),
+		            DefaultSlot = EditorDock.DockSlot.RightUl,
+		        };
+		        dock.AddChild(GD.Load&lt;PackedScene&gt;("res://addons/my_plugin/dock_content.tscn").Instantiate());
+		        AddDock(dock);
+		    }
+		    public override void _ExitTree()
+		    {
+		        RemoveDock(dock);
+		        dock.QueueFree();
+		        dock = null;
+		    }
+		}
+		[/csharp]
+		[/codeblocks]
 	</description>
 	<tutorials>
 		<link title="Making plugins">$DOCS_URL/tutorials/plugins/editor/making_plugins.html</link>
@@ -55,10 +81,18 @@
 			<param index="0" name="layout" type="int" />
 			<description>
 				Implement this method to handle the layout switching for this dock. [param layout] is one of the [enum DockLayout] constants.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _update_layout(layout):
 					box_container.vertical = (layout == DOCK_LAYOUT_VERTICAL)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override void _UpdateLayout(int layout)
+				{
+				    boxContainer.Vertical = layout == (int)DockLayout.Vertical;
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="_update_layout_and_slot" qualifiers="virtual">
@@ -67,10 +101,18 @@
 			<param index="1" name="slot" type="int" />
 			<description>
 				Implement this method to handle the layout/slot switching for this dock. [param layout] is one of the [enum DockLayout] constants, and [param slot] is one of the [enum DockSlot] ones.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _update_layout_and_slot(layout, slot):
 					box_container.vertical = (layout == DOCK_LAYOUT_VERTICAL)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override void _UpdateLayoutAndSlot(int layout, int slot)
+				{
+				    boxContainer.Vertical = layout == (int)DockLayout.Vertical;
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="close">

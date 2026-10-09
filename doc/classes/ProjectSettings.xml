@@ -143,7 +143,8 @@
 			<description>
 				Returns the absolute, native OS path corresponding to the localized [param path] (starting with [code]res://[/code] or [code]user://[/code]). The returned path will vary depending on the operating system and user preferences. See [url=$DOCS_URL/tutorials/io/data_paths.html]File paths in Godot projects[/url] to see what those paths convert to. See also [method localize_path].
 				[b]Note:[/b] [method globalize_path] with [code]res://[/code] will not work in an exported project. Instead, prepend the executable's base directory to the path when running from an exported project:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				var path = ""
 				if OS.has_feature("editor"):
 					# Running from an editor binary.
@@ -155,7 +156,13 @@
 					# This is *not* identical to using `ProjectSettings.globalize_path()` with a `res://` path,
 					# but is close enough in spirit.
 					path = OS.get_executable_path().get_base_dir().path_join("hello.txt")
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				string path = OS.HasFeature("editor")
+				    ? ProjectSettings.GlobalizePath("res://hello.txt")
+				    : OS.GetExecutablePath().GetBaseDir().PathJoin("hello.txt");
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="has_setting" qualifiers="const">
@@ -221,7 +228,8 @@
 			<param index="1" name="value" type="Variant" />
 			<description>
 				Sets the specified setting's initial value. This is the value the setting reverts to. The setting should already exist before calling this method. Note that project settings equal to their default value are not saved, so your code needs to account for that.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				extends EditorPlugin
 
 				const SETTING_NAME = "addons/my_setting"
@@ -232,7 +240,18 @@
 						ProjectSettings.set_setting(SETTING_NAME, SETTING_DEFAULT)
 
 					ProjectSettings.set_initial_value(SETTING_NAME, SETTING_DEFAULT)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				private const string SettingName = "addons/my_setting";
+				private const double SettingDefault = 10.0;
+				public override void _EnterTree()
+				{
+				    if (!ProjectSettings.HasSetting(SettingName))
+				        ProjectSettings.SetSetting(SettingName, SettingDefault);
+				    ProjectSettings.SetInitialValue(SettingName, SettingDefault);
+				}
+				[/csharp]
+				[/codeblocks]
 				If you have a project setting defined by an [EditorPlugin], but want to use it in a running project, you will need a similar code at runtime.
 			</description>
 		</method>

@@ -31,10 +31,18 @@
 			<param index="2" name="icon" type="Texture2D" default="null" />
 			<description>
 				Add custom option to the context menu of the plugin's specified slot. [param callback] should be a method that takes a single argument of type [Dictionary]. It will be called when the option is activated and the data received in the callback is the same as in [method _get_menu_options].
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _get_menu_options(data):
 					add_context_menu_item("File Custom options", handle, ICON)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override void _GetMenuOptions(Godot.Collections.Dictionary&lt;StringName, Variant&gt; data)
+				{
+				    AddContextMenuItem("File Custom options", Callable.From(Handle), icon);
+				}
+				[/csharp]
+				[/codeblocks]
 				If you want to assign shortcut to the menu item, use [method add_context_menu_item_from_shortcut] instead.
 			</description>
 		</method>
@@ -45,13 +53,25 @@
 			<param index="2" name="icon" type="Texture2D" default="null" />
 			<description>
 				Add custom option to the context menu of the plugin's specified slot. The option will have the [param shortcut] assigned and reuse its callback. The shortcut has to be registered beforehand with [method add_menu_shortcut].
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _init():
 					add_menu_shortcut(SHORTCUT, handle)
 
 				func _get_menu_options(paths):
 					add_context_menu_item_from_shortcut("File Custom options", SHORTCUT, ICON)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public MyContextMenuPlugin()
+				{
+				    AddMenuShortcut(shortcut, Callable.From(Handle));
+				}
+				public override void _GetMenuOptions(Godot.Collections.Dictionary&lt;StringName, Variant&gt; data)
+				{
+				    AddContextMenuItemFromShortcut("File Custom options", shortcut, icon);
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="add_context_submenu_item">
@@ -61,7 +81,8 @@
 			<param index="2" name="icon" type="Texture2D" default="null" />
 			<description>
 				Add a submenu to the context menu of the plugin's specified slot. The submenu is not automatically handled, you need to connect to its signals yourself. Also the submenu is freed on every popup, so provide a new [PopupMenu] every time.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _get_menu_options(data):
 					var popup_menu = PopupMenu.new()
 					popup_menu.add_item("Blue")
@@ -69,7 +90,18 @@
 					popup_menu.id_pressed.connect(_on_color_submenu_option)
 
 					add_context_submenu_item("Set Node Color", popup_menu)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override void _GetMenuOptions(Godot.Collections.Dictionary&lt;StringName, Variant&gt; data)
+				{
+				    var popupMenu = new PopupMenu();
+				    popupMenu.AddItem("Blue");
+				    popupMenu.AddItem("White");
+				    popupMenu.IdPressed += OnColorSubmenuOption;
+				    AddContextSubmenuItem("Set Node Color", popupMenu);
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="add_menu_shortcut">
@@ -78,10 +110,18 @@
 			<param index="1" name="callback" type="Callable" />
 			<description>
 				Registers a shortcut associated with the plugin's context menu. This method should be called once (e.g. in the plugin's [method Object._init]). [param callback] will be called when user presses the specified [param shortcut] while the menu's context is in effect (e.g. FileSystem dock is focused). Callback should take single data [Dictionary], same as in [method add_context_menu_item].
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _init():
 					add_menu_shortcut(SHORTCUT, handle)
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public MyContextMenuPlugin()
+				{
+				    AddMenuShortcut(shortcut, Callable.From(Handle));
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 	</methods>
@@ -103,13 +143,22 @@
 			The "Create..." submenu of FileSystem dock's context menu, or the "New" section of the main context menu when empty space is clicked. The data [Dictionary] contains:
 			[code]&amp;"base_directory": String[/code] - Path to the base directory where a file should be created.
 			[code]&amp;"needs_prefix": bool[/code] - Whether the option needs a "New" prefix (for consistency with native options).
-			[codeblock]
+			[codeblocks]
+			[gdscript]
 			func _get_menu_options(data):
 				if data["needs_prefix"]:
 					add_context_menu_item("New Image File...", create_image)
 				else:
 					add_context_menu_item("Image File...", create_image)
-			[/codeblock]
+			[/gdscript]
+			[csharp]
+			public override void _GetMenuOptions(Godot.Collections.Dictionary&lt;StringName, Variant&gt; data)
+			{
+			    string label = data["needs_prefix"].AsBool() ? "New Image File..." : "Image File...";
+			    AddContextMenuItem(label, Callable.From(CreateImage));
+			}
+			[/csharp]
+			[/codeblocks]
 		</constant>
 		<constant name="CONTEXT_SLOT_SCRIPT_EDITOR_CODE" value="4" enum="ContextMenuSlot">
 			Context menu of Script editor's code editor. The data [Dictionary] contains:

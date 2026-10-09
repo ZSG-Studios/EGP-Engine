@@ -138,7 +138,8 @@
 				Sets the active environment blend mode.
 				[param mode] is the environment blend mode starting with the next frame.
 				[b]Note:[/b] Not all runtimes support all environment blend modes, so it is important to check this at startup. For example:
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				func _ready():
 					var xr_interface = XRServer.find_interface("OpenXR")
 					if xr_interface and xr_interface.is_initialized():
@@ -150,7 +151,23 @@
 							if mode in modes:
 								xr_interface.set_environment_blend_mode(mode)
 								break
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				public override void _Ready()
+				{
+				    XRInterface xr = XRServer.FindInterface("OpenXR");
+				    if (xr == null || !xr.IsInitialized()) return;
+				    GetViewport().UseXR = true;
+				    var supported = xr.GetSupportedEnvironmentBlendModes();
+				    foreach (var preferred in new[] { XRInterface.EnvironmentBlendMode.Opaque, XRInterface.EnvironmentBlendMode.Additive })
+				    {
+				        if (!supported.Contains((long)preferred)) continue;
+				        xr.SetEnvironmentBlendMode(preferred);
+				        break;
+				    }
+				}
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="set_play_area_mode">

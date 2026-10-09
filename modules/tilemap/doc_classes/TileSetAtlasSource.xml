@@ -289,21 +289,41 @@
 		</constant>
 		<constant name="TRANSFORM_FLIP_H" value="4096">
 			Represents cell's horizontal flip flag. Should be used directly with [TileMapLayer] to flip placed tiles by altering their alternative IDs.
-			[codeblock]
+			[codeblocks]
+			[gdscript]
 			var alternate_id = $TileMapLayer.get_cell_alternative_tile(Vector2i(2, 2))
-			if not alternate_id &amp; TileSetAtlasSource.TRANSFORM_FLIP_H:
+			if (alternate_id &amp; TileSetAtlasSource.TRANSFORM_FLIP_H) == 0:
 				# If tile is not already flipped, flip it.
 				$TileMapLayer.set_cell(Vector2i(2, 2), source_id, atlas_coords, alternate_id | TileSetAtlasSource.TRANSFORM_FLIP_H)
-			[/codeblock]
+			[/gdscript]
+			[csharp]
+			var layer = GetNode&lt;TileMapLayer&gt;("TileMapLayer");
+			var cell = new Vector2I(2, 2);
+			int alternateId = layer.GetCellAlternativeTile(cell);
+			if ((alternateId &amp; TileSetAtlasSource.TransformFlipH) == 0)
+			    layer.SetCell(cell, sourceId, atlasCoords, alternateId | (int)TileSetAtlasSource.TransformFlipH);
+			[/csharp]
+			[/codeblocks]
 			[b]Note:[/b] These transformations can be combined to do the equivalent of 0, 90, 180, and 270 degree rotations, as shown below:
-			[codeblock]
+			[codeblocks]
+			[gdscript]
 			enum TileTransform {
 				ROTATE_0 = 0,
 				ROTATE_90 = TileSetAtlasSource.TRANSFORM_TRANSPOSE | TileSetAtlasSource.TRANSFORM_FLIP_H,
 				ROTATE_180 = TileSetAtlasSource.TRANSFORM_FLIP_H | TileSetAtlasSource.TRANSFORM_FLIP_V,
 				ROTATE_270 = TileSetAtlasSource.TRANSFORM_TRANSPOSE | TileSetAtlasSource.TRANSFORM_FLIP_V,
 			}
-			[/codeblock]
+			[/gdscript]
+			[csharp]
+			public enum TileTransform : long
+			{
+			    Rotate0 = 0,
+			    Rotate90 = TileSetAtlasSource.TransformTranspose | TileSetAtlasSource.TransformFlipH,
+			    Rotate180 = TileSetAtlasSource.TransformFlipH | TileSetAtlasSource.TransformFlipV,
+			    Rotate270 = TileSetAtlasSource.TransformTranspose | TileSetAtlasSource.TransformFlipV,
+			}
+			[/csharp]
+			[/codeblocks]
 		</constant>
 		<constant name="TRANSFORM_FLIP_V" value="8192">
 			Represents cell's vertical flip flag. See [constant TRANSFORM_FLIP_H] for usage.

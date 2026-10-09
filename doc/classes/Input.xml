@@ -58,7 +58,7 @@
 		<method name="get_accelerometer" qualifiers="const">
 			<return type="Vector3" />
 			<description>
-				Returns the acceleration in m/s² of the device's accelerometer sensor, if the device has one. Otherwise, the method returns [constant Vector3.ZERO].
+				Returns the acceleration in m/sÂ² of the device's accelerometer sensor, if the device has one. Otherwise, the method returns [constant Vector3.ZERO].
 				Note this method returns an empty [Vector3] when running from the editor even when your device has an accelerometer. You must export your project to a supported device to read values from the accelerometer.
 				[b]Note:[/b] This method only works on Android and iOS. On other platforms, it always returns [constant Vector3.ZERO].
 				[b]Note:[/b] For Android, [member ProjectSettings.input_devices/sensors/enable_accelerometer] must be enabled.
@@ -111,17 +111,24 @@
 				The returned quaternion represents the rotation from the device coordinate frame to the world coordinate frame. In portrait mode, the device's coordinate system is: X right, Y up, Z towards viewer.
 				[b]Note:[/b] This method only works on Android and iOS. On other platforms, it always returns [constant Quaternion.IDENTITY].
 				[b]Note:[/b] For Android, [member ProjectSettings.input_devices/sensors/enable_device_orientation] must be enabled.
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				var orientation := Input.get_device_orientation()
 				var euler := orientation.get_euler()
 				var roll := euler.z  # Device roll angle in radians.
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				Quaternion orientation = Input.GetDeviceOrientation();
+				Vector3 euler = orientation.GetEuler();
+				float roll = euler.Z; // Radians.
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="get_gravity" qualifiers="const">
 			<return type="Vector3" />
 			<description>
-				Returns the gravity in m/s² of the device's accelerometer sensor, if the device has one. Otherwise, the method returns [constant Vector3.ZERO].
+				Returns the gravity in m/sÂ² of the device's accelerometer sensor, if the device has one. Otherwise, the method returns [constant Vector3.ZERO].
 				[b]Note:[/b] This method only works on Android and iOS. On other platforms, it always returns [constant Vector3.ZERO].
 				[b]Note:[/b] For Android, [member ProjectSettings.input_devices/sensors/enable_gravity] must be enabled.
 			</description>
@@ -138,7 +145,7 @@
 			<return type="Vector3" />
 			<param index="0" name="device" type="int" />
 			<description>
-				Returns the acceleration, including the force of gravity, in m/s² of the joypad's accelerometer sensor, if the joypad has one and it's currently enabled. Otherwise, the method returns [constant Vector3.ZERO]. See also [method get_joy_gravity] and [method set_joy_motion_sensors_enabled].
+				Returns the acceleration, including the force of gravity, in m/sÂ² of the joypad's accelerometer sensor, if the joypad has one and it's currently enabled. Otherwise, the method returns [constant Vector3.ZERO]. See also [method get_joy_gravity] and [method set_joy_motion_sensors_enabled].
 				For a joypad held in front of you, the returned axes are defined as follows:
 				+X ... -X: left ... right;
 				+Y ... -Y: bottom ... top;
@@ -159,7 +166,7 @@
 			<return type="Vector3" />
 			<param index="0" name="device" type="int" />
 			<description>
-				Returns the gravity in m/s² of the joypad's accelerometer sensor, if the joypad has one and it's currently enabled. Otherwise, the method returns [constant Vector3.ZERO]. See also [method get_joy_accelerometer] and [method set_joy_motion_sensors_enabled].
+				Returns the gravity in m/sÂ² of the joypad's accelerometer sensor, if the joypad has one and it's currently enabled. Otherwise, the method returns [constant Vector3.ZERO]. See also [method get_joy_accelerometer] and [method set_joy_motion_sensors_enabled].
 				For a joypad held in front of you, the returned axes are defined as follows:
 				+X ... -X: left ... right;
 				+Y ... -Y: bottom ... top;
@@ -644,11 +651,11 @@
 			<param index="2" name="hotspot" type="Vector2" default="Vector2(0, 0)" />
 			<description>
 				Sets a custom mouse cursor image, which is only visible inside the game window, for the given mouse [param shape]. The hotspot can also be specified. Passing [code]null[/code] to the image parameter resets to the system cursor.
-				[param image] can be either [Texture2D] or [Image] and its size must be lower than or equal to 256×256. To avoid rendering issues, sizes lower than or equal to 128×128 are recommended.
+				[param image] can be either [Texture2D] or [Image] and its size must be lower than or equal to 256Ã—256. To avoid rendering issues, sizes lower than or equal to 128Ã—128 are recommended.
 				[param hotspot] must be within [param image]'s size.
 				[b]Note:[/b] [AnimatedTexture]s aren't supported as custom mouse cursors. If using an [AnimatedTexture], only the first frame will be displayed.
 				[b]Note:[/b] The [b]Lossless[/b], [b]Lossy[/b] or [b]Uncompressed[/b] compression modes are recommended. The [b]Video RAM[/b] compression mode can be used, but it will be decompressed on the CPU, which means loading times are slowed down and no memory is saved compared to lossless modes.
-				[b]Note:[/b] On the web platform, the maximum allowed cursor image size is 128×128. Cursor images larger than 32×32 will also only be displayed if the mouse cursor image is entirely located within the page for [url=https://chromestatus.com/feature/5825971391299584]security reasons[/url].
+				[b]Note:[/b] On the web platform, the maximum allowed cursor image size is 128Ã—128. Cursor images larger than 32Ã—32 will also only be displayed if the mouse cursor image is entirely located within the page for [url=https://chromestatus.com/feature/5825971391299584]security reasons[/url].
 			</description>
 		</method>
 		<method name="set_default_cursor_shape">

@@ -18,6 +18,17 @@ from misc.utility.color import Ansi, force_stderr_color, force_stdout_color
 # $DOCS_URL/path/to/page.html(#fragment-tag)
 GODOT_DOCS_PATTERN = re.compile(r"^\$DOCS_URL/(.*)\.html(#.*)?$")
 
+# These blocks describe shared data, output or shader/shell syntax, rather than
+# calls to the scripting API. GDScript and C# samples still require both tabs.
+NON_SCRIPT_CODE_LANGUAGES = frozenset({"text", "glsl", "xml", "json", "ini", "csv", "bash", "console"})
+
+
+def codeblock_language(arguments: str) -> str:
+    for argument in arguments.split():
+        if argument.startswith("lang="):
+            return argument.removeprefix("lang=")
+    return ""
+
 # Based on reStructuredText inline markup recognition rules
 # https://docutils.sourceforge.io/docs/ref/rst/restructuredtext.html#inline-markup-recognition-rules
 MARKUP_ALLOWED_PRECEDENT = " -:/'\"<([{"
@@ -2039,15 +2050,17 @@ def format_text_block(
                         has_codeblocks_csharp = True
                     tag_text = "\n .. code-tab:: csharp\n"
                 else:
-                    state.script_language_parity_check.add_hit(
-                        state.current_class,
-                        context,
-                        "Code sample is formatted with [codeblock] where [codeblocks] should be used",
-                        state,
-                    )
+                    language = codeblock_language(tag_state.arguments)
+                    if language not in NON_SCRIPT_CODE_LANGUAGES:
+                        state.script_language_parity_check.add_hit(
+                            state.current_class,
+                            context,
+                            "Code sample is formatted with [codeblock] where [codeblocks] should be used",
+                            state,
+                        )
 
-                    if "lang=text" in tag_state.arguments.split(" "):
-                        tag_text = "\n.. code:: text\n"
+                    if language in NON_SCRIPT_CODE_LANGUAGES:
+                        tag_text = f"\n.. code:: {language}\n"
                     else:
                         tag_text = "\n::\n"
 

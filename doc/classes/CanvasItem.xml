@@ -168,7 +168,7 @@
 			<description>
 				Draws a textured rectangle region of the font texture with LCD subpixel anti-aliasing at a given position, optionally modulated by a color. The [param rect] is defined in local space.
 				Texture is drawn using the following blend operation, blend mode of the [CanvasItemMaterial] is ignored:
-				[codeblock]
+				[codeblock lang=glsl]
 				dst.r = texture.r * modulate.r * modulate.a + dst.r * (1.0 - texture.r * modulate.a);
 				dst.g = texture.g * modulate.g * modulate.a + dst.g * (1.0 - texture.g * modulate.a);
 				dst.b = texture.b * modulate.b * modulate.a + dst.b * (1.0 - texture.b * modulate.a);
@@ -588,9 +588,14 @@
 			<description>
 				Transforms [param viewport_point] from the viewport's coordinates to this node's local coordinates.
 				For the opposite operation, use [method get_global_transform_with_canvas].
-				[codeblock]
+				[codeblocks]
+				[gdscript]
 				var viewport_point = get_global_transform_with_canvas() * local_point
-				[/codeblock]
+				[/gdscript]
+				[csharp]
+				Vector2 viewportPoint = GetGlobalTransformWithCanvas() * localPoint;
+				[/csharp]
+				[/codeblocks]
 			</description>
 		</method>
 		<method name="make_input_local" qualifiers="const">
