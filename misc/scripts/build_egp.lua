@@ -39,7 +39,9 @@ function main(platform, target, jobs, cache, flags, dryrun, resultpath, invocati
     local digest = hash.sha256(bytes(table.concat(ordered,'\n')))
     local mode = (policy.enabled(options.dev_build) or target=='template_debug') and 'debug' or 'release'
     local variant = path.join(path.absolute(cache or path.join(root,'.build/xmake-cache')), platform .. '-' .. options.arch .. '-' .. target, mode)
-    local configure = {'f','-y','-P',root,'-o',variant,'-p',normalized.plat,'-a',normalized.arch,'--toolchain=' .. normalized.toolchain,'-m',mode,'--godot_platform=' .. platform,'--egp_arch=' .. options.arch,'--egp_target=' .. target}
+    -- Reused output directories must not retain options omitted by a later request.
+    -- Reset configuration while retaining the canonical object/output cache.
+    local configure = {'f','-c','-y','-P',root,'-o',variant,'-p',normalized.plat,'-a',normalized.arch,'--toolchain=' .. normalized.toolchain,'-m',mode,'--godot_platform=' .. platform,'--egp_arch=' .. options.arch,'--egp_target=' .. target}
     table.join2(configure, import('build.xmake.platforms.host', {rootdir=root}).configure_arguments(normalized, options))
     for _, key in ipairs(keys) do
         if key ~= 'platform' and key ~= 'target' and key ~= 'arch' and key ~= 'mingw' then table.insert(configure,'--' .. key .. '=' .. options[key]) end
