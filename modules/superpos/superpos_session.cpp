@@ -1825,6 +1825,10 @@ Dictionary SuperposSession::read_object(uint64_t p_handle) const {
 #include "private/session_fields.inc"
 #if defined(SUPERPOS_HAS_DTLS) || defined(SUPERPOS_HAS_RTC)
 #include "private/spawning/session_public.inc"
+#if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
+#include "private/recovery/recovery_access.hpp"
+#include "private/recovery/session_recovery.inc"
+#endif
 #else
 Dictionary SuperposReceiverPublicAccess::read(SuperposSession &, uint64_t, uint64_t, const std::array<uint64_t, 6> &, const PackedInt64Array *) { Dictionary r; r["error"] = ERR_UNAVAILABLE; return r; }
 Error SuperposReceiverPublicAccess::retry(SuperposSession &, uint64_t, uint64_t, const std::array<uint64_t, 6> &) { return ERR_UNAVAILABLE; }

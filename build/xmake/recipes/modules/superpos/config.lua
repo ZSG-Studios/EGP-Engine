@@ -6,13 +6,15 @@ end
 function get_opts(platform)
     local BoolVariable
     BoolVariable = R.BoolVariable
-    return {BoolVariable("superpos_dtls", "Compile Superpos DTLS backend against EGP's crypto profile", true)}
+    return {BoolVariable("superpos_dtls", "Compile Superpos DTLS backend against EGP's crypto profile", true),
+        BoolVariable("superpos_durable_recovery", "Opt-in embedded durable recovery: SQLite journal, coordinator and canonical restore services", false)}
 end
 function configure(env)
     env:module_add_dependencies("superpos", {"mbedtls"})
 end
 function get_doc_classes()
-    return {"SuperposUInt64", "SuperposField", "SuperposSchema", "SuperposSimulationProvider", "SuperposSession", "SuperposWorld"}
+    return {"SuperposUInt64", "SuperposField", "SuperposSchema", "SuperposSimulationProvider", "SuperposSession", "SuperposWorld",
+        "SuperposSpawnEntry", "SuperposSpawnCatalog", "SuperposReplicaView", "SuperposSpawner"}
 end
 function get_doc_path()
     return "doc_classes"

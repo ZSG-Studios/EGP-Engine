@@ -20,6 +20,7 @@ class SuperposSession : public RefCounted {
     friend struct SuperposRtcBindingAccess;
     friend struct SuperposNativeReceiverAccess;
     friend class SuperposReceiverPublicAccess;
+    friend struct SuperposRecoveryAccess;
     void *pending_native_retirement = nullptr;
     friend class SuperposSimulationScope;
     friend class SuperposManagedReload;

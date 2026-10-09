@@ -120,6 +120,24 @@
       "managed_reload": "rejected_while_receiver_attached",
       "fixture_source": "private/lifecycle_engine/staged/engine_fixture.cpp"
     },
+    "durable_recovery": {
+      "version": 1,
+      "status": "experimental_opt_in_windows_x64_engine_fixture_qualified",
+      "option": "superpos_durable_recovery",
+      "default": false,
+      "core_feature": "services",
+      "crypto": "borrowed_EGP_builtin_MbedTLS_PSA_through_superpos_dtls",
+      "sqlite": {
+        "version": "3.53.4",
+        "manifest": "core/xmake/sqlite-manifest.json",
+        "directory": "core/dependencies/sqlite-amalgamation-3530400"
+      },
+      "sources": [
+        "private/recovery/world_restore.cpp",
+        "private/recovery/restore_publisher.cpp"
+      ],
+      "fixture": "private/recovery/recovery_fixture.inc"
+    },
     "native_spawner": {
       "version": 1,
       "status": "experimental_windows_x64_engine_runtime_and_bindings_qualified",

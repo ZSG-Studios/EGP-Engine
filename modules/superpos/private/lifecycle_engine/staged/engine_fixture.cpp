@@ -165,3 +165,6 @@ void superpos_register_lifecycle_fixture(){for(const String& arg:OS::get_singlet
 #ifdef SUPERPOS_LIFECYCLE_FIXTURE
 #include "../../spawning/public_fixture.inc"
 #endif
+#if defined(SUPERPOS_LIFECYCLE_FIXTURE) && defined(SUPERPOS_HAS_DURABLE_RECOVERY)
+#include "../../recovery/recovery_fixture.inc"
+#endif

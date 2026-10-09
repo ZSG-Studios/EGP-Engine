@@ -9,6 +9,9 @@
 #ifdef SUPERPOS_LIFECYCLE_FIXTURE
 void superpos_register_lifecycle_fixture();
 void superpos_register_public_spawner_fixture();
+#ifdef SUPERPOS_HAS_DURABLE_RECOVERY
+void superpos_register_recovery_fixture();
+#endif
 #endif
 #include "superpos_simulation_provider.h"
 #include "superpos_uint64.h"
@@ -54,6 +57,9 @@ void initialize_superpos_module(ModuleInitializationLevel p_level) {
 #ifdef SUPERPOS_LIFECYCLE_FIXTURE
     superpos_register_lifecycle_fixture();
     superpos_register_public_spawner_fixture();
+#ifdef SUPERPOS_HAS_DURABLE_RECOVERY
+    superpos_register_recovery_fixture();
+#endif
 #endif
 #ifdef SUPERPOS_RTC_EMBEDDED_FIXTURE
     superpos_egp_register_embedded_fixture();
