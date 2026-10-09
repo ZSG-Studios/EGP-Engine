@@ -228,7 +228,9 @@ protected: \
 	virtual void _notification_forwardv(int p_notification) override { \
 		const ObjectID receiver_id = _notification_lifetime_token(); \
 		m_inherits::_notification_forwardv(p_notification); \
-		if (!_notification_receiver_alive(receiver_id, this)) { return; } \
+		if (!_notification_receiver_alive(receiver_id, this)) { \
+			return; \
+		} \
 		if (m_class::_get_notification() != m_inherits::_get_notification()) { \
 			_notification(p_notification); \
 		} \
@@ -238,7 +240,9 @@ protected: \
 		if (m_class::_get_notification() != m_inherits::_get_notification()) { \
 			_notification(p_notification); \
 		} \
-		if (!_notification_receiver_alive(receiver_id, this)) { return; } \
+		if (!_notification_receiver_alive(receiver_id, this)) { \
+			return; \
+		} \
 		m_inherits::_notification_backwardv(p_notification); \
 	} \
 \

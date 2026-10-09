@@ -43,6 +43,7 @@ class Box2DPhysicsServer2D;
 
 class Box2DBody2D final : public Box2DCollisionObject2D {
 	friend class Box2DLocalReplay;
+
 public:
 	void set_hit_events_enabled(bool p_enabled);
 	bool get_hit_events_enabled() const { return shape_def.enableHitEvents; }

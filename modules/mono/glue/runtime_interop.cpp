@@ -29,12 +29,14 @@
 /**************************************************************************/
 
 #include "runtime_interop.h"
+
 #include "modules/modules_enabled.gen.h"
 #ifdef MODULE_SUPERPOS_ENABLED
+#include "core/os/thread.h"
+
 #include "modules/superpos/superpos_managed_reload.h"
 #include "modules/superpos/superpos_session.h"
 #include "modules/superpos/superpos_world.h"
-#include "core/os/thread.h"
 #endif
 
 #include "../csharp_script.h"
@@ -84,20 +86,24 @@ const MethodBind *godotsharp_method_bind_get_method_with_compatibility(const Str
 
 #ifdef MODULE_SUPERPOS_ENABLED
 Object *superpos_managed_session_create(bool p_postinitialize) {
-    ERR_FAIL_COND_V_MSG(!SuperposManagedReload::can_create_managed(), nullptr,
-            "Superpos managed Session construction requires the engine owner thread.");
-    return ClassDB::classes.getptr(SNAME("SuperposSession"))->creation_func(p_postinitialize);
+	ERR_FAIL_COND_V_MSG(!SuperposManagedReload::can_create_managed(), nullptr,
+			"Superpos managed Session construction requires the engine owner thread.");
+	return ClassDB::classes.getptr(SNAME("SuperposSession"))->creation_func(p_postinitialize);
 }
 Object *superpos_managed_world_create(bool p_postinitialize) {
-    ERR_FAIL_COND_V_MSG(!SuperposManagedReload::can_create_managed(), nullptr,
-            "Superpos managed World construction requires the engine owner thread.");
-    return ClassDB::classes.getptr(SNAME("SuperposWorld"))->creation_func(p_postinitialize);
+	ERR_FAIL_COND_V_MSG(!SuperposManagedReload::can_create_managed(), nullptr,
+			"Superpos managed World construction requires the engine owner thread.");
+	return ClassDB::classes.getptr(SNAME("SuperposWorld"))->creation_func(p_postinitialize);
 }
 #endif
 godotsharp_class_creation_func godotsharp_get_class_constructor(const StringName *p_classname) {
 #ifdef MODULE_SUPERPOS_ENABLED
-    if (*p_classname == SNAME("SuperposSession")) { return superpos_managed_session_create; }
-    if (*p_classname == SNAME("SuperposWorld")) { return superpos_managed_world_create; }
+	if (*p_classname == SNAME("SuperposSession")) {
+		return superpos_managed_session_create;
+	}
+	if (*p_classname == SNAME("SuperposWorld")) {
+		return superpos_managed_world_create;
+	}
 #endif
 	ClassDB::ClassInfo *class_info = ClassDB::classes.getptr(*p_classname);
 	if (class_info) {
@@ -190,12 +196,12 @@ void godotsharp_internal_object_disposed(Object *p_ptr, GCHandleIntPtr p_gchandl
 
 void godotsharp_internal_refcounted_disposed(Object *p_ptr, GCHandleIntPtr p_gchandle_to_free, bool p_is_finalizer) {
 #ifdef MODULE_SUPERPOS_ENABLED
-    if (Object::cast_to<SuperposSession>(p_ptr)) {
-        ERR_FAIL_COND_MSG(!SuperposManagedReload::is_retirement_callback(p_ptr), "Superpos Session disposal requires its generation-bound owner retirement callback.");
-        if (p_gchandle_to_free.value == nullptr) {
-            p_gchandle_to_free = godotsharp_internal_object_get_associated_gchandle(p_ptr);
-        }
-    }
+	if (Object::cast_to<SuperposSession>(p_ptr)) {
+		ERR_FAIL_COND_MSG(!SuperposManagedReload::is_retirement_callback(p_ptr), "Superpos Session disposal requires its generation-bound owner retirement callback.");
+		if (p_gchandle_to_free.value == nullptr) {
+			p_gchandle_to_free = godotsharp_internal_object_get_associated_gchandle(p_ptr);
+		}
+	}
 #endif
 #ifdef DEBUG_ENABLED
 	CRASH_COND(p_ptr == nullptr);
@@ -250,30 +256,32 @@ void godotsharp_internal_refcounted_disposed(Object *p_ptr, GCHandleIntPtr p_gch
 }
 
 Error godotsharp_internal_superpos_binding_claim(Object *p_ptr, uint64_t *r_generation) {
-    if (!r_generation) { return ERR_INVALID_PARAMETER; }
-    *r_generation = 0;
+	if (!r_generation) {
+		return ERR_INVALID_PARAMETER;
+	}
+	*r_generation = 0;
 #ifdef MODULE_SUPERPOS_ENABLED
-    return SuperposManagedReload::claim_managed_binding(p_ptr, *r_generation);
+	return SuperposManagedReload::claim_managed_binding(p_ptr, *r_generation);
 #else
-    return ERR_UNAVAILABLE;
+	return ERR_UNAVAILABLE;
 #endif
 }
 
 Error godotsharp_internal_superpos_binding_validate(Object *p_ptr, uint64_t p_generation) {
 #ifdef MODULE_SUPERPOS_ENABLED
-    return SuperposManagedReload::validate_managed_claim(p_ptr, p_generation);
+	return SuperposManagedReload::validate_managed_claim(p_ptr, p_generation);
 #else
-    return ERR_UNAVAILABLE;
+	return ERR_UNAVAILABLE;
 #endif
 }
 Error godotsharp_internal_superpos_binding_retire(Object *p_ptr, uint64_t p_generation, bool p_finalizer) {
 #ifdef MODULE_SUPERPOS_ENABLED
-    return SuperposManagedReload::retire_managed_binding(p_ptr, p_generation, p_finalizer,
-            [](Object *object, void *, bool finalizer) {
-                godotsharp_internal_refcounted_disposed(object, GCHandleIntPtr{nullptr}, finalizer);
-            });
+	return SuperposManagedReload::retire_managed_binding(p_ptr, p_generation, p_finalizer,
+			[](Object *object, void *, bool finalizer) {
+				godotsharp_internal_refcounted_disposed(object, GCHandleIntPtr{ nullptr }, finalizer);
+			});
 #else
-    return ERR_UNAVAILABLE;
+	return ERR_UNAVAILABLE;
 #endif
 }
 
@@ -319,21 +327,31 @@ GCHandleIntPtr godotsharp_internal_unmanaged_instance_binding_create_managed(Obj
 	CRASH_COND(!p_unmanaged);
 #endif
 
-    void *data = nullptr;
+	void *data = nullptr;
 #ifdef MODULE_SUPERPOS_ENABLED
-    Ref<RefCounted> superpos_binding_pin;
-    if (Object::cast_to<SuperposSession>(p_unmanaged)) {
-        if (!SuperposManagedReload::can_create_managed()) { return { nullptr }; }
-        superpos_binding_pin = Ref<RefCounted>(Object::cast_to<RefCounted>(p_unmanaged));
-        if (SuperposManagedReload::prepare_managed_binding(p_unmanaged) != OK) { return { nullptr }; }
-        // A failed setup must not retry a user constructor implicitly.
-        data = CSharpLanguage::get_existing_instance_binding(p_unmanaged);
-        if (!data) { return { nullptr }; }
-        auto &existing = static_cast<RBMap<Object *, CSharpScriptBinding>::Element *>(data)->value();
-        if (!existing.inited || existing.gchandle.get_intptr().value != p_old_gchandle.value) { return { nullptr }; }
-    } else
+	Ref<RefCounted> superpos_binding_pin;
+	if (Object::cast_to<SuperposSession>(p_unmanaged)) {
+		if (!SuperposManagedReload::can_create_managed()) {
+			return { nullptr };
+		}
+		superpos_binding_pin = Ref<RefCounted>(Object::cast_to<RefCounted>(p_unmanaged));
+		if (SuperposManagedReload::prepare_managed_binding(p_unmanaged) != OK) {
+			return { nullptr };
+		}
+		// A failed setup must not retry a user constructor implicitly.
+		data = CSharpLanguage::get_existing_instance_binding(p_unmanaged);
+		if (!data) {
+			return { nullptr };
+		}
+		auto &existing = static_cast<RBMap<Object *, CSharpScriptBinding>::Element *>(data)->value();
+		if (!existing.inited || existing.gchandle.get_intptr().value != p_old_gchandle.value) {
+			return { nullptr };
+		}
+	} else
 #endif
-    { data = CSharpLanguage::get_instance_binding_with_setup(p_unmanaged); }
+	{
+		data = CSharpLanguage::get_instance_binding_with_setup(p_unmanaged);
+	}
 	ERR_FAIL_NULL_V(data, { nullptr });
 	CSharpScriptBinding &script_binding = ((RBMap<Object *, CSharpScriptBinding>::Element *)data)->value();
 	ERR_FAIL_COND_V(!script_binding.inited, { nullptr });
@@ -1883,9 +1901,9 @@ static const void *unmanaged_callbacks[]{
 	(void *)godotsharp_var_to_str,
 	(void *)godotsharp_err_print_error,
 	(void *)godotsharp_object_to_string,
-    (void *)godotsharp_internal_superpos_binding_claim,
-    (void *)godotsharp_internal_superpos_binding_validate,
-    (void *)godotsharp_internal_superpos_binding_retire,
+	(void *)godotsharp_internal_superpos_binding_claim,
+	(void *)godotsharp_internal_superpos_binding_validate,
+	(void *)godotsharp_internal_superpos_binding_retire,
 };
 
 const void **godotsharp::get_runtime_interop_funcs(int32_t &r_size) {

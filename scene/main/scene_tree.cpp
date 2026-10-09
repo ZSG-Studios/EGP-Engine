@@ -703,7 +703,6 @@ bool SceneTree::process(double p_time) {
 
 	process_time = p_time;
 
-
 	emit_signal(SNAME("process_frame"));
 
 	MessageQueue::get_singleton()->flush(); //small little hack
@@ -1228,7 +1227,9 @@ void SceneTree::_process_group(ProcessGroup *p_group, bool p_physics) {
 			if (n->is_physics_processing_internal()) {
 				n->notification(Node::NOTIFICATION_INTERNAL_PHYSICS_PROCESS);
 			}
-			if (nodes_removed_on_group_call.has(n)) { continue; }
+			if (nodes_removed_on_group_call.has(n)) {
+				continue;
+			}
 			if (n->is_physics_processing()) {
 				n->notification(Node::NOTIFICATION_PHYSICS_PROCESS);
 			}
@@ -1236,7 +1237,9 @@ void SceneTree::_process_group(ProcessGroup *p_group, bool p_physics) {
 			if (n->is_processing_internal()) {
 				n->notification(Node::NOTIFICATION_INTERNAL_PROCESS);
 			}
-			if (nodes_removed_on_group_call.has(n)) { continue; }
+			if (nodes_removed_on_group_call.has(n)) {
+				continue;
+			}
 			if (n->is_processing()) {
 				n->notification(Node::NOTIFICATION_PROCESS);
 			}
@@ -1903,7 +1906,6 @@ void SceneTree::_bind_methods() {
 
 	ClassDB::bind_method(D_METHOD("reload_current_scene"), &SceneTree::reload_current_scene);
 	ClassDB::bind_method(D_METHOD("unload_current_scene"), &SceneTree::unload_current_scene);
-
 
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "auto_accept_quit"), "set_auto_accept_quit", "is_auto_accept_quit");
 	ADD_PROPERTY(PropertyInfo(Variant::BOOL, "quit_on_go_back"), "set_quit_on_go_back", "is_quit_on_go_back");

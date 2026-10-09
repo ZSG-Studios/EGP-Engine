@@ -32,6 +32,7 @@
 
 #include "core/object/class_db.h"
 #include "core/object/script_instance.h"
+
 #include "modules/modules_enabled.gen.h"
 #ifdef MODULE_SUPERPOS_ENABLED
 #include "modules/superpos/superpos_managed_reload.h"
@@ -95,12 +96,14 @@ bool RefCounted::reference() {
 
 bool RefCounted::unreference() {
 #ifdef MODULE_SUPERPOS_ENABLED
-    bool deferred = false;
-    const Error handoff = SuperposManagedReload::defer_native_reference(this, deferred);
-    // A uint64 pending counter cannot saturate for valid uint32 references;
-    // corrupted ownership must fail before off-owner decrement/callbacks.
-    CRASH_COND_MSG(handoff != OK, "Unsupported or corrupted Superpos native reference ownership.");
-    if (deferred) { return false; }
+	bool deferred = false;
+	const Error handoff = SuperposManagedReload::defer_native_reference(this, deferred);
+	// A uint64 pending counter cannot saturate for valid uint32 references;
+	// corrupted ownership must fail before off-owner decrement/callbacks.
+	CRASH_COND_MSG(handoff != OK, "Unsupported or corrupted Superpos native reference ownership.");
+	if (deferred) {
+		return false;
+	}
 #endif
 	dereference_count.increment();
 	uint32_t rc_val = refcount.unrefval();

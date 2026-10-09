@@ -64,9 +64,11 @@ class CSharpLanguage;
 
 template <typename TScriptInstance, typename TScriptLanguage>
 TScriptInstance *cast_script_instance(ScriptInstance *p_inst) {
-    if (!p_inst || p_inst->is_placeholder() ||
-            p_inst->get_language() != TScriptLanguage::get_singleton()) { return nullptr; }
-    return static_cast<TScriptInstance *>(p_inst);
+	if (!p_inst || p_inst->is_placeholder() ||
+			p_inst->get_language() != TScriptLanguage::get_singleton()) {
+		return nullptr;
+	}
+	return static_cast<TScriptInstance *>(p_inst);
 }
 
 #define CAST_CSHARP_INSTANCE(m_inst) (cast_script_instance<CSharpInstance, CSharpLanguage>(m_inst))
