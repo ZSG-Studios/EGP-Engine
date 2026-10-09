@@ -39,6 +39,10 @@ class ExposureAuditTests(unittest.TestCase):
             "SuperposSchema",
             "SuperposUInt64",
             "SuperposSimulationProvider",
+            "SuperposSpawnEntry",
+            "SuperposSpawnCatalog",
+            "SuperposReplicaView",
+            "SuperposSpawner",
         ):
             self.api["classes"].append({"name": name, "methods": [{"name": "configure", "is_virtual": False}]})
             self.reflection["classes"][name] = {"properties": [], "signals": []}

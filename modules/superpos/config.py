@@ -10,7 +10,8 @@ def configure(env):
     env.module_add_dependencies("superpos", ["mbedtls"])
 
 def get_doc_classes():
-    return ["SuperposUInt64", "SuperposField", "SuperposSchema", "SuperposSession", "SuperposWorld"]
+    return ["SuperposUInt64", "SuperposField", "SuperposSchema", "SuperposSession", "SuperposWorld",
+            "SuperposSpawnEntry", "SuperposSpawnCatalog", "SuperposReplicaView", "SuperposSpawner"]
 
 def get_doc_path():
     return "doc_classes"

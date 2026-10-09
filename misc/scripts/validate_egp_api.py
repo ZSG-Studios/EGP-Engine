@@ -50,6 +50,10 @@ REQUIRED_CLASSES = {
     "SuperposSchema",
     "SuperposUInt64",
     "SuperposSimulationProvider",
+    "SuperposSpawnEntry",
+    "SuperposSpawnCatalog",
+    "SuperposReplicaView",
+    "SuperposSpawner",
 }
 INTERNAL_SIGNALS = {("PhysicsServer2D", "_debug_changed"), ("PhysicsServer3D", "_debug_changed")}
 
