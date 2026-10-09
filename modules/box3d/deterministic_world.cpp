@@ -21,6 +21,11 @@ constexpr uint64_t SNAPSHOT_MAGIC = 0x3150414E53334745ull; // EG3SNAP1, little e
 // EG3SNAP2 appends a joint table (count, then id/body A/body B/kind per joint) so joint
 // identifiers survive restore and joints take part in the state hash.
 constexpr uint64_t SNAPSHOT_MAGIC_JOINTS = 0x3250414E53334745ull;
+// EG3SNAP3 maps identities explicitly: the joint table also carries each Box3D joint id,
+// and an identity table lists every body (entity, Box3D id, then index and id per shape).
+// Box3D serializes its id pools, so restored ids are exact. Names are not used: the
+// recording interns them by a 32-bit hash, which collides at about 10^5 names.
+constexpr uint64_t SNAPSHOT_MAGIC_IDS = 0x3350414E53334745ull;
 constexpr uint64_t PROFILE_ID = 0xe77352cd606dc1a3ull;
 // Box3D world-slot allocation and replay length-scale updates are process globals.
 // Serialize entry from independent owners and managed finalizers. Solver workers
@@ -40,6 +45,18 @@ uint64_t read_u64(const std::vector<uint8_t> &in, size_t offset) {
 		v |= uint64_t(in[offset + i]) << (i * 8);
 	}
 	return v;
+}
+// Box3D ids as one u64 (index1, generation); the world slot is the restoring world's.
+uint64_t pack_id(int32_t index1, uint16_t generation) {
+	return (uint64_t(uint32_t(index1)) << 32) | generation;
+}
+template <typename Id>
+Id unpack_id(uint64_t packed, b3WorldId world) {
+	Id id;
+	id.index1 = int32_t(uint32_t(packed >> 32));
+	id.world0 = uint16_t(world.index1 - 1);
+	id.generation = uint16_t(packed & 0xffffu);
+	return id;
 }
 void hash_u64(uint64_t &hash, uint64_t v) {
 	for (unsigned i = 0; i < 8; ++i) {
@@ -1116,7 +1133,7 @@ Result DeterministicWorld::capture_snapshot(std::vector<uint8_t> &out) {
 		return Result::LIMIT_REACHED;
 	}
 	out.clear();
-	append_u64(out, joints.empty() ? SNAPSHOT_MAGIC : SNAPSHOT_MAGIC_JOINTS);
+	append_u64(out, SNAPSHOT_MAGIC_IDS);
 	append_u64(out, PROFILE_ID);
 	append_u64(out, tick);
 	append_u64(out, tick_rate);
@@ -1128,13 +1145,25 @@ Result DeterministicWorld::capture_snapshot(std::vector<uint8_t> &out) {
 	append_u64(out, size);
 	const uint8_t *data = b3Recording_GetData(recording);
 	out.insert(out.end(), data, data + size);
-	if (!joints.empty()) {
-		append_u64(out, joints.size());
-		for (const auto &joint : joints) {
-			append_u64(out, joint.first);
-			append_u64(out, joint.second.body_a);
-			append_u64(out, joint.second.body_b);
-			append_u64(out, joint.second.kind);
+	append_u64(out, joints.size());
+	for (const auto &joint : joints) {
+		append_u64(out, joint.first);
+		append_u64(out, joint.second.body_a);
+		append_u64(out, joint.second.body_b);
+		append_u64(out, joint.second.kind);
+		append_u64(out, pack_id(joint.second.id.index1, joint.second.id.generation));
+	}
+	append_u64(out, bodies.size());
+	for (const auto &body : bodies) {
+		append_u64(out, body.first);
+		append_u64(out, pack_id(body.second.index1, body.second.generation));
+		auto found = shapes.find(body.first);
+		append_u64(out, found == shapes.end() ? 0 : found->second.size());
+		if (found != shapes.end()) {
+			for (const auto &shape : found->second) {
+				append_u64(out, shape.first);
+				append_u64(out, pack_id(shape.second.index1, shape.second.generation));
+			}
 		}
 	}
 	append_u64(out, checksum(out, out.size()));
@@ -1150,12 +1179,32 @@ Result DeterministicWorld::restore_snapshot(const std::vector<uint8_t> &bytes) {
 	if (!pending.empty()) {
 		return Result::PENDING_COMMANDS;
 	}
-	const bool joint_table = bytes.size() >= 8 && read_u64(bytes, 0) == SNAPSHOT_MAGIC_JOINTS;
-	const uint64_t recording_size = bytes.size() >= 80 ? read_u64(bytes, 72) : 0;
+	const uint64_t magic = bytes.size() >= 8 ? read_u64(bytes, 0) : 0;
+	const bool identities = magic == SNAPSHOT_MAGIC_IDS;
+	const bool joint_table = magic == SNAPSHOT_MAGIC_JOINTS || identities;
+	const uint64_t joint_bytes = identities ? 40 : 32;
+	const uint64_t recording_size = bytes.size() >= 80 ? std::min<uint64_t>(read_u64(bytes, 72), MAX_SNAPSHOT_BYTES + 1ull) : 0;
 	const uint64_t table_offset = 80 + recording_size;
-	const uint64_t joint_count = joint_table && bytes.size() >= table_offset + 16 ? read_u64(bytes, table_offset) : 0;
-	const uint64_t expected_size = 88 + recording_size + (joint_table ? 8 + joint_count * 32 : 0);
-	if (bytes.size() < 89 || bytes.size() > MAX_SNAPSHOT_BYTES || (read_u64(bytes, 0) != SNAPSHOT_MAGIC && !joint_table) || recording_size > MAX_SNAPSHOT_BYTES || joint_count > MAX_COMMANDS || read_u64(bytes, 8) != PROFILE_ID || read_u64(bytes, 24) != tick_rate || read_u64(bytes, 32) != substeps || read_u64(bytes, 40) > 0xffffffffull || read_u64(bytes, 48) > 0xffffffffull || read_u64(bytes, 56) > 0xffffffffull || read_u64(bytes, 16) > uint64_t(INT64_MAX) || read_u64(bytes, 64) > MAX_BODIES || expected_size != bytes.size() || read_u64(bytes, bytes.size() - 8) != checksum(bytes, bytes.size() - 8)) {
+	const uint64_t joint_count = joint_table && bytes.size() >= table_offset + 16 ? std::min<uint64_t>(read_u64(bytes, table_offset), MAX_COMMANDS + 1ull) : 0;
+	uint64_t expected_size = 88 + recording_size + (joint_table ? 8 + joint_count * joint_bytes : 0);
+	// The identity table follows the joint table: body count, then per body entity, id,
+	// shape count and that many (index, id) pairs. Walk it within the checksummed bytes.
+	const uint64_t identity_offset = table_offset + 8 + joint_count * joint_bytes;
+	if (identities) {
+		uint64_t at = identity_offset;
+		uint64_t count = at + 8 <= bytes.size() ? read_u64(bytes, at) : MAX_BODIES + 1ull;
+		at += 8;
+		for (uint64_t i = 0; count <= MAX_BODIES && i < count; ++i) {
+			const uint64_t shape_count = at + 24 <= bytes.size() ? read_u64(bytes, at + 16) : MAX_SHAPES_PER_BODY + 1ull;
+			if (shape_count > MAX_SHAPES_PER_BODY) {
+				count = MAX_BODIES + 1ull;
+				break;
+			}
+			at += 24 + shape_count * 16;
+		}
+		expected_size = count > MAX_BODIES ? 0 : at + 8;
+	}
+	if (bytes.size() < 89 || bytes.size() > MAX_SNAPSHOT_BYTES || (magic != SNAPSHOT_MAGIC && !joint_table) || recording_size > MAX_SNAPSHOT_BYTES || joint_count > MAX_COMMANDS || read_u64(bytes, 8) != PROFILE_ID || read_u64(bytes, 24) != tick_rate || read_u64(bytes, 32) != substeps || read_u64(bytes, 40) > 0xffffffffull || read_u64(bytes, 48) > 0xffffffffull || read_u64(bytes, 56) > 0xffffffffull || read_u64(bytes, 16) > uint64_t(INT64_MAX) || read_u64(bytes, 64) > MAX_BODIES || expected_size != bytes.size() || read_u64(bytes, bytes.size() - 8) != checksum(bytes, bytes.size() - 8)) {
 		return Result::INVALID_SNAPSHOT;
 	}
 	if (b3GetWorldCount() >= 127) {
@@ -1167,16 +1216,43 @@ Result DeterministicWorld::restore_snapshot(const std::vector<uint8_t> &bytes) {
 		return Result::INVALID_SNAPSHOT;
 	}
 	std::map<uint64_t, b3BodyId> restored;
+	std::map<uint64_t, std::map<uint32_t, b3ShapeId>> restored_shapes;
 	bool valid = true;
+	const b3WorldId restored_world = b3RecPlayer_GetWorldId(candidate);
+	int live_bodies = 0;
 	for (int i = 0; i < b3RecPlayer_GetBodyCount(candidate); ++i) {
-		b3BodyId id = b3RecPlayer_GetBodyId(candidate, i);
-		if (!b3Body_IsValid(id)) {
-			continue;
+		live_bodies += b3Body_IsValid(b3RecPlayer_GetBodyId(candidate, i)) ? 1 : 0;
+	}
+	if (identities) {
+		size_t at = size_t(identity_offset);
+		const uint64_t count = read_u64(bytes, at);
+		at += 8;
+		valid = count == uint64_t(live_bodies);
+		for (uint64_t i = 0; valid && i < count; ++i) {
+			const uint64_t entity = read_u64(bytes, at);
+			const b3BodyId body = unpack_id<b3BodyId>(read_u64(bytes, at + 8), restored_world);
+			const uint64_t shape_count = read_u64(bytes, at + 16);
+			at += 24;
+			valid = entity > 0 && entity <= uint64_t(INT64_MAX) && b3Body_IsValid(body) && shape_count == uint64_t(b3Body_GetShapeCount(body)) && restored.emplace(entity, body).second;
+			auto &indices = restored_shapes[entity];
+			for (uint64_t j = 0; valid && j < shape_count; ++j) {
+				const uint64_t index = read_u64(bytes, at);
+				const b3ShapeId shape = unpack_id<b3ShapeId>(read_u64(bytes, at + 8), restored_world);
+				at += 16;
+				valid = index <= 0xffffffffull && b3Shape_IsValid(shape) && B3_ID_EQUALS(b3Shape_GetBody(shape), body) && indices.emplace(uint32_t(index), shape).second;
+			}
 		}
-		uint64_t entity;
-		if (!parse_entity(b3Body_GetName(id), entity) || !restored.emplace(entity, id).second) {
-			valid = false;
-			break;
+	} else {
+		for (int i = 0; i < b3RecPlayer_GetBodyCount(candidate); ++i) {
+			b3BodyId id = b3RecPlayer_GetBodyId(candidate, i);
+			if (!b3Body_IsValid(id)) {
+				continue;
+			}
+			uint64_t entity;
+			if (!parse_entity(b3Body_GetName(id), entity) || !restored.emplace(entity, id).second) {
+				valid = false;
+				break;
+			}
 		}
 	}
 	b3Vec3 restored_gravity;
@@ -1186,8 +1262,7 @@ Result DeterministicWorld::restore_snapshot(const std::vector<uint8_t> &bytes) {
 		std::memcpy(&restored_gravity.y, &bits[1], 4);
 		std::memcpy(&restored_gravity.z, &bits[2], 4);
 	}
-	std::map<uint64_t, std::map<uint32_t, b3ShapeId>> restored_shapes;
-	if (!valid || restored.size() != read_u64(bytes, 64) || !finite(restored_gravity) || !rebuild_shapes(restored, restored_shapes)) {
+	if (!valid || restored.size() != read_u64(bytes, 64) || !finite(restored_gravity) || (!identities && !rebuild_shapes(restored, restored_shapes))) {
 		b3DestroyPlayer(candidate);
 		return Result::INVALID_SNAPSHOT;
 	}
@@ -1195,7 +1270,7 @@ Result DeterministicWorld::restore_snapshot(const std::vector<uint8_t> &bytes) {
 	std::map<uint64_t, JointRecord> restored_joints;
 	std::set<std::pair<uint64_t, uint64_t>> claimed;
 	for (uint64_t i = 0; valid && i < joint_count; ++i) {
-		const size_t at = size_t(table_offset + 8 + i * 32);
+		const size_t at = size_t(table_offset + 8 + i * joint_bytes);
 		JointRecord record;
 		const uint64_t id = read_u64(bytes, at);
 		record.body_a = read_u64(bytes, at + 8);
@@ -1206,6 +1281,13 @@ Result DeterministicWorld::restore_snapshot(const std::vector<uint8_t> &bytes) {
 		if (a == restored.end() || b == restored.end() || restored_joints.count(id) || record.kind >= JOINT_TYPE_COUNT) {
 			valid = false;
 			break;
+		}
+		if (identities) {
+			record.id = unpack_id<b3JointId>(read_u64(bytes, at + 32), restored_world);
+			valid = b3Joint_IsValid(record.id) && B3_ID_EQUALS(b3Joint_GetBodyA(record.id), a->second) && B3_ID_EQUALS(b3Joint_GetBodyB(record.id), b->second) &&
+					b3Joint_GetType(record.id) == box3d_joint_type(JointType(record.kind));
+			restored_joints[id] = record;
+			continue;
 		}
 		std::vector<b3JointId> attached(size_t(b3Body_GetJointCount(a->second)));
 		b3Body_GetJoints(a->second, attached.data(), int(attached.size()));

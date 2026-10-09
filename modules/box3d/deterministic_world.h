@@ -213,8 +213,8 @@ class DeterministicWorld {
 
 public:
 	static constexpr uint32_t MAX_COMMANDS = 65536;
-	static constexpr uint32_t MAX_BODIES = 65536;
-	static constexpr uint32_t MAX_SNAPSHOT_BYTES = 64 * 1024 * 1024;
+	static constexpr uint32_t MAX_BODIES = 1u << 20;
+	static constexpr uint32_t MAX_SNAPSHOT_BYTES = 512u * 1024 * 1024;
 	static constexpr uint32_t MAX_SHAPES_PER_BODY = 256;
 	// Entity key of world commands (SET_WORLD, EXPLODE): after all bodies in a batch.
 	static constexpr uint64_t WORLD_KEY = uint64_t(1) << 63;

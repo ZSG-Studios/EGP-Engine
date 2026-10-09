@@ -21,7 +21,7 @@
 		<method name="capture_snapshot">
 			<return type="PackedByteArray" />
 			<description>
-				Captures full local solver state and stable body mapping at a boundary with no queued commands. Returns empty bytes on failure. Snapshot size is bounded to 64 MiB.
+				Captures full local solver state and stable body mapping at a boundary with no queued commands. Returns empty bytes on failure. Snapshot size is bounded to 512 MiB.
 			</description>
 		</method>
 		<method name="cast_rays" qualifiers="const">
