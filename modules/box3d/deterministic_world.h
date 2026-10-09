@@ -46,7 +46,10 @@ enum class Operation { CREATE_BOX,
 	SET_JOINT,
 	APPLY,
 	SET_WORLD,
-	EXPLODE };
+	EXPLODE,
+	// Character drive: sets the velocity components selected by axes (bit 0 x, 1 y,
+	// 2 z) from value, keeping the solver's position and the other components.
+	DRIVE };
 
 // APPLY: value is the force, torque or impulse; point is the world point for the
 // *_AT_POINT kinds. Forces act over the next step.
@@ -111,6 +114,8 @@ struct Command {
 	// SET_SHAPE: -1 changes the shape; 0.. one entry of a mesh or height field's
 	// material table (0 is the shape's own material).
 	int32_t material_index = -1;
+	// DRIVE: velocity axes to set (bit 0 x, bit 1 y, bit 2 z).
+	uint8_t axes = 5;
 };
 
 // A shape by stable identity: body entity and shape index (entity 0: no longer exists).
@@ -271,6 +276,10 @@ public:
 	// Closest hit of a placed shape swept along a translation, ignoring one body. Ties
 	// break by identity.
 	bool cast_shape(const Geometry &p_geometry, b3Vec3 p_position, b3Quat p_rotation, b3Vec3 p_translation, uint64_t p_mask, uint64_t p_ignore, RayHit &r_hit) const;
+	// Ground support for many bodies: one downward ray per body from its position,
+	// depth long, ignoring the body itself. Writes hit flags, surface normals and the
+	// supporting entity (0 when none).
+	void probe_ground(const uint64_t *p_entities, const float *p_depths, size_t p_count, uint8_t *r_hits, b3Vec3 *r_normals, uint64_t *r_supports) const;
 	// Box3D character mover: collide, solve planes, cast and slide a vertical capsule
 	// (centred on p_position) through the world, ignoring one body. Returns the final
 	// position; r_clipped is the requested translation clipped by the contact planes.

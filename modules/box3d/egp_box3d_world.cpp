@@ -113,6 +113,8 @@ void EGPBox3DWorld::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("set_body_buoyant", "entity_id", "enabled"), &EGPBox3DWorld::set_body_buoyant, DEFVAL(true));
 	ClassDB::bind_method(D_METHOD("queue_body_states", "entity_ids", "sequence", "records"), &EGPBox3DWorld::queue_body_states);
 	ClassDB::bind_method(D_METHOD("queue_impulses", "entity_ids", "sequence", "impulses"), &EGPBox3DWorld::queue_impulses);
+	ClassDB::bind_method(D_METHOD("queue_drive", "entity_ids", "sequence", "velocities", "axes"), &EGPBox3DWorld::queue_drive, DEFVAL(5));
+	ClassDB::bind_method(D_METHOD("probe_ground", "entity_ids", "depths"), &EGPBox3DWorld::probe_ground);
 	BIND_ENUM_CONSTANT(JOINT_DISTANCE);
 	BIND_ENUM_CONSTANT(JOINT_SPHERICAL);
 	BIND_ENUM_CONSTANT(JOINT_PRISMATIC);
@@ -288,6 +290,51 @@ Error EGPBox3DWorld::queue_body_states(const PackedInt64Array &entities, int64_t
 		}
 	}
 	return OK;
+}
+Error EGPBox3DWorld::queue_drive(const PackedInt64Array &entities, int64_t sequence, const PackedVector3Array &velocities, int64_t axes) {
+	ERR_FAIL_COND_V(Thread::get_caller_id() != owner_thread, ERR_BUSY);
+	ERR_FAIL_COND_V(velocities.size() != entities.size() || axes < 1 || axes > 7, ERR_INVALID_PARAMETER);
+	egp::box3d::Command c;
+	c.operation = egp::box3d::Operation::DRIVE;
+	c.axes = uint8_t(axes);
+	for (int64_t i = 0; i < entities.size(); ++i) {
+		ERR_FAIL_COND_V(!valid_ids(entities[i], sequence), ERR_INVALID_PARAMETER);
+		c.entity = uint64_t(entities[i]);
+		c.sequence = uint32_t(sequence);
+		c.value = to_b3(velocities[i]);
+		const Error error = queue_command(c);
+		if (error != OK) {
+			return error;
+		}
+	}
+	return OK;
+}
+Dictionary EGPBox3DWorld::probe_ground(const PackedInt64Array &entities, const PackedFloat32Array &depths) const {
+	Dictionary result;
+	ERR_FAIL_COND_V(Thread::get_caller_id() != owner_thread, result);
+	ERR_FAIL_COND_V(depths.size() != entities.size(), result);
+	const int64_t count = entities.size();
+	std::vector<uint64_t> ids(static_cast<size_t>(count));
+	for (int64_t i = 0; i < count; ++i) {
+		ids[size_t(i)] = entities[i] > 0 ? uint64_t(entities[i]) : 0;
+	}
+	PackedByteArray hit;
+	PackedVector3Array normal;
+	PackedInt64Array support;
+	hit.resize(count);
+	normal.resize(count);
+	support.resize(count);
+	std::vector<b3Vec3> normals(static_cast<size_t>(count));
+	std::vector<uint64_t> supports(static_cast<size_t>(count));
+	simulation.probe_ground(ids.data(), depths.ptr(), static_cast<size_t>(count), hit.ptrw(), normals.data(), supports.data());
+	for (int64_t i = 0; i < count; ++i) {
+		normal.set(i, Vector3(normals[size_t(i)].x, normals[size_t(i)].y, normals[size_t(i)].z));
+		support.set(i, int64_t(supports[size_t(i)]));
+	}
+	result["hit"] = hit;
+	result["normal"] = normal;
+	result["support"] = support;
+	return result;
 }
 Error EGPBox3DWorld::queue_impulses(const PackedInt64Array &entities, int64_t sequence, const PackedFloat32Array &impulses) {
 	ERR_FAIL_COND_V(Thread::get_caller_id() != owner_thread, ERR_BUSY);

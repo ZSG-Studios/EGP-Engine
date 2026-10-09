@@ -79,6 +79,9 @@ public:
 	PackedFloat32Array get_body_states(const PackedInt64Array &p_entities) const;
 	Error queue_body_states(const PackedInt64Array &p_entities, int64_t p_sequence, const PackedFloat32Array &p_records);
 	Error queue_impulses(const PackedInt64Array &p_entities, int64_t p_sequence, const PackedFloat32Array &p_impulses);
+	// Characters: batched velocity drive and ground support.
+	Error queue_drive(const PackedInt64Array &p_entities, int64_t p_sequence, const PackedVector3Array &p_velocities, int64_t p_axes = 5);
+	Dictionary probe_ground(const PackedInt64Array &p_entities, const PackedFloat32Array &p_depths) const;
 	// Box3D queries (deterministic, read-only) and fluid volumes.
 	Dictionary cast_rays(const PackedVector3Array &p_origins, const PackedVector3Array &p_translations, int64_t p_mask = -1) const;
 	Dictionary move_capsule(const Vector3 &p_position, double p_half_height, double p_radius, const Vector3 &p_translation, int64_t p_ignore_entity) const;

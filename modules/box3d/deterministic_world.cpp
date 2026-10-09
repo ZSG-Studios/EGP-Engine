@@ -204,7 +204,7 @@ Result DeterministicWorld::queue(const Command &c) {
 	if (c.entity == 0 || (c.entity > uint64_t(INT64_MAX) && !(world_operation(c.operation) && c.entity == WORLD_KEY)) || (world_operation(c.operation) && c.entity != WORLD_KEY) || !finite(c.value) || !finite(c.size) || !std::isfinite(c.density)) {
 		return Result::INVALID_ARGUMENT;
 	}
-	if (c.operation < Operation::CREATE_BOX || c.operation > Operation::EXPLODE) {
+	if (c.operation < Operation::CREATE_BOX || c.operation > Operation::DRIVE || (c.operation == Operation::DRIVE && (c.axes == 0 || c.axes > 7))) {
 		return Result::INVALID_ARGUMENT;
 	}
 	switch (c.operation) {
@@ -636,6 +636,14 @@ void DeterministicWorld::apply_body_command(const Command &c, b3BodyId body) {
 			}
 			break;
 		}
+		case Operation::DRIVE: {
+			b3Vec3 velocity = b3Body_GetLinearVelocity(body);
+			velocity.x = c.axes & 1 ? c.value.x : velocity.x;
+			velocity.y = c.axes & 2 ? c.value.y : velocity.y;
+			velocity.z = c.axes & 4 ? c.value.z : velocity.z;
+			b3Body_SetLinearVelocity(body, velocity);
+			break;
+		}
 		case Operation::APPLY:
 			switch (c.apply) {
 				case ApplyKind::FORCE:
@@ -910,6 +918,27 @@ void DeterministicWorld::cast_rays(const b3Vec3 *origins, const b3Vec3 *translat
 		hits[i].normal = ray.normal;
 		hits[i].entity = shape_entity(ray.shapeId);
 		hits[i].shape = shape_index(ray.shapeId);
+	}
+}
+
+void DeterministicWorld::probe_ground(const uint64_t *entities, const float *depths, size_t count, uint8_t *hits, b3Vec3 *normals, uint64_t *supports) const {
+	std::lock_guard<std::recursive_mutex> guard(get_simulation_mutex());
+	const b3QueryFilter filter = b3DefaultQueryFilter();
+	for (size_t i = 0; i < count; ++i) {
+		hits[i] = 0;
+		normals[i] = {};
+		supports[i] = 0;
+		const auto found = bodies.find(entities[i]);
+		if (found == bodies.end() || !b3World_IsValid(world) || !(depths[i] > 0.0f) || !std::isfinite(depths[i])) {
+			continue;
+		}
+		// The ray starts inside the body, whose own shapes it therefore ignores.
+		const b3RayResult ray = b3World_CastRayClosest(world, b3Body_GetPosition(found->second), { 0.0f, -depths[i], 0.0f }, filter);
+		if (ray.hit) {
+			hits[i] = 1;
+			normals[i] = ray.normal;
+			supports[i] = shape_entity(ray.shapeId);
+		}
 	}
 }
 

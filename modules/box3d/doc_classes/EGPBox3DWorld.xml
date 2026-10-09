@@ -338,6 +338,24 @@
 				Removes one shape and updates the body's mass.
 			</description>
 		</method>
+		<method name="probe_ground" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="entity_ids" type="PackedInt64Array" />
+			<param index="1" name="depths" type="PackedFloat32Array" />
+			<description>
+				Ground support for many characters in one call: casts one ray straight down from each body's position, [param depths] long (for a capsule: half height + radius + a small reach), ignoring the body itself. Returns parallel arrays [code]hit[/code] ([PackedByteArray]), [code]normal[/code] and [code]support[/code] (the supporting entity, 0 when none). Deterministic, read-only.
+			</description>
+		</method>
+		<method name="queue_drive">
+			<return type="int" enum="Error" />
+			<param index="0" name="entity_ids" type="PackedInt64Array" />
+			<param index="1" name="sequence" type="int" />
+			<param index="2" name="velocities" type="PackedVector3Array" />
+			<param index="3" name="axes" type="int" default="5" />
+			<description>
+				Drives many characters: sets the velocity components selected by [param axes] (bit 0 x, bit 1 y, bit 2 z; the default 5 is horizontal) and keeps the solver's position and the other components, so gravity, jumps and contacts continue naturally. Cheaper and smoother than rewriting full body states every tick.
+			</description>
+		</method>
 		<method name="queue_explode">
 			<return type="int" enum="Error" />
 			<param index="0" name="sequence" type="int" />
