@@ -12,7 +12,8 @@
     "superpos_world.cpp",
     "superpos_uint64_editor.cpp",
     "superpos_managed_reload.cpp",
-    "private/module_memory.cpp"
+    "private/module_memory.cpp",
+    "private/box2d_replay.cpp"
   ],
   "core_manifest": "core/source_manifest.json",
   "required_engine_modules": [
@@ -51,6 +52,24 @@
       "private/module_memory.hpp": "5e6f145be9db23e6bf6a7d6d45c159d4c7f6054b6d73c9be4f481605d2928d8a",
       "private/session_prediction.inc": "589570448b0eee8f6f0426fcbe85fe26ed9f7293854b0581e7befe3f790bfa3b"
     }
+  },
+  "experimental_local_replay": {
+    "version": 1,
+    "source": "private/box2d_replay.cpp",
+    "header": "private/box2d_replay.hpp",
+    "backend": "Box2DLocalReplay",
+    "status": "source_only_pending_remote_qualification",
+    "process_scope": "trusted_same_process_same_configuration_fixed_topology_serial_drained_boundary",
+    "checkpoint": "complete_native_solver_image_and_wrapper_contact_force_order_records",
+    "recovery_grade_ceiling": "LocalRestart",
+    "portable": false,
+    "prediction": false,
+    "runtime_advertised": false,
+    "publication": "all_stage_then_all_commit_then_explicit_finish_restore",
+    "allocation_owner": "module_backing_retained_by_native_Space_lease_until_teardown",
+    "native_arena_capacity": 2,
+    "box3d": "unsupported_until_bounded_complete_checkpoint_path",
+    "native_include": "#thirdparty/box2d/include"
   },
   "features": {
     "rtc_embedded": {

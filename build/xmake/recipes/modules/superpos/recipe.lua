@@ -37,6 +37,13 @@ function main(graph)
     -- Select the adapter's complete manifest, including private memory backing.
     -- A root glob silently omitted private/module_memory.cpp and failed linking.
     local adapter_manifest = json.loads(superpos_env:file("source_manifest.json"):read())
+    -- Only the selected private Box2D participant needs this native header root.
+    -- Public SDK headers and other module environments retain their includes.
+    if adapter_manifest.experimental_local_replay and env.module_list.box2d then
+        assert(adapter_manifest.experimental_local_replay.native_include == "#thirdparty/box2d/include",
+            "Unsupported Superpos local replay native header profile")
+        superpos_env:prepend({["CPPPATH"] = {"#thirdparty/box2d/include"}})
+    end
     for _, adapter_source in ipairs(adapter_manifest.sources) do
         assert(not adapter_source:find("..", 1, true) and adapter_source:endswith(".cpp"),
             "Invalid Superpos adapter source manifest entry")

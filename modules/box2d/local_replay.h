@@ -34,6 +34,10 @@
 #include "core/templates/rid.h"
 
 #include "modules/box2d/bodies/box2d_body_2d.h"
+#include <mutex>
+extern "C" {
+#include "thirdparty/box2d/src/local_replay/reservation.h"
+}
 
 class Box2DPhysicsServer2D;
 class Box2DSpace2D;
@@ -127,6 +131,32 @@ public:
 		int substeps = 0;
 	};
 
+	// Private same-owner transaction. Inputs, topology and wrapper owners remain
+	// immutable until cleanup; no engine iteration/gameplay callback may intervene.
+	// The held server mutex excludes other threads, not same-thread reentry.
+	struct PreparedRestore {
+		PreparedRestore() noexcept = default;
+		~PreparedRestore();
+		PreparedRestore(const PreparedRestore &) = delete;
+		PreparedRestore &operator=(const PreparedRestore &) = delete;
+		bool active() const noexcept { return owner_lock.owns_lock(); }
+	private:
+		friend class Box2DLocalReplay;
+		std::unique_lock<std::recursive_mutex> owner_lock;
+		Box2DPhysicsServer2D *server = nullptr;
+		Box2DSpace2D *space = nullptr;
+		void *lease = nullptr;
+		SpaceRecord checkpoint;
+		const BodyRecord *bodies = nullptr;
+		const ShapeRecord *shapes = nullptr;
+		const ContactRecord *contacts = nullptr;
+		uint32_t body_count = 0, shape_count = 0;
+		uint64_t mapped[4096] = {};
+		spB2ReservedCandidate candidate = {}, retired_candidate = {};
+		b2WorldId retired_world = {};
+		bool staged = false;
+	};
+
 	// Private local profile: actual rigid-body wrappers, a default
 	// area, fixed topology, serial solver; no area callbacks, joints, pending
 	// delete queue, undrained hit/joint events or exceptions. Cached rigid-body
@@ -155,6 +185,15 @@ public:
 			const ShapeRecord *shapes, uint32_t shape_count,
 			const void *image, size_t image_bytes, size_t native_budget,
 			const ContactRecord *contacts = nullptr, uint32_t contact_count = 0);
+	static Error prepare_restore(Box2DPhysicsServer2D *server, const SpaceRecord &checkpoint,
+			const BodyRecord *bodies, uint32_t body_count, const ShapeRecord *shapes, uint32_t shape_count,
+			const void *image, size_t image_bytes, size_t native_budget, PreparedRestore &prepared,
+			spB2CandidateAllocator allocator = {}, const ContactRecord *contacts = nullptr, uint32_t contact_count = 0);
+	// Allocation/callback-free publication; caller supplies the qualified owner
+	// phase barrier. Old-world teardown occurs only in cleanup after publication.
+	static void commit_restore(PreparedRestore &prepared) noexcept;
+	// Abort before publication, or retire the superseded world after publication.
+	static void abort_restore(PreparedRestore &prepared) noexcept;
 	static void before_step(Box2DSpace2D *space);
 	static void after_flush(Box2DSpace2D *space);
 	static void space_destroyed(Box2DSpace2D *space);

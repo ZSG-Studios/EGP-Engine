@@ -15,6 +15,8 @@ typedef struct spB2Arena {
     unsigned char* data;
     size_t capacity, used, allocations, freed_bytes;
     uint32_t generation;
+    bool transitioning;
+    spB2CandidateAllocator allocator;
 } spB2Arena;
 static spB2Arena owners[SP_B2_OWNER_CAPACITY];
 static spB2ReservationStats stats;
@@ -100,26 +102,33 @@ bool spB2CheckedNextGeneration(uint32_t current, uint32_t* next) {
     return true;
 }
 
-static spB2Arena* reserve(size_t bytes, spB2ReserveStatus* status) {
+static spB2Arena* reserve(size_t bytes, spB2ReserveStatus* status, spB2CandidateAllocator allocator) {
     invariant(current_arena == NULL, "candidate scope must be non-nested");
     spB2Arena* arena = NULL;
+    lock_registry();
     for (size_t i = 0; i < SP_B2_OWNER_CAPACITY; ++i) {
         // An exhausted token slot is permanently retired; stale handles never alias.
-        if (!owners[i].data && owners[i].generation != UINT32_MAX) { arena = owners + i; break; }
+        if (!owners[i].data && !owners[i].transitioning && owners[i].generation != UINT32_MAX) { arena = owners + i; break; }
     }
-    if (!arena) { *status = spB2ReserveOwnerLimit; return NULL; }
-    lock_registry();++stats.reservation_attempts;unlock_registry();
+    if (!arena) { unlock_registry(); *status = spB2ReserveOwnerLimit; return NULL; }
+    // Pin before an external allocation callback can reenter reservation.
+    arena->transitioning = true;
+    ++stats.reservation_attempts;unlock_registry();
     void* memory = NULL;
 #if defined(SP_B2_LOCAL_REPLAY_TESTS)
     if (fail_next) fail_next = false;
     else
 #endif
-    memory = arena_alloc(bytes);
-    if (!memory) { *status = spB2ReserveOutOfMemory; return NULL; }
+    memory = allocator.allocate ? allocator.allocate(allocator.context, bytes, 32) : arena_alloc(bytes);
+    if (!memory) {
+        lock_registry();arena->transitioning = false;unlock_registry();
+        *status = spB2ReserveOutOfMemory; return NULL;
+    }
+    invariant(!((uintptr_t)memory & 31u), "candidate allocator returned misaligned storage");
     uint32_t generation = 0;
     invariant(spB2CheckedNextGeneration(arena->generation, &generation), "owner generation exhausted");
     lock_registry();
-    *arena = (spB2Arena){memory, bytes, 0, 0, 0, generation};
+    *arena = (spB2Arena){memory, bytes, 0, 0, 0, generation, false, allocator};
     stats.reservation_live_bytes += bytes;
     ++stats.active_owners;
     unlock_registry();
@@ -131,19 +140,24 @@ static void retire(spB2Arena* arena) {
               "native teardown must free every arena allocation before retiring owner");
     lock_registry();
     void* memory = arena->data;
+    spB2CandidateAllocator allocator = arena->allocator;
     stats.reservation_live_bytes -= arena->capacity;
     --stats.active_owners;
     arena->data = NULL;
     arena->capacity = arena->used = arena->allocations = arena->freed_bytes = 0;
+    arena->transitioning = true;
+    arena->allocator = (spB2CandidateAllocator){0};
     unlock_registry();
-    arena_free(memory);
+    if (allocator.deallocate) allocator.deallocate(allocator.context, memory);
+    else arena_free(memory);
+    lock_registry();arena->transitioning = false;unlock_registry();
 }
 
 #if defined(SP_B2_LOCAL_REPLAY_TESTS)
 bool spB2FixtureCheckShell(const spB2CandidateRequirements* requirements) {
     if (!requirements) return false;
     spB2ReserveStatus status;
-    spB2Arena* arena = reserve(requirements->shell_bytes, &status);
+    spB2Arena* arena = reserve(requirements->shell_bytes, &status, (spB2CandidateAllocator){0});
     if (!arena) return false;
     current_arena = arena;
     b2WorldDef def = b2DefaultWorldDef();
@@ -161,6 +175,13 @@ bool spB2FixtureCheckShell(const spB2CandidateRequirements* requirements) {
 
 spB2ReserveStatus spB2CreateReservedCandidate(b2WorldId original_world,
     const uint8_t* image, size_t size, size_t budget, spB2ReservedCandidate* candidate) {
+    return spB2CreateChargedCandidate(original_world, image, size, budget, (spB2CandidateAllocator){0}, candidate);
+}
+
+spB2ReserveStatus spB2CreateChargedCandidate(b2WorldId original_world,
+    const uint8_t* image, size_t size, size_t budget,
+    spB2CandidateAllocator allocator, spB2ReservedCandidate* candidate) {
+    if ((allocator.allocate == NULL) != (allocator.deallocate == NULL)) return spB2ReserveInvalid;
     if (!candidate || !b2World_IsValid(original_world)) return spB2ReserveInvalid;
     if (b2GetWorldFromId(original_world)->locked) return spB2ReserveBusy;
     uintptr_t begin = (uintptr_t)image, output = (uintptr_t)candidate;
@@ -170,7 +191,7 @@ spB2ReserveStatus spB2CreateReservedCandidate(b2WorldId original_world,
     if (!spB2MeasureCandidateRequirements(image, size, &requirements)) return spB2ReserveInvalid;
     if (budget < requirements.total_bytes) return spB2ReserveBudget;
     spB2ReserveStatus status;
-    spB2Arena* arena = reserve(requirements.total_bytes, &status);
+    spB2Arena* arena = reserve(requirements.total_bytes, &status, allocator);
     if (!arena) return status;
     current_arena = arena;
     b2WorldId world = b2CreateWorldFromSnapshot(image, (int)size, 1);

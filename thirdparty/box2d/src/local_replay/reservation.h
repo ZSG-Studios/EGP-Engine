@@ -29,6 +29,15 @@ typedef struct spB2ReservedCandidate {
     uint32_t owner_generation;
 } spB2ReservedCandidate;
 
+// Optional borrowed process owner. It must outlive every published Space lease;
+// callbacks are non-throwing and never mutate the source/candidate worlds.
+// Kept per arena until native world destruction, never installed globally.
+typedef struct spB2CandidateAllocator {
+    void* context;
+    void* (*allocate)(void* context, size_t bytes, size_t alignment);
+    void (*deallocate)(void* context, void* memory);
+} spB2CandidateAllocator;
+
 typedef enum spB2ReserveStatus {
     spB2ReserveOk,
     spB2ReserveInvalid,
@@ -61,6 +70,9 @@ bool spB2FixtureCheckShell(const spB2CandidateRequirements* requirements);
 #endif
 spB2ReserveStatus spB2CreateReservedCandidate(b2WorldId original_world,
     const uint8_t* image, size_t size, size_t budget, spB2ReservedCandidate* candidate);
+spB2ReserveStatus spB2CreateChargedCandidate(b2WorldId original_world,
+    const uint8_t* image, size_t size, size_t budget,
+    spB2CandidateAllocator allocator, spB2ReservedCandidate* candidate);
 bool spB2DestroyReservedCandidate(spB2ReservedCandidate* candidate);
 // Called only after the owning engine Space has destroyed the same world.
 // Does not destroy a world; verifies generation and all arena frees first.

@@ -48,6 +48,7 @@ namespace {
 struct SpaceLease {
 	Box2DSpace2D *space = nullptr;
 	spB2ReservedCandidate candidate = {};
+	Box2DLocalReplay::PreparedRestore *prepared = nullptr;
 };
 SpaceLease leases[2];
 uint64_t image_hash(const void *data, size_t size) {
@@ -329,6 +330,7 @@ void Box2DLocalReplay::after_flush(Box2DSpace2D *space) {
 void Box2DLocalReplay::space_destroyed(Box2DSpace2D *space) {
 	for (auto &entry : leases) {
 		if (entry.space == space) {
+			CRASH_COND(entry.prepared != nullptr); // Caller must retain Space through its owner barrier.
 			CRASH_COND(!spB2ReleaseDestroyedCandidate(&entry.candidate));
 			entry.space = nullptr;
 		}
@@ -369,13 +371,15 @@ Error Box2DLocalReplay::checkpoint(Box2DPhysicsServer2D *server, RID rid,
 	out.image_hash = image_hash(image, size);
 	return OK;
 }
-Error Box2DLocalReplay::restore(Box2DPhysicsServer2D *server, const SpaceRecord &checkpoint,
+Error Box2DLocalReplay::prepare_restore(Box2DPhysicsServer2D *server, const SpaceRecord &checkpoint,
 		const BodyRecord *bodies, uint32_t body_count, const ShapeRecord *shapes, uint32_t shape_count,
-		const void *image, size_t bytes, size_t budget, const ContactRecord *contacts, uint32_t contact_count) {
+		const void *image, size_t bytes, size_t budget, PreparedRestore &prepared, spB2CandidateAllocator allocator, const ContactRecord *contacts, uint32_t contact_count) {
 	if (!Thread::is_main_thread()) {
 		return ERR_BUSY;
 	}
-	std::lock_guard<std::recursive_mutex> guard(egp::box2d::get_simulation_mutex());
+	if (prepared.owner_lock.owns_lock()) return ERR_BUSY;
+	prepared.owner_lock = std::unique_lock<std::recursive_mutex>(egp::box2d::get_simulation_mutex());
+	struct FailureCleanup { PreparedRestore &value; bool success = false; ~FailureCleanup() { if (!success) Box2DLocalReplay::abort_restore(value); } } cleanup{prepared};
 	Requirements required;
 	Error error = measure(server, checkpoint.rid, required);
 	if (error != OK) {
@@ -413,7 +417,7 @@ Error Box2DLocalReplay::restore(Box2DPhysicsServer2D *server, const SpaceRecord 
 	}
 	if (!lease) {
 		for (auto &entry : leases) {
-			if (!entry.space) {
+			if (!entry.space && !entry.prepared) {
 				lease = &entry;
 				break;
 			}
@@ -422,10 +426,12 @@ Error Box2DLocalReplay::restore(Box2DPhysicsServer2D *server, const SpaceRecord 
 	if (!lease) {
 		return ERR_OUT_OF_MEMORY;
 	}
+	if (lease->prepared) return ERR_BUSY;
 	// Fixed stack metadata is bounded before any candidate allocation. All
 	// pointer owners remain live under the physics server mutex.
 	spB2LocalBinding bindings[SP_B2_LOCAL_BINDING_LIMIT];
-	uint64_t mapped[SP_B2_LOCAL_BINDING_LIMIT];
+	static_assert(SP_B2_LOCAL_BINDING_LIMIT == 4096u);
+	auto &mapped = prepared.mapped;
 	uint32_t count = 0;
 	uint32_t force_count = 0, checked_contacts = 0;
 	for (uint32_t i = 0; i < body_count; ++i) {
@@ -535,20 +541,22 @@ Error Box2DLocalReplay::restore(Box2DPhysicsServer2D *server, const SpaceRecord 
 	if (space->default_area && B2_IS_NON_NULL(space->default_area->body_id)) {
 		bindings[count++] = { spB2BindingBody, b2StoreBodyId(space->default_area->body_id), space->default_area };
 	}
-	spB2ReservedCandidate candidate = {};
-	auto status = spB2CreateReservedCandidate(space->world_id, static_cast<const uint8_t *>(image), bytes, budget, &candidate);
+	prepared.server = server;
+	prepared.space = space;
+	prepared.lease = lease;
+	prepared.checkpoint = checkpoint;
+	prepared.bodies = bodies;
+	prepared.shapes = shapes;
+	prepared.contacts = contacts;
+	prepared.body_count = body_count;
+	prepared.shape_count = shape_count;
+	lease->space = space;
+	lease->prepared = &prepared;
+	auto &candidate = prepared.candidate;
+	auto status = spB2CreateChargedCandidate(space->world_id, static_cast<const uint8_t *>(image), bytes, budget, allocator, &candidate);
 	if (status != spB2ReserveOk) {
-		return status == spB2ReserveBusy ? ERR_BUSY : status == spB2ReserveInvalid ? ERR_INVALID_DATA
-																				   : ERR_OUT_OF_MEMORY;
+		return status == spB2ReserveBusy ? ERR_BUSY : status == spB2ReserveInvalid ? ERR_INVALID_DATA : ERR_OUT_OF_MEMORY;
 	}
-	struct Abort {
-		spB2ReservedCandidate *c;
-		~Abort() {
-			if (c->world.index1) {
-				CRASH_COND(!spB2DestroyReservedCandidate(c));
-			}
-		}
-	} abort{ &candidate };
 	if (!spB2ParticipantSameTopology(space->world_id, candidate.world)) {
 		return ERR_INVALID_DATA;
 	}
@@ -562,9 +570,26 @@ Error Box2DLocalReplay::restore(Box2DPhysicsServer2D *server, const SpaceRecord 
 	if (spB2CommitLocalBindings(space->world_id, candidate.world, bindings, mapped, count) != spB2BindingOk) {
 		return ERR_INVALID_DATA;
 	}
+	prepared.staged = true;
+	cleanup.success = true;
+	return OK;
+}
+void Box2DLocalReplay::commit_restore(PreparedRestore &prepared) noexcept {
+	CRASH_COND(!Thread::is_main_thread() || !prepared.owner_lock.owns_lock() || !prepared.staged);
+	auto *server = prepared.server;
+	auto *space = prepared.space;
+	auto *lease = static_cast<SpaceLease *>(prepared.lease);
+	CRASH_COND(!lease || lease->prepared != &prepared);
+	const auto &checkpoint = prepared.checkpoint;
+	const auto *bodies = prepared.bodies;
+	const auto *shapes = prepared.shapes;
+	const auto *contacts = prepared.contacts;
+	const auto body_count = prepared.body_count, shape_count = prepared.shape_count;
+	auto &candidate = prepared.candidate;
+	auto &mapped = prepared.mapped;
 	// Everything after here is an allocation-free, callback-free publication.
-	const b2WorldId previous = space->world_id;
-	auto previous_lease = lease->candidate;
+	prepared.retired_world = space->world_id;
+	prepared.retired_candidate = lease->candidate;
 	space->world_id = candidate.world;
 	lease->space = space;
 	lease->candidate = candidate;
@@ -630,9 +655,47 @@ Error Box2DLocalReplay::restore(Box2DPhysicsServer2D *server, const SpaceRecord 
 	space->last_step = checkpoint.last_step;
 	space->linear_damp_changed = checkpoint.linear_damp_changed;
 	space->angular_damp_changed = checkpoint.angular_damp_changed;
-	b2DestroyWorld(previous);
-	if (previous_lease.world.index1) {
-		CRASH_COND(!spB2ReleaseDestroyedCandidate(&previous_lease));
+	prepared.staged = false;
+	lease->prepared = nullptr;
+}
+
+Box2DLocalReplay::PreparedRestore::~PreparedRestore() { Box2DLocalReplay::abort_restore(*this); }
+void Box2DLocalReplay::abort_restore(PreparedRestore &prepared) noexcept {
+	if (!prepared.owner_lock.owns_lock()) return;
+	CRASH_COND(!Thread::is_main_thread());
+	// Never reclaim the published candidate. Its allocator owner travels with
+	// the Space lease; only uncommitted or superseded worlds retire here.
+	if (prepared.candidate.world.index1) CRASH_COND(!spB2DestroyReservedCandidate(&prepared.candidate));
+	if (prepared.retired_world.index1) {
+		b2DestroyWorld(prepared.retired_world);
+		if (prepared.retired_candidate.world.index1) CRASH_COND(!spB2ReleaseDestroyedCandidate(&prepared.retired_candidate));
 	}
+	auto *lease = static_cast<SpaceLease *>(prepared.lease);
+	if (lease && lease->prepared == &prepared) {
+		lease->prepared = nullptr;
+		if (!lease->candidate.world.index1) lease->space = nullptr;
+	}
+	prepared.server = nullptr;
+	prepared.space = nullptr;
+	prepared.lease = nullptr;
+	prepared.bodies = nullptr;
+	prepared.shapes = nullptr;
+	prepared.contacts = nullptr;
+	prepared.candidate = {};
+	prepared.retired_candidate = {};
+	prepared.retired_world = {};
+	prepared.staged = false;
+	prepared.owner_lock.unlock();
+}
+Error Box2DLocalReplay::restore(Box2DPhysicsServer2D *server, const SpaceRecord &checkpoint,
+		const BodyRecord *bodies, uint32_t body_count, const ShapeRecord *shapes, uint32_t shape_count,
+		const void *image, size_t bytes, size_t budget, const ContactRecord *contacts, uint32_t contact_count) {
+	PreparedRestore prepared;
+	const Error result = prepare_restore(server, checkpoint, bodies, body_count, shapes, shape_count, image, bytes, budget, prepared, {}, contacts, contact_count);
+	if (result != OK) return result;
+	commit_restore(prepared);
+	// Legacy one-participant call retains its behavior, with teardown explicitly
+	// following the publication barrier rather than inside commit_restore.
+	abort_restore(prepared);
 	return OK;
 }
