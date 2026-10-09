@@ -16,6 +16,13 @@
 				Returns the application metadata assigned with [method body_set_user_data]. An invalid [param body] reports an error and returns [code]null[/code].
 			</description>
 		</method>
+		<method name="body_portable_identity">
+			<return type="int" />
+			<param index="0" name="body" type="RID" />
+			<description>
+				Returns the persistent canonical identity of [param body] assigned by the most recent portable capture of its space, or [code]0[/code] if the body has not been captured. Identities persist across captures: a surviving body keeps its identity, a new body receives a fresh one and a removed body's identity is never reused.
+			</description>
+		</method>
 		<method name="body_set_user_data" qualifiers="const">
 			<return type="void" />
 			<param index="0" name="body" type="RID" />
@@ -29,6 +36,50 @@
 			<param index="0" name="space" type="RID" />
 			<description>
 				Returns a flat [Array] of alternating application user-data and [Transform2D] entries for bodies moved in the most recent native step: [code][data0, transform0, data1, transform1, ...][/code]. Assign metadata with [method body_set_user_data] to identify bodies. Read after stepping, outside locked physics callbacks. An invalid or locked space reports an error and returns an empty array.
+			</description>
+		</method>
+		<method name="space_portable_capture">
+			<return type="Dictionary" />
+			<param index="0" name="space" type="RID" />
+			<description>
+				Captures a portable checkpoint of [param space] immediately. Returns [code]{"error": Error, "bytes": PackedByteArray, "refusal": int}[/code], where [code]refusal[/code] is a nonzero diagnostic code when the capture is refused. Succeeds only at the physics phase boundary (outside stepping and query flushing, after the space's step effects were consumed); otherwise [code]error[/code] is [constant ERR_BUSY]. Unsupported content (joints, extra areas, collision exceptions, force-integration callbacks, contact monitoring) returns [constant ERR_UNAVAILABLE].
+			</description>
+		</method>
+		<method name="space_portable_capture_info">
+			<return type="Dictionary" />
+			<param index="0" name="space" type="RID" />
+			<description>
+				Returns statistics of the most recent portable capture of [param space]: [code]captures[/code], [code]births[/code], [code]retirements[/code], [code]survivors[/code], [code]records[/code] and [code]bindings[/code]. Empty if the space was never captured.
+			</description>
+		</method>
+		<method name="space_portable_digest">
+			<return type="PackedByteArray" />
+			<param index="0" name="space" type="RID" />
+			<description>
+				Returns the 32-byte complete-state digest of [param space]'s native world, with every pointer named symbolically, or an empty array if the space is locked or holds unsupported pointers. A restored space and its source have equal digests while they step identically.
+			</description>
+		</method>
+		<method name="space_portable_request_capture">
+			<return type="int" />
+			<param index="0" name="space" type="RID" />
+			<description>
+				Requests a portable capture of [param space] at the next physics phase boundary, immediately after the space's state sync and before scripts run. Collect it with [method space_portable_take_capture]. Returns an [enum Error] code.
+			</description>
+		</method>
+		<method name="space_portable_restore">
+			<return type="Dictionary" />
+			<param index="0" name="bytes" type="PackedByteArray" />
+			<param index="1" name="object_map" type="Dictionary" default="{}" />
+			<param index="2" name="shape_map" type="Dictionary" default="{}" />
+			<description>
+				Restores a portable checkpoint into a fresh space with new body RIDs. Returns [code]{"error": Error, "space": RID, "default_area": RID, "bodies": {source body id: RID}}[/code]; the new space is inactive. [param object_map] maps every non-zero source instance id (node and canvas instance ids, object user data) to an [Object] or instance id; an unmapped id fails with [constant ERR_DOES_NOT_EXIST]. [param shape_map] maps source shape RID ids to shape [RID]s; when empty, the source shape RIDs of this server are used. Corrupt or tampered bytes fail with [constant ERR_FILE_CORRUPT], another format version or position width with [constant ERR_FILE_UNRECOGNIZED].
+			</description>
+		</method>
+		<method name="space_portable_take_capture">
+			<return type="Dictionary" />
+			<param index="0" name="space" type="RID" />
+			<description>
+				Returns the capture taken at the phase boundary after [method space_portable_request_capture], as [code]{"error": Error, "bytes": PackedByteArray}[/code]. [code]error[/code] is [constant ERR_BUSY] while the capture is still pending and [constant ERR_DOES_NOT_EXIST] if none was requested.
 			</description>
 		</method>
 	</methods>

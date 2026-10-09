@@ -65,6 +65,7 @@
 #include "../box2d_physics_server_2d.h"
 #include "../box2d_project_settings.h"
 #include "box2d_space_2d.h"
+#include "../box2d_portable_space.h"
 
 #include "modules/box2d/precompiled.h"
 
@@ -164,6 +165,7 @@ Box2DSpace2D::~Box2DSpace2D() {
 	}
 
 	Box2DLocalReplay::space_destroyed(this);
+	Box2DPortableSpace::space_destroyed(this);
 	world_id = b2_nullWorldId;
 }
 
@@ -272,6 +274,9 @@ void Box2DSpace2D::sync_state() {
 		}
 	}
 	Box2DLocalReplay::after_flush(this);
+	// Phase boundary: this space's step effects are consumed and scripts have
+	// not yet run. A requested portable capture executes exactly here.
+	Box2DPortableSpace::after_flush(this);
 }
 
 Box2DDirectSpaceState2D *Box2DSpace2D::get_direct_state() {

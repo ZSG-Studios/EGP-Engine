@@ -46,6 +46,8 @@ using namespace PhysicsServer2DEnums;
 
 class Box2DPhysicsServer2D : public PhysicsServer2D {
 	friend class Box2DLocalReplay;
+	friend class Box2DPortableSpace;
+	friend class Box2DPortableSpaceAccess;
 	GDCLASS(Box2DPhysicsServer2D, PhysicsServer2D);
 
 public:
@@ -75,6 +77,15 @@ public:
 	real_t joint_get_constraint_torque(RID p_joint) const override;
 
 	RID space_create() override;
+
+	// Portable checkpoints (modules/box2d/box2d_portable_space.h).
+	Dictionary space_portable_capture(RID p_space);
+	Error space_portable_request_capture(RID p_space);
+	Dictionary space_portable_take_capture(RID p_space);
+	Dictionary space_portable_restore(const PackedByteArray &p_bytes, const Dictionary &p_object_map, const Dictionary &p_shape_map);
+	PackedByteArray space_portable_digest(RID p_space);
+	Dictionary space_portable_capture_info(RID p_space);
+	int64_t body_portable_identity(RID p_body);
 	void space_set_active(RID p_space, bool p_active) override;
 	bool space_is_active(RID p_space) const override;
 	void space_set_param(RID p_space, PS2DE::SpaceParameter p_param, real_t p_value) override;

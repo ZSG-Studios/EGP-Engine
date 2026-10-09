@@ -1,0 +1,48 @@
+// SPDX-License-Identifier: MIT
+#include "geometry_ownership_bridge.h"
+#include "body.h"
+#include "contact.h"
+#include "shape.h"
+#include "sensor.h"
+#include "broad_phase.h"
+#include <math.h>
+#include <string.h>
+static bool valid_index(int id,uint32_t n){return id>=0&&(uint32_t)id<n;}
+static bool valid_array(const void*p,int n,int cap){return n>=0&&cap>=n&&cap<=100000&&(!cap||p);}
+static bool view_ok(const SpGeometryOwnershipView*v){return v&&v->world&&v->broadphase&&v->shape_count<=100000&&v->chain_count<=100000&&v->sensor_count<=100000&&(!v->shape_count||v->shapes)&&(!v->chain_count||v->chains)&&(!v->sensor_count||v->sensors);}
+static bool range_overlap(const void*p,uint64_t n,const void*q,uint64_t m){uintptr_t a=(uintptr_t)p,b=(uintptr_t)q;return n&&m&&(a<=b?b-a<n:a-b<m);}
+static bool finite_box(b2AABB a){return isfinite(a.lowerBound.x)&&isfinite(a.lowerBound.y)&&isfinite(a.upperBound.x)&&isfinite(a.upperBound.y)&&a.lowerBound.x<=a.upperBound.x&&a.lowerBound.y<=a.upperBound.y;}
+static bool contains(b2AABB a,b2AABB b){return a.lowerBound.x<=b.lowerBound.x&&a.lowerBound.y<=b.lowerBound.y&&a.upperBound.x>=b.upperBound.x&&a.upperBound.y>=b.upperBound.y;}
+bool spGeometryOwnershipOverlaps(const SpGeometryOwnershipView*v,const void*p,uint64_t bytes){
+ if(!view_ok(v)||spWorldOwnershipOverlaps(v->world,p,bytes))return true;
+ const b2Shape*s=v->shapes;const b2ChainShape*c=v->chains;const b2Sensor*se=v->sensors;const b2BroadPhase*bp=v->broadphase;
+ if(bp->moveResults||bp->movePairs)return true;
+ if(range_overlap(p,bytes,v,sizeof(*v))||range_overlap(p,bytes,s,(uint64_t)v->shape_count*sizeof(*s))||range_overlap(p,bytes,c,(uint64_t)v->chain_count*sizeof(*c))||range_overlap(p,bytes,se,(uint64_t)v->sensor_count*sizeof(*se))||range_overlap(p,bytes,bp,sizeof(*bp)))return true;
+ for(uint32_t i=0;i<v->chain_count;++i)if(c[i].id!=-1){if(c[i].count<0||c[i].count>100000||c[i].materialCount<0||c[i].materialCount>100000||(c[i].count&&!c[i].shapeIndices)||(c[i].materialCount&&!c[i].materials)||range_overlap(p,bytes,c[i].shapeIndices,(uint64_t)c[i].count*sizeof(int))||range_overlap(p,bytes,c[i].materials,(uint64_t)c[i].materialCount*sizeof(b2SurfaceMaterial)))return true;}
+#define CHECK_ARRAY(a) do{if(!valid_array((a).data,(a).count,(a).capacity)||range_overlap(p,bytes,(a).data,(uint64_t)(a).capacity*sizeof(*(a).data)))return true;}while(0)
+ for(uint32_t i=0;i<v->sensor_count;++i){CHECK_ARRAY(se[i].hits);CHECK_ARRAY(se[i].overlaps1);CHECK_ARRAY(se[i].overlaps2);}
+ CHECK_ARRAY(bp->moveArray);
+ for(int type=0;type<3;++type){const b2DynamicTree*t=bp->trees+type;if(t->nodeCount<0||t->nodeCapacity<t->nodeCount||t->nodeCapacity>100000||(!t->nodes&&t->nodeCapacity)||range_overlap(p,bytes,t->nodes,(uint64_t)t->nodeCapacity*sizeof(b2TreeNode)))return true;if(t->rebuildCapacity<0||t->rebuildCapacity>100000||(!t->leafIndices&&t->rebuildCapacity)||(!t->leafCenters&&t->rebuildCapacity)||t->leafBoxes||t->binIndices||range_overlap(p,bytes,t->leafIndices,(uint64_t)t->rebuildCapacity*sizeof(int))||range_overlap(p,bytes,t->leafCenters,(uint64_t)t->rebuildCapacity*sizeof(b2Vec2)))return true;const b2BitSet*bits=bp->movedProxies+type;if(bits->blockCount>bits->blockCapacity||bits->blockCapacity>100000||(!bits->bits&&bits->blockCapacity)||range_overlap(p,bytes,bits->bits,(uint64_t)bits->blockCapacity*sizeof(uint64_t)))return true;}
+#undef CHECK_ARRAY
+ return bp->pairSet.capacity>262144||bp->pairSet.count>bp->pairSet.capacity||(!bp->pairSet.items&&bp->pairSet.capacity)||range_overlap(p,bytes,bp->pairSet.items,(uint64_t)bp->pairSet.capacity*sizeof(b2SetItem));
+}
+bool spValidateGeometryOwnership(const SpGeometryOwnershipView*v,uint8_t*marks,uint32_t mark_capacity,uint64_t*contact_keys,uint64_t*pair_keys,uint32_t key_capacity,uint32_t*key_count){
+ if(!view_ok(v)||!key_count||mark_capacity<v->shape_count||mark_capacity>100000||key_capacity>100000||(v->shape_count&&!marks))return false;
+ const b2Shape*s=v->shapes;const b2ChainShape*chains=v->chains;const b2Sensor*sensors=v->sensors;const b2BroadPhase*bp=v->broadphase;const b2Body*b=v->world->bodies;const b2Contact*contacts=v->world->contacts;
+ // Validate every descriptor before the first scratch write.
+ if(spGeometryOwnershipOverlaps(v,marks,mark_capacity)||spGeometryOwnershipOverlaps(v,contact_keys,(uint64_t)key_capacity*sizeof(uint64_t))||spGeometryOwnershipOverlaps(v,pair_keys,(uint64_t)key_capacity*sizeof(uint64_t))||range_overlap(marks,mark_capacity,contact_keys,(uint64_t)key_capacity*sizeof(uint64_t))||range_overlap(marks,mark_capacity,pair_keys,(uint64_t)key_capacity*sizeof(uint64_t))||range_overlap(contact_keys,(uint64_t)key_capacity*sizeof(uint64_t),pair_keys,(uint64_t)key_capacity*sizeof(uint64_t)))return false;
+ if(spGeometryOwnershipOverlaps(v,key_count,sizeof(*key_count))||range_overlap(key_count,sizeof(*key_count),marks,mark_capacity)||range_overlap(key_count,sizeof(*key_count),contact_keys,(uint64_t)key_capacity*sizeof(uint64_t))||range_overlap(key_count,sizeof(*key_count),pair_keys,(uint64_t)key_capacity*sizeof(uint64_t)))return false;
+ if(bp->pairSet.count>key_capacity||(key_capacity&&(!contact_keys||!pair_keys)))return false;
+ if(v->shape_count)memset(marks,0,v->shape_count);uint64_t chained=0,live_chains=0;
+ for(uint32_t body=0;body<v->world->body_count;++body)if(b[body].id!=-1){int id=b[body].headShapeId,prev=-1,count=0;while(id!=-1){if(!valid_index(id,v->shape_count)||count>=b[body].shapeCount||count>=(int)v->shape_count)return false;const b2Shape*x=s+id;if(x->id!=id||x->bodyId!=(int)body||x->prevShapeId!=prev||(marks[id]&1))return false;marks[id]|=1;prev=id;id=x->nextShapeId;++count;}if(count!=b[body].shapeCount)return false;
+  id=b[body].headChainId;count=0;while(id!=-1){if(!valid_index(id,v->chain_count)||count>=(int)v->chain_count||chains[id].id!=id||chains[id].bodyId!=(int)body)return false;id=chains[id].nextChainId;++count;}chained+=(uint32_t)count;}
+ for(uint32_t i=0;i<v->chain_count;++i)if(chains[i].id!=-1){const b2ChainShape*c=chains+i;++live_chains;if(c->id!=(int)i||!c->generation||!valid_index(c->bodyId,v->world->body_count)||b[c->bodyId].id!=c->bodyId||c->count<=0||c->materialCount<=0)return false;for(int q=0;q<c->count;++q){int id=c->shapeIndices[q];if(!valid_index(id,v->shape_count)||s[id].id!=id||s[id].bodyId!=c->bodyId||s[id].type!=b2_chainSegmentShape||s[id].chainSegment.chainId!=(int)i||(marks[id]&2))return false;marks[id]|=2;}}
+ if(chained!=live_chains)return false;
+ for(uint32_t i=0;i<v->sensor_count;++i){int id=sensors[i].shapeId;if(!valid_index(id,v->shape_count)||s[id].id!=id||s[id].sensorIndex!=(int)i||(marks[id]&8)||sensors[i].hits.count)return false;marks[id]|=8;}
+ for(int type=0;type<3;++type){const b2DynamicTree*t=bp->trees+type;uint32_t leaf_count=0;for(int q=0;q<t->nodeCapacity;++q){const b2TreeNode*n=t->nodes+q;if(!(n->flags&b2_allocatedNode)||!(n->flags&b2_leafNode))continue;if(n->userData>=v->shape_count)return false;uint32_t id=(uint32_t)n->userData;if(s[id].id!=(int)id||s[id].proxyKey!=B2_PROXY_KEY(q,type)||(marks[id]&4)||!finite_box(n->aabb)||!contains(n->aabb,s[id].fatAABB))return false;marks[id]|=4;++leaf_count;}if(t->proxyCount<0||leaf_count!=(uint32_t)t->proxyCount)return false;}
+ for(uint32_t i=0;i<v->shape_count;++i)if(s[i].id!=-1){const b2Shape*x=s+i;if(x->id!=(int)i||!x->generation||!valid_index(x->bodyId,v->world->body_count)||b[x->bodyId].id!=x->bodyId||!(marks[i]&1)||x->type<b2_circleShape||x->type>b2_chainSegmentShape||!finite_box(x->aabb)||!finite_box(x->fatAABB)||!contains(x->fatAABB,x->aabb))return false;if((x->type==b2_chainSegmentShape)!=(bool)(marks[i]&2))return false;if((x->sensorIndex!=-1)!=(bool)(marks[i]&8))return false;bool enabled=b[x->bodyId].setIndex!=1;if(enabled){if(x->proxyKey<0||B2_PROXY_TYPE(x->proxyKey)!=b[x->bodyId].type||!(marks[i]&4))return false;}else if(x->proxyKey!=-1||(marks[i]&4))return false;}
+ uint32_t n=0;for(uint32_t i=0;i<v->world->contact_count;++i)if(contacts[i].contactId!=-1){const b2Contact*c=contacts+i;if(n>=key_capacity||!valid_index(c->shapeIdA,v->shape_count)||!valid_index(c->shapeIdB,v->shape_count)||c->shapeIdA==c->shapeIdB)return false;const b2Shape*a=s+c->shapeIdA,*z=s+c->shapeIdB;if(a->id!=c->shapeIdA||z->id!=c->shapeIdB||a->bodyId!=c->edges[0].bodyId||z->bodyId!=c->edges[1].bodyId||a->sensorIndex!=-1||z->sensorIndex!=-1||a->proxyKey<0||z->proxyKey<0)return false;contact_keys[n++]=(uint64_t)(uint32_t)(c->shapeIdA<c->shapeIdB?c->shapeIdA:c->shapeIdB)<<32|(uint32_t)(c->shapeIdA<c->shapeIdB?c->shapeIdB:c->shapeIdA);}
+ uint32_t pairs=0;for(uint32_t i=0;i<bp->pairSet.capacity;++i)if(bp->pairSet.items[i].key){if(pairs>=key_capacity)return false;pair_keys[pairs++]=bp->pairSet.items[i].key;}if(n!=pairs||pairs!=bp->pairSet.count)return false;*key_count=n;return true;
+}
+bool spObserveGeometryOwner(const SpGeometryOwnershipView*v,bool chain,uint32_t slot,SpNativeLifetime*out){if(!view_ok(v)||!out)return false;if(chain){if(slot>=v->chain_count)return false;const b2ChainShape*c=(const b2ChainShape*)v->chains+slot;out->native_id=c->id;out->generation=c->generation;}else{if(slot>=v->shape_count)return false;const b2Shape*s=(const b2Shape*)v->shapes+slot;out->native_id=s->id;out->generation=s->generation;}return true;}
+bool spObserveShapeProxy(const SpGeometryOwnershipView*v,uint32_t slot,int*node,int*type){if(!view_ok(v)||slot>=v->shape_count||!node||!type)return false;const b2Shape*s=(const b2Shape*)v->shapes+slot;if(s->id!=(int)slot)return false;if(s->proxyKey==-1){*node=*type=-1;return true;}if(s->proxyKey<0||B2_PROXY_TYPE(s->proxyKey)>2)return false;*node=B2_PROXY_ID(s->proxyKey);*type=B2_PROXY_TYPE(s->proxyKey);return true;}

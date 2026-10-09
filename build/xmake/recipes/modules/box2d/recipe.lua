@@ -28,6 +28,27 @@ function main(graph)
     env_thirdparty:sources(thirdparty_obj, "#thirdparty/box2d/src/*.c")
     env_thirdparty:sources(thirdparty_obj, "#thirdparty/box2d/src/local_replay/*.c")
     env.modules_sources = R.iadd(env.modules_sources, thirdparty_obj)
+    -- Portable restore: native bridges (C), the C++23 checkpoint library and the
+    -- EGP_BOX2D_PORTABLE participant. The library links against the Superpos
+    -- core, so it is selected only together with the superpos module.
+    if env.module_list and env.module_list.superpos then
+        local portable_c = {}
+        env_thirdparty:sources(portable_c, "#thirdparty/box2d/src/portable/*.c")
+        env.modules_sources = R.iadd(env.modules_sources, portable_c)
+        local env_portable = env_box2d:clone()
+        env_portable:disable_warnings()
+        for _, flags in ipairs({"CCFLAGS", "CXXFLAGS"}) do
+            R.setindex(env_portable, flags, (function() local kept = {}; for _, flag in ipairs(R.iter(R.index(env_portable, flags))) do; if not R.truthy(R.startswith(R.str(flag), {"/std:c++", "-std=c++", "-std=gnu++"})) then table.insert(kept, flag) end; end; return kept end)())
+        end
+        env_portable:add({["CXXFLAGS"] = R.truthy(env.msvc) and {"/std:c++latest"} or {"-std=c++23"}})
+        env_portable:prepend({["CPPPATH"] = {"#thirdparty/box2d/src/portable", "#thirdparty/box2d/src/portable/core/include", "#modules/superpos/core/include"}})
+        local portable_obj = {}
+        env_portable:sources(portable_obj, "#thirdparty/box2d/src/portable/*.cpp")
+        env_portable:sources(portable_obj, "#thirdparty/box2d/src/portable/core/src/*.cpp")
+        env.modules_sources = R.iadd(env.modules_sources, portable_obj)
+        env:depends(portable_obj, portable_c)
+        env_box2d:add({["CPPDEFINES"] = {"EGP_BOX2D_PORTABLE"}})
+    end
     module_obj = {}
     for _, __item4 in ipairs(R.iter({"", "bodies/", "joints/", "shapes/", "spaces/"})) do
         directory = __item4

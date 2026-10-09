@@ -1,0 +1,6 @@
+// SPDX-License-Identifier: MIT
+#include "broadphase_bridge.h"
+#include "broad_phase.h"
+bool spExportBroadPhase(const void *p,SpBroadPhaseView *out){if(!p||!out)return false;const b2BroadPhase*n=p;for(int i=0;i<3;++i){out->trees[i]=n->trees[i];out->movedProxies[i]=n->movedProxies[i];}out->moveArray.data=n->moveArray.data;out->moveArray.count=n->moveArray.count;out->moveArray.capacity=n->moveArray.capacity;out->pairSet=n->pairSet;out->moveResults=n->moveResults!=NULL;out->movePairs=n->movePairs!=NULL;out->movePairCapacity=n->movePairCapacity;out->movePairIndex=n->movePairIndex.value;return true;}
+bool spImportBroadPhaseCandidate(const SpBroadPhaseView *s,void*p){if(!s||!p||s->moveResults||s->movePairs)return false;b2BroadPhase n={0};for(int i=0;i<3;++i){n.trees[i]=s->trees[i];n.movedProxies[i]=s->movedProxies[i];}n.moveArray.data=s->moveArray.data;n.moveArray.count=s->moveArray.count;n.moveArray.capacity=s->moveArray.capacity;n.pairSet=s->pairSet;n.movePairCapacity=s->movePairCapacity;n.movePairIndex.value=s->movePairIndex;*(b2BroadPhase*)p=n;return true;}
+bool spBroadPhaseFixtureRoundTrip(const SpBroadPhaseView*s,SpBroadPhaseView*out){b2BroadPhase native={0};return spImportBroadPhaseCandidate(s,&native)&&spExportBroadPhase(&native,out);}

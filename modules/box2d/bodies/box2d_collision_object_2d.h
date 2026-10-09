@@ -47,6 +47,8 @@ class Box2DBody2D;
 
 class Box2DCollisionObject2D {
 	friend class Box2DLocalReplay;
+	friend class Box2DPortableSpace;
+	friend class Box2DPortableSpaceAccess;
 
 public:
 	enum Type {

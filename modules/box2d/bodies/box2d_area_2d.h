@@ -38,6 +38,9 @@ bool integrate(T &p_value, const T &p_override_value, PS2DE::AreaSpaceOverrideMo
 }
 
 class Box2DArea2D final : public Box2DCollisionObject2D {
+	friend class Box2DPortableSpace;
+	friend class Box2DPortableSpaceAccess;
+
 public:
 	struct ShapePair {
 		RID other_rid;

@@ -32,6 +32,7 @@
 // SPDX-License-Identifier: MIT
 // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
 #include "box2d_physics_server_2d.h"
+#include "box2d_portable_space.h"
 #include "joints/box2d_damped_spring_joint_2d.h"
 #include "joints/box2d_groove_joint_2d.h"
 #include "joints/box2d_pin_joint_2d.h"
@@ -114,7 +115,22 @@ void Box2DPhysicsServer2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("space_get_body_move_events", "space"), &Box2DPhysicsServer2D::space_get_body_move_events);
 	ClassDB::bind_method(D_METHOD("body_set_user_data", "body", "data"), &Box2DPhysicsServer2D::body_set_user_data);
 	ClassDB::bind_method(D_METHOD("body_get_user_data", "body"), &Box2DPhysicsServer2D::body_get_user_data);
+	ClassDB::bind_method(D_METHOD("space_portable_capture", "space"), &Box2DPhysicsServer2D::space_portable_capture);
+	ClassDB::bind_method(D_METHOD("space_portable_request_capture", "space"), &Box2DPhysicsServer2D::space_portable_request_capture);
+	ClassDB::bind_method(D_METHOD("space_portable_take_capture", "space"), &Box2DPhysicsServer2D::space_portable_take_capture);
+	ClassDB::bind_method(D_METHOD("space_portable_restore", "bytes", "object_map", "shape_map"), &Box2DPhysicsServer2D::space_portable_restore, DEFVAL(Dictionary()), DEFVAL(Dictionary()));
+	ClassDB::bind_method(D_METHOD("space_portable_digest", "space"), &Box2DPhysicsServer2D::space_portable_digest);
+	ClassDB::bind_method(D_METHOD("space_portable_capture_info", "space"), &Box2DPhysicsServer2D::space_portable_capture_info);
+	ClassDB::bind_method(D_METHOD("body_portable_identity", "body"), &Box2DPhysicsServer2D::body_portable_identity);
 }
+
+Dictionary Box2DPhysicsServer2D::space_portable_capture(RID p_space) { return Box2DPortableSpace::capture(this, p_space); }
+Error Box2DPhysicsServer2D::space_portable_request_capture(RID p_space) { return Box2DPortableSpace::request_capture(this, p_space); }
+Dictionary Box2DPhysicsServer2D::space_portable_take_capture(RID p_space) { return Box2DPortableSpace::take_capture(this, p_space); }
+Dictionary Box2DPhysicsServer2D::space_portable_restore(const PackedByteArray &p_bytes, const Dictionary &p_object_map, const Dictionary &p_shape_map) { return Box2DPortableSpace::restore(this, p_bytes, p_object_map, p_shape_map); }
+PackedByteArray Box2DPhysicsServer2D::space_portable_digest(RID p_space) { return Box2DPortableSpace::digest(this, p_space); }
+Dictionary Box2DPhysicsServer2D::space_portable_capture_info(RID p_space) { return Box2DPortableSpace::capture_info(this, p_space); }
+int64_t Box2DPhysicsServer2D::body_portable_identity(RID p_body) { return Box2DPortableSpace::identity(this, p_body); }
 
 Box2DPhysicsServer2D::Box2DPhysicsServer2D() {
 	std::lock_guard<std::recursive_mutex> guard(egp::box2d::get_simulation_mutex());

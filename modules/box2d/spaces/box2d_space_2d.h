@@ -53,6 +53,8 @@ class Box2DPhysicsServer2D;
 
 class Box2DSpace2D {
 	friend class Box2DLocalReplay;
+	friend class Box2DPortableSpace;
+	friend class Box2DPortableSpaceAccess;
 
 public:
 	HashSet<Box2DCollisionObject2D *> objects;

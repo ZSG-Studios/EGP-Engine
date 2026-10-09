@@ -42,6 +42,8 @@ class Box2DCollisionObject2D;
 
 class Box2DShapeInstance {
 	friend class Box2DLocalReplay;
+	friend class Box2DPortableSpace;
+	friend class Box2DPortableSpaceAccess;
 
 public:
 	explicit Box2DShapeInstance(Box2DCollisionObject2D *p_object,

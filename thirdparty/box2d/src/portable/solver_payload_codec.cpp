@@ -1,0 +1,55 @@
+// SPDX-License-Identifier: MIT
+#include "solver_payload_codec.hpp"
+#include "graph_color_bridge.h"
+#include <algorithm>
+namespace superpos::box2d_portable {using namespace canonical;
+namespace {
+struct Range{const void*p;size_t n;};
+bool overlap(Range a,Range b)noexcept{auto x=reinterpret_cast<uintptr_t>(a.p),y=reinterpret_cast<uintptr_t>(b.p);return a.n&&b.n&&(x<=y?y-x<a.n:x-y<b.n);}
+bool mapping_overlap(const SolverPayloadMappings&m,Range r)noexcept{
+ if(overlap(r,{&m,sizeof(m)})||overlap(r,{m.joints.data(),m.joints.size_bytes()})||overlap(r,{m.contacts.data(),m.contacts.size_bytes()}))return true;
+ for(const auto*map:{&m.membership.set,&m.membership.body,&m.membership.joint,&m.membership.contact,&m.membership.island})if(map->overlaps_storage(r.p,r.n))return true;
+ for(const auto&x:m.joints)for(const auto*map:{&x.joint,&x.body,&x.solver_body})if(map->overlaps_storage(r.p,r.n))return true;
+ for(const auto&x:m.contacts)for(const auto*map:{&x.contact,&x.shape,&x.body,&x.solver_body})if(map->overlaps_storage(r.p,r.n))return true;return false;
+}
+std::array<Range,5> buffers(const SpSolverPayload&s)noexcept{return {{{s.body_sims,size_t(s.capacity[0])*sizeof(b2BodySim)},{s.body_states,size_t(s.capacity[1])*sizeof(b2BodyState)},{s.joints,size_t(s.capacity[2])*sizeof(SpJointSim)},{s.contacts,size_t(s.capacity[3])*sizeof(SpContactSim)},{s.islands,size_t(s.capacity[4])*sizeof(int)}}};}
+Status valid(const SpSolverPayload&s,const SolverPayloadMappings&m,TreeCaptureBoundary b,SolverPayloadScratch scratch)noexcept{
+ if(!b.physics_jobs_drained||!b.rebuild_drained||b.heuristic)return fail(Error::NotReady);if(s.set_index<0)return fail(Error::InvalidArgument);
+ auto ranges=buffers(s);if(mapping_overlap(m,{scratch.identities.data(),scratch.identities.size_bytes()}))return fail(Error::InvalidArgument);for(size_t i=0;i<5;++i){if(mapping_overlap(m,ranges[i]))return fail(Error::InvalidArgument);if(s.count[i]>s.capacity[i]||s.capacity[i]>100000||(!ranges[i].p&&s.capacity[i]))return fail(Error::CapacityExceeded);for(size_t j=0;j<i;++j)if(overlap(ranges[i],ranges[j]))return fail(Error::InvalidArgument);}
+ if(m.joints.size()!=s.count[2]||m.contacts.size()!=s.count[3])return fail(Error::IncompatibleSchema);
+ if(s.set_index==2){if(s.count[0]!=s.count[1]||s.count[2])return fail(Error::InvalidArgument);}else if(s.count[1])return fail(Error::InvalidArgument);if(s.set_index<2&&s.count[4])return fail(Error::InvalidArgument);if(s.set_index==0&&s.count[3])return fail(Error::InvalidArgument);
+ const size_t columns[4]={0,2,3,4};for(size_t i=0;i<4;++i){if(scratch.ids[i].size()<s.capacity[columns[i]])return fail(Error::CapacityExceeded);Range r{scratch.ids[i].data(),scratch.ids[i].size_bytes()};if(mapping_overlap(m,r))return fail(Error::InvalidArgument);for(auto x:ranges)if(overlap(r,x))return fail(Error::InvalidArgument);for(size_t j=0;j<i;++j)if(overlap(r,{scratch.ids[j].data(),scratch.ids[j].size_bytes()}))return fail(Error::InvalidArgument);if(overlap(r,{scratch.identities.data(),scratch.identities.size_bytes()})||overlap(r,{&s,sizeof(s)}))return fail(Error::InvalidArgument);}
+ for(auto r:ranges)if(overlap(r,{scratch.identities.data(),scratch.identities.size_bytes()}))return fail(Error::InvalidArgument);
+ return {};
+}
+SpSolverMembership membership(const SpSolverPayload&s,SolverPayloadScratch scratch)noexcept{return {s.set_index,scratch.ids[0].data(),scratch.ids[1].data(),scratch.ids[2].data(),scratch.ids[3].data(),s.count[0],s.capacity[0],s.count[1],s.capacity[1],s.count[2],s.capacity[2],s.count[3],s.capacity[3],s.count[4],s.capacity[4]};}
+Result<Identity> typed(const IdentityMap&m,int id,uint32_t kind)noexcept{if(id<0)return fail(Error::InvalidArgument);auto x=m.canonical(uint32_t(id));if(!x)return fail(x.error());x->kind=kind;return *x;}
+const Field* field(const Record&r,uint32_t id)noexcept{for(const auto&f:r.fields)if(f.id==id)return &f;return nullptr;}
+Status contact_roles(const SpSolverPayload&s)noexcept{for(size_t i=0;i<s.count[3];++i){bool touching=(s.contacts[i].simFlags&spGraphTouchingFlag())!=0;if(s.set_index<3&&(touching||s.contacts[i].manifold.pointCount!=0))return fail(Error::InvalidArgument);if(s.set_index>=3&&(!touching||s.contacts[i].manifold.pointCount<1||s.contacts[i].manifold.pointCount>2))return fail(Error::InvalidArgument);}return {};}
+}
+Status capture_solver_payload(const SpSolverPayload&s,Identity id,const SolverPayloadMappings&m,TreeCaptureBoundary b,SolverPayloadScratch scratch,SolverMembershipImage&out,SolverPayloadImages images)noexcept{
+ if(auto v=valid(s,m,b,scratch);!v)return v;if(auto v=contact_roles(s);!v)return v;
+ const size_t sizes[5]={images.bodies.size(),images.states.size(),images.joints.size(),images.contacts.size(),images.islands.size()};for(size_t i=0;i<5;++i)if(sizes[i]<s.count[i])return fail(Error::CapacityExceeded);
+ std::array<Range,24> ranges{};size_t used=0;for(auto r:buffers(s))ranges[used++]=r;for(auto a:scratch.ids)ranges[used++]={a.data(),a.size_bytes()};ranges[used++]={scratch.identities.data(),scratch.identities.size_bytes()};ranges[used++]={&out,sizeof(out)};for(auto a:out.storage)ranges[used++]={a.data(),a.size_bytes()};ranges[used++]={images.bodies.data(),images.bodies.size_bytes()};ranges[used++]={images.states.data(),images.states.size_bytes()};ranges[used++]={images.joints.data(),images.joints.size_bytes()};ranges[used++]={images.contacts.data(),images.contacts.size_bytes()};ranges[used++]={images.islands.data(),images.islands.size_bytes()};ranges[used++]={&s,sizeof(s)};for(size_t i=0;i<used;++i){if(mapping_overlap(m,ranges[i]))return fail(Error::InvalidArgument);for(size_t j=0;j<i;++j)if(overlap(ranges[i],ranges[j]))return fail(Error::InvalidArgument);}
+ const auto*bodies=static_cast<const b2BodySim*>(s.body_sims);const auto*states=static_cast<const b2BodyState*>(s.body_states);
+ for(size_t i=0;i<s.count[0];++i)scratch.ids[0][i]=bodies[i].bodyId;for(size_t i=0;i<s.count[2];++i)scratch.ids[1][i]=s.joints[i].jointId;for(size_t i=0;i<s.count[3];++i)scratch.ids[2][i]=s.contacts[i].contactId;for(size_t i=0;i<s.count[4];++i)scratch.ids[3][i]=s.islands[i];auto mem=membership(s,scratch);if(auto v=capture_solver_membership(mem,id,m.membership,scratch.identities,out);!v)return v;
+ for(size_t i=0;i<s.count[0];++i){auto token=typed(m.membership.body,bodies[i].bodyId,bodysim_kind);if(!token)return fail(token.error());if(auto v=capture_body_sim(bodies[i],*token,m.membership.body,images.bodies[i]);!v)return v;if(i<s.count[1]){token->kind=bodystate_kind;if(auto v=capture_body_state(states[i],*token,images.states[i]);!v)return v;}}
+ for(size_t i=0;i<s.count[2];++i){auto token=typed(m.membership.joint,s.joints[i].jointId,joint_sim_kind);if(!token)return fail(token.error());if(auto v=capture_joint_sim(s.joints[i],*token,m.joints[i],images.joints[i]);!v)return v;}
+ for(size_t i=0;i<s.count[3];++i){auto token=typed(m.membership.contact,s.contacts[i].contactId,contact_sim_kind);if(!token)return fail(token.error());if(auto v=capture_contact_sim(s.contacts[i],*token,m.contacts[i],images.contacts[i]);!v)return v;}
+ for(size_t i=0;i<s.count[4];++i){auto token=typed(m.membership.island,s.islands[i],island_sim_kind);if(!token)return fail(token.error());if(auto v=capture_island_sim(s.islands[i],*token,m.membership.island,images.islands[i]);!v)return v;}return {};
+}
+Status restore_solver_payload(const Record&r,SolverPayloadRecords records,const SolverPayloadMappings&m,TreeCaptureBoundary b,SolverPayloadScratch scratch,SpSolverPayload&out)noexcept{
+ // Validate declared candidate capacities before any membership writes. Counts
+ // are staged from the canonical membership, not trusted from the candidate.
+ SpSolverPayload staged=out;const uint32_t columns[5]={1124724519u,3766062639u,453519499u,2255560442u,3546041940u};const size_t sizes[5]={records.bodies.size(),records.states.size(),records.joints.size(),records.contacts.size(),records.islands.size()};const std::span<const Record> rs[5]={records.bodies,records.states,records.joints,records.contacts,records.islands};
+ for(size_t c=0;c<5;++c){const auto*f=field(r,columns[c]);if(!f||f->atoms.size()!=sizes[c]||sizes[c]>out.capacity[c])return fail(Error::IncompatibleSchema);staged.count[c]=uint32_t(sizes[c]);for(size_t i=0;i<sizes[c];++i)if(f->atoms[i].bits||f->atoms[i].identity!=rs[c][i].identity)return fail(Error::StaleGeneration);}if(records.joint_payloads.size()!=sizes[2])return fail(Error::IncompatibleSchema);
+ auto own=m.membership.set.native(r.identity);if(!own||*own>INT32_MAX)return fail(Error::StaleGeneration);staged.set_index=int(*own);if(auto v=valid(staged,m,b,scratch);!v)return v;std::array<Range,11>writes{};size_t used=0;for(auto v:buffers(staged))writes[used++]=v;for(auto a:scratch.ids)writes[used++]={a.data(),a.size_bytes()};writes[used++]={scratch.identities.data(),scratch.identities.size_bytes()};writes[used++]={&out,sizeof(out)};for(size_t i=0;i<used;++i){if(mapping_overlap(m,writes[i]))return fail(Error::InvalidArgument);for(size_t j=0;j<i;++j)if(overlap(writes[i],writes[j]))return fail(Error::InvalidArgument);}auto disjoint=[&](Range source)->bool{for(size_t i=0;i<used;++i)if(overlap(source,writes[i]))return false;return true;};auto record_disjoint=[&](const Record&record)->bool{if(!disjoint({&record,sizeof(record)})||!disjoint({record.fields.data(),record.fields.size_bytes()}))return false;for(auto f:record.fields)if(!disjoint({f.atoms.data(),f.atoms.size_bytes()}))return false;return true;};if(!record_disjoint(r)||!disjoint({records.joint_payloads.data(),records.joint_payloads.size_bytes()}))return fail(Error::InvalidArgument);for(auto column:rs){if(!disjoint({column.data(),column.size_bytes()}))return fail(Error::InvalidArgument);for(const auto&record:column)if(!record_disjoint(record))return fail(Error::InvalidArgument);}for(auto record:records.joint_payloads)if(record&&!record_disjoint(*record))return fail(Error::InvalidArgument);
+ auto mem=membership(staged,scratch);if(auto v=restore_solver_membership(r,m.membership,scratch.identities,mem);!v)return v;
+ auto*bodies=static_cast<b2BodySim*>(out.body_sims);auto*states=static_cast<b2BodyState*>(out.body_states);
+ for(size_t i=0;i<sizes[0];++i){if(auto v=restore_body_sim(records.bodies[i],m.membership.body,bodies[i]);!v)return v;if(bodies[i].bodyId!=scratch.ids[0][i])return fail(Error::StaleGeneration);if(i<sizes[1])if(auto v=restore_body_state(records.states[i],states[i]);!v)return v;}
+ for(size_t i=0;i<sizes[2];++i){if(auto v=restore_joint_sim(records.joints[i],records.joint_payloads[i],m.joints[i],out.joints[i]);!v)return v;if(out.joints[i].jointId!=scratch.ids[1][i])return fail(Error::StaleGeneration);}
+ for(size_t i=0;i<sizes[3];++i){if(auto v=restore_contact_sim(records.contacts[i],m.contacts[i],out.contacts[i]);!v)return v;if(out.contacts[i].contactId!=scratch.ids[2][i])return fail(Error::StaleGeneration);}
+ for(size_t i=0;i<sizes[4];++i){auto v=restore_island_sim(records.islands[i],m.membership.island);if(!v)return fail(v.error());out.islands[i]=*v;if(*v!=scratch.ids[3][i])return fail(Error::StaleGeneration);}
+ if(auto v=contact_roles(staged);!v)return v;out=staged;return {};
+}
+}

@@ -43,6 +43,8 @@ class Box2DPhysicsServer2D;
 
 class Box2DBody2D final : public Box2DCollisionObject2D {
 	friend class Box2DLocalReplay;
+	friend class Box2DPortableSpace;
+	friend class Box2DPortableSpaceAccess;
 
 public:
 	void set_hit_events_enabled(bool p_enabled);
