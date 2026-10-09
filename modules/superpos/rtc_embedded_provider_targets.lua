@@ -2,7 +2,8 @@
 -- Global project policies are intentionally absent.
 -- Proposed Windows provider source graph. No prebuilt archive is consumed.
 
-local provider_root = path.join(os.scriptdir(),"core/backends/webrtc/provider-port")
+local module_root = os.scriptdir()
+local provider_root = path.join(module_root,"core/backends/webrtc/provider-port")
 local cached_manifest = nil
 
 
@@ -29,6 +30,7 @@ for _, name in ipairs({"rtc_provider_openssl_crypto", "rtc_provider_openssl_ssl"
         checked_profile()
         on_load(function(target)
             import("core.project.config")
+            import("rtc_toolchain",{rootdir=module_root}).configure(target)
             local runtime = config.get("superpos_rtc_runtime") or "MDd"
             assert(runtime == "MDd" or runtime == "MT", "Unsupported RTC provider CRT profile")
             target:set("runtimes", runtime)

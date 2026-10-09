@@ -9,6 +9,12 @@ option_end()
 
 -- Declare opt-in configuration before the conditional targets so a clean
 -- first configure can admit all RTC arguments. Defaults remain unchanged.
+option("superpos_rtc_fixture")
+    set_default(false)
+    set_description("Native owner-thread RTC qualification only; never enable in release packages")
+    set_showmenu(true)
+option_end()
+
 option("superpos_rtc_runtime")
     set_default("MDd") set_values("MDd", "MT") set_showmenu(true)
 option_end()
@@ -34,6 +40,7 @@ if has_config("superpos_rtc_embedded") then
         on_load(function(target)
             import("core.project.config")
             import("core.base.json")
+            import("rtc_toolchain",{rootdir=module_root}).configure(target)
             local shared=json.loadfile(path.join(rtc_core,"source_manifest.json"))
             local rtc_feature=assert(shared.features.rtc_embedded,"Missing embedded RTC feature")
             assert(rtc_feature.version==1 and table.concat(rtc_feature.engine_owns,",")=="core,allocator,PSA","Unsupported embedded RTC feature")
@@ -75,6 +82,7 @@ if has_config("superpos_rtc_embedded") then
 end
 rule("superpos.egp.native.sources")
     on_load(function (target)
+        local config=import("core.project.config")
         import("core.base.json")
         local manifest = json.loadfile(path.join(module_root, "source_manifest.json"))
         local core = json.loadfile(path.join(module_root, manifest.core_manifest))
@@ -98,6 +106,12 @@ rule("superpos.egp.native.sources")
             assert(rtc_feature.version==1,"Unsupported embedded RTC feature")
             target:add("deps","superpos_egp_rtc_backend",{inherit=false})
             target:add("defines","SUPERPOS_HAS_RTC=1")
+            if has_config("superpos_rtc_fixture") then
+                local dev=config.get("dev_build")
+                assert(config.get("egp_target")=="editor" and (dev==true or dev=="y" or dev=="true") and config.get("mode")=="debug",
+                       "RTC fixture requires the debug development editor")
+                target:add("defines","SUPERPOS_RTC_EMBEDDED_FIXTURE=1")
+            end
             target:set("runtimes",rtc_feature.crt)
             target:add("cxxflags","/clang:-std=c++23",{force=true})
             local native_feature=assert(manifest.features and manifest.features.rtc_embedded,"Missing module-owned embedded RTC source contract")

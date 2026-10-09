@@ -1,5 +1,19 @@
 -- Called only by EGP's module_superpos library branch after captured sources.
 -- Source ownership comes from the one versioned core feature, not a second list.
+local function cxx23_flags(flags)
+    local result={}
+    for _,flag in ipairs(flags or {}) do
+        if flag=="/d2archSSE42" then
+            table.insert(result,"/clang:-msse4.2") -- preserve the captured engine CPU minimum
+        elseif not flag:startswith("/std:c++") and not flag:startswith("-std:c++")
+           and not flag:startswith("-std=c++") and not flag:startswith("/clang:-std=") then
+            table.insert(result,flag)
+        end
+    end
+    table.insert(result,"/clang:-std=c++23")
+    return result
+end
+
 local function selection(library, options, engine_root)
     local config=import("core.project.config")
     local json=import("core.base.json")
@@ -20,8 +34,7 @@ local function selection(library, options, engine_root)
     assert(allocator==1 and base,"Captured engine must own one allocator and core Session policy")
     local extra={}
     local body_policy=table.clone(base)
-    body_policy.CXXFLAGS=table.copy(base.CXXFLAGS)
-    table.insert(body_policy.CXXFLAGS,"/clang:-std=c++23") -- captured engine no-EH policy, explicit language revision
+    body_policy.CXXFLAGS=cxx23_flags(base.CXXFLAGS)
 
     for _,name in ipairs(feature.module_sources) do
         assert(name:startswith("services/src/") and name:endswith(".cpp") and not name:find("..",1,true),"Invalid embedded body source")
@@ -47,10 +60,7 @@ function policies(list)
     local result={}
     for _,source in ipairs(list) do
         local row=table.clone(source);row.policy=table.clone(source.policy)
-        row.policy.CXXFLAGS=table.copy(source.policy.CXXFLAGS)
-        local pinned=false
-        for _,flag in ipairs(row.policy.CXXFLAGS) do if flag=="/clang:-std=c++23" then pinned=true end end
-        if not pinned then table.insert(row.policy.CXXFLAGS,"/clang:-std=c++23") end
+        row.policy.CXXFLAGS=cxx23_flags(source.policy.CXXFLAGS)
         table.insert(result,row)
     end
     return result
@@ -87,6 +97,11 @@ function capture(graph, engine_root)
             library.module_memory={version=1,sources=memory.sources,manifest_sha256=hash.sha256(path.join(engine_root,"modules/superpos/source_manifest.json"))}
         end
     end
+    assert(not config.get("superpos_rtc_fixture") or config.get("superpos_rtc_embedded"), "RTC fixture requires the embedded RTC feature")
+    if config.get("superpos_rtc_fixture") then
+        assert(graph.options.target=="editor" and graph.options.dev_build==true and config.get("mode")=="debug",
+               "RTC fixture requires the debug development editor")
+    end
     if not config.get("superpos_rtc_embedded") then return end
     local found=false
     for _,library in ipairs(graph.libraries) do
@@ -106,13 +121,16 @@ function capture(graph, engine_root)
 end
 
 function configure(target, library, options, engine_root)
+    local config=import("core.project.config")
     local json=import("core.base.json")
     local root=path.join(engine_root,"modules/superpos/core")
     local feature=assert(json.loadfile(path.join(root,"source_manifest.json")).features.rtc_embedded)
     local captured=assert(library.rtc_embedded,"RTC source feature must be selected before graph capture")
     assert(captured.version==1 and captured.manifest_sha256==hash.sha256(path.join(root,"source_manifest.json")),"Captured RTC feature changed")
+    import("modules.superpos.rtc_toolchain",{rootdir=engine_root}).configure(target,options)
     target:add("deps",captured.backend_target,{inherit=false})
     target:add("defines","SUPERPOS_HAS_RTC=1")
+    if config.get("superpos_rtc_fixture") then target:add("defines","SUPERPOS_RTC_EMBEDDED_FIXTURE=1") end
     target:set("runtimes",feature.crt)
     target:add("cxxflags","/GR-",{force=true})
     target:add("includedirs",path.join(engine_root,"modules/superpos"))

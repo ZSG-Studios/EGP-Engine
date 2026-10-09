@@ -76,7 +76,8 @@
       "sources": [
         "rtc_private/rtc_owner.cpp",
         "rtc_private/rtc_process.cpp",
-        "rtc_private/rtc_crypto.cpp"
+        "rtc_private/rtc_crypto.cpp",
+        "rtc_private/rtc_embedded_fixture.cpp"
       ],
       "headers": [
         "rtc_owner.hpp",

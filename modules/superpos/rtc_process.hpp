@@ -27,3 +27,8 @@ superpos::Result<ProcessHandle> rtc_process_attach(pairing::Token,const superpos
 superpos::Result<RtcOwner::SessionLease> rtc_process_borrow(ProcessHandle) noexcept;
 superpos::Status rtc_process_retire(ProcessHandle) noexcept;
 }
+
+#ifdef SUPERPOS_RTC_EMBEDDED_FIXTURE
+// Qualification-only registration; not an engine/script public interface.
+void superpos_egp_register_embedded_fixture() noexcept;
+#endif

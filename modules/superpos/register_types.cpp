@@ -31,6 +31,9 @@ void initialize_superpos_module(ModuleInitializationLevel p_level) {
     GDREGISTER_ABSTRACT_CLASS(SuperposSimulationProvider);
     GDREGISTER_CLASS(SuperposSession);
     GDREGISTER_CLASS(SuperposWorld);
+#ifdef SUPERPOS_RTC_EMBEDDED_FIXTURE
+    superpos_egp_register_embedded_fixture();
+#endif
 }
 void uninitialize_superpos_module(ModuleInitializationLevel p_level) {
     if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
