@@ -1228,6 +1228,7 @@ void SceneTree::_process_group(ProcessGroup *p_group, bool p_physics) {
 			if (n->is_physics_processing_internal()) {
 				n->notification(Node::NOTIFICATION_INTERNAL_PHYSICS_PROCESS);
 			}
+			if (nodes_removed_on_group_call.has(n)) { continue; }
 			if (n->is_physics_processing()) {
 				n->notification(Node::NOTIFICATION_PHYSICS_PROCESS);
 			}
@@ -1235,6 +1236,7 @@ void SceneTree::_process_group(ProcessGroup *p_group, bool p_physics) {
 			if (n->is_processing_internal()) {
 				n->notification(Node::NOTIFICATION_INTERNAL_PROCESS);
 			}
+			if (nodes_removed_on_group_call.has(n)) { continue; }
 			if (n->is_processing()) {
 				n->notification(Node::NOTIFICATION_PROCESS);
 			}

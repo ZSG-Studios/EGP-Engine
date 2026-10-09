@@ -24,6 +24,10 @@ namespace Godot
 
         private static void OnGodotShuttingDownImpl()
         {
+            // Join prior finalizers while native callbacks are still valid.
+            // Their counted Session references are drained on the native owner.
+            GC.Collect();
+            GC.WaitForPendingFinalizers();
             bool isStdoutVerbose;
 
             try
@@ -55,6 +59,7 @@ namespace Godot
                     self.Dispose();
             }
 
+            GC.WaitForPendingFinalizers();
             if (isStdoutVerbose)
                 GD.Print("Unloading: Finished disposing tracked instances.");
         }

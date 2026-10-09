@@ -21,6 +21,7 @@ class Box2DDirectSpaceState2D;
 class Box2DPhysicsServer2D;
 
 class Box2DSpace2D {
+	friend class Box2DLocalReplay;
 public:
 	HashSet<Box2DCollisionObject2D *> objects;
 	Box2DSpace2D();
@@ -149,4 +150,5 @@ private:
 	bool exceptions_dirty = false;
 
 	bool locked = false;
+	bool replay_pending_events = false;
 };

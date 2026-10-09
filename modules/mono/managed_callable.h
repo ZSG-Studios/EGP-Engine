@@ -45,6 +45,7 @@ class ManagedCallable : public CallableCustom {
 	GCHandleIntPtr delegate_handle;
 	void *trampoline = nullptr;
 	ObjectID object_id;
+	uint32_t stable_hash = 0;
 
 #ifdef GD_MONO_HOT_RELOAD
 	SelfList<ManagedCallable> self_instance = this;

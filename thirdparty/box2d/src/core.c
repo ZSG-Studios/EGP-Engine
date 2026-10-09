@@ -1,3 +1,4 @@
+#include "local_replay/reservation.h"
 // SPDX-FileCopyrightText: 2023 Erin Catto
 // SPDX-License-Identifier: MIT
 
@@ -144,6 +145,8 @@ void* b2Alloc( size_t size )
 	// https://en.cppreference.com/w/c/memory/aligned_alloc
 	size_t size32 = ( ( size - 1 ) | 0x1F ) + 1;
 
+	void* reserved = spB2TryAllocateReserved(size32);
+	if (reserved) { b2TracyCAlloc(reserved, size); return reserved; }
 	if ( b2_allocFcn != NULL )
 	{
 		void* ptr = b2_allocFcn( size32, B2_ALIGNMENT );
@@ -192,6 +195,7 @@ void b2Free( void* mem, size_t size )
 
 	b2TracyCFree( mem );
 
+	if (spB2TryFreeReserved(mem, size)) { b2AtomicFetchAddI64(&b2_byteCount, -(int64_t)size); return; }
 	if ( b2_freeFcn != NULL )
 	{
 		b2_freeFcn( mem, size );

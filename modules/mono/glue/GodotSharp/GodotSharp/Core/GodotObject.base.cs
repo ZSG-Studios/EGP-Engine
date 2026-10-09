@@ -13,6 +13,11 @@ namespace Godot
     public partial class GodotObject : IDisposable
     {
         private bool _disposed;
+        private readonly object _superposDisposalLock = new();
+        private ulong _superposBindingGeneration;
+#if DEBUG
+        private static System.Action<GodotObject>? _superposBeforeTieFailureProbe;
+#endif
         private static readonly Type _cachedType = typeof(GodotObject);
 
         private static readonly Dictionary<Type, StringName?> _nativeNames = new Dictionary<Type, StringName?>();
@@ -51,20 +56,54 @@ namespace Godot
             bool refCounted
         )
         {
+            if ((cachedType.FullName == "Godot.SuperposSession" || cachedType.FullName == "Godot.SuperposWorld") &&
+                !ManagedCallbacks.IsSuperposOwnerThread)
+            {
+                // An existing-pointer candidate has not acquired a counted
+                // managed reference; its failed constructor must not unref it.
+                NativePtr = IntPtr.Zero;
+                throw new InvalidOperationException("Superpos managed construction/binding requires the engine owner thread.");
+            }
             if (NativePtr == IntPtr.Zero)
             {
                 Debug.Assert(nativeCtor != null);
 
                 // Need postinitialization.
                 NativePtr = nativeCtor(godot_bool.True);
+                if (NativePtr == IntPtr.Zero)
+                    throw new InvalidOperationException("Native construction is unavailable on this thread or during shutdown.");
 
-                InteropUtils.TieManagedToUnmanaged(this, NativePtr,
-                    nativeName, refCounted, GetType(), cachedType);
+                SuperposClaimBinding(cachedType);
+                try
+                {
+                    SuperposRunTieFailureProbe();
+                    SuperposValidateBinding();
+                    InteropUtils.TieManagedToUnmanaged(this, NativePtr,
+                        nativeName, refCounted, GetType(), cachedType);
+                    SuperposValidateBinding();
+                }
+                catch
+                {
+                    SuperposAbortBinding();
+                    throw;
+                }
             }
             else
             {
-                InteropUtils.TieManagedToUnmanagedWithPreSetup(this, NativePtr,
-                    GetType(), cachedType);
+                SuperposClaimBinding(cachedType);
+                try
+                {
+                    SuperposRunTieFailureProbe();
+                    SuperposValidateBinding();
+                    InteropUtils.TieManagedToUnmanagedWithPreSetup(this, NativePtr,
+                        GetType(), cachedType);
+                    SuperposValidateBinding();
+                }
+                catch
+                {
+                    SuperposAbortBinding();
+                    throw;
+                }
             }
 
             _weakReferenceToSelf = DisposablesTracker.RegisterGodotObject(this);
@@ -112,8 +151,106 @@ namespace Godot
         /// <summary>
         /// Disposes implementation of this <see cref="GodotObject"/>.
         /// </summary>
+        private void SuperposClaimBinding(Type nativeType)
+        {
+            if (nativeType.FullName != "Godot.SuperposSession") return;
+            Error admitted = NativeFuncs.godotsharp_internal_superpos_binding_claim(NativePtr, out _superposBindingGeneration);
+            if (admitted != Error.Ok)
+            {
+                NativePtr = IntPtr.Zero; // This candidate never acquired a counted ref.
+                throw new InvalidOperationException("Superpos binding admission failed: " + admitted);
+            }
+        }
+
+        private void SuperposValidateBinding()
+        {
+            if (_superposBindingGeneration == 0) return;
+            Error admitted = NativeFuncs.godotsharp_internal_superpos_binding_validate(NativePtr, _superposBindingGeneration);
+            if (admitted != Error.Ok)
+                throw new InvalidOperationException("Superpos binding became unavailable before construction completed: " + admitted);
+        }
+
+        private void SuperposRunTieFailureProbe()
+        {
+#if DEBUG
+            if (_superposBindingGeneration != 0)
+            {
+                var failure = System.Threading.Interlocked.Exchange(ref _superposBeforeTieFailureProbe, null);
+                failure?.Invoke(this);
+            }
+#endif
+        }
+
+        // Nonvirtual private owner callback. It never invokes user Dispose.
+        [System.Runtime.InteropServices.UnmanagedCallersOnly]
+        internal static godot_bool SuperposRevokeBindingForReload(IntPtr handle, ulong generation)
+        {
+            try
+            {
+                if (!ManagedCallbacks.IsSuperposOwnerThread || handle == IntPtr.Zero || generation == 0)
+                    return godot_bool.False;
+                object? target = System.Runtime.InteropServices.GCHandle.FromIntPtr(handle).Target;
+                if (target == null) return godot_bool.True; // An old finalizer token stays fenced natively.
+                if (target is not GodotObject candidate) return godot_bool.False;
+                lock (candidate._superposDisposalLock)
+                {
+                    if (candidate._disposed && candidate.NativePtr == IntPtr.Zero && candidate._superposBindingGeneration == 0)
+                        return godot_bool.True;
+                    if (candidate._superposBindingGeneration != generation || candidate.NativePtr == IntPtr.Zero)
+                        return godot_bool.False;
+                    candidate._disposed = true;
+                    candidate._superposBindingGeneration = 0;
+                    candidate.NativePtr = IntPtr.Zero;
+                    if (candidate._weakReferenceToSelf != null)
+                        DisposablesTracker.UnregisterGodotObject(candidate, candidate._weakReferenceToSelf);
+                    candidate._weakReferenceToSelf = null;
+                    return godot_bool.True;
+                }
+            }
+            catch (Exception error)
+            {
+                ExceptionUtils.LogException(error);
+                return godot_bool.False;
+            }
+        }
+
+        private void SuperposAbortBinding()
+        {
+            if (_superposBindingGeneration == 0) return;
+            Error retired = NativeFuncs.godotsharp_internal_superpos_binding_retire(
+                NativePtr, _superposBindingGeneration, godot_bool.False);
+            if (retired != Error.Ok && retired != Error.AlreadyInUse)
+                throw new InvalidOperationException("Superpos construction abort failed: " + retired);
+            _superposBindingGeneration = 0;
+            NativePtr = IntPtr.Zero;
+            _disposed = true;
+        }
+
         protected virtual void Dispose(bool disposing)
         {
+            if (InternalGetClassNativeBase(GetType()).FullName == "Godot.SuperposSession")
+            {
+                lock (_superposDisposalLock)
+                {
+                    if (_disposed) return;
+                    if (NativePtr != IntPtr.Zero && _superposBindingGeneration != 0)
+                    {
+                        Error retired = NativeFuncs.godotsharp_internal_superpos_binding_retire(
+                            NativePtr, _superposBindingGeneration, (!disposing).ToGodotBool());
+                        // A script-side transfer may already have consumed this
+                        // generation. It must never touch the replacement handle.
+                        if (retired != Error.Ok && retired != Error.AlreadyInUse)
+                            throw new InvalidOperationException("Superpos binding retirement failed: " + retired);
+                    }
+                    _disposed = true;
+                    _superposBindingGeneration = 0;
+                    NativePtr = IntPtr.Zero;
+                    if (_weakReferenceToSelf != null)
+                        DisposablesTracker.UnregisterGodotObject(this, _weakReferenceToSelf);
+                    _weakReferenceToSelf = null;
+                }
+                return;
+            }
             if (_disposed)
                 return;
 

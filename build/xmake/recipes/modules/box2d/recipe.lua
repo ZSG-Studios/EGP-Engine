@@ -5,7 +5,7 @@ function main(graph)
     env = graph:use("env")
     env_modules = graph:use("env_modules")
     env_box2d = env_modules:clone()
-    env_box2d:prepend({["CPPPATH"] = {"#thirdparty/box2d/include"}})
+    env_box2d:prepend({["CPPPATH"] = {"#thirdparty/box2d/include", "#thirdparty/box2d/src", "#thirdparty/box2d/src/local_replay"}})
     for _, __item1 in ipairs(R.iter({"CCFLAGS", "CFLAGS", "CXXFLAGS"})) do
         key = __item1
         R.setindex(env_box2d, key, (function() local __item2 = {}; for _, __item3 in ipairs(R.iter(R.index(env_box2d, key))) do; local flag = __item3; if R.truthy(not R.truthy(R.startswith(R.str(flag), {"/fp:", "-ffast-math", "-Ofast", "-ffp-contract=", "-funsafe-math-optimizations"}))) then; table.insert(__item2, flag); end; end; return __item2 end)())
@@ -26,6 +26,7 @@ function main(graph)
     env_thirdparty:disable_warnings()
     thirdparty_obj = {}
     env_thirdparty:sources(thirdparty_obj, "#thirdparty/box2d/src/*.c")
+    env_thirdparty:sources(thirdparty_obj, "#thirdparty/box2d/src/local_replay/*.c")
     env.modules_sources = R.iadd(env.modules_sources, thirdparty_obj)
     module_obj = {}
     for _, __item4 in ipairs(R.iter({"", "bodies/", "joints/", "shapes/", "spaces/"})) do

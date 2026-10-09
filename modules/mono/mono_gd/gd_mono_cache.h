@@ -114,8 +114,8 @@ struct ManagedCallbacks {
 	using FuncCSharpInstanceBridge_CallDispose = void(GD_CLR_STDCALL *)(GCHandleIntPtr, bool);
 	using FuncCSharpInstanceBridge_CallToString = void(GD_CLR_STDCALL *)(GCHandleIntPtr, String *, bool *);
 	using FuncCSharpInstanceBridge_HasMethodUnknownParams = bool(GD_CLR_STDCALL *)(GCHandleIntPtr, const StringName *);
-	using FuncCSharpInstanceBridge_SerializeState = void(GD_CLR_STDCALL *)(GCHandleIntPtr, const Dictionary *, const Dictionary *);
-	using FuncCSharpInstanceBridge_DeserializeState = void(GD_CLR_STDCALL *)(GCHandleIntPtr, const Dictionary *, const Dictionary *);
+	using FuncCSharpInstanceBridge_SerializeState = bool(GD_CLR_STDCALL *)(GCHandleIntPtr, const Dictionary *, const Dictionary *);
+	using FuncCSharpInstanceBridge_DeserializeState = bool(GD_CLR_STDCALL *)(GCHandleIntPtr, const Dictionary *, const Dictionary *);
 	using FuncGCHandleBridge_FreeGCHandle = void(GD_CLR_STDCALL *)(GCHandleIntPtr);
 	using FuncGCHandleBridge_GCHandleIsTargetCollectible = bool(GD_CLR_STDCALL *)(GCHandleIntPtr);
 	using FuncDebuggingUtils_GetCurrentStackInfo = void(GD_CLR_STDCALL *)(Vector<ScriptLanguage::StackInfo> *);
@@ -165,6 +165,8 @@ struct ManagedCallbacks {
 	FuncDebuggingUtils_GetCurrentStackInfo DebuggingUtils_GetCurrentStackInfo;
 	FuncDisposablesTracker_OnGodotShuttingDown DisposablesTracker_OnGodotShuttingDown;
 	FuncGD_OnCoreApiAssemblyLoaded GD_OnCoreApiAssemblyLoaded;
+	using FuncSuperposRevokeBinding = bool(GD_CLR_STDCALL *)(GCHandleIntPtr, uint64_t);
+	FuncSuperposRevokeBinding Superpos_RevokeBindingForReload;
 };
 
 extern ManagedCallbacks managed_callbacks;

@@ -50,41 +50,57 @@ namespace Godot.NativeInterop
         public static void TieManagedToUnmanaged(GodotObject managed, IntPtr unmanaged,
             StringName nativeName, bool refCounted, Type type, Type nativeType)
         {
-            var gcHandle = refCounted ?
-                CustomGCHandle.AllocWeak(managed) :
-                CustomGCHandle.AllocStrong(managed, type);
-
-            if (type == nativeType)
+            var handle = refCounted ? CustomGCHandle.AllocWeak(managed) : CustomGCHandle.AllocStrong(managed, type);
+            bool transferred = false;
+            try
             {
-                var nativeNameSelf = (godot_string_name)nativeName.NativeValue;
-                NativeFuncs.godotsharp_internal_tie_native_managed_to_unmanaged(
-                    GCHandle.ToIntPtr(gcHandle), unmanaged, nativeNameSelf, refCounted.ToGodotBool());
-            }
-            else
-            {
-                unsafe
+                Error tied;
+                if (type == nativeType)
                 {
-                    // We don't dispose `script` ourselves here.
-                    // `tie_user_managed_to_unmanaged` does it for us to avoid another P/Invoke call.
-                    godot_ref script;
-                    ScriptManagerBridge.GetOrLoadOrCreateScriptForType(type, &script);
-
-                    // IMPORTANT: This must be called after GetOrCreateScriptBridgeForType
-                    NativeFuncs.godotsharp_internal_tie_user_managed_to_unmanaged(
-                        GCHandle.ToIntPtr(gcHandle), unmanaged, &script, refCounted.ToGodotBool());
+                    var nativeNameSelf = (godot_string_name)nativeName.NativeValue;
+                    tied = NativeFuncs.godotsharp_internal_tie_native_managed_to_unmanaged(
+                        GCHandle.ToIntPtr(handle), unmanaged, nativeNameSelf, refCounted.ToGodotBool());
                 }
+                else
+                {
+                    unsafe
+                    {
+                        // Native always consumes this script Ref. It consumes the
+                        // separate handle only when its fallible receipt is OK.
+                        godot_ref script;
+                        ScriptManagerBridge.GetOrLoadOrCreateScriptForType(type, &script);
+                        tied = NativeFuncs.godotsharp_internal_tie_user_managed_to_unmanaged(
+                            GCHandle.ToIntPtr(handle), unmanaged, &script, refCounted.ToGodotBool());
+                    }
+                }
+                if (tied != Error.Ok)
+                    throw new InvalidOperationException("Native managed Tie failed: " + tied);
+                transferred = true;
+            }
+            finally
+            {
+                if (!transferred) CustomGCHandle.Free(handle);
             }
         }
 
         public static void TieManagedToUnmanagedWithPreSetup(GodotObject managed, IntPtr unmanaged,
             Type type, Type nativeType)
         {
-            if (type == nativeType)
-                return;
-
-            var strongGCHandle = CustomGCHandle.AllocStrong(managed);
-            NativeFuncs.godotsharp_internal_tie_managed_to_unmanaged_with_pre_setup(
-                GCHandle.ToIntPtr(strongGCHandle), unmanaged);
+            if (type == nativeType) return;
+            var handle = CustomGCHandle.AllocStrong(managed);
+            bool transferred = false;
+            try
+            {
+                Error tied = NativeFuncs.godotsharp_internal_tie_managed_to_unmanaged_with_pre_setup(
+                    GCHandle.ToIntPtr(handle), unmanaged);
+                if (tied != Error.Ok)
+                    throw new InvalidOperationException("Native managed Tie failed: " + tied);
+                transferred = true;
+            }
+            finally
+            {
+                if (!transferred) CustomGCHandle.Free(handle);
+            }
         }
 
         public static GodotObject EngineGetSingleton(string name)

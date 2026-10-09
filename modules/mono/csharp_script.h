@@ -64,7 +64,9 @@ class CSharpLanguage;
 
 template <typename TScriptInstance, typename TScriptLanguage>
 TScriptInstance *cast_script_instance(ScriptInstance *p_inst) {
-	return dynamic_cast<TScriptInstance *>(p_inst);
+    if (!p_inst || p_inst->is_placeholder() ||
+            p_inst->get_language() != TScriptLanguage::get_singleton()) { return nullptr; }
+    return static_cast<TScriptInstance *>(p_inst);
 }
 
 #define CAST_CSHARP_INSTANCE(m_inst) (cast_script_instance<CSharpInstance, CSharpLanguage>(m_inst))
@@ -370,6 +372,7 @@ class CSharpInstance : public ScriptInstance {
 	bool unsafe_referenced = false;
 	bool predelete_notified = false;
 	bool destructing_script_instance = false;
+	bool failed_managed_construction = false;
 
 	Ref<CSharpScript> script;
 	MonoGCHandleData gchandle;
@@ -629,9 +632,9 @@ public:
 	RBMap<Object *, CSharpScriptBinding>::Element *insert_script_binding(Object *p_object, const CSharpScriptBinding &p_script_binding);
 	bool setup_csharp_script_binding(CSharpScriptBinding &r_script_binding, Object *p_object);
 
-	static void tie_native_managed_to_unmanaged(GCHandleIntPtr p_gchandle_intptr, Object *p_unmanaged, const StringName *p_native_name, bool p_ref_counted);
-	static void tie_user_managed_to_unmanaged(GCHandleIntPtr p_gchandle_intptr, Object *p_unmanaged, Ref<CSharpScript> *p_script, bool p_ref_counted);
-	static void tie_managed_to_unmanaged_with_pre_setup(GCHandleIntPtr p_gchandle_intptr, Object *p_unmanaged);
+	static Error tie_native_managed_to_unmanaged(GCHandleIntPtr p_gchandle_intptr, Object *p_unmanaged, const StringName *p_native_name, bool p_ref_counted);
+	static Error tie_user_managed_to_unmanaged(GCHandleIntPtr p_gchandle_intptr, Object *p_unmanaged, Ref<CSharpScript> *p_script, bool p_ref_counted);
+	static Error tie_managed_to_unmanaged_with_pre_setup(GCHandleIntPtr p_gchandle_intptr, Object *p_unmanaged);
 
 	void post_unsafe_reference(Object *p_obj);
 	void pre_unsafe_unreference(Object *p_obj);

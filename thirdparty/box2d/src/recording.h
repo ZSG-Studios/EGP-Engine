@@ -73,6 +73,8 @@ typedef struct b2RecBuffer
 	int capacity;
 	int size;
 	bool countOnly;
+	bool fixedCapacity; // private caller-owned checkpoint storage
+	bool failed;
 } b2RecBuffer;
 
 // User-owned recording buffer. The world appends into it while recording; the user saves and

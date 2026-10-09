@@ -87,12 +87,20 @@ namespace GodotPlugins
 
         [UnmanagedCallersOnly]
         // ReSharper disable once UnusedMember.Local
-        private static unsafe godot_bool InitializeFromEngine(IntPtr godotDllHandle, godot_bool editorHint,
+        private static unsafe godot_bool InitializeFromEngineSuperposReloadV5(IntPtr godotDllHandle, godot_bool editorHint,
             PluginsCallbacks* pluginsCallbacks, ManagedCallbacks* managedCallbacks,
-            IntPtr unmanagedCallbacks, int unmanagedCallbacksSize)
+            IntPtr unmanagedCallbacks, int unmanagedCallbacksSize, ulong expectedReloadAbi)
         {
             try
             {
+                // Reflect the ABI method so an old GodotSharp assembly is
+                // rejected before JIT can resolve a missing direct-call token.
+                // No callback pointer is written before this check succeeds.
+                var reloadAbi = typeof(ManagedCallbacks).GetMethod("GetSuperposReloadAbi", BindingFlags.Public | BindingFlags.Static);
+                if (reloadAbi == null || reloadAbi.ReturnType != typeof(ulong) ||
+                    reloadAbi.GetParameters().Length != 0 ||
+                    reloadAbi.Invoke(null, null) is not ulong actualReloadAbi || actualReloadAbi != expectedReloadAbi)
+                    return godot_bool.False;
                 NativeFuncs.Initialize(unmanagedCallbacks, unmanagedCallbacksSize);
                 Marshaling.Initialize();
 

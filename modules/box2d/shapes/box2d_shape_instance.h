@@ -10,6 +10,7 @@ class Box2DShape2D;
 class Box2DCollisionObject2D;
 
 class Box2DShapeInstance {
+	friend class Box2DLocalReplay;
 public:
 	explicit Box2DShapeInstance(Box2DCollisionObject2D *p_object,
 			Box2DShape2D *p_shape,

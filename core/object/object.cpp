@@ -29,6 +29,11 @@
 /**************************************************************************/
 
 #include "object.h"
+#include "modules/modules_enabled.gen.h"
+#ifdef MODULE_SUPERPOS_ENABLED
+#include "modules/superpos/superpos_managed_reload.h"
+#include "modules/superpos/superpos_world.h"
+#endif
 #include "object.compat.inc"
 
 #include "core/config/engine.h"
@@ -986,10 +991,28 @@ void Object::_gdvirtual_init_method_ptr(uint32_t p_compat_hash, void *&r_fn_ptr,
 	r_fn_ptr = fn_ptr;
 }
 
+ObjectID Object::_notification_lifetime_token() const {
+#ifdef MODULE_SUPERPOS_ENABLED
+    // Only the native Superpos World synchronous owner-retirement contract
+    // uses this continuation guard. This is an owner-thread weak lookup,
+    // not permission to destroy Nodes concurrently from another thread.
+    if (Object::cast_to<SuperposWorld>(const_cast<Object *>(this))) {
+        return _instance_id;
+    }
+#endif
+    return ObjectID();
+}
+
+bool Object::_notification_receiver_alive(ObjectID p_id, const Object *p_receiver) {
+    return !p_id.is_valid() || ObjectDB::get_instance(p_id) == p_receiver;
+}
+
 void Object::_notification_forward(int p_notification) {
+	const ObjectID receiver_id = _notification_lifetime_token();
 	// Notify classes starting with Object and ending with most derived subclass.
 	// e.g. Object -> Node -> Node3D
 	_notification_forwardv(p_notification);
+	if (!_notification_receiver_alive(receiver_id, this)) { return; }
 
 	if (_extension) {
 		if (_extension->notification2) {
@@ -1001,16 +1024,19 @@ void Object::_notification_forward(int p_notification) {
 		}
 	}
 
+	if (!_notification_receiver_alive(receiver_id, this)) { return; }
 	if (script_instance) {
 		script_instance->notification(p_notification, false);
 	}
 }
 
 void Object::_notification_backward(int p_notification) {
+	const ObjectID receiver_id = _notification_lifetime_token();
 	if (script_instance) {
 		script_instance->notification(p_notification, true);
 	}
 
+	if (!_notification_receiver_alive(receiver_id, this)) { return; }
 	if (_extension) {
 		if (_extension->notification2) {
 			_extension->notification2(_extension_instance, p_notification, static_cast<GDExtensionBool>(true));
@@ -1021,6 +1047,7 @@ void Object::_notification_backward(int p_notification) {
 		}
 	}
 
+	if (!_notification_receiver_alive(receiver_id, this)) { return; }
 	// Notify classes starting with most derived subclass and ending in Object.
 	// e.g. Node3D -> Node -> Object
 	_notification_backwardv(p_notification);
@@ -1047,6 +1074,13 @@ String Object::to_string() {
 }
 
 void Object::set_script(const Variant &p_script) {
+#ifdef MODULE_SUPERPOS_ENABLED
+    // Inner ScriptInstance teardown may destroy its owning World and reject
+    // wrapper recreation. Keep this receiver alive through all later setter
+    // writes; an inner destructor-local pin is insufficient for that boundary.
+    Ref<RefCounted> superpos_script_pin;
+    if (SuperposManagedReload::protect_script_change(this, superpos_script_pin) != OK) { return; }
+#endif
 	if (get_script() == p_script) {
 		return;
 	}
@@ -1077,6 +1111,12 @@ void Object::set_script(const Variant &p_script) {
 }
 
 void Object::set_script_instance(ScriptInstance *p_instance) {
+#ifdef MODULE_SUPERPOS_ENABLED
+    // Direct native replacement has the same reentrant teardown boundary as
+    // set_script. Retain the receiver until its final script_instance write.
+    Ref<RefCounted> superpos_script_pin;
+    if (SuperposManagedReload::protect_script_change(this, superpos_script_pin) != OK) { return; }
+#endif
 	if (script_instance == p_instance) {
 		return;
 	}

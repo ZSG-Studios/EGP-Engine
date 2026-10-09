@@ -36,6 +36,8 @@ function configure(env, options, explicit)
     for _, key in ipairs({"use_llvm", "use_mingw", "debug_crt", "use_asan", "use_ubsan", "use_tsan", "use_lsan", "use_msan"}) do options[key] = enabled(options[key]) end
     platform_policy.normalize(options, json.loadfile(path.join(env.graph.root, "build/xmake/defaults.json")), enabled)
     local platform, target = options.platform, options.target
+    assert(not (options.module_egp_net_enabled == true and options.module_superpos_enabled == true),
+        "Select one networking stack: Superpos or the explicit legacy migration profile")
     assert(table.contains({"windows", "linuxbsd", "macos", "android", "ios", "visionos", "web"}, platform), "Unsupported platform")
     assert(table.contains({"editor", "template_debug", "template_release"}, target), "Unsupported target")
     options.arch = options.arch or (platform == "web" and "wasm32" or (table.contains({"android", "ios", "visionos"}, platform) and "arm64" or "x86_64"))
@@ -110,7 +112,11 @@ function configure(env, options, explicit)
     if options.precision == "double" then table.insert(definitions, "REAL_T_IS_DOUBLE") end
     if options.library_type ~= "executable" then table.insert(definitions, "LIBGODOT_ENABLED") end
     if options.disable_exceptions and env.msvc then table.insert(definitions, {"_HAS_EXCEPTIONS", 0}) end
-    for key, definition in pairs({threads = "THREADS_ENABLED", strict_checks = "STRICT_CHECKS", use_precise_math_checks = "PRECISE_MATH_CHECKS", rendering_device = "RD_ENABLED", minizip = "MINIZIP_ENABLED", brotli = "BROTLI_ENABLED", disable_2d = "_2D_DISABLED", disable_3d = "_3D_DISABLED", disable_advanced_gui = "ADVANCED_GUI_DISABLED", disable_physics_2d = "PHYSICS_2D_DISABLED", disable_physics_3d = "PHYSICS_3D_DISABLED", disable_navigation_2d = "NAVIGATION_2D_DISABLED", disable_navigation_3d = "NAVIGATION_3D_DISABLED", disable_xr = "XR_DISABLED"}) do
+    local option_definitions = {threads = "THREADS_ENABLED", strict_checks = "STRICT_CHECKS", use_precise_math_checks = "PRECISE_MATH_CHECKS", rendering_device = "RD_ENABLED", minizip = "MINIZIP_ENABLED", brotli = "BROTLI_ENABLED", disable_2d = "_2D_DISABLED", disable_3d = "_3D_DISABLED", disable_advanced_gui = "ADVANCED_GUI_DISABLED", disable_physics_2d = "PHYSICS_2D_DISABLED", disable_physics_3d = "PHYSICS_3D_DISABLED", disable_navigation_2d = "NAVIGATION_2D_DISABLED", disable_navigation_3d = "NAVIGATION_3D_DISABLED", disable_xr = "XR_DISABLED"}
+    local definition_keys = table.keys(option_definitions)
+    table.sort(definition_keys)
+    for _, key in ipairs(definition_keys) do
+        local definition = option_definitions[key]
         if enabled(options[key]) then table.insert(definitions, definition) end
     end
     if options.rendering_device then

@@ -46,6 +46,7 @@ class Box2DArea2D;
 class Box2DBody2D;
 
 class Box2DCollisionObject2D {
+	friend class Box2DLocalReplay;
 public:
 	enum Type {
 		RIGIDBODY,

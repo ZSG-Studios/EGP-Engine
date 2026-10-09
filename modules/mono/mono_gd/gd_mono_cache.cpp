@@ -92,6 +92,7 @@ void update_godot_api_cache(const ManagedCallbacks &p_managed_callbacks) {
 	CHECK_CALLBACK_NOT_NULL(DebuggingUtils, GetCurrentStackInfo);
 	CHECK_CALLBACK_NOT_NULL(DisposablesTracker, OnGodotShuttingDown);
 	CHECK_CALLBACK_NOT_NULL(GD, OnCoreApiAssemblyLoaded);
+	CHECK_CALLBACK_NOT_NULL(Superpos, RevokeBindingForReload);
 
 	managed_callbacks = p_managed_callbacks;
 

@@ -29,6 +29,42 @@
 /**************************************************************************/
 
 #include "csharp_script.h"
+#include "modules/modules_enabled.gen.h"
+#ifdef MODULE_SUPERPOS_ENABLED
+#include "modules/superpos/superpos_managed_reload.h"
+#include "modules/superpos/superpos_session.h"
+#include "modules/superpos/superpos_world.h"
+
+#include "mono_gd/gd_mono_cache.h"
+extern "C" GCHandleIntPtr godotsharp_internal_object_get_associated_gchandle(Object *);
+extern "C" void godotsharp_internal_refcounted_disposed(Object *, GCHandleIntPtr, bool);
+static Error superpos_revoke_managed_binding(Object *object, uint64_t generation) {
+    const auto handle = godotsharp_internal_object_get_associated_gchandle(object);
+    if (handle.value && (!GDMonoCache::managed_callbacks.Superpos_RevokeBindingForReload ||
+            !GDMonoCache::managed_callbacks.Superpos_RevokeBindingForReload(handle, generation))) {
+        return ERR_INVALID_DATA;
+    }
+    // A concurrent old Dispose may have queued its reference before the
+    // nonvirtual callback acquired the wrapper lock. New claims are fenced.
+    SuperposManagedReload::drain_managed_disposals();
+    const Error retired = SuperposManagedReload::retire_managed_binding(object, generation, false,
+            [](Object *old_object, void *, bool finalizer) {
+                godotsharp_internal_refcounted_disposed(old_object, GCHandleIntPtr{nullptr}, finalizer);
+            });
+    return retired == OK || retired == ERR_ALREADY_IN_USE ? OK : retired;
+}
+
+static Error superpos_prepare_managed_owner(Object *p_object, Ref<RefCounted> &r_pin) {
+    if (Object::cast_to<SuperposWorld>(p_object)) {
+        return SuperposManagedReload::can_create_managed() ? OK : ERR_UNAVAILABLE;
+    }
+    auto *session = Object::cast_to<SuperposSession>(p_object);
+    if (!session) { return OK; }
+    if (!SuperposManagedReload::can_create_managed()) { return ERR_UNAVAILABLE; }
+    r_pin = Ref<RefCounted>(session);
+    return SuperposManagedReload::prepare_managed_binding(session);
+}
+#endif
 
 #include "godotsharp_defs.h"
 #include "godotsharp_dirs.h"
@@ -142,10 +178,17 @@ void CSharpLanguage::finalize() {
 		return;
 	}
 
+#ifdef MODULE_SUPERPOS_ENABLED
+    SuperposManagedReload::begin_managed_shutdown();
+#endif
 	if (gdmono && gdmono->is_runtime_initialized() && GDMonoCache::godot_api_cache_updated) {
 		GDMonoCache::managed_callbacks.DisposablesTracker_OnGodotShuttingDown();
 	}
 
+#ifdef MODULE_SUPERPOS_ENABLED
+    // Tracker joined workers while handles/callbacks are still valid.
+    SuperposManagedReload::drain_managed_disposals();
+#endif
 	finalizing = true;
 
 	// Make sure all script binding gchandles are released before finalizing GDMono.
@@ -167,6 +210,11 @@ void CSharpLanguage::finalize() {
 		gdmono = nullptr;
 	}
 
+#ifdef MODULE_SUPERPOS_ENABLED
+    // Domain unload/GC can release collection-held native references after the
+    // managed wrapper drain. Instance callbacks were detached above.
+    SuperposManagedReload::drain_native_references();
+#endif
 	// Clear here, after finalizing all domains to make sure there is nothing else referencing the elements.
 	script_bindings.clear();
 
@@ -513,6 +561,9 @@ Vector<ScriptLanguage::StackInfo> CSharpLanguage::debug_get_current_stack_info()
 }
 
 void CSharpLanguage::post_unsafe_reference(Object *p_obj) {
+#ifdef MODULE_SUPERPOS_ENABLED
+    SuperposManagedReload::managed_reference_added(p_obj);
+#endif
 #ifdef DEBUG_ENABLED
 	MutexLock lock(unsafe_object_references_lock);
 	ObjectID id = p_obj->get_instance_id();
@@ -521,6 +572,9 @@ void CSharpLanguage::post_unsafe_reference(Object *p_obj) {
 }
 
 void CSharpLanguage::pre_unsafe_unreference(Object *p_obj) {
+#ifdef MODULE_SUPERPOS_ENABLED
+    SuperposManagedReload::managed_reference_removed(p_obj);
+#endif
 #ifdef DEBUG_ENABLED
 	MutexLock lock(unsafe_object_references_lock);
 	ObjectID id = p_obj->get_instance_id();
@@ -533,6 +587,9 @@ void CSharpLanguage::pre_unsafe_unreference(Object *p_obj) {
 }
 
 void CSharpLanguage::frame() {
+#ifdef MODULE_SUPERPOS_ENABLED
+    SuperposManagedReload::drain_managed_disposals();
+#endif
 	if (gdmono && gdmono->is_runtime_initialized() && GDMonoCache::godot_api_cache_updated) {
 		GDMonoCache::managed_callbacks.ScriptManagerBridge_FrameCallback();
 	}
@@ -634,6 +691,22 @@ void CSharpLanguage::reload_assemblies() {
 		return;
 	}
 
+#ifdef MODULE_SUPERPOS_ENABLED
+    uint64_t superpos_reload_epoch = 0;
+    bool superpos_callbacks_validated = true;
+    Error superpos_pause = SuperposManagedReload::begin(superpos_reload_epoch);
+    if (superpos_pause != OK) {
+        // A callback in flight requires a later owner boundary. Never unload
+        // while native callbacks/state can still cross the old managed domain.
+        ERR_PRINT_ED("Superpos: native managed reload boundary is unavailable.");
+        return;
+    }
+    struct SuperposReloadRetention {
+        uint64_t epoch;
+        ~SuperposReloadRetention() { SuperposManagedReload::failed(epoch); }
+    } superpos_reload_retention{superpos_reload_epoch};
+#endif
+
 	print_verbose(".NET: Reloading assemblies...");
 
 	// There is no soft reloading with Mono. It's always hard reloading.
@@ -647,6 +720,9 @@ void CSharpLanguage::reload_assemblies() {
 			// Do not reload scripts with only non-collectible instances to avoid disrupting event subscriptions and such.
 			bool is_reloadable = script.instances.is_empty();
 			for (Object *obj : script.instances) {
+#ifdef MODULE_SUPERPOS_ENABLED
+				if (!obj->get_script_instance()) { superpos_callbacks_validated = false; }
+#endif
 				ERR_CONTINUE(!obj->get_script_instance());
 				CSharpInstance *csi = static_cast<CSharpInstance *>(obj->get_script_instance());
 				if (GDMonoCache::managed_callbacks.GCHandleBridge_GCHandleIsTargetCollectible(csi->get_gchandle_intptr())) {
@@ -668,6 +744,9 @@ void CSharpLanguage::reload_assemblies() {
 		MutexLock lock(ManagedCallable::instances_mutex);
 
 		for (ManagedCallable &managed_callable : ManagedCallable::instances) {
+#ifdef MODULE_SUPERPOS_ENABLED
+			if (managed_callable.delegate_handle.value == nullptr) { superpos_callbacks_validated = false; }
+#endif
 			ERR_CONTINUE(managed_callable.delegate_handle.value == nullptr);
 
 			if (!GDMonoCache::managed_callbacks.GCHandleBridge_GCHandleIsTargetCollectible(managed_callable.delegate_handle)) {
@@ -682,6 +761,11 @@ void CSharpLanguage::reload_assemblies() {
 			if (success) {
 				ManagedCallable::instances_pending_reload.insert(&managed_callable, serialized_data);
 			} else {
+#ifdef MODULE_SUPERPOS_ENABLED
+                ManagedCallable::instances_pending_reload.clear();
+                ERR_PRINT_ED("Superpos: managed delegate serialization failed before domain unload.");
+                return;
+#endif
 				if (OS::get_singleton()->is_stdout_verbose()) {
 					OS::get_singleton()->print("Failed to serialize delegate.\n");
 				}
@@ -753,6 +837,9 @@ void CSharpLanguage::reload_assemblies() {
 		RBMap<ObjectID, CSharpScript::StateBackup> &owners_map = scr->pending_reload_state;
 
 		for (Object *obj : scr->instances) {
+#ifdef MODULE_SUPERPOS_ENABLED
+			if (!obj->get_script_instance()) { superpos_callbacks_validated = false; }
+#endif
 			ERR_CONTINUE(!obj->get_script_instance());
 
 			CSharpInstance *csi = static_cast<CSharpInstance *>(obj->get_script_instance());
@@ -763,8 +850,15 @@ void CSharpLanguage::reload_assemblies() {
 
 			Dictionary properties;
 
-			GDMonoCache::managed_callbacks.CSharpInstanceBridge_SerializeState(
-					csi->get_gchandle_intptr(), &properties, &state.event_signals);
+            const bool serialized = GDMonoCache::managed_callbacks.CSharpInstanceBridge_SerializeState(
+                    csi->get_gchandle_intptr(), &properties, &state.event_signals);
+#ifdef MODULE_SUPERPOS_ENABLED
+            if (!serialized) {
+                { MutexLock lock(ManagedCallable::instances_mutex); ManagedCallable::instances_pending_reload.clear(); }
+                ERR_PRINT_ED("Superpos: managed state serialization failed before domain unload.");
+                return;
+            }
+#endif
 
 			for (const Variant *s = properties.next(nullptr); s != nullptr; s = properties.next(s)) {
 				StringName name = *s;
@@ -775,6 +869,22 @@ void CSharpLanguage::reload_assemblies() {
 			owners_map[obj->get_instance_id()] = state;
 		}
 	}
+
+#ifdef MODULE_SUPERPOS_ENABLED
+    if (!superpos_callbacks_validated) {
+        { MutexLock lock(ManagedCallable::instances_mutex); ManagedCallable::instances_pending_reload.clear(); }
+        ERR_PRINT_ED("Superpos: incomplete managed state receipt; domain unload rejected.");
+        return;
+    }
+#endif
+
+#ifdef MODULE_SUPERPOS_ENABLED
+    if (SuperposManagedReload::revoke_managed_bindings(superpos_reload_epoch, superpos_revoke_managed_binding) != OK) {
+        { MutexLock lock(ManagedCallable::instances_mutex); ManagedCallable::instances_pending_reload.clear(); }
+        ERR_PRINT_ED("Superpos: managed wrapper revocation failed; retained networking stays paused.");
+        return;
+    }
+#endif
 
 	// After the state of all instances is saved, clear scripts and script instances
 	for (Ref<CSharpScript> &scr : scripts) {
@@ -805,6 +915,9 @@ void CSharpLanguage::reload_assemblies() {
 				Object *obj = ObjectDB::get_instance(F.key);
 
 				if (!obj) {
+#ifdef MODULE_SUPERPOS_ENABLED
+                    superpos_callbacks_validated = false;
+#endif
 					continue;
 				}
 
@@ -848,6 +961,9 @@ void CSharpLanguage::reload_assemblies() {
 
 			bool valid = GDMonoCache::managed_callbacks.ScriptManagerBridge_AddScriptBridge(scr.ptr(), &script_path);
 
+#ifdef MODULE_SUPERPOS_ENABLED
+            if (!valid) { superpos_callbacks_validated = false; }
+#endif
 			if (valid) {
 				scr->valid = true;
 
@@ -870,6 +986,9 @@ void CSharpLanguage::reload_assemblies() {
 			scr->reload();
 
 			if (!scr->valid) {
+#ifdef MODULE_SUPERPOS_ENABLED
+                superpos_callbacks_validated = false;
+#endif
 				scr->pending_reload_instances.clear();
 				scr->pending_reload_state.clear();
 				continue;
@@ -878,6 +997,9 @@ void CSharpLanguage::reload_assemblies() {
 			bool success = GDMonoCache::managed_callbacks.ScriptManagerBridge_TryReloadRegisteredScriptWithClass(scr.ptr());
 
 			if (!success) {
+#ifdef MODULE_SUPERPOS_ENABLED
+                superpos_callbacks_validated = false;
+#endif
 				// Couldn't reload
 				scr->pending_reload_instances.clear();
 				scr->pending_reload_state.clear();
@@ -892,11 +1014,17 @@ void CSharpLanguage::reload_assemblies() {
 				Object *obj = ObjectDB::get_instance(obj_id);
 
 				if (!obj) {
+#ifdef MODULE_SUPERPOS_ENABLED
+                    superpos_callbacks_validated = false;
+#endif
 					scr->pending_reload_state.erase(obj_id);
 					continue;
 				}
 
 				if (!obj->is_class(native_name)) {
+#ifdef MODULE_SUPERPOS_ENABLED
+                superpos_callbacks_validated = false;
+#endif
 					// No longer inherits the same compatible type, can't reload
 					scr->pending_reload_state.erase(obj_id);
 					continue;
@@ -978,8 +1106,14 @@ void CSharpLanguage::reload_assemblies() {
 
 			bool success = GDMonoCache::managed_callbacks.DelegateUtils_TryDeserializeDelegateWithGCHandle(
 					&serialized_data, &delegate);
+#ifdef MODULE_SUPERPOS_ENABLED
+            if (!success || delegate.value == nullptr) { superpos_callbacks_validated = false; }
+#endif
 
 			if (success) {
+#ifdef MODULE_SUPERPOS_ENABLED
+				if (delegate.value == nullptr) { superpos_callbacks_validated = false; }
+#endif
 				ERR_CONTINUE(delegate.value == nullptr);
 				managed_callable->delegate_handle = delegate;
 			} else if (OS::get_singleton()->is_stdout_verbose()) {
@@ -995,16 +1129,25 @@ void CSharpLanguage::reload_assemblies() {
 			Object *obj = ObjectDB::get_instance(obj_id);
 
 			if (!obj) {
+#ifdef MODULE_SUPERPOS_ENABLED
+                    superpos_callbacks_validated = false;
+#endif
 				scr->pending_reload_state.erase(obj_id);
 				continue;
 			}
 
+#ifdef MODULE_SUPERPOS_ENABLED
+			if (!obj->get_script_instance()) { superpos_callbacks_validated = false; }
+#endif
 			ERR_CONTINUE(!obj->get_script_instance());
 
 			CSharpScript::StateBackup &state_backup = scr->pending_reload_state[obj_id];
 
 			CSharpInstance *csi = CAST_CSHARP_INSTANCE(obj->get_script_instance());
 
+#ifdef MODULE_SUPERPOS_ENABLED
+            if (!csi) { superpos_callbacks_validated = false; }
+#endif
 			if (csi) {
 				Dictionary properties;
 
@@ -1013,14 +1156,31 @@ void CSharpLanguage::reload_assemblies() {
 				}
 
 				// Restore serialized state and call OnAfterDeserialize.
-				GDMonoCache::managed_callbacks.CSharpInstanceBridge_DeserializeState(
-						csi->get_gchandle_intptr(), &properties, &state_backup.event_signals);
+                const bool restored = GDMonoCache::managed_callbacks.CSharpInstanceBridge_DeserializeState(
+                        csi->get_gchandle_intptr(), &properties, &state_backup.event_signals);
+#ifdef MODULE_SUPERPOS_ENABLED
+                if (!restored) { superpos_callbacks_validated = false; }
+#endif
 			}
 		}
 
 		scr->pending_reload_instances.clear();
 		scr->pending_reload_state.clear();
 	}
+
+#ifdef MODULE_SUPERPOS_ENABLED
+    if (superpos_callbacks_validated) {
+        const uint32_t retained_count = SuperposManagedReload::ticket_count();
+        for (uint32_t index = 0; index < retained_count; ++index) {
+            SuperposManagedReload::Ticket ticket;
+            if (SuperposManagedReload::ticket(index, ticket) != OK ||
+                    SuperposManagedReload::claim(ticket) != OK) { superpos_callbacks_validated = false; break; }
+        }
+    }
+    if (SuperposManagedReload::complete(superpos_reload_epoch, superpos_callbacks_validated) != OK) {
+        ERR_PRINT_ED("Superpos: retained networking remains paused after failed managed rebind.");
+    }
+#endif
 
 #ifdef TOOLS_ENABLED
 	// FIXME: Hack to refresh editor in order to display new properties and signals. See if there is a better alternative.
@@ -1069,6 +1229,13 @@ bool CSharpLanguage::debug_break(const String &p_error, bool p_allow_continue) {
 
 #ifdef TOOLS_ENABLED
 void CSharpLanguage::_editor_init_callback() {
+    // Failed/version-rejected managed initialization must never call a null
+    // tools callback while the native EditorNode continues startup.
+    GDMono *mono = GDMono::get_singleton();
+    ERR_FAIL_NULL(mono);
+    ERR_FAIL_COND_MSG(!mono->is_initialized() || !GDMonoCache::godot_api_cache_updated ||
+            !mono->get_plugin_callbacks().LoadToolsAssemblyCallback,
+            "C# editor tools unavailable because managed initialization failed.");
 	// Load GodotTools and initialize GodotSharpEditor
 
 	int32_t interop_funcs_size = 0;
@@ -1133,6 +1300,10 @@ CSharpLanguage::~CSharpLanguage() {
 }
 
 bool CSharpLanguage::setup_csharp_script_binding(CSharpScriptBinding &r_script_binding, Object *p_object) {
+#ifdef MODULE_SUPERPOS_ENABLED
+    Ref<RefCounted> superpos_binding_pin;
+    ERR_FAIL_COND_V(superpos_prepare_managed_owner(p_object, superpos_binding_pin) != OK, false);
+#endif
 #ifdef DEBUG_ENABLED
 	// I don't trust you
 	if (p_object->get_script_instance()) {
@@ -1196,6 +1367,10 @@ RBMap<Object *, CSharpScriptBinding>::Element *CSharpLanguage::insert_script_bin
 }
 
 void *CSharpLanguage::_instance_binding_create_callback(void *, void *p_instance) {
+#ifdef MODULE_SUPERPOS_ENABLED
+    if ((Object::cast_to<SuperposSession>((Object *)p_instance) || Object::cast_to<SuperposWorld>((Object *)p_instance)) &&
+            !SuperposManagedReload::can_create_managed()) { return nullptr; }
+#endif
 	CSharpLanguage *csharp_lang = CSharpLanguage::get_singleton();
 
 	MutexLock lock(csharp_lang->language_bind_mutex);
@@ -1329,6 +1504,10 @@ void *CSharpLanguage::get_instance_binding(Object *p_object) {
 }
 
 void *CSharpLanguage::get_instance_binding_with_setup(Object *p_object) {
+#ifdef MODULE_SUPERPOS_ENABLED
+    Ref<RefCounted> superpos_binding_pin;
+    ERR_FAIL_COND_V(superpos_prepare_managed_owner(p_object, superpos_binding_pin) != OK, nullptr);
+#endif
 	void *binding = get_instance_binding(p_object);
 
 	// Initially this was in `_instance_binding_create_callback`. However, after the new instance
@@ -1360,7 +1539,12 @@ void *CSharpLanguage::get_existing_instance_binding(Object *p_object) {
 bool CSharpLanguage::has_instance_binding(Object *p_object) {
 	return p_object->has_instance_binding(get_singleton());
 }
-void CSharpLanguage::tie_native_managed_to_unmanaged(GCHandleIntPtr p_gchandle_intptr, Object *p_unmanaged, const StringName *p_native_name, bool p_ref_counted) {
+Error CSharpLanguage::tie_native_managed_to_unmanaged(GCHandleIntPtr p_gchandle_intptr, Object *p_unmanaged, const StringName *p_native_name, bool p_ref_counted) {
+#ifdef MODULE_SUPERPOS_ENABLED
+    Ref<RefCounted> superpos_binding_pin;
+    const Error admitted = superpos_prepare_managed_owner(p_unmanaged, superpos_binding_pin);
+    if (admitted != OK) { return admitted; }
+#endif
 	// This method should not fail
 
 	CRASH_COND(!p_unmanaged);
@@ -1403,14 +1587,21 @@ void CSharpLanguage::tie_native_managed_to_unmanaged(GCHandleIntPtr p_gchandle_i
 	script_binding.type_name = *p_native_name;
 	script_binding.gchandle = gchandle;
 	script_binding.owner = p_unmanaged;
+	// OK transfers the incoming GCHandle; every error leaves it managed-owned.
+	return OK;
 }
 
-void CSharpLanguage::tie_user_managed_to_unmanaged(GCHandleIntPtr p_gchandle_intptr, Object *p_unmanaged, Ref<CSharpScript> *p_script, bool p_ref_counted) {
+Error CSharpLanguage::tie_user_managed_to_unmanaged(GCHandleIntPtr p_gchandle_intptr, Object *p_unmanaged, Ref<CSharpScript> *p_script, bool p_ref_counted) {
+	// Always consume the incoming script Ref, including rejected admission.
+	Ref<CSharpScript> script(std::move(*p_script));
+	p_script->~Ref();
+#ifdef MODULE_SUPERPOS_ENABLED
+    Ref<RefCounted> superpos_binding_pin;
+    const Error admitted = superpos_prepare_managed_owner(p_unmanaged, superpos_binding_pin);
+    if (admitted != OK) { return admitted; }
+#endif
 	// This method should not fail
 
-	Ref<CSharpScript> script = *p_script;
-	// We take care of destructing this reference here, so the managed code won't need to do another P/Invoke call
-	p_script->~Ref();
 
 	CRASH_COND(!p_unmanaged);
 
@@ -1424,16 +1615,24 @@ void CSharpLanguage::tie_user_managed_to_unmanaged(GCHandleIntPtr p_gchandle_int
 	MonoGCHandleData gchandle = MonoGCHandleData(p_gchandle_intptr,
 			p_ref_counted ? gdmono::GCHandleType::WEAK_HANDLE : gdmono::GCHandleType::STRONG_HANDLE);
 
-	CRASH_COND(script.is_null());
+	if (script.is_null()) { return ERR_INVALID_DATA; }
 
 	CSharpInstance *csharp_instance = CSharpInstance::create_for_managed_type(p_unmanaged, script.ptr(), gchandle);
+	if (!csharp_instance) { return ERR_UNAVAILABLE; }
 
 	p_unmanaged->set_script_instance(csharp_instance);
 
 	csharp_instance->connect_event_signals();
+	// OK transfers the incoming GCHandle; every error leaves it managed-owned.
+	return OK;
 }
 
-void CSharpLanguage::tie_managed_to_unmanaged_with_pre_setup(GCHandleIntPtr p_gchandle_intptr, Object *p_unmanaged) {
+Error CSharpLanguage::tie_managed_to_unmanaged_with_pre_setup(GCHandleIntPtr p_gchandle_intptr, Object *p_unmanaged) {
+#ifdef MODULE_SUPERPOS_ENABLED
+    Ref<RefCounted> superpos_binding_pin;
+    const Error admitted = superpos_prepare_managed_owner(p_unmanaged, superpos_binding_pin);
+    if (admitted != OK) { return admitted; }
+#endif
 	// This method should not fail
 
 	CRASH_COND(!p_unmanaged);
@@ -1441,8 +1640,8 @@ void CSharpLanguage::tie_managed_to_unmanaged_with_pre_setup(GCHandleIntPtr p_gc
 	CSharpInstance *instance = CAST_CSHARP_INSTANCE(p_unmanaged->get_script_instance());
 
 	if (!instance) {
-		// Native bindings don't need post-setup
-		return;
+		// No native owner accepted this incoming GCHandle.
+		return ERR_UNCONFIGURED;
 	}
 
 	CRASH_COND(!instance->gchandle.is_released());
@@ -1461,9 +1660,15 @@ void CSharpLanguage::tie_managed_to_unmanaged_with_pre_setup(GCHandleIntPtr p_gc
 	}
 
 	instance->connect_event_signals();
+	// OK transfers the incoming GCHandle; every error leaves it managed-owned.
+	return OK;
 }
 
 CSharpInstance *CSharpInstance::create_for_managed_type(Object *p_owner, CSharpScript *p_script, const MonoGCHandleData &p_gchandle) {
+#ifdef MODULE_SUPERPOS_ENABLED
+    Ref<RefCounted> superpos_binding_pin;
+    ERR_FAIL_COND_V(superpos_prepare_managed_owner(p_owner, superpos_binding_pin) != OK, nullptr);
+#endif
 	CSharpInstance *instance = memnew(CSharpInstance(Ref<CSharpScript>(p_script)));
 
 	RefCounted *rc = Object::cast_to<RefCounted>(p_owner);
@@ -1882,6 +2087,9 @@ bool CSharpInstance::_unreference_owner_unsafe() {
 
 bool CSharpInstance::_internal_new_managed() {
 	CSharpLanguage::get_singleton()->release_script_gchandle(gchandle);
+#ifdef MODULE_SUPERPOS_ENABLED
+    SuperposManagedReload::managed_binding_released(owner);
+#endif
 
 	ERR_FAIL_NULL_V(owner, false);
 	ERR_FAIL_COND_V(script.is_null(), false);
@@ -1891,10 +2099,7 @@ bool CSharpInstance::_internal_new_managed() {
 			script.ptr(), owner, nullptr, 0);
 
 	if (!ok) {
-		// Important to clear this before destroying the script instance here
-		script = Ref<CSharpScript>();
-		owner = nullptr;
-
+		failed_managed_construction = true;
 		return false;
 	}
 
@@ -1982,6 +2187,9 @@ void CSharpInstance::refcount_incremented() {
 	CRASH_COND(owner == nullptr);
 #endif // DEBUG_ENABLED
 
+#ifdef MODULE_SUPERPOS_ENABLED
+	if (SuperposManagedReload::is_owner_retired(owner) && gchandle.is_released()) { return; }
+#endif
 	RefCounted *rc_owner = Object::cast_to<RefCounted>(owner);
 
 	if (rc_owner->get_reference_count() > 1 && gchandle.is_weak()) { // The managed side also holds a reference, hence 1 instead of 0
@@ -2016,6 +2224,9 @@ bool CSharpInstance::refcount_decremented() {
 	RefCounted *rc_owner = Object::cast_to<RefCounted>(owner);
 
 	int refcount = rc_owner->get_reference_count();
+#ifdef MODULE_SUPERPOS_ENABLED
+	if (SuperposManagedReload::is_owner_retired(owner) && gchandle.is_released()) { return refcount == 0; }
+#endif
 
 	if (refcount == 1 && !gchandle.is_weak()) { // The managed side also holds a reference, hence 1 instead of 0
 		// If owner owner is no longer referenced by the unmanaged side,
@@ -2121,12 +2332,16 @@ CSharpInstance::CSharpInstance(const Ref<CSharpScript> &p_script) :
 
 CSharpInstance::~CSharpInstance() {
 	destructing_script_instance = true;
+	bool superpos_quiescing = false;
+#ifdef MODULE_SUPERPOS_ENABLED
+	superpos_quiescing = SuperposManagedReload::is_quiescing();
+#endif
 
 	// Must make sure event signals are not left dangling
 	disconnect_event_signals();
 
 	if (!gchandle.is_released()) {
-		if (!predelete_notified && !ref_dying) {
+		if (!predelete_notified && !ref_dying && !superpos_quiescing) {
 			// This destructor is not called from the owners destructor.
 			// This could be being called from the owner's set_script_instance method,
 			// meaning this script is being replaced with another one. If this is the case,
@@ -2156,16 +2371,32 @@ CSharpInstance::~CSharpInstance() {
 		// Otherwise, the unsafe reference debug checks will incorrectly detect a bug.
 		bool die = _unreference_owner_unsafe();
 		CRASH_COND(die); // `owner_keep_alive` holds a reference, so it can't die
+#ifdef MODULE_SUPERPOS_ENABLED
+        SuperposManagedReload::managed_binding_released(owner);
+#endif
 
-		void *data = CSharpLanguage::get_instance_binding_with_setup(owner);
-		CRASH_COND(data == nullptr);
-		CSharpScriptBinding &script_binding = ((RBMap<Object *, CSharpScriptBinding>::Element *)data)->get();
-		CRASH_COND(!script_binding.inited);
+		bool superpos_owner_retired = false;
+#ifdef MODULE_SUPERPOS_ENABLED
+		superpos_owner_retired = SuperposManagedReload::is_owner_retired(owner);
+#endif
+		if (!failed_managed_construction && !superpos_quiescing && !superpos_owner_retired) {
+			void *data = CSharpLanguage::get_instance_binding_with_setup(owner);
+#ifdef MODULE_SUPERPOS_ENABLED
+			// Preparation drains old wrappers and may invoke managed callbacks.
+			// A World freed during that call permanently forbids recreation.
+			superpos_owner_retired = SuperposManagedReload::is_owner_retired(owner);
+#endif
+			if (!superpos_owner_retired) {
+			CRASH_COND(data == nullptr);
+			CSharpScriptBinding &script_binding = ((RBMap<Object *, CSharpScriptBinding>::Element *)data)->get();
+			CRASH_COND(!script_binding.inited);
 
 #ifdef DEBUG_ENABLED
-		// The "instance binding" holds a reference so the refcount should be at least 2 before `scope_keep_owner_alive` goes out of scope
-		CRASH_COND(rc_owner->get_reference_count() <= 1);
+			// The "instance binding" holds a reference so the refcount should be at least 2 before `scope_keep_owner_alive` goes out of scope
+			CRASH_COND(rc_owner->get_reference_count() <= 1);
 #endif // DEBUG_ENABLED
+			}
+		}
 	}
 
 	if (script.is_valid() && owner) {
@@ -2174,8 +2405,8 @@ CSharpInstance::~CSharpInstance() {
 #ifdef DEBUG_ENABLED
 		// CSharpInstance must not be created unless it's going to be added to the list for sure
 		HashSet<Object *>::Iterator match = script->instances.find(owner);
-		CRASH_COND(!match);
-		script->instances.remove(match);
+		CRASH_COND(!match && !failed_managed_construction);
+		if (match) { script->instances.remove(match); }
 #else
 		script->instances.erase(owner);
 #endif // DEBUG_ENABLED
@@ -2565,6 +2796,13 @@ StringName CSharpScript::get_instance_base_type() const {
 }
 
 CSharpInstance *CSharpScript::_create_instance(const Variant **p_args, int p_argcount, Object *p_owner, bool p_is_ref_counted, Callable::CallError &r_error) {
+#ifdef MODULE_SUPERPOS_ENABLED
+    Ref<RefCounted> superpos_binding_pin;
+    if (superpos_prepare_managed_owner(p_owner, superpos_binding_pin) != OK) {
+        r_error.error = Callable::CallError::CALL_ERROR_INSTANCE_IS_NULL;
+        return nullptr;
+    }
+#endif
 	ERR_FAIL_COND_V_MSG(!type_info.can_instantiate(), nullptr, "Cannot instantiate C# script. Script: '" + get_path() + "'.");
 
 	/* STEP 1, CREATE */
@@ -2601,11 +2839,10 @@ CSharpInstance *CSharpScript::_create_instance(const Variant **p_args, int p_arg
 			this, p_owner, p_args, p_argcount);
 
 	if (!ok) {
-		// Important to clear this before destroying the script instance here
-		instance->script = Ref<CSharpScript>();
+		instance->failed_managed_construction = true;
+		r_error.error = Callable::CallError::CALL_ERROR_INSTANCE_IS_NULL;
+		// This immediately deletes instance; never write to it afterward.
 		p_owner->set_script_instance(nullptr);
-		instance->owner = nullptr;
-
 		return nullptr;
 	}
 

@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "component": "Box2DLocalReplay",
+  "status": "source_only_internal_experimental",
+  "capabilities": [],
+  "maintained_manifest_sha256": "74aa5b09888b61ef6501d70510f7cf933dd63fd245b426aa429fbd655affa37e",
+  "engine_head": "2666f16f4efc9e988602f3bd66091c365d6982c5",
+  "files": {
+    "modules/box2d/local_replay.h": "7e61dc189f12d828265cc0f4a6b65ade8885a3891cb007914a2297831031d694",
+    "modules/box2d/local_replay.cpp": "19a4b90c0ae62bc772f4e167c8572d06e20fe8f63e558bee63bad7fed50c7e2d",
+    "thirdparty/box2d/src/local_replay/binding.c": "e876bdc808fdfa5840bcdecb034a4780e8c89cc647bc1afb1fd1b220e7961093",
+    "thirdparty/box2d/src/local_replay/binding.h": "7f7c5591cdd949c7d324676637d9b491a598f4ed4b56e32326479e548c6a303f",
+    "thirdparty/box2d/src/local_replay/reservation.c": "48f13b6a5113e2f7c695dc1fd7eab590df4e9ce479a727db3de2b59affc7cfba",
+    "thirdparty/box2d/src/local_replay/reservation.h": "3d2fc0640879249865a85b3d7f68f2ab32e5c9c319c7c5ca1e8936255b259f03",
+    "thirdparty/box2d/src/local_replay/reservation_requirements.inc": "ec0c75d2a22b141df83b73cbb810de0c429c3ed784f7c72ba08fda7e56b4788f",
+    "thirdparty/box2d/src/local_replay/solver_image.c": "b41065194ee259dbdb483667585de44289e3a25c31700ef57d106ca3b5444244",
+    "thirdparty/box2d/src/local_replay/solver_image.h": "79459aa2509d8d00e2906c0b166dcfdad0b27ea71aef6e115cfd740b4335ad5e",
+    "thirdparty/box2d/src/local_replay/solver_preflight.h": "89289cb2a2c5fb025173f1410d4fc620a233e5490c598d361f6be3adb6d4d137",
+    "thirdparty/box2d/src/local_replay/solver_preflight.inc": "6fc0ea039e58c214e84805484b997e776bfbc159020e09a09219f84f00aa4296",
+    "thirdparty/box2d/src/local_replay/participant.c": "91d38c9a01ba9723b37be48f826e51bb37fef4af92e492d44acafb4cc75e9871",
+    "thirdparty/box2d/src/local_replay/participant.h": "9fe7b993c84865f1d8072a06914082b8dcca2a4d27cf625efa1e24fc4b61c758",
+    "modules/box2d/box2d_physics_server_2d.h": "17d91b5407bd82bdf49aeacfaef46ce05bb5595ee566f4836496b9f16a24031b",
+    "modules/box2d/spaces/box2d_space_2d.h": "89118090da1b43cb9981cf0ed826b3d326742d2d3b1246416882a85a51f2e94b",
+    "modules/box2d/bodies/box2d_body_2d.h": "c60b33ba9944a575eda7b574a8255e4040a95a312b1cc3c6a4e0b8a3d63f3c1e",
+    "modules/box2d/bodies/box2d_collision_object_2d.h": "b0c319609e05b55d94e7daa5d2f69e86aa29c99cfda530b1a7ccf2614c0b062f",
+    "modules/box2d/shapes/box2d_shape_instance.h": "c92dcd91355f36824cacfb7b6b499ba1f3bf54694d61942d1fac379eb4cb9dc7",
+    "modules/box2d/spaces/box2d_space_2d.cpp": "f5643d3ef5f5b22f14f312b58fda41697da92b6fdcfe298c6069ad3a67a3dee9",
+    "thirdparty/box2d/src/core.c": "625806e04e879edb5adfe487e66047ff12caca2e2de91950f641eb4d28ee7c52",
+    "thirdparty/box2d/src/recording.c": "a371e25a850e5da4054ee280e3c491f2d7f0c216e49669ddb4746d14de7e9438",
+    "thirdparty/box2d/src/recording.h": "187dfb3bc9f799179b0c1e26e6e95c6f4da18a7f08d4982fd608f9e4a00eee38",
+    "thirdparty/box2d/src/world_snapshot.c": "8c387aed965ab942ea521c64dc60f34cdece0d9c25ad10485551bf4777fba17b",
+    "build/xmake/recipes/modules/box2d/recipe.lua": "d7b5eed212e49c3846ecdabe4c8fd4631d51342f0f51b66668c024c78d49f0e3"
+  },
+  "qualification": {
+    "runtime_receipt": "C:\\Users\\Rose-X\\Documents\\EGP Workspace\\Third Party Dev\\Superpos-EGP\\.build\\physics-participant\\runs\\1791493998909360600\\receipt.json",
+    "runtime_sha256": "004ba7cf755bd3bfa2bde1b9233878328ee5609327ecad94bdc0e5cb78f82991",
+    "production_object_receipt": "C:\\Users\\Rose-X\\Documents\\EGP Workspace\\Third Party Dev\\Superpos-EGP\\.build\\physics-participant\\production-objects\\1791494025382549200\\receipt.json",
+    "production_object_sha256": "00cf9824fde5f98c1d3aef03bc66322d49bb6cd638e7c9d04bd920d57b561c28"
+  },
+  "current_engine_rebuild_required": true
+}

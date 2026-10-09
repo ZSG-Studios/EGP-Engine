@@ -1,3 +1,4 @@
+#include "../local_replay.h"
 /**************************************************************************/
 /*  box2d_space_2d.cpp                                                    */
 /**************************************************************************/
@@ -132,10 +133,12 @@ Box2DSpace2D::~Box2DSpace2D() {
 		b2DestroyWorld(world_id);
 	}
 
+	Box2DLocalReplay::space_destroyed(this);
 	world_id = b2_nullWorldId;
 }
 
 void Box2DSpace2D::step(real_t p_step) {
+	Box2DLocalReplay::before_step(this);
 	locked = true;
 
 	if (linear_damp_changed || angular_damp_changed) {
@@ -238,6 +241,7 @@ void Box2DSpace2D::sync_state() {
 			object->as_area()->update_overlaps();
 		}
 	}
+	Box2DLocalReplay::after_flush(this);
 }
 
 Box2DDirectSpaceState2D *Box2DSpace2D::get_direct_state() {

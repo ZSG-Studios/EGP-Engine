@@ -36,7 +36,39 @@ namespace Godot
             try
             {
                 var @delegate = (Delegate?)GCHandle.FromIntPtr(delegateGCHandle).Target;
-                return @delegate?.GetHashCode() ?? 0;
+                if (@delegate == null) return 0;
+                uint hash = 2166136261;
+                void Add(string? value)
+                {
+                    unchecked
+                    {
+                        if (value != null)
+                            foreach (char unit in value) hash = (hash ^ unit) * 16777619;
+                        hash = (hash ^ 0xffffu) * 16777619;
+                    }
+                }
+                foreach (Delegate member in @delegate.GetInvocationList())
+                {
+                    Add(member.GetType().AssemblyQualifiedName);
+                    Add(member.Method.DeclaringType?.AssemblyQualifiedName);
+                    Add(member.Method.ToString());
+                    if (member.Target is GodotObject nativeTarget)
+                    {
+                        // Read managed pointer bits; do not dereference native
+                        // memory or call GetInstanceId during hash construction.
+                        ulong bits = unchecked((ulong)nativeTarget.NativePtr.ToInt64());
+                        unchecked
+                        {
+                            for (int octet = 0; octet != 8; ++octet)
+                            {
+                                hash = (hash ^ (byte)bits) * 16777619;
+                                bits >>= 8;
+                            }
+                        }
+                    }
+                    else Add(member.Target?.GetType().AssemblyQualifiedName);
+                }
+                return unchecked((int)hash);
             }
             catch (Exception e)
             {

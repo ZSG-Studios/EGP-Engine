@@ -423,7 +423,7 @@ load_assembly_and_get_function_pointer_fn initialize_hostfxr_self_contained(
 #endif
 
 #ifdef TOOLS_ENABLED
-using godot_plugins_initialize_fn = bool (*)(void *, bool, gdmono::PluginCallbacks *, GDMonoCache::ManagedCallbacks *, const void **, int32_t);
+using godot_plugins_initialize_fn = bool (*)(void *, bool, gdmono::PluginCallbacks *, GDMonoCache::ManagedCallbacks *, const void **, int32_t, uint64_t);
 #else
 using godot_plugins_initialize_fn = bool (*)(void *, GDMonoCache::ManagedCallbacks *, const void **, int32_t);
 #endif
@@ -453,7 +453,7 @@ godot_plugins_initialize_fn initialize_hostfxr_and_godot_plugins(bool &r_runtime
 
 	int rc = load_assembly_and_get_function_pointer(get_data(godot_plugins_path),
 			HOSTFXR_STR("GodotPlugins.Main, GodotPlugins"),
-			HOSTFXR_STR("InitializeFromEngine"),
+			HOSTFXR_STR("InitializeFromEngineSuperposReloadV5"),
 			UNMANAGEDCALLERSONLY_METHOD,
 			nullptr,
 			(void **)&godot_plugins_initialize);
@@ -702,7 +702,7 @@ void GDMono::initialize() {
 	bool init_ok = godot_plugins_initialize(godot_dll_handle,
 			Engine::get_singleton()->is_editor_hint(),
 			&plugin_callbacks_res, &managed_callbacks,
-			interop_funcs, interop_funcs_size);
+			interop_funcs, interop_funcs_size, 0x5350524c00000005ULL);
 	ERR_FAIL_COND_MSG(!init_ok, ".NET: GodotPlugins initialization failed");
 
 	plugin_callbacks = plugin_callbacks_res;

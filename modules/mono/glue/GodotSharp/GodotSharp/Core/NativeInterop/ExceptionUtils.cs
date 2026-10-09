@@ -161,8 +161,9 @@ namespace Godot.NativeInterop
         {
             if (error.Error != godot_variant_call_error_error.GODOT_CALL_ERROR_CALL_OK)
             {
-                using godot_variant callableVariant =
-                    VariantUtils.CreateFromCallableTakingOwnershipOfDisposableValue(callable);
+                // The argument is borrowed; only the copied Variant owns a release.
+                godot_variant borrowed = VariantUtils.CreateFromCallableTakingOwnershipOfDisposableValue(callable);
+                using godot_variant callableVariant = NativeFuncs.godotsharp_variant_new_copy(borrowed);
                 string where = $"callable '{VariantUtils.ConvertToString(callableVariant)}'";
                 string errorText = GetCallErrorMessage(error, where, args);
                 GD.PushError(errorText);
@@ -190,7 +191,9 @@ namespace Godot.NativeInterop
 
             if (string.IsNullOrEmpty(methodstr))
             {
-                methodstr = StringName.CreateTakingOwnershipOfDisposableValue(method);
+                using var methodCopy = StringName.CreateTakingOwnershipOfDisposableValue(
+                    NativeFuncs.godotsharp_string_name_new_copy(method));
+                methodstr = methodCopy;
             }
 
             return $"function '{methodstr}' in base '{basestr}'";

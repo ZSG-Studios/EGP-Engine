@@ -25,6 +25,7 @@
 #include "box2d/types.h"
 
 #include <string.h>
+#include <limits.h>
 
 // Snapshot image magic and version
 #define B2_SNAP_MAGIC 0x32534E42u // 'BNS2'
@@ -147,9 +148,10 @@ static void b2SnapW_U32( b2RecBuffer* buf, uint32_t v )
 	b2RecBufAppend( buf, &v, 4 );
 }
 
-static void b2SnapW_Bytes( b2RecBuffer* buf, const void* src, int n )
+static void b2SnapW_Bytes( b2RecBuffer* buf, const void* src, int64_t n )
 {
-	b2RecBufAppend( buf, src, n );
+	if ( n < 0 || n > INT_MAX ) { buf->failed = true; return; }
+	b2RecBufAppend( buf, src, (int)n );
 }
 
 // Reject a count read from the image before it reaches an allocation or memset. count must be non
@@ -176,7 +178,7 @@ static bool b2SnapCheckCount( const b2SnapReader* r, int count, int memSize, int
 		b2SnapW_I32( buf, ( arr ).count );                                                                                       \
 		if ( ( arr ).count > 0 )                                                                                                 \
 		{                                                                                                                        \
-			b2SnapW_Bytes( buf, ( arr ).data, ( arr ).count * (int)sizeof( *( arr ).data ) );                                    \
+			b2SnapW_Bytes( buf, ( arr ).data, ( arr ).count * (int64_t)sizeof( *( arr ).data ) );                                    \
 		}                                                                                                                        \
 	}                                                                                                                            \
 	while ( 0 )
@@ -238,7 +240,7 @@ static void b2SerBitSet( b2RecBuffer* buf, const b2BitSet* bs )
 	b2SnapW_U32( buf, bs->blockCount );
 	if ( bs->blockCount > 0 )
 	{
-		b2SnapW_Bytes( buf, bs->bits, (int)( bs->blockCount * sizeof( uint64_t ) ) );
+		b2SnapW_Bytes( buf, bs->bits, (int64_t)bs->blockCount * sizeof( uint64_t ) );
 	}
 }
 
@@ -275,7 +277,7 @@ static void b2SerHashSet( b2RecBuffer* buf, const b2HashSet* hs )
 	b2SnapW_U32( buf, hs->count );
 	if ( hs->capacity > 0 )
 	{
-		b2SnapW_Bytes( buf, hs->items, (int)( hs->capacity * sizeof( b2SetItem ) ) );
+		b2SnapW_Bytes( buf, hs->items, (int64_t)hs->capacity * sizeof( b2SetItem ) );
 	}
 }
 
@@ -322,7 +324,7 @@ static void b2SerTree( b2RecBuffer* buf, const b2DynamicTree* tree )
 	b2SnapW_I32( buf, tree->proxyCount );
 	if ( tree->nodeCapacity > 0 )
 	{
-		b2SnapW_Bytes( buf, tree->nodes, tree->nodeCapacity * (int)sizeof( b2TreeNode ) );
+		b2SnapW_Bytes( buf, tree->nodes, tree->nodeCapacity * (int64_t)sizeof( b2TreeNode ) );
 	}
 }
 
@@ -531,8 +533,8 @@ void b2SerializeWorld( b2World* world, b2RecBuffer* buf )
 		if ( chain->id != B2_NULL_INDEX )
 		{
 			// Live slot: write the two heap arrays
-			b2SnapW_Bytes( buf, chain->shapeIndices, chain->count * (int)sizeof( int ) );
-			b2SnapW_Bytes( buf, chain->materials, chain->materialCount * (int)sizeof( b2SurfaceMaterial ) );
+			b2SnapW_Bytes( buf, chain->shapeIndices, chain->count * (int64_t)sizeof( int ) );
+			b2SnapW_Bytes( buf, chain->materials, chain->materialCount * (int64_t)sizeof( b2SurfaceMaterial ) );
 		}
 	}
 
@@ -1157,3 +1159,30 @@ uint64_t b2HashWorldStateDeep( b2World* world )
 
 	return hash;
 }
+
+#if defined(SP_B2_IMAGE_TEST_HOOKS)
+bool spB2TestBitSetSizing(uint32_t count, int* written)
+{
+    b2RecBuffer buffer = {0};
+    buffer.countOnly = true;
+    b2BitSet bits = {0};
+    bits.blockCount = count;
+    b2SerBitSet(&buffer, &bits);
+    *written = buffer.size;
+    return buffer.failed;
+}
+bool spB2TestHashSetSizing(uint32_t count, int* written)
+{
+    b2RecBuffer buffer = {0};
+    buffer.countOnly = true;
+    b2HashSet set = {0};
+    set.capacity = count;
+    b2SerHashSet(&buffer, &set);
+    *written = buffer.size;
+    return buffer.failed;
+}
+#endif
+
+#include "local_replay/solver_preflight.inc"
+
+#include "local_replay/reservation_requirements.inc"

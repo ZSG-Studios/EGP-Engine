@@ -22,6 +22,15 @@ local function host_tools(root, options)
     -- The built-in xmake SDK option is not an engine graph option.
     local sdkroot = options.mingw or import("core.project.config").get("mingw")
     table.join2(configure, hosts.configure_arguments(host, options, sdkroot))
+    -- Reuse explicit Windows host SDK selection, not the target cross compiler.
+    if os.host() == "windows" and host.plat == "windows" and
+            (host.toolchain == "msvc" or host.toolchain == "clang-cl") then
+        local native_config = import("core.project.config")
+        for _, key in ipairs({"vs", "vs_toolset", "vs_sdkver"}) do
+            local selected = native_config.get(key)
+            if selected and selected ~= "" then table.insert(configure, "--" .. key .. "=" .. selected) end
+        end
+    end
     os.vrunv(os.programfile(), configure, {curdir = project, envs = envs})
     os.vrunv(os.programfile(), {"-P", project, "-b", "-j", "4"}, {curdir = project, envs = envs})
     assert(os.isfile(executable), "Native host compressor build failed")

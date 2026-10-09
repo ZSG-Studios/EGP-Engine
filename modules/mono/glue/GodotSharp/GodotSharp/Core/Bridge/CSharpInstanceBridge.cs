@@ -286,7 +286,7 @@ namespace Godot.Bridge
         }
 
         [UnmanagedCallersOnly]
-        internal static unsafe void SerializeState(
+        internal static unsafe godot_bool SerializeState(
             IntPtr godotObjectGCHandle,
             godot_dictionary* propertiesState,
             godot_dictionary* signalEventsState
@@ -297,7 +297,7 @@ namespace Godot.Bridge
                 var godotObject = (GodotObject)GCHandle.FromIntPtr(godotObjectGCHandle).Target;
 
                 if (godotObject == null)
-                    return;
+                    return godot_bool.False;
 
                 // Call OnBeforeSerialize
 
@@ -311,15 +311,17 @@ namespace Godot.Bridge
                     *propertiesState, *signalEventsState);
 
                 godotObject.SaveGodotObjectData(info);
+                return godot_bool.True;
             }
             catch (Exception e)
             {
                 ExceptionUtils.LogException(e);
+                return godot_bool.False;
             }
         }
 
         [UnmanagedCallersOnly]
-        internal static unsafe void DeserializeState(
+        internal static unsafe godot_bool DeserializeState(
             IntPtr godotObjectGCHandle,
             godot_dictionary* propertiesState,
             godot_dictionary* signalEventsState
@@ -330,7 +332,7 @@ namespace Godot.Bridge
                 var godotObject = (GodotObject)GCHandle.FromIntPtr(godotObjectGCHandle).Target;
 
                 if (godotObject == null)
-                    return;
+                    return godot_bool.False;
 
                 // Restore instance state
 
@@ -344,10 +346,12 @@ namespace Godot.Bridge
                 // ReSharper disable once SuspiciousTypeConversion.Global
                 if (godotObject is ISerializationListener serializationListener)
                     serializationListener.OnAfterDeserialize();
+                return godot_bool.True;
             }
             catch (Exception e)
             {
                 ExceptionUtils.LogException(e);
+                return godot_bool.False;
             }
         }
     }

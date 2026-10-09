@@ -63,7 +63,7 @@ bool ManagedCallable::compare_less(const CallableCustom *p_a, const CallableCust
 }
 
 uint32_t ManagedCallable::hash() const {
-	return GDMonoCache::managed_callbacks.DelegateUtils_DelegateHash(delegate_handle);
+	return stable_hash;
 }
 
 String ManagedCallable::get_as_text() const {
@@ -112,6 +112,8 @@ void ManagedCallable::release_delegate_handle() {
 /* clang-format off */
 ManagedCallable::ManagedCallable(GCHandleIntPtr p_delegate_handle, void *p_trampoline, ObjectID p_object_id) :
 		delegate_handle(p_delegate_handle), trampoline(p_trampoline), object_id(p_object_id) {
+	// Never recompute a native map key after its managed target is revoked.
+	stable_hash = GDMonoCache::managed_callbacks.DelegateUtils_DelegateHash(delegate_handle);
 #ifdef GD_MONO_HOT_RELOAD
 	{
 		MutexLock lock(instances_mutex);

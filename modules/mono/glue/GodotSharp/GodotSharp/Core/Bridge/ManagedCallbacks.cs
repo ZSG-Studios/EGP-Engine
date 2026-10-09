@@ -48,17 +48,27 @@ namespace Godot.Bridge
         public delegate* unmanaged<IntPtr, godot_bool, void> CSharpInstanceBridge_CallDispose;
         public delegate* unmanaged<IntPtr, godot_string*, godot_bool*, void> CSharpInstanceBridge_CallToString;
         public delegate* unmanaged<IntPtr, godot_string_name*, godot_bool> CSharpInstanceBridge_HasMethodUnknownParams;
-        public delegate* unmanaged<IntPtr, godot_dictionary*, godot_dictionary*, void> CSharpInstanceBridge_SerializeState;
-        public delegate* unmanaged<IntPtr, godot_dictionary*, godot_dictionary*, void> CSharpInstanceBridge_DeserializeState;
+        public delegate* unmanaged<IntPtr, godot_dictionary*, godot_dictionary*, godot_bool> CSharpInstanceBridge_SerializeState;
+        public delegate* unmanaged<IntPtr, godot_dictionary*, godot_dictionary*, godot_bool> CSharpInstanceBridge_DeserializeState;
         public delegate* unmanaged<IntPtr, void> GCHandleBridge_FreeGCHandle;
         public delegate* unmanaged<IntPtr, godot_bool> GCHandleBridge_GCHandleIsTargetCollectible;
         public delegate* unmanaged<void*, void> DebuggingUtils_GetCurrentStackInfo;
         public delegate* unmanaged<void> DisposablesTracker_OnGodotShuttingDown;
         public delegate* unmanaged<godot_bool, void> GD_OnCoreApiAssemblyLoaded;
+        public delegate* unmanaged<IntPtr, ulong, godot_bool> Superpos_RevokeBindingForReload;
         // @formatter:on
+
+        private static int _superposOwnerManagedThread;
+        internal static bool IsSuperposOwnerThread => _superposOwnerManagedThread != 0 &&
+            System.Threading.Volatile.Read(ref _superposOwnerManagedThread) == System.Environment.CurrentManagedThreadId;
 
         public static ManagedCallbacks Create()
         {
+            // The version-checked native initializer calls this on its owner.
+            int caller = System.Environment.CurrentManagedThreadId;
+            int prior = System.Threading.Interlocked.CompareExchange(ref _superposOwnerManagedThread, caller, 0);
+            if (prior != 0 && prior != caller)
+                throw new InvalidOperationException("Managed callback creation requires the original engine owner.");
             return new()
             {
                 // @formatter:off
@@ -105,9 +115,13 @@ namespace Godot.Bridge
                 DebuggingUtils_GetCurrentStackInfo = &DebuggingUtils.GetCurrentStackInfo,
                 DisposablesTracker_OnGodotShuttingDown = &DisposablesTracker.OnGodotShuttingDown,
                 GD_OnCoreApiAssemblyLoaded = &GD.OnCoreApiAssemblyLoaded,
+                Superpos_RevokeBindingForReload = &GodotObject.SuperposRevokeBindingForReload,
                 // @formatter:on
             };
         }
+
+        [System.Runtime.CompilerServices.MethodImpl(System.Runtime.CompilerServices.MethodImplOptions.NoInlining)]
+        public static ulong GetSuperposReloadAbi() => 0x5350524c00000005UL;
 
         public static void Create(IntPtr outManagedCallbacks)
             => *(ManagedCallbacks*)outManagedCallbacks = Create();

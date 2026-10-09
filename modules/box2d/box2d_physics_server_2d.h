@@ -14,6 +14,7 @@
 using namespace PhysicsServer2DEnums;
 
 class Box2DPhysicsServer2D : public PhysicsServer2D {
+	friend class Box2DLocalReplay;
 	GDCLASS(Box2DPhysicsServer2D, PhysicsServer2D);
 
 public:

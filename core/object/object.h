@@ -226,15 +226,19 @@ protected: \
 		return (void (Object::*)(int)) & m_class::_notification; \
 	} \
 	virtual void _notification_forwardv(int p_notification) override { \
+		const ObjectID receiver_id = _notification_lifetime_token(); \
 		m_inherits::_notification_forwardv(p_notification); \
+		if (!_notification_receiver_alive(receiver_id, this)) { return; } \
 		if (m_class::_get_notification() != m_inherits::_get_notification()) { \
 			_notification(p_notification); \
 		} \
 	} \
 	virtual void _notification_backwardv(int p_notification) override { \
+		const ObjectID receiver_id = _notification_lifetime_token(); \
 		if (m_class::_get_notification() != m_inherits::_get_notification()) { \
 			_notification(p_notification); \
 		} \
+		if (!_notification_receiver_alive(receiver_id, this)) { return; } \
 		m_inherits::_notification_backwardv(p_notification); \
 	} \
 \
@@ -532,6 +536,11 @@ protected:
 	virtual bool _property_can_revertv(const StringName &p_name) const { return false; }
 	virtual bool _property_get_revertv(const StringName &p_name, Variant &r_property) const { return false; }
 
+	// Native World callbacks may synchronously retire their Node. These
+	// tokens guard notification continuation without pinning a Node or
+	// changing the virtual ABI; untracked objects use an empty token.
+	ObjectID _notification_lifetime_token() const;
+	static bool _notification_receiver_alive(ObjectID p_id, const Object *p_receiver);
 	void _notification_forward(int p_notification);
 	void _notification_backward(int p_notification);
 	virtual void _notification_forwardv(int p_notification) {}

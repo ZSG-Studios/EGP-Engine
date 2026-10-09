@@ -80,13 +80,13 @@ namespace Godot.NativeInterop
             in godot_string_name signal,
             IntPtr target, IntPtr awaiterHandlePtr);
 
-        internal static partial void godotsharp_internal_tie_native_managed_to_unmanaged(IntPtr gcHandleIntPtr,
+        internal static partial Error godotsharp_internal_tie_native_managed_to_unmanaged(IntPtr gcHandleIntPtr,
             IntPtr unmanaged, in godot_string_name nativeName, godot_bool refCounted);
 
-        internal static partial void godotsharp_internal_tie_user_managed_to_unmanaged(IntPtr gcHandleIntPtr,
+        internal static partial Error godotsharp_internal_tie_user_managed_to_unmanaged(IntPtr gcHandleIntPtr,
             IntPtr unmanaged, godot_ref* scriptPtr, godot_bool refCounted);
 
-        internal static partial void godotsharp_internal_tie_managed_to_unmanaged_with_pre_setup(
+        internal static partial Error godotsharp_internal_tie_managed_to_unmanaged_with_pre_setup(
             IntPtr gcHandleIntPtr, IntPtr unmanaged);
 
         internal static partial IntPtr godotsharp_internal_unmanaged_get_script_instance_managed(IntPtr p_unmanaged,
@@ -608,5 +608,10 @@ namespace Godot.NativeInterop
         // Object
 
         public static partial void godotsharp_object_to_string(IntPtr ptr, out godot_string r_str);
+        // Private version-fenced native lifecycle ABI v2. Appended ordinals.
+        internal static partial Error godotsharp_internal_superpos_binding_claim(IntPtr ptr, out ulong generation);
+        internal static partial Error godotsharp_internal_superpos_binding_validate(IntPtr ptr, ulong generation);
+        internal static partial Error godotsharp_internal_superpos_binding_retire(IntPtr ptr, ulong generation, godot_bool isFinalizer);
+
     }
 }

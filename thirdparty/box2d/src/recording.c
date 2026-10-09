@@ -20,8 +20,16 @@
 
 void b2RecBufAppend( b2RecBuffer* buf, const void* data, int size )
 {
-	if ( size <= 0 )
+	if ( buf->failed ) return;
+	if ( size < 0 || buf->size < 0 || size > INT_MAX - buf->size )
 	{
+		buf->failed = true;
+		return;
+	}
+	if ( size == 0 ) return;
+	if ( buf->fixedCapacity && size > buf->capacity - buf->size )
+	{
+		buf->failed = true;
 		return;
 	}
 

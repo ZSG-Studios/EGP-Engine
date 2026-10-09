@@ -1,0 +1,8 @@
+[configuration]
+entry_symbol = "test_init"
+compatibility_minimum = "4.8"
+reloadable = true
+
+[libraries]
+windows.debug.x86_64 = "res://extensions/test/bin/test.windows.debug.x86_64.dll"
+windows.release.x86_64 = "res://extensions/test/bin/test.windows.release.x86_64.dll"
