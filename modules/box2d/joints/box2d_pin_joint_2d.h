@@ -5,6 +5,8 @@
 #include "box2d_joint_2d.h"
 
 class Box2DPinJoint2D : public Box2DJoint2D {
+	friend class Box2DPortableSpace;
+	friend class Box2DPortableSpaceAccess;
 public:
 	Box2DPinJoint2D(const Vector2 &p_pos, Box2DBody2D *p_body_a, Box2DBody2D *p_body_b);
 

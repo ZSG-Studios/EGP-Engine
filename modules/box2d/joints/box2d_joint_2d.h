@@ -36,6 +36,8 @@
 #include "../bodies/box2d_body_2d.h"
 
 class Box2DJoint2D {
+	friend class Box2DPortableSpace;
+	friend class Box2DPortableSpaceAccess;
 public:
 	Box2DJoint2D() = default;
 	explicit Box2DJoint2D(PS2DE::JointType p_type, Box2DBody2D *p_body_a, Box2DBody2D *p_body_b) :

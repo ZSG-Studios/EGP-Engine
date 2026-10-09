@@ -27,16 +27,23 @@ class Box2DSpace2D;
 // ids and object user data are mapped through a caller-supplied table;
 // unknown ids are rejected.
 //
-// Supported profile: rigid, kinematic and static bodies with any shapes in a
-// space with only its default area; no joints, extra areas, collision
-// exceptions, force-integration callbacks or contact monitoring. Everything
-// else is refused at capture.
+// Covered: rigid, kinematic and static bodies with any shapes; the default
+// area and extra areas with their overrides, step order, monitor callbacks
+// and overlap state; every joint type through the server (pin, groove, damped
+// spring and the configured distance..wheel joints) with their creation
+// definitions; collision exceptions and their filter joints; reported
+// contacts; force-integration callbacks with their user data and the
+// state-sync callback. Callbacks are rebound through `callable_map`
+// ("<role>:<source id>" -> Callable) or, for method callables, through
+// `object_map`; an unresolvable force-integration or monitor callback is
+// rejected, an unresolvable state-sync callback is dropped. Cached hit and
+// joint events and named bodies are refused at capture.
 class Box2DPortableSpace {
 public:
 	static Dictionary capture(Box2DPhysicsServer2D *p_server, RID p_space);
 	static Error request_capture(Box2DPhysicsServer2D *p_server, RID p_space);
 	static Dictionary take_capture(Box2DPhysicsServer2D *p_server, RID p_space);
-	static Dictionary restore(Box2DPhysicsServer2D *p_server, const PackedByteArray &p_bytes, const Dictionary &p_object_map, const Dictionary &p_shape_map);
+	static Dictionary restore(Box2DPhysicsServer2D *p_server, const PackedByteArray &p_bytes, const Dictionary &p_object_map, const Dictionary &p_shape_map, const Dictionary &p_callable_map);
 	static PackedByteArray digest(Box2DPhysicsServer2D *p_server, RID p_space);
 	static Dictionary capture_info(Box2DPhysicsServer2D *p_server, RID p_space);
 	static int64_t identity(Box2DPhysicsServer2D *p_server, RID p_body);

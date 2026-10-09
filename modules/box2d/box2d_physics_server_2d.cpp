@@ -118,7 +118,7 @@ void Box2DPhysicsServer2D::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("space_portable_capture", "space"), &Box2DPhysicsServer2D::space_portable_capture);
 	ClassDB::bind_method(D_METHOD("space_portable_request_capture", "space"), &Box2DPhysicsServer2D::space_portable_request_capture);
 	ClassDB::bind_method(D_METHOD("space_portable_take_capture", "space"), &Box2DPhysicsServer2D::space_portable_take_capture);
-	ClassDB::bind_method(D_METHOD("space_portable_restore", "bytes", "object_map", "shape_map"), &Box2DPhysicsServer2D::space_portable_restore, DEFVAL(Dictionary()), DEFVAL(Dictionary()));
+	ClassDB::bind_method(D_METHOD("space_portable_restore", "bytes", "object_map", "shape_map", "callable_map"), &Box2DPhysicsServer2D::space_portable_restore, DEFVAL(Dictionary()), DEFVAL(Dictionary()), DEFVAL(Dictionary()));
 	ClassDB::bind_method(D_METHOD("space_portable_digest", "space"), &Box2DPhysicsServer2D::space_portable_digest);
 	ClassDB::bind_method(D_METHOD("space_portable_capture_info", "space"), &Box2DPhysicsServer2D::space_portable_capture_info);
 	ClassDB::bind_method(D_METHOD("body_portable_identity", "body"), &Box2DPhysicsServer2D::body_portable_identity);
@@ -127,7 +127,7 @@ void Box2DPhysicsServer2D::_bind_methods() {
 Dictionary Box2DPhysicsServer2D::space_portable_capture(RID p_space) { return Box2DPortableSpace::capture(this, p_space); }
 Error Box2DPhysicsServer2D::space_portable_request_capture(RID p_space) { return Box2DPortableSpace::request_capture(this, p_space); }
 Dictionary Box2DPhysicsServer2D::space_portable_take_capture(RID p_space) { return Box2DPortableSpace::take_capture(this, p_space); }
-Dictionary Box2DPhysicsServer2D::space_portable_restore(const PackedByteArray &p_bytes, const Dictionary &p_object_map, const Dictionary &p_shape_map) { return Box2DPortableSpace::restore(this, p_bytes, p_object_map, p_shape_map); }
+Dictionary Box2DPhysicsServer2D::space_portable_restore(const PackedByteArray &p_bytes, const Dictionary &p_object_map, const Dictionary &p_shape_map, const Dictionary &p_callable_map) { return Box2DPortableSpace::restore(this, p_bytes, p_object_map, p_shape_map, p_callable_map); }
 PackedByteArray Box2DPhysicsServer2D::space_portable_digest(RID p_space) { return Box2DPortableSpace::digest(this, p_space); }
 Dictionary Box2DPhysicsServer2D::space_portable_capture_info(RID p_space) { return Box2DPortableSpace::capture_info(this, p_space); }
 int64_t Box2DPhysicsServer2D::body_portable_identity(RID p_body) { return Box2DPortableSpace::identity(this, p_body); }

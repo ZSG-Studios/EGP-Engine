@@ -42,7 +42,7 @@
 			<return type="Dictionary" />
 			<param index="0" name="space" type="RID" />
 			<description>
-				Captures a portable checkpoint of [param space] immediately. Returns [code]{"error": Error, "bytes": PackedByteArray, "refusal": int}[/code], where [code]refusal[/code] is a nonzero diagnostic code when the capture is refused. Succeeds only at the physics phase boundary (outside stepping and query flushing, after the space's step effects were consumed); otherwise [code]error[/code] is [constant ERR_BUSY]. Unsupported content (joints, extra areas, collision exceptions, force-integration callbacks, contact monitoring) returns [constant ERR_UNAVAILABLE].
+				Captures a portable checkpoint of [param space] immediately. Returns [code]{"error": Error, "bytes": PackedByteArray, "refusal": int}[/code], where [code]refusal[/code] is a nonzero diagnostic code when the capture is refused. Succeeds only at the physics phase boundary (outside stepping and query flushing, after the space's step effects were consumed); otherwise [code]error[/code] is [constant ERR_BUSY]. Cached hit or joint events, named bodies and pointers outside the symbolic registry return [constant ERR_UNAVAILABLE].
 			</description>
 		</method>
 		<method name="space_portable_capture_info">
@@ -71,8 +71,9 @@
 			<param index="0" name="bytes" type="PackedByteArray" />
 			<param index="1" name="object_map" type="Dictionary" default="{}" />
 			<param index="2" name="shape_map" type="Dictionary" default="{}" />
+			<param index="3" name="callable_map" type="Dictionary" default="{}" />
 			<description>
-				Restores a portable checkpoint into a fresh space with new body RIDs. Returns [code]{"error": Error, "space": RID, "default_area": RID, "bodies": {source body id: RID}}[/code]; the new space is inactive. [param object_map] maps every non-zero source instance id (node and canvas instance ids, object user data) to an [Object] or instance id; an unmapped id fails with [constant ERR_DOES_NOT_EXIST]. [param shape_map] maps source shape RID ids to shape [RID]s; when empty, the source shape RIDs of this server are used. Corrupt or tampered bytes fail with [constant ERR_FILE_CORRUPT], another format version or position width with [constant ERR_FILE_UNRECOGNIZED].
+				Restores a portable checkpoint into a fresh space with new body RIDs. Returns [code]{"error": Error, "space": RID, "default_area": RID, "bodies": {source body id: RID}}[/code]; the new space is inactive. [param object_map] maps every non-zero source instance id (node and canvas instance ids, object user data) to an [Object] or instance id; an unmapped id fails with [constant ERR_DOES_NOT_EXIST]. [param shape_map] maps source shape RID ids to shape [RID]s; when empty, the source shape RIDs of this server are used. Corrupt or tampered bytes fail with [constant ERR_FILE_CORRUPT], another format version or position width with [constant ERR_FILE_UNRECOGNIZED]. Bodies, extra areas (with overrides, step order and overlap state), every joint type, collision exceptions and reported contacts are restored; [code]areas[/code] and [code]joints[/code] map source ids to new RIDs as well. Callbacks are rebound through [param callable_map], keyed [code]"state_sync:&lt;source id&gt;"[/code], [code]"force_integration:&lt;source id&gt;"[/code], [code]"body_monitor:&lt;source id&gt;"[/code] or [code]"area_monitor:&lt;source id&gt;"[/code]; a method callable whose object is in [param object_map] is rebound automatically. An unresolvable force-integration or monitor callback fails with [constant ERR_DOES_NOT_EXIST]; an unresolvable state-sync callback is dropped.
 			</description>
 		</method>
 		<method name="space_portable_take_capture">

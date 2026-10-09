@@ -82,7 +82,7 @@ public:
 	Dictionary space_portable_capture(RID p_space);
 	Error space_portable_request_capture(RID p_space);
 	Dictionary space_portable_take_capture(RID p_space);
-	Dictionary space_portable_restore(const PackedByteArray &p_bytes, const Dictionary &p_object_map, const Dictionary &p_shape_map);
+	Dictionary space_portable_restore(const PackedByteArray &p_bytes, const Dictionary &p_object_map, const Dictionary &p_shape_map, const Dictionary &p_callable_map);
 	PackedByteArray space_portable_digest(RID p_space);
 	Dictionary space_portable_capture_info(RID p_space);
 	int64_t body_portable_identity(RID p_body);

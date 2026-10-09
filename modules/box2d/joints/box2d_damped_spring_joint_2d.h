@@ -5,6 +5,8 @@
 #include "box2d_joint_2d.h"
 
 class Box2DDampedSpringJoint2D : public Box2DJoint2D {
+	friend class Box2DPortableSpace;
+	friend class Box2DPortableSpaceAccess;
 public:
 	Box2DDampedSpringJoint2D(const Vector2 &p_anchor_a, const Vector2 &p_anchor_b, Box2DBody2D *p_body_a, Box2DBody2D *p_body_b);
 

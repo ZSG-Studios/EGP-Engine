@@ -614,7 +614,8 @@ void Box2DBody2D::update_mass() {
 	BodyJointRange range(body_id);
 	for (b2JointId id : range) {
 		Box2DJoint2D *joint = static_cast<Box2DJoint2D *>(b2Joint_GetUserData(id));
-		if (joint->get_type() == PS2DE::JOINT_TYPE_DAMPED_SPRING) {
+		// Collision-exception filter joints carry no wrapper.
+		if (joint && joint->get_type() == PS2DE::JOINT_TYPE_DAMPED_SPRING) {
 			Box2DDampedSpringJoint2D *spring = static_cast<Box2DDampedSpringJoint2D *>(joint);
 			spring->update_stiffness();
 		}

@@ -2,6 +2,8 @@
 #pragma once
 #include "box2d_joint_2d.h"
 class Box2DConfiguredJoint2D final : public Box2DJoint2D {
+	friend class Box2DPortableSpace;
+	friend class Box2DPortableSpaceAccess;
 public:
 	Box2DConfiguredJoint2D(PS2DE::JointType p_type, Box2DBody2D *p_a, Box2DBody2D *p_b, const Transform2D &p_frame_a, const Transform2D &p_frame_b);
 	bool set_configuration(const Dictionary &p_configuration);
