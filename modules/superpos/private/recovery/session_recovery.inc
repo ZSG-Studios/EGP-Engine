@@ -20,6 +20,7 @@ superpos::Result<superpos_egp::recovery::SessionTarget> SuperposRecoveryAccess::
     result.capacity = impl->capacity;
     result.state_stride = identity->config.state_stride;
     result.authority_epoch = identity->config.authority_epoch;
+    result.authority_peer = identity->config.authority_peer;
     result.schemas_fingerprint = impl->world->fingerprint();
     result.simulation_fingerprint = *profile;
     result.digest = &impl->digest;
@@ -37,37 +38,36 @@ superpos::Result<std::size_t> SuperposRecoveryAccess::live_count(SuperposSession
     return owner.impl->world->world().live_count();
 }
 
+superpos::Result<std::size_t> SuperposRecoveryAccess::snapshot_bytes(SuperposSession &owner) noexcept {
+    if (auto ready = available(owner); !ready) return superpos::fail(ready.error());
+    return owner.impl->world->world().capture_bytes();
+}
+
+superpos::Result<std::size_t> SuperposRecoveryAccess::snapshot(SuperposSession &owner, std::span<std::byte> output) noexcept {
+    if (auto ready = available(owner); !ready) return superpos::fail(ready.error());
+    return owner.impl->world->world().capture(output);
+}
+
 superpos::Result<superpos_egp::recovery::ApplyResult> SuperposRecoveryAccess::apply(SuperposSession &owner,
-        std::span<const std::byte> payload, superpos::Epoch successor, std::span<superpos_egp::recovery::HandleMapping> mapping) noexcept {
+        std::span<const std::byte> snapshot, superpos::Epoch successor) noexcept {
     using superpos::Error;
     if (auto ready = available(owner); !ready) return superpos::fail(ready.error());
     auto *impl = owner.impl;
     if (owner.pending_native_retirement || (impl->network && impl->network->receiver)) return superpos::fail(Error::Busy);
-    auto &world = impl->world->world();
-    auto epoch = world.authority_epoch(); if (!epoch) return superpos::fail(epoch.error());
-    if (!successor || *epoch != successor) return superpos::fail(Error::StaleEpoch);
-    auto live = world.live_count(); if (!live) return superpos::fail(live.error());
-    if (*live) return superpos::fail(Error::Busy);
-    auto header = superpos_egp::recovery::validate_world_payload(payload, impl->schemas.span(), impl->capacity);
-    if (!header) return superpos::fail(header.error());
-    if (mapping.size() < header->count) return superpos::fail(Error::CapacityExceeded);
-    // Callback-free: World spawn performs no scene or user calls.
-    std::uint32_t spawned = 0;
-    bool preserved = true;
-    auto applied = superpos_egp::recovery::for_each_entity(payload, [&](const superpos_egp::recovery::WorldEntity &entity) -> superpos::Status {
-        auto handle = impl->world->spawn(entity.schema, entity.owner, entity.state, entity.tick);
-        if (!handle) return superpos::fail(handle.error());
-        const auto original = superpos::ObjectHandle::from_parts(entity.slot, entity.generation).value;
-        mapping[spawned++] = {original, handle->value};
-        preserved = preserved && original == handle->value;
-        return {};
-    });
-    if (!applied) {
-        for (std::uint32_t i = 0; i < spawned; ++i) (void)impl->world->destroy(superpos::ObjectHandle{mapping[i].restored}, successor);
-        return superpos::fail(applied.error());
-    }
-    if (header->tick > impl->tick) impl->tick = header->tick;
-    return superpos_egp::recovery::ApplyResult{spawned, preserved, impl->tick};
+    if (impl->network && impl->network->authority) return superpos::fail(Error::Busy);
+    if (!successor) return superpos::fail(Error::StaleEpoch);
+    // RegisteredWorld exposes no restore pass-through yet. Its World member
+    // is not a const object, so restoring through it is well defined; the
+    // frozen registry is unaffected and World::restore validates schemas,
+    // capacity, the pristine state and the successor epoch itself.
+    auto &world = const_cast<superpos::World &>(impl->world->world());
+    auto restored = world.restore(snapshot, successor);
+    if (!restored) return superpos::fail(restored.error());
+    // Resume the Session tick at least at the newest restored entity tick.
+    superpos::Tick newest = 0;
+    for (uint32_t i = 0; i < impl->capacity; ++i) if (impl->slots[i].live && impl->slots[i].tick > newest) newest = impl->slots[i].tick;
+    if (newest > impl->tick) impl->tick = newest;
+    return superpos_egp::recovery::ApplyResult{uint32_t(*restored), true, impl->tick};
 }
 
 superpos::Status SuperposRecoveryAccess::attach_authority(SuperposSession &link, superpos::ReplicaConfig config,

@@ -18,6 +18,12 @@ std::size_t maximum_world_payload(std::uint32_t capacity, std::size_t stride) no
     return world_header_bytes + std::size_t(capacity) * (world_entry_bytes + stride);
 }
 
+std::size_t maximum_world_snapshot(std::uint32_t capacity, std::size_t stride) noexcept {
+    // Header and per-slot u64 fields with exact canonical bytes, plus the
+    // free-list order; generous fixed slack covers versioned header growth.
+    return 256 + std::size_t(capacity) * (16 * 8 + stride);
+}
+
 superpos::Result<std::size_t> encode_world_payload(const superpos::World &world, std::span<const superpos::WorldSlot> slots,
         superpos::Tick tick, std::span<std::byte> output) noexcept {
     auto epoch = world.authority_epoch(); if (!epoch) return fail(epoch.error());
@@ -66,19 +72,34 @@ superpos::Result<WorldPayloadHeader> validate_world_payload(std::span<const std:
 }
 
 WorldParticipant::WorldParticipant(std::span<const superpos::Schema> schemas, std::uint32_t capacity, std::size_t stride,
-        superpos::CryptographicDigest &digest, superpos::HostRestoreCapabilities capabilities) noexcept
-    : schemas_(schemas), capacity_(capacity), stride_(stride), digest_(&digest), capabilities_(capabilities) {}
+        superpos::PeerId authority_peer, superpos::CryptographicDigest &digest, superpos::HostRestoreCapabilities capabilities) noexcept
+    : schemas_(schemas), capacity_(capacity), stride_(stride), authority_peer_(authority_peer), digest_(&digest), capabilities_(capabilities) {}
 
 WorldParticipant::~WorldParticipant() { discard(); }
 
-superpos::Status WorldParticipant::prepare(const superpos::HostRestorePlan &, superpos::Allocator &allocator) noexcept {
+superpos::Status WorldParticipant::prepare(const superpos::HostRestorePlan &plan, superpos::Allocator &allocator) noexcept {
     if (buffer_) return fail(Error::Busy);
-    limit_ = maximum_world_payload(capacity_, stride_);
-    if (!capacity_ || !stride_ || limit_ > capabilities_.maximum_record_bytes) return fail(Error::CapacityExceeded);
+    if (!capacity_ || !stride_ || !plan.successor_epoch) return fail(Error::InvalidArgument);
+    limit_ = maximum_world_snapshot(capacity_, stride_);
+    if (limit_ > capabilities_.maximum_record_bytes) return fail(Error::CapacityExceeded);
+    // Candidate bytes plus a private scratch World for semantic validation.
     buffer_ = static_cast<std::byte *>(allocator.allocate(limit_, alignof(std::max_align_t), superpos::MemoryDomain::Recovery));
-    if (!buffer_) return fail(Error::OutOfMemory);
-    allocator_ = &allocator; size_ = 0; chunks_ = records_ = 0; sealed_ = false;
+    scratch_slots_ = static_cast<superpos::WorldSlot *>(allocator.allocate(sizeof(superpos::WorldSlot) * capacity_, alignof(superpos::WorldSlot), superpos::MemoryDomain::Recovery));
+    scratch_arena_ = static_cast<std::byte *>(allocator.allocate(std::size_t(capacity_) * stride_, alignof(std::max_align_t), superpos::MemoryDomain::Recovery));
+    allocator_ = &allocator;
+    if (!buffer_ || !scratch_slots_ || !scratch_arena_) { discard(); return fail(Error::OutOfMemory); }
+    for (std::uint32_t i = 0; i < capacity_; ++i) std::construct_at(scratch_slots_ + i);
+    successor_ = plan.successor_epoch; size_ = 0; chunks_ = records_ = 0; sealed_ = false;
     return {};
+}
+
+superpos::Status WorldParticipant::validate(std::span<const std::byte> snapshot) noexcept {
+    // A fresh pristine scratch World each time; core restore is all-or-nothing.
+    auto scratch = superpos::World::create({successor_, authority_peer_, stride_}, {scratch_slots_, capacity_},
+        {scratch_arena_, std::size_t(capacity_) * stride_}, schemas_);
+    if (!scratch) return fail(scratch.error());
+    auto restored = scratch->restore(snapshot, successor_);
+    return restored ? superpos::Status{} : superpos::Status(fail(restored.error()));
 }
 
 superpos::Status WorldParticipant::adopt(std::span<const std::byte> envelope, superpos::CanonicalStateKind kind) noexcept {
@@ -87,8 +108,7 @@ superpos::Status WorldParticipant::adopt(std::span<const std::byte> envelope, su
     if (!view || view->header.kind != kind) return fail(Error::RecoveryUnavailable);
     if (view->payload.size() > limit_) return fail(Error::CapacityExceeded);
     // Validate before replacing: a rejected image never becomes the candidate.
-    auto header = validate_world_payload(view->payload, schemas_, capacity_);
-    if (!header) return fail(header.error());
+    if (auto checked = validate(view->payload); !checked) return checked;
     std::memcpy(buffer_, view->payload.data(), view->payload.size());
     size_ = view->payload.size();
     return {};
@@ -116,7 +136,7 @@ superpos::Status WorldParticipant::poststate(superpos::Epoch, std::uint64_t, sup
 superpos::Result<superpos::Fingerprint> WorldParticipant::seal() noexcept {
     if (!buffer_ || sealed_ || !chunks_) return fail(Error::NotReady);
     const std::span<const std::byte> payload(buffer_, size_);
-    if (auto checked = validate_world_payload(payload, schemas_, capacity_); !checked) return fail(checked.error());
+    if (auto checked = validate(payload); !checked) return fail(checked.error());
     superpos::Fingerprint result{};
     if (auto hashed = digest_->hash(payload, result); !hashed) return fail(hashed.error());
     sealed_ = true;
@@ -124,8 +144,13 @@ superpos::Result<superpos::Fingerprint> WorldParticipant::seal() noexcept {
 }
 
 void WorldParticipant::discard() noexcept {
-    if (buffer_ && allocator_) allocator_->deallocate(buffer_);
-    buffer_ = nullptr; allocator_ = nullptr; size_ = limit_ = 0; sealed_ = false;
+    if (allocator_) {
+        if (buffer_) allocator_->deallocate(buffer_);
+        if (scratch_slots_) { for (std::uint32_t i = 0; i < capacity_; ++i) std::destroy_at(scratch_slots_ + i); allocator_->deallocate(scratch_slots_); }
+        if (scratch_arena_) allocator_->deallocate(scratch_arena_);
+    }
+    buffer_ = nullptr; scratch_slots_ = nullptr; scratch_arena_ = nullptr; allocator_ = nullptr;
+    size_ = limit_ = 0; sealed_ = false; successor_ = 0;
 }
 
 superpos::Result<std::span<const std::byte>> WorldParticipant::sealed_payload() const noexcept {

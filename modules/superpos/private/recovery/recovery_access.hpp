@@ -15,12 +15,13 @@ struct SessionTarget {
     std::uint32_t capacity{};
     std::size_t state_stride{};
     superpos::Epoch authority_epoch{};
+    superpos::PeerId authority_peer{};
     superpos::Fingerprint schemas_fingerprint{}, simulation_fingerprint{};
     superpos::CryptographicDigest *digest{};
 };
-struct HandleMapping { std::uint64_t original{}, restored{}; };
-// Typed apply outcome. handles_preserved is true only when every restored
-// handle equals its sealed handle; otherwise callers use the mapping.
+// Typed apply outcome. World::restore reproduces exact handles, generations,
+// revisions, ticks, free-list order and the publication counter, so
+// handles_preserved is always true for a successful apply.
 struct ApplyResult {
     std::uint32_t objects{};
     bool handles_preserved{};
@@ -30,15 +31,18 @@ struct ApplyResult {
 
 struct SuperposRecoveryAccess {
     static superpos::Result<superpos_egp::recovery::SessionTarget> target(SuperposSession &) noexcept;
-    // Canonical payload of the Session's current world (quiescent owner thread).
+    // Read-only live-entity listing of the Session's world (publication view).
     static superpos::Result<std::size_t> capture(SuperposSession &, std::span<std::byte>) noexcept;
+    // Exact core World snapshot (World::capture), the durable restore payload.
+    static superpos::Result<std::size_t> snapshot_bytes(SuperposSession &) noexcept;
+    static superpos::Result<std::size_t> snapshot(SuperposSession &, std::span<std::byte>) noexcept;
     static superpos::Result<std::size_t> live_count(SuperposSession &) noexcept;
-    // Applies a sealed, validated payload to an empty Session whose world
-    // already uses the restore's successor authority epoch. Complete preflight
-    // precedes the first spawn; any later failure removes what it spawned, so
-    // a refused apply leaves the Session's live state unchanged.
-    static superpos::Result<superpos_egp::recovery::ApplyResult> apply(SuperposSession &, std::span<const std::byte> payload,
-        superpos::Epoch successor, std::span<superpos_egp::recovery::HandleMapping>) noexcept;
+    // Applies a sealed snapshot with World::restore to a Session whose world is
+    // pristine (never mutated since configure) and already uses the restore's
+    // successor authority epoch. Core restore is all-or-nothing: a refused
+    // apply leaves the Session's world unchanged.
+    static superpos::Result<superpos_egp::recovery::ApplyResult> apply(SuperposSession &, std::span<const std::byte> snapshot,
+        superpos::Epoch successor) noexcept;
     // Authority-side replication on a network-ready link Session. The link
     // reserves Control/State/Bulk for the core ReplicaAuthoritySession and its
     // Session pump is replaced by the bridge pump. Not for RTC links.

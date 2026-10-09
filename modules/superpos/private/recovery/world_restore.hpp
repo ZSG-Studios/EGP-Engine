@@ -10,7 +10,12 @@
 #include <span>
 
 namespace superpos_egp::recovery {
-// Canonical EGP world payload, version 1 (little-endian, no padding):
+// Durable restore payloads are exact core World snapshots (World::capture):
+// handles, generations, revisions, ticks, free-list order and the publication
+// counter survive restore. The listing below is a separate read-only view of
+// live entities used for publication and fixtures; it is never journaled.
+//
+// Live-entity listing, version 1 (little-endian, no padding):
 //   header (32 bytes): magic "EGW1", version, count, reserved=0,
 //                      authority epoch, tick
 //   entry  (56 bytes): slot, generation, schema, owner, ownership revision,
@@ -45,15 +50,20 @@ superpos::Result<WorldPayloadHeader> validate_world_payload(std::span<const std:
 // Visits validated entities in slot order. Payload must already be validated.
 template <class F> superpos::Status for_each_entity(std::span<const std::byte>, F &&) noexcept;
 std::size_t maximum_world_payload(std::uint32_t capacity, std::size_t state_stride) noexcept;
+// Upper bound of World::capture for a world of this capacity and stride.
+std::size_t maximum_world_snapshot(std::uint32_t capacity, std::size_t state_stride) noexcept;
 
 // Aggregate trusted participant for one target Session world. Every mutation
 // is to private state from the supplied allocator: no scene, Session or World
 // change happens until a separate, explicit apply after a successful seal.
-// Owner-thread only (the restore driver's thread).
+// Each candidate snapshot is semantically validated by restoring it into a
+// private scratch World with the target's schemas, capacity, stride and the
+// plan's successor epoch, so core's complete World::restore checks run before
+// it is staged and again at seal. Owner-thread only (the driver's thread).
 class WorldParticipant final : public superpos::HostRestoreParticipant {
 public:
     WorldParticipant(std::span<const superpos::Schema> schemas, std::uint32_t capacity, std::size_t state_stride,
-        superpos::CryptographicDigest &digest, superpos::HostRestoreCapabilities capabilities) noexcept;
+        superpos::PeerId authority_peer, superpos::CryptographicDigest &digest, superpos::HostRestoreCapabilities capabilities) noexcept;
     ~WorldParticipant() override;
     WorldParticipant(const WorldParticipant &) = delete;
     WorldParticipant &operator=(const WorldParticipant &) = delete;
@@ -71,9 +81,14 @@ public:
     std::uint32_t records() const noexcept { return records_; }
 private:
     superpos::Status adopt(std::span<const std::byte> envelope, superpos::CanonicalStateKind) noexcept;
+    superpos::Status validate(std::span<const std::byte> snapshot) noexcept;
     std::span<const superpos::Schema> schemas_;
     std::uint32_t capacity_{};
     std::size_t stride_{};
+    superpos::PeerId authority_peer_{};
+    superpos::Epoch successor_{};
+    superpos::WorldSlot *scratch_slots_{};
+    std::byte *scratch_arena_{};
     superpos::CryptographicDigest *digest_{};
     superpos::HostRestoreCapabilities capabilities_{};
     superpos::Allocator *allocator_{};

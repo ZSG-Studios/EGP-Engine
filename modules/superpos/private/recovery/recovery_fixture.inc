@@ -121,8 +121,10 @@ struct Run {
     sp::AuthorityGrant grant{};
     sp::CheckpointTicket verified{};
     sp::Fingerprint schemas_fp{}, simulation_fp{}, participants_fp{}, codec_fp{}, final_state{};
-    std::array<std::byte, 4096> final_payload{};
-    std::size_t final_bytes{};
+    // Sealed durable payload (exact World snapshot) and the producer's final
+    // live-entity listing, used to check exact handles, revisions and values.
+    std::array<std::byte, 4096> final_payload{}, final_listing{};
+    std::size_t final_bytes{}, listing_bytes{};
     std::uint32_t expected_objects{};
     RestoreFanout fanout;
     std::uint64_t frame_ms{};
@@ -160,15 +162,17 @@ struct Run {
         for (int i = 0; i < 4; ++i) { p[i] = uint8_t(uint32_t(value) >> (8 * i)); p[4 + i] = uint8_t(uint32_t(second) >> (8 * i)); }
         return bytes;
     }
-    sp::Result<std::size_t> capture(SuperposSession &session, std::span<std::byte> out) { return SuperposRecoveryAccess::capture(session, out); }
+    sp::Result<std::size_t> capture(SuperposSession &session, std::span<std::byte> out) { return SuperposRecoveryAccess::snapshot(session, out); }
+    std::span<const std::byte> listing() const { return std::span<const std::byte>(final_listing.data(), listing_bytes); }
     bool envelope(sp::CanonicalStateHeader header, std::span<const std::byte> payload, std::span<std::byte> out, std::size_t &size) {
         auto encoded = sp::encode_canonical_state(header, payload, out); VERIFY(encoded); size = *encoded; return true;
     }
 
     // Previous coordinator incarnation: the producing host's canonical world
-    // journal. Full record at 1, verified checkpoint anchor at 2, fence, then
-    // a final full record at 3 in epoch 2. The final world has a destroyed
-    // slot, so a sequential restore cannot preserve every handle.
+    // journal of exact World snapshots. Full record at 1, verified checkpoint
+    // anchor at 2, fence, then a final full record at 3 in epoch 2. The final
+    // world has a destroyed slot and a published revision, so exact restore
+    // must preserve a gap, a generation bump and revision 2.
     bool produce() {
         Ref<SuperposSchema> schema; schema.instantiate(); schema->set_schema_id(19);
         TypedArray<SuperposField> fields;
@@ -183,10 +187,16 @@ struct Run {
         std::array<std::byte, 4096> p1{}, p2{}, p3{};
         auto n1 = capture(*producer.ptr(), p1); VERIFY(n1);
         handles[3] = producer->spawn_object(19, 2, state(13, 103)); VERIFY(handles[3] != 0);
+        Dictionary changed; changed[int64_t(1)] = 20; changed[int64_t(2)] = 200;
+        VERIFY(producer->publish_fields(handles[0], 1, changed) == OK);
         auto n2 = capture(*producer.ptr(), p2); VERIFY(n2);
         VERIFY(producer->destroy_object(handles[1]) == OK);
         auto n3 = capture(*producer.ptr(), p3); VERIFY(n3);
         std::memcpy(final_payload.data(), p3.data(), *n3); final_bytes = *n3; expected_objects = 3;
+        auto listed = SuperposRecoveryAccess::capture(*producer.ptr(), final_listing); VERIFY(listed); listing_bytes = *listed;
+        bool revised = false;
+        VERIFY(for_each_entity(listing(), [&](const WorldEntity &entity) -> sp::Status { revised = revised || entity.revision == 2; return {}; }));
+        VERIFY(revised);
         const auto s1 = std::span<const std::byte>(p1.data(), *n1), s2 = std::span<const std::byte>(p2.data(), *n2), s3 = std::span<const std::byte>(p3.data(), *n3);
         final_state = hash(s3);
         path(filename, "superpos-recovery-fixture.sqlite");
@@ -285,7 +295,7 @@ struct Run {
     // WorldParticipant is immovable: construct it in place in the caller.
     bool participant_for(SuperposSession &target, std::optional<WorldParticipant> &participant) {
         auto bound = SuperposRecoveryAccess::target(target); if (!bound) return false;
-        participant.emplace(bound->schemas, bound->capacity, bound->state_stride, *bound->digest,
+        participant.emplace(bound->schemas, bound->capacity, bound->state_stride, bound->authority_peer, *bound->digest,
             sp::HostRestoreCapabilities{schemas_fp, simulation_fp, participants_fp, sp::RecoveryGrade::PortableRestart,
                 sp::checkpoint_maximum_bytes, 1024 * 1024, 65536, true});
         return true;
@@ -334,13 +344,18 @@ struct Run {
         auto plan = driver.sealed_plan(); VERIFY(plan && plan->final_state == final_state && plan->successor_epoch == grant.epoch);
         auto sealed = participant->sealed_payload(); VERIFY(sealed && sealed->size() == final_bytes);
         VERIFY(std::memcmp(sealed->data(), final_payload.data(), final_bytes) == 0);
-        // Apply, then lease restoration for the exact authority/membership.
-        std::array<HandleMapping, 8> mapping{};
-        auto applied = SuperposRecoveryAccess::apply(*authority.ptr(), *sealed, plan->successor_epoch, mapping);
+        // Exact apply (World::restore), then lease restoration.
+        auto applied = SuperposRecoveryAccess::apply(*authority.ptr(), *sealed, plan->successor_epoch);
         if (!applied) { std::printf("RECOVERY_APPLY_ERROR error=%u live=%d\n", unsigned(applied.error()), int(authority_live().value_or(-1))); std::fflush(stdout); }
         VERIFY(applied);
-        VERIFY(applied->objects == expected_objects && !applied->handles_preserved && mapping[1].original != mapping[1].restored);
-        VERIFY(error_is(SuperposRecoveryAccess::apply(*authority.ptr(), *sealed, plan->successor_epoch, mapping), sp::Error::Busy));
+        VERIFY(applied->objects == expected_objects && applied->handles_preserved);
+        // Every entity field is exact: handle, generation, owner, ownership
+        // revision, revision, tick and canonical state (headers carry epochs).
+        std::array<std::byte, 4096> restored{};
+        auto relisted = SuperposRecoveryAccess::capture(*authority.ptr(), restored); VERIFY(relisted && *relisted == listing_bytes);
+        VERIFY(std::memcmp(restored.data() + world_header_bytes, final_listing.data() + world_header_bytes, listing_bytes - world_header_bytes) == 0);
+        // Restore needs a pristine target: a second apply is refused unchanged.
+        VERIFY(error_is(SuperposRecoveryAccess::apply(*authority.ptr(), *sealed, plan->successor_epoch), sp::Error::Busy));
         VERIFY(driver.abort() && !participant->active());
         VERIFY(gate().restored(grant.coordinator_term, grant.epoch, grant.membership_generation, grant.owner, grant.kind));
         VERIFY(gate().phase() == sp::LeasePhase::Active);
@@ -372,7 +387,7 @@ struct Run {
         if (views.size() != int(expected_objects) || spawner->get_child_count() != int(expected_objects)) return false;
         std::array<bool, 8> matched{};
         bool complete = true;
-        auto checked = for_each_entity(std::span<const std::byte>(final_payload.data(), final_bytes), [&](const WorldEntity &entity) -> sp::Status {
+        auto checked = for_each_entity(listing(), [&](const WorldEntity &entity) -> sp::Status {
             const int value = int(detail::u32(entity.state.data())), second = int(detail::u32(entity.state.data() + 4));
             bool found = false;
             for (int c = 0; c < spawner->get_child_count() && !found; ++c) {
@@ -383,10 +398,20 @@ struct Run {
             return {};
         });
         if (!checked || !complete) return false;
+        // Views keep the exact restored handle and revision. Their replica keys
+        // carry the successor epoch (plan: resume with fresh keys), so views
+        // from an older epoch would stay stale and must rebind.
         for (int v = 0; v < views.size(); ++v) {
             Ref<SuperposReplicaView> view = views[v];
             Dictionary status = view->read_status(); Dictionary scene = status["scene"];
             if (int(status["error"]) != OK || !bool(status["canonical_ready"]) || String(scene["scene_phase"]) != String("ready")) return false;
+            bool exact = false;
+            (void)for_each_entity(listing(), [&](const WorldEntity &entity) -> sp::Status {
+                exact = exact || (sp::ObjectHandle::from_parts(entity.slot, entity.generation).value == view->get_handle() &&
+                    uint64_t(int64_t(status["revision"])) == entity.revision);
+                return {};
+            });
+            if (!exact) return false;
         }
         return true;
     }
@@ -405,6 +430,9 @@ struct Run {
         for (unsigned n = 0; n < 4; ++n) for (auto &session : links) VERIFY(session->advance_tick() == OK);
         for (unsigned i = 0; i < clients_count; ++i) { auto link = fanout.status(i); VERIFY(link && link->totals.sent == sent[i] && link->totals.gated >= 4); }
         VERIFY(authority_live().value_or(0) == expected_objects);
+        // The exact free-list order survived restore: the next spawn reuses
+        // the destroyed slot 2 with its bumped generation.
+        VERIFY(authority->spawn_object(19, 2, state(30, 300)) == sp::ObjectHandle::from_parts(2, 2).value);
         return true;
     }
     bool cleanup() {
@@ -515,8 +543,8 @@ void idle() {
         finished = true;
         const unsigned frames = run->frames, dropped = run->dropped;
         memdelete(run); run = nullptr;
-        std::printf("EGP_RECOVERY_RESTORE_OK checks=%u cases=8 sealed_restore=1 apply=1 lease_restored=1 publication=replica_authority_session "
-            "clients=4 client_converged=1 late_join=1 lossy_link=1 dropped_packets=%u publish_before_restore=refused abort_untouched=1 "
+        std::printf("EGP_RECOVERY_RESTORE_OK checks=%u cases=9 sealed_restore=1 apply=1 lease_restored=1 publication=replica_authority_session "
+            "clients=4 client_converged=1 exact_handles=1 exact_revisions=1 free_list_order=1 late_join=1 lossy_link=1 dropped_packets=%u publish_before_restore=refused abort_untouched=1 "
             "superseded_capability=stale expired_capability=timeout egress_closed=1 convergence_frames=%u\n", checks, dropped, frames);
         std::fflush(stdout); SceneTree::get_singleton()->quit(0);
     }
