@@ -1,5 +1,7 @@
 #pragma once
 #include "types.hpp"
+#include "capability.hpp"
+#include <thread>
 #include <cstdint>
 #include <span>
 #include <utility>
@@ -132,12 +134,34 @@ private:
     std::span<PredictedSpawnRecord> records_{};
 };
 
-struct RecoveryParticipantDescriptor { std::uint64_t id{},schema_version{}; std::size_t maximum_checkpoint_bytes{}; bool portable{}; };
+struct RecoveryParticipantDescriptor {
+    std::uint64_t id{},schema_version{}; std::size_t maximum_checkpoint_bytes{};
+    RecoveryGrade recovery{};
+    // Qualified codec/simulation semantics; local configuration also covers the
+    // process/build/backend/ABI configuration required by a local checkpoint.
+    Fingerprint simulation{},local_configuration{};
+    bool operator==(const RecoveryParticipantDescriptor&) const noexcept=default;
+};
+struct RecoveryRestoreRequirements {
+    RecoveryGrade recovery{RecoveryGrade::PortableRestart};
+    Fingerprint local_configuration{};
+};
+struct RecoveryPart;
 // The application must attest that capture contains every simulation-relevant
 // value, including hidden state and nondeterminism. stage_restore is isolated;
-// commit_restore cannot fail. External effects belong in the fenced outbox.
+// descriptor() must not mutate simulation or any participant metadata. Descriptor
+// metadata remains stable throughout a restore transaction, including other
+// participants' callbacks. stage_restore changes only private staging; commit
+// cannot allocate, fail, invoke gameplay, or change registrations. External
+// effects belong in the fenced outbox.
 class RecoveryParticipant {
+    const std::thread::id owner_{std::this_thread::get_id()};
+    bool restoring_{};
+    friend Status restore_participants(Epoch,Tick,std::span<const RecoveryPart>,RecoveryRestoreRequirements) noexcept;
 public:
+    RecoveryParticipant() noexcept=default;
+    RecoveryParticipant(const RecoveryParticipant&)=delete;
+    RecoveryParticipant& operator=(const RecoveryParticipant&)=delete;
     virtual ~RecoveryParticipant()=default;
     virtual RecoveryParticipantDescriptor descriptor() const noexcept=0;
     virtual Result<std::size_t> capture(std::span<std::byte>) const noexcept=0;
@@ -145,10 +169,19 @@ public:
     virtual void commit_restore() noexcept=0;
     virtual void abort_restore() noexcept=0;
 };
-struct RecoveryPart { RecoveryParticipant* participant{}; std::uint64_t schema_version{}; std::span<const std::byte> canonical{}; };
-// Caller already holds a valid recovery fence and owner-thread publication
-// barrier. Up to 16 participants stage before any commits; failed staging aborts
-// every participant entered, including the failing participant.
-Status restore_participants(Epoch,Tick,std::span<const RecoveryPart>) noexcept;
+struct RecoveryPart {
+    RecoveryParticipant* participant{}; std::uint64_t schema_version{};
+    std::span<const std::byte> canonical{};
+    Fingerprint simulation{},local_configuration{};
+};
+// Caller holds an authenticated recovery fence, complete checkpoint coverage and
+// an owner-thread publication barrier. Storage/participants outlive the call and
+// checkpoint bytes remain immutable. The declared grade never upgrades restart
+// to exact resume and does not establish future deterministic execution.
+// Up to 16 participants are locked before descriptor/stage/commit/abort callbacks;
+// all stage before any commit. Failure aborts every entered stage, including the
+// failing participant. Callbacks cannot reenter restoration of a locked member.
+Status restore_participants(Epoch,Tick,std::span<const RecoveryPart>,
+    RecoveryRestoreRequirements={}) noexcept;
 
 } // namespace superpos

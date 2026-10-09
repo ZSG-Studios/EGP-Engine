@@ -228,22 +228,54 @@ Status PredictedSpawns::reset_epoch(Epoch epoch) noexcept {
     for (auto& r:records_) r={}; epoch_=epoch; next_sequence_=0; return {};
 }
 
-Status restore_participants(Epoch epoch,Tick tick,std::span<const RecoveryPart> parts) noexcept {
-    if (!epoch || parts.empty() || parts.size()>16) return fail(Error::InvalidArgument);
-    std::array<std::uint64_t,16> ids{};
-    for (std::size_t i=0;i<parts.size();++i) {
-        const auto& p=parts[i]; if (!p.participant) return fail(Error::InvalidArgument);
-        auto d=p.participant->descriptor(); if (!d.portable) return fail(Error::Unsupported);
-        if (!d.id || !d.schema_version || !d.maximum_checkpoint_bytes || p.canonical.empty() || p.canonical.size()>d.maximum_checkpoint_bytes) return fail(Error::InvalidArgument);
-        if (p.schema_version!=d.schema_version) return fail(Error::IncompatibleSchema);
-        for (std::size_t j=0;j<i;++j) if (ids[j]==d.id || parts[j].participant==p.participant) return fail(Error::InvalidArgument);
-        ids[i]=d.id;
+Status restore_participants(Epoch epoch,Tick tick,std::span<const RecoveryPart> parts,RecoveryRestoreRequirements requirements) noexcept {
+    if (!epoch || parts.empty() || parts.size()>16 || requirements.recovery==RecoveryGrade::None ||
+        static_cast<unsigned>(requirements.recovery)>static_cast<unsigned>(RecoveryGrade::PortableExact)) return fail(Error::InvalidArgument);
+    if (requirements.recovery==RecoveryGrade::LocalRestart && !known_fingerprint(requirements.local_configuration)) return fail(Error::InvalidArgument);
+    // Freeze the row identities before any provider callback. Provider code must
+    // not be able to replace a validated later row through caller-owned metadata.
+    std::array<RecoveryPart,16> frozen{};
+    std::copy(parts.begin(),parts.end(),frozen.begin());
+    auto selected=std::span(frozen).first(parts.size());
+    for(std::size_t i=0;i<selected.size();++i) {
+        if(!selected[i].participant)return fail(Error::InvalidArgument);
+        for(std::size_t j=0;j<i;++j)if(selected[i].participant==selected[j].participant)return fail(Error::InvalidArgument);
     }
-    for (std::size_t i=0;i<parts.size();++i) {
-        if (auto result=parts[i].participant->stage_restore(epoch,tick,parts[i].canonical);!result) {
-            for (std::size_t j=0;j<=i;++j) parts[j].participant->abort_restore(); return result;
+    std::array<RecoveryParticipant*,16> locked{};
+    auto release=[&]() noexcept { for(auto* participant:locked)if(participant)participant->restoring_=false; };
+    struct Guard { decltype(release)& callback; ~Guard(){callback();} } guard{release};
+    for(std::size_t i=0;i<selected.size();++i) {
+        auto* participant=selected[i].participant;
+        if(participant->owner_!=std::this_thread::get_id())return fail(Error::PermissionDenied);
+        if(participant->restoring_)return fail(Error::Busy);
+        participant->restoring_=true;locked[i]=participant;
+    }
+    std::array<std::uint64_t,16> ids{};
+    std::array<RecoveryParticipantDescriptor,16> qualified{};
+    for (std::size_t i=0;i<selected.size();++i) {
+        const auto& p=selected[i];const auto d=p.participant->descriptor();
+        if(static_cast<unsigned>(d.recovery)>static_cast<unsigned>(RecoveryGrade::PortableExact))return fail(Error::InvalidArgument);
+        if(d.recovery<requirements.recovery)return fail(Error::Unsupported);
+        if (!d.id || !d.schema_version || !d.maximum_checkpoint_bytes || !known_fingerprint(d.simulation) ||
+            p.canonical.empty() || p.canonical.size()>d.maximum_checkpoint_bytes) return fail(Error::InvalidArgument);
+        if (p.schema_version!=d.schema_version || p.simulation!=d.simulation) return fail(Error::IncompatibleSchema);
+        if(requirements.recovery==RecoveryGrade::LocalRestart &&
+            (d.local_configuration!=requirements.local_configuration || p.local_configuration!=requirements.local_configuration))return fail(Error::IncompatibleSchema);
+        for (std::size_t j=0;j<i;++j) if (ids[j]==d.id) return fail(Error::InvalidArgument);
+        ids[i]=d.id;qualified[i]=d;
+    }
+    for (std::size_t i=0;i<selected.size();++i) {
+        if (auto result=selected[i].participant->stage_restore(epoch,tick,selected[i].canonical);!result) {
+            for (std::size_t j=0;j<=i;++j) selected[j].participant->abort_restore(); return result;
         }
     }
-    for (const auto& p:parts) p.participant->commit_restore(); return {};
+    // Detect staging-time descriptor drift before publication. This defensive
+    // check relies on the public descriptor purity/stability contract; it cannot
+    // sandbox arbitrary provider side effects. Commit callbacks remain strictly
+    // non-failing and cannot invoke gameplay code or mutate registrations.
+    for(std::size_t i=0;i<selected.size();++i)if(selected[i].participant->descriptor()!=qualified[i]) {
+        for(const auto& p:selected)p.participant->abort_restore();return fail(Error::IncompatibleSchema);
+    }
+    for (const auto& p:selected) p.participant->commit_restore(); return {};
 }
 } // namespace superpos

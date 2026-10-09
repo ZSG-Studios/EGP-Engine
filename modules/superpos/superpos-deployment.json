@@ -54,7 +54,7 @@
     "core/include/superpos/crypto_nonce.hpp": "113827bd280ecac9fc63ed9d53e73e50591f7d2a38afd65d244499ba858fe336",
     "core/include/superpos/delivery.hpp": "1fdcdc1d332c1b7b8c00268fbb8bb2be78cb386ddb9196b7fc2272a9d51bcec9",
     "core/include/superpos/dtls.hpp": "47137204a0efac7984c92a4c4bc4c6a1d39cc45873cee8537006749b39f9b5b8",
-    "core/include/superpos/gameplay.hpp": "070fb8b6212716d2b141ae76e1ee5bf8132e67487ae8707e0ed5cc3835af8dca",
+    "core/include/superpos/gameplay.hpp": "8f557946c2bd5d9d637aebfdf07408c8ba8e2b401ee5d6b1a76fcd6568284e7f",
     "core/include/superpos/lease.hpp": "b54b698d0c97d560b8cfc18e92ab872693883ed19cb3fc2b766852b8f79de40c",
     "core/include/superpos/packet_transport.hpp": "d8e61f88a2d7598242420284ea15136a52cd43c09fefb846e934dfa9922dcf88",
     "core/include/superpos/platform_clock.hpp": "de4e95c8ed8f3c6bd806d640c79b52abc2d1d7fe51e190e9431a923b17966672",
@@ -88,7 +88,7 @@
     "core/src/crypto_nonce.cpp": "32405d78e4f9a006f576a2ec0d4ddf2c66d3548d24fbdf76fbd10509287db8cb",
     "core/src/delivery.cpp": "58399b0d9a6dd44a4bef22743b2ec87a476e8e2281cb5510c51aa94da41dd215",
     "core/src/dtls.cpp": "a8e5a07127fea56e77999ce03d306fde99ff38dd0a5c8279ee7fdc4b8bcfad12",
-    "core/src/gameplay.cpp": "7caaa3ecc557da88edfdabc9e2ad083b37ca70c0fe43b04303b7fd28e21b0ddf",
+    "core/src/gameplay.cpp": "4a8d201eacd76188c64c9e3783056e83c6e3ccbd569967788d08b7f2f39bbd50",
     "core/src/lease.cpp": "36ced3341d7f5786da7916da9c2907bdf1531046e7fc30a6568c631fe5cfb17b",
     "core/src/packet_transport.cpp": "569e07441da0a5deebd2962265fac580b4fbfdd092a0eb3e0455d0c48acb4c9b",
     "core/src/platform_clock.cpp": "34036344864959cd97e29b4a12eb85e56d8a5db9924ff460b18a488bfd0b6ba0",
@@ -2188,7 +2188,7 @@
     "core/backends/webrtc/provider-port/vendor/openssl/include/crypto/riscv_arch.def": "f2b50c9478e11ba4feed645494718c797c57370d76b2b343ecd48a3644b83edc"
   },
   "retained_unselected_files": {
-    "superpos-core-refresh.json": "e546d14200624913eff7bb6941520e3505413b56d67b460aca812db46814b587",
+    "superpos-core-refresh.json": "478fb11b90aa67d77d20b2f5a83478299cb08dae263d97198b99f675dc0cdeb4",
     "superpos-xmake-integration.json": "37af45b32c51b6b4214b28c997ab7ddc4f02948954499d4a1c6848996b344a6d"
   },
   "materialization_sha256": "68dde940970229cffceb324dd957c732f3112fed3f1a2c4efd80d4137eb8e60e",
@@ -2212,5 +2212,18 @@
       "doc_classes/SuperposUInt64.xml": "df34e805dacc7e00a505332d6ebfb9567821ef9b7d8fe451bbff9e353258cce2",
       "doc_classes/SuperposWorld.xml": "2b9f056de92393448ae3f12d2a7cfc96cb32f716287e9c1f072448e203c1482d"
     }
+  },
+  "current_core_source_refresh": {
+    "provenance": "superpos-core-refresh.json",
+    "sha256": "478fb11b90aa67d77d20b2f5a83478299cb08dae263d97198b99f675dc0cdeb4",
+    "engine_head_before": "3e4d79e7c6b0fc40d70bd7a34484ca5a3a66be7e",
+    "core_head": "78436b67e5286f39bc634b158004c2897b93b85c",
+    "changed_files": [
+      "core/include/superpos/gameplay.hpp",
+      "core/src/gameplay.cpp"
+    ],
+    "source_only": true,
+    "fresh_engine_compile_required": true,
+    "runtime_qualified": false
   }
 }
