@@ -50,6 +50,9 @@ public:
  Session(Session&&) noexcept;Session&operator=(Session&&) noexcept;
  static Result<Session> create(Allocator&,TransportProvider&,SessionConfig) noexcept;
  Status pump(Tick) noexcept;
+ // Raises every channel's retransmission interval (in pump ticks) to the
+ // carrier's measured retransmission timeout; never below limits.retry_ticks.
+ Status set_retry_ticks(Tick) noexcept;
  bool ready() const noexcept;
  // Negotiated, immutable carrier roles are visible only after admission.
  Result<std::uint8_t> channel_count() const noexcept;

@@ -38,16 +38,21 @@
 			<return type="int" enum="Error" />
 			<param index="0" name="input_bytes" type="int" />
 			<param index="1" name="slots" type="int" />
-			<description>Sets the fixed input width (1-16 bytes) and the number of player slots (1-256) shared with the server. Reconfiguring discards all retained inputs and commands.</description>
+			<param index="2" name="buffer_ticks" type="int" default="128" />
+			<description>Sets the fixed input width (1-16 bytes), the number of player slots (1-256) shared with the server, and how many received command ticks may wait ahead of the simulation. A batch that would overflow the buffer is rejected whole and resent later. Reconfiguring discards all retained inputs and commands.</description>
 		</method>
 		<method name="get_input" qualifiers="const">
 			<return type="PackedByteArray" />
 			<param index="0" name="slot" type="int" />
 			<description>Returns the input of [param slot] at the most recently applied command tick. A slot that was never set holds zero bytes.</description>
 		</method>
+		<method name="get_processed_tick" qualifiers="const">
+			<return type="int" />
+			<description>Returns this client's own input tick that the server consumed at the most recently applied command tick, when the server packs commands with this client as recipient; otherwise [code]0[/code]. Reconcile prediction against it.</description>
+		</method>
 		<method name="get_status" qualifiers="const">
 			<return type="Dictionary" />
-			<description>Returns [code]configured[/code], [code]recorded_tick[/code], [code]unacknowledged_inputs[/code], [code]applied_command_tick[/code], [code]newest_command_tick[/code] and [code]buffered_commands[/code].</description>
+			<description>Returns [code]configured[/code], [code]recorded_tick[/code], [code]unacknowledged_inputs[/code], [code]applied_command_tick[/code], [code]newest_command_tick[/code], [code]buffered_commands[/code], [code]processed_tick[/code] and [code]deferred_commands[/code] (batches parked beyond a gap until its repair arrives).</description>
 		</method>
 		<method name="load_keyframe">
 			<return type="int" enum="Error" />

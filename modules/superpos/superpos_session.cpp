@@ -23,6 +23,7 @@
 #include "u64_bits.h"
 
 #include "core/object/class_db.h"
+#include "core/os/os.h"
 
 #include "core/crypto/crypto_core.h"
 
@@ -379,6 +380,11 @@ struct EngineNetwork {
     std::optional<superpos::DtlsAssociation> dtls;
 
     std::optional<superpos::PacketTransport> packet;
+    // Pump cadence (callers pump at their own rate), used to express the carrier's
+    // measured retransmission timeout in session ticks.
+    uint64_t last_pump_usec = 0;
+    uint64_t pump_interval_usec = 0;
+    superpos::Tick retry_ticks = 0;
 
 
 
@@ -412,6 +418,22 @@ struct EngineNetwork {
     superpos::Status pump(superpos_egp::SessionAccess& access,uint64_t generation,superpos::Tick tick) noexcept {
         if(receiver && receiver->drained())return {};
         if(receiver){auto result=receiver->pump(*access.operator->(),generation,tick);return result?superpos::Status{}:superpos::fail(result.error());}
+#ifdef SUPERPOS_HAS_DTLS
+        if(packet) {
+            const uint64_t at=OS::get_singleton()->get_ticks_usec();
+            if(last_pump_usec && at>last_pump_usec) {
+                const uint64_t sample=std::min<uint64_t>(at-last_pump_usec,1000000);
+                pump_interval_usec=pump_interval_usec?(7*pump_interval_usec+sample)/8:sample;
+            }
+            last_pump_usec=at;
+            auto stats=packet->statistics();
+            if(stats && stats->retransmit_timeout_us && pump_interval_usec) {
+                // Resend only after the measured RTO, never on a fixed tick count.
+                const superpos::Tick ticks=(stats->retransmit_timeout_us+pump_interval_usec-1)/pump_interval_usec;
+                if(ticks!=retry_ticks && access->set_retry_ticks(ticks))retry_ticks=ticks;
+            }
+        }
+#endif
         return access->pump(tick);
     }
     const char* transport_name() const noexcept {
@@ -1216,7 +1238,7 @@ Error SuperposSession::configure_udp(bool p_server, const String &p_local_addres
 
         const String name = key;
 
-        if (name != "bundle_frames" && name != "burst_datagrams" && name != "receive_frames" && name != "channel_modes") { return last_error = ERR_INVALID_PARAMETER; }
+        if (name != "bundle_frames" && name != "burst_datagrams" && name != "receive_frames" && name != "channel_modes" && name != "minimum_rate") { return last_error = ERR_INVALID_PARAMETER; }
 
     }
 
@@ -1225,10 +1247,12 @@ Error SuperposSession::configure_udp(bool p_server, const String &p_local_addres
     const int64_t burst_datagrams = p_transport.get("burst_datagrams", 4);
 
     const int64_t receive_frames = p_transport.get("receive_frames", 64);
+    // Real-time budget floor (bytes/s): random loss never starves the stream below it.
+    const int64_t minimum_rate = p_transport.get("minimum_rate", 0);
 
     const Array channel_modes = p_transport.get("channel_modes", Array());
 
-    if (burst_datagrams < 1 || burst_datagrams > 16 || receive_frames < 1 || receive_frames > 64 || channel_modes.size() > 32) { return last_error = ERR_INVALID_PARAMETER; }
+    if (burst_datagrams < 1 || burst_datagrams > 16 || receive_frames < 1 || receive_frames > 64 || channel_modes.size() > 32 || minimum_rate < 0 || minimum_rate > 1073741824) { return last_error = ERR_INVALID_PARAMETER; }
 
     for (int i = 0; i < channel_modes.size(); ++i) {
 
@@ -1315,6 +1339,7 @@ Error SuperposSession::configure_udp(bool p_server, const String &p_local_addres
     packet_config.receive_frames = uint8_t(receive_frames);
 
     packet_config.congestion.burst_datagrams = uint8_t(burst_datagrams);
+    packet_config.congestion.minimum_rate_bytes_per_second = uint64_t(minimum_rate);
 
     auto packet = superpos::PacketTransport::create(impl->allocator, candidate->clock, *candidate->dtls, packet_config);
 
@@ -1972,6 +1997,9 @@ Dictionary SuperposSession::get_statistics() const {
             result["congestion_window"] = superpos_egp::signed_bits(stats->congestion_window);
 
             result["bytes_in_flight"] = superpos_egp::signed_bits(stats->bytes_in_flight);
+            result["smoothed_rtt_us"] = superpos_egp::signed_bits(stats->smoothed_rtt_us);
+            result["retransmit_timeout_us"] = superpos_egp::signed_bits(stats->retransmit_timeout_us);
+            result["retry_ticks"] = superpos_egp::signed_bits(impl->network->retry_ticks);
 
         }
 

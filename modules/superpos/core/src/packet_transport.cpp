@@ -352,7 +352,11 @@ Status PacketTransport::advance() noexcept {
     }
     auto ack=self.flush_ack(*now);if(!ack) { if(ack.error()!=Error::Busy)self.failed=true;return ack; }
     auto probe=self.flush_probe(*now);if(!probe) { if(probe.error()!=Error::Busy)self.failed=true;return probe; }
-    auto data=self.flush_data(*now);if(!data && data.error()!=Error::Busy)self.failed=true;return data;
+    auto data=self.flush_data(*now);if(!data && data.error()!=Error::Busy)self.failed=true;
+    // A write still owned behind pacing (sealed bundles full) keeps the carrier
+    // unwritable: the owner must not offer a frame that would be refused.
+    if(data && self.overflow_size)return fail(Error::Busy);
+    return data;
 }
 Status PacketTransport::send(std::span<const std::byte> bytes) noexcept {
     if(!impl_)return fail(Error::NotReady);auto& self=*impl_;
@@ -399,7 +403,7 @@ Result<PacketTransportStats> PacketTransport::statistics() const noexcept {
     if(!impl_)return fail(Error::NotReady);const auto& self=*impl_;
     if(!self.owned()||self.active_call)return fail(Error::PermissionDenied);
     auto stats=self.stats;stats.bytes_in_flight=self.flow->bytes_in_flight();stats.congestion_window=self.flow->congestion_window();
-    stats.smoothed_rtt_us=self.flow->smoothed_rtt_us();stats.queued_receive_frames=self.count;
+    stats.smoothed_rtt_us=self.flow->smoothed_rtt_us();stats.retransmit_timeout_us=self.flow->retransmit_timeout_us();stats.queued_receive_frames=self.count;
     stats.owns_pending_send=self.pending_size!=0||self.carrier_blocked||self.queued();return stats;
 }
 }

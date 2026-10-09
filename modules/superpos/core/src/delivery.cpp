@@ -483,7 +483,7 @@ std::size_t DeliveryReceiver::pending_messages() const noexcept { return occupie
 
 DeliverySender::DeliverySender(DeliveryMode mode, Epoch epoch, DeliveryLimits limits,
     std::span<DeliverySlot> slots, std::span<std::byte> arena, std::uint64_t first,std::uint16_t channel,bool shared) noexcept
-    : mode_(mode), epoch_(epoch), limits_(limits), slots_(slots.first(limits.max_messages)),
+    : mode_(mode), epoch_(epoch), limits_(limits), retry_ticks_(limits.retry_ticks), slots_(slots.first(limits.max_messages)),
       arena_(arena), next_message_(first), applied_through_(first - 1U),channel_(channel) {
     if (!shared) for (auto &slot : slots_) {
         slot = {};
@@ -592,7 +592,7 @@ Result<CarrierAttempt> DeliverySender::next(Tick now) noexcept {
             return fail(Error::InvalidArgument);
         }
         const bool due = (unreliable(mode_)?slot.next_fragment<slot.fragments:first_missing(slot,slot.next_fragment)<slot.fragments) ||
-            (!unreliable(mode_) && now - slot.last_cycle_at >= limits_.retry_ticks);
+            (!unreliable(mode_) && now - slot.last_cycle_at >= retry_ticks_);
         if (due && (chosen == nullptr || slot.message < chosen->message)) {
             chosen = &slot;
         }
@@ -636,6 +636,10 @@ Status DeliverySender::carrier_result(std::uint64_t attempt, bool accepted, Tick
     }
     attempt_pending_ = false;
     if (accepted) {
+        if(!attempt_probe_ && slot.stage==DeliveryStage::Admitted && slot.sent_bits==std::array<std::uint64_t,2>{}) {
+            // First fragment on the carrier: the message starts aging now.
+            slot.admitted_at=now; slot.last_progress_at=now;
+        }
         if(attempt_probe_) { slot.next_fragment=slot.fragments; slot.last_cycle_at=now; }
         else {
             slot.sent_bits[attempt_fragment_/64]|=std::uint64_t{1}<<(attempt_fragment_%64);
@@ -763,6 +767,14 @@ Status DeliverySender::expire(Tick now) noexcept {
             return fail(unknown_outcome ? Error::UnknownOutcome : Error::Timeout);
         }
     }
+    return {};
+}
+
+Status DeliverySender::set_retry_ticks(Tick ticks) noexcept {
+    if (failed_) {
+        return fail(Error::ChannelFailed);
+    }
+    retry_ticks_ = std::clamp(ticks, limits_.retry_ticks, std::max(limits_.retry_ticks, limits_.progress_timeout_ticks / 2));
     return {};
 }
 

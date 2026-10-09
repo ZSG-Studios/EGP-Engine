@@ -91,10 +91,15 @@ var movable: Array = []
 var sim_epoch := -1.0
 var section_ms := {"tick":[],"render":[],"animate":[],"animated":[],"engine_process":[],"engine_physics":[]}
 var gameplay: RefCounted
+var keyframe_cache := {}
+# Bot processes share one deterministic world, advanced from one bot's own stream,
+# only so their brains can see positions; every bot still runs its own stream.
+var world_feed := -1
+var bot_positions := {}
 var deterministic := false
 var lockstep_server: Object
 var lockstep_client: Object
-var det := {"loaded":false,"chunks":{},"chunk_id":-1,"tick":0,"target":3,"playing":false,"starved":0,"calm":0,"prev":{},"curr":{},"last_tick16":-1,"keyframes":0,"advanced":0,"lag":[],"buffered":[],"step_ms":[],"render_ids":PackedInt64Array(),"render_keys":[]}
+var det := {"loaded":false,"chunks":{},"chunk_id":-1,"tick":0,"target":3,"playing":false,"starved":0,"calm":0,"prev":{},"curr":{},"last_processed":-1,"keyframes":0,"advanced":0,"lag":[],"buffered":[],"step_ms":[],"render_ids":PackedInt64Array(),"render_keys":[]}
 
 
 func check(ok: bool, reason: String) -> bool:
@@ -121,7 +126,7 @@ func _ready() -> void:
 	deterministic = bool(config.get("deterministic", true)) and ClassDB.class_exists("SuperposLockstepServer")
 	if deterministic and role == "human":
 		lockstep_client = ClassDB.instantiate("SuperposLockstepClient")
-		check(lockstep_client.configure(GAMEPLAY.INPUT_BYTES, config.total) == OK, "Lockstep client")
+		check(lockstep_client.configure(GAMEPLAY.INPUT_BYTES, config.total, 512) == OK, "Lockstep client")
 	schema = SuperposSchema.new()
 	schema.schema_id = SCHEMA
 	var field := SuperposField.new()
@@ -135,6 +140,12 @@ func _ready() -> void:
 	for spec in config.peers:
 		var id: int = spec.id
 		var c := {"id":id, "spec":spec, "session":null, "handle":0, "generation":1, "ready":false, "ever_ready":false, "last_ready":false, "recoveries":0, "transport_errors":0, "last_error":0, "ticket":{}, "sent":0, "applied":0, "received":0, "sequence":0, "accepted_sequence":0, "input_sequence":0, "last_input":-100.0, "last_state":-100.0, "direction":Vector3.ZERO, "position":_spawn(id), "predicted":_spawn(id), "neighbors":{}, "goal":id % 8, "score":0, "cooldown":0.0, "ack_ms":0.0, "acks":[], "errors":[], "distance":0.0, "last_position":_spawn(id), "last_send":-100.0, "period":(_tuning("human_state_period",HUMAN_STATE_PERIOD) if role=="server" else _tuning("human_input_period",HUMAN_INPUT_PERIOD)) if id==HUMAN else _tuning("bot_period",BOT_PERIOD), "flags":0, "max_pending":0, "rejected":0, "stale":0}
+		if deterministic and role == "bots":
+			# Each bot is an independent deterministic client: its own input history,
+			# command decoder and keyframe join, exactly like a real player.
+			c.lockstep = ClassDB.instantiate("SuperposLockstepClient")
+			check(c.lockstep.configure(GAMEPLAY.INPUT_BYTES, config.total, 256) == OK, "Bot lockstep client")
+			c.kf = {"id":-1,"chunks":{},"loaded":false,"keyframes":0,"advanced":0}
 		connections.append(c)
 		_open(c)
 	if role == "human":
@@ -158,7 +169,7 @@ func _create_physics() -> void:
 	simulation=gameplay.simulation
 	if deterministic:
 		lockstep_server=ClassDB.instantiate("SuperposLockstepServer")
-		check(lockstep_server.configure(GAMEPLAY.INPUT_BYTES,config.total)==OK,"Lockstep server")
+		check(lockstep_server.configure(GAMEPLAY.INPUT_BYTES,config.total,{"command_history_ticks":int(_tuning("command_history_ticks",2048))})==OK,"Lockstep server")
 
 func _open(c: Dictionary) -> void:
 	if not c.has("sprinting"):
@@ -231,8 +242,9 @@ func _open(c: Dictionary) -> void:
 	var remote_ip: String = config.client_ip if server else "127.0.0.1"
 	var key := Marshalls.base64_to_raw(spec.key)
 	var args := [server,local_ip,local_port,remote_ip,remote_port,53100+c.id,60000+c.id,key]
-	if deterministic and c.id==HUMAN:
-		args.append({"channel_modes":DETERMINISTIC_MODES})
+	if deterministic:
+		# Real-time floor: the lockstep stream needs ~15 kB/s; wireless loss must not starve it.
+		args.append({"channel_modes":DETERMINISTIC_MODES,"minimum_rate":int(_tuning("minimum_rate",32768))})
 	check(session.callv("configure_udp",args) == OK,"UDP association provision")
 	c.unreliable=[]
 	c.session = session
@@ -310,6 +322,9 @@ func _physics_process(delta: float) -> void:
 		if result != OK and result != ERR_BUSY and result != ERR_UNCONFIGURED and result != c.last_error:
 			c.transport_errors += 1
 			c.last_error = result
+			if not c.has("error_codes"):
+				c.error_codes={}
+			c.error_codes[str(result)]=int(c.error_codes.get(str(result),0))+1
 		if c.ready:
 			if not c.ever_ready:
 				c.ever_ready = true
@@ -354,6 +369,12 @@ func _tuning(key: String, fallback: float) -> float:
 	# Optional run_lab --tuning overrides for transport budget sweeps.
 	var tuning: Dictionary = config.get("tuning",{})
 	return float(tuning.get(key,fallback))
+
+func _acked(result: int, what: String) -> void:
+	# Busy: receipts are backed up behind a paced carrier. The message stays at the
+	# lane head and is re-read (idempotently) next tick.
+	if result!=OK and result!=ERR_BUSY:
+		check(false,"%s error=%d" % [what,result])
 
 func _pending(c: Dictionary, channel: int) -> int:
 	var count := 0
@@ -431,8 +452,12 @@ func _server_step() -> void:
 	var tick: int=physics.get_tick()+1
 	if deterministic:
 		check(lockstep_server.begin_tick(tick)==OK,"Lockstep tick")
+		# Each slot's consumed client tick rides privately to that slot's client.
+		var processed := {}
+		for c in connections:
+			processed[c.id]=int(c.get("processed_tick",0))
 		for slot in range(config.total):
-			check(lockstep_server.set_command(slot,inputs[slot])==OK,"Lockstep command")
+			check(lockstep_server.set_command(slot,inputs[slot],int(processed.get(slot,0)))==OK,"Lockstep command")
 		check(lockstep_server.end_tick()==OK,"Lockstep seal")
 	var started := Time.get_ticks_usec()
 	_sample(control_times,started-control_started)
@@ -450,7 +475,7 @@ func _server_step() -> void:
 	for item in acknowledgements:
 		var c: Dictionary = item.c
 		var packet: Dictionary = item.packet
-		check(c.session.acknowledge_packet(packet.message,packet.binding_generation,item.lane) == OK,"Controls acknowledged after native physics step")
+		_acked(c.session.acknowledge_packet(packet.message,packet.binding_generation,item.lane),"Controls acknowledged after native physics step")
 	var states: Dictionary = {}
 	for c in connections:
 		var state := physics.get_body_state(PLAYER_BASE+c.id)
@@ -473,7 +498,7 @@ func _server_step() -> void:
 	var records := {}
 	var ids: Array = states.keys()
 	for c in connections:
-		var local_world: bool=deterministic and c.id==HUMAN and int(lockstep_server.get_playout_status(HUMAN).get("command_acknowledged",0))>0
+		var local_world: bool=deterministic
 		if c.ready and not local_world and _free_lane(c,STATE)>=0 and now-c.last_send>=c.period:
 			if c.id==HUMAN:
 				c.interest=_priority_interest(c,states,ids)
@@ -506,7 +531,7 @@ func _server_step() -> void:
 				bytes.append_array(records[id])
 			if _publish(c,bytes):
 				_enqueue(c,bytes,STATE)
-		if c.ready and _pending(c,EXHIBIT)==0 and now-c.last_exhibit_send>=_exhibit_period(c):
+		if not deterministic and c.ready and _pending(c,EXHIBIT)==0 and now-c.last_exhibit_send>=_exhibit_period(c):
 			c.packet_cycle+=1
 			c.sequence+=1
 			var exhibit_packet: PackedByteArray=simulation.compact_packet(c.sequence,physics.get_tick(),sim_time)
@@ -559,9 +584,9 @@ func _sample(values: Array[float], usec: int) -> void:
 			values.pop_front()
 
 func _accept_input(c: Dictionary, bytes: PackedByteArray) -> void:
-	if c.id==HUMAN:
-		if deterministic:
-			if lockstep_server.accept_inputs(HUMAN,bytes)==OK:
+	if deterministic:
+		if true:
+			if lockstep_server.accept_inputs(c.id,bytes)==OK:
 				c.received+=1
 			else:
 				c.rejected+=1
@@ -603,12 +628,12 @@ func _apply_controls(c: Dictionary, x: float, z: float, flags: int, facing: floa
 	c.last_input=now
 
 func _tick_input(c: Dictionary) -> PackedByteArray:
-	if c.id==HUMAN and deterministic:
-		# The human's own per-tick inputs, played out by the native jitter buffer. A
+	if deterministic:
+		# Every client's own per-tick inputs, played out by the native jitter buffer. A
 		# starved tick holds stance but never invents movement; catch-up merges actions.
-		var items: Array=lockstep_server.consume_inputs(HUMAN)
+		var items: Array=lockstep_server.consume_inputs(c.id)
 		if items.is_empty():
-			return c.get("hold_input",GAMEPLAY.encode_input(Vector3.ZERO,0,0.0,0))
+			return c.get("hold_input",GAMEPLAY.encode_input(Vector3.ZERO,0,0.0))
 		var latest: PackedByteArray=items.back().input.duplicate()
 		var one_shot := 0
 		for item in items:
@@ -621,13 +646,19 @@ func _tick_input(c: Dictionary) -> PackedByteArray:
 		c.hold_input=hold
 		c.processed_tick=int(items.back().tick)
 		c.last_input=now
+		var stance := 0
+		for candidate in [256,128,64,16,8,32]:
+			if GAMEPLAY.decode_flags(latest)&candidate:
+				stance=candidate
+				break
+		c.activities[str(stance)]=int(c.activities.get(str(stance),0))+1
 		return latest
 	# Bots (and the legacy human path): the server's per-tick decision from the latest
 	# intent, recorded in the command stream so clients replay exactly this.
 	var direction: Vector3=c.direction if now-c.last_input<1.25 else Vector3.ZERO
 	var flags: int=(int(c.get("input_flags",0))&GAMEPLAY.PERSISTENT)|int(c.get("pending_oneshot",0))
 	c.pending_oneshot=0
-	return GAMEPLAY.encode_input(direction,flags,c.facing,0)
+	return GAMEPLAY.encode_input(direction,flags,c.facing)
 
 func _retire_unreliable(c: Dictionary) -> void:
 	# Unreliable messages are never applied-acknowledged when lost: retire each sender
@@ -648,31 +679,59 @@ func _send_unreliable(c: Dictionary, bytes: PackedByteArray, lane: int) -> void:
 		c.sent+=1
 
 func _send_lockstep() -> void:
-	if not deterministic or connections.size()<=HUMAN:
+	if not deterministic:
 		return
-	var c: Dictionary=connections[HUMAN]
-	if not c.ready or not c.pumped:
-		return
+	for c in connections:
+		if c.ready and c.pumped:
+			_send_lockstep_to(c)
+
+func _send_lockstep_to(c: Dictionary) -> void:
 	_retire_unreliable(c)
-	var status: Dictionary=lockstep_server.get_playout_status(HUMAN)
+	var status: Dictionary=lockstep_server.get_playout_status(c.id)
 	if int(c.get("keyframe_tick",0))==0 or c.get("resync",false):
 		_send_keyframe(c)
 		return
-	# Incremental delivery: each batch carries the newest ticks with a few ticks of
-	# overlap, so throughput never depends on a round-trip-old acknowledgement. When
-	# the client's acknowledgement stalls (a lost batch left a gap), resend from it.
+	if _pending(c,KEYFRAME_LANE)>0 or int(c.get("kf_next",0))<int(c.get("kf_count",0)):
+		# The join keyframe owns the link until it lands, one chunk in flight at a
+		# time; retained command history covers the wait.
+		if _pending(c,KEYFRAME_LANE)==0:
+			_send_keyframe_chunk(c)
+		return
+	# Fresh-first streaming: every batch carries all new ticks, and leftover space
+	# repeats a few unacknowledged ones so an isolated loss heals without a round trip.
 	var acknowledged: int=maxi(int(status.get("command_acknowledged",0)),int(c.keyframe_tick))
 	if acknowledged>int(c.get("command_ack_seen",0)):
 		c.command_ack_seen=acknowledged
 		c.command_ack_at=now
+		# Round trip from the send time of the newest acknowledged tick.
+		var sent_at: Dictionary=c.get("command_sent_at",{})
+		if sent_at.has(acknowledged):
+			var sample: float=now-float(sent_at[acknowledged])
+			c.command_rtt=sample if float(c.get("command_rtt",0.0))<=0.0 else lerpf(float(c.command_rtt),sample,0.125)
+		for tick in sent_at.keys():
+			if int(tick)<=acknowledged:
+				sent_at.erase(tick)
 	var sent_newest: int=maxi(int(c.get("command_sent_newest",0)),acknowledged)
-	var after: int=maxi(acknowledged,sent_newest-6)
-	if sent_newest-acknowledged>6 and now-float(c.get("command_ack_at",now))>0.15:
-		after=acknowledged
+	# A stalled acknowledgement (after a round trip: a slow link is not a lossy one)
+	# rewinds the stream to it. The client parks batches beyond the gap, so once the
+	# repair lands its acknowledgement jumps past them and the stream skips ahead.
+	# The carrier's smoothed RTT (not the application ack delay, which grows while
+	# batches wait parked behind a gap) plus the client's ack cadence.
+	if now-float(c.get("srtt_at",-1.0))>0.25:
+		c.srtt_at=now
+		c.srtt=float(c.session.get_statistics().get("smoothed_rtt_us",100000))/1000000.0
+	var stall: float=maxf(0.1,2.0*float(c.get("srtt",0.1))+0.07)
+	if sent_newest>acknowledged and now-float(c.get("command_ack_at",now))>stall:
+		sent_newest=acknowledged
+		c.command_sent_newest=acknowledged
 		c.command_ack_at=now
-	var batch: Dictionary=lockstep_server.pack_commands(after,860)
+		c.command_resends=int(c.get("command_resends",0))+1
+	var batch: Dictionary=lockstep_server.pack_command_window(acknowledged,sent_newest,860,c.id,int(_tuning("command_redundancy",1)))
 	if batch.error==ERR_DOES_NOT_EXIST:
-		c.resync=true
+		# History no longer covers this client: one keyframe resync at most every 2 s.
+		if now-float(c.get("resync_at",-100.0))>2.0:
+			c.resync=true
+			c.resync_at=now
 		return
 	if batch.error!=OK:
 		return
@@ -686,7 +745,13 @@ func _send_lockstep() -> void:
 		# Delta batch header: version, kind, first tick, tick count (varuints).
 		var first_and_count: Array=_varuints(encoded,2,2)
 		if first_and_count.size()==2 and int(first_and_count[1])>0:
-			c.command_sent_newest=maxi(int(c.get("command_sent_newest",0)),int(first_and_count[0])+int(first_and_count[1])-1)
+			var batch_newest: int=int(first_and_count[0])+int(first_and_count[1])-1
+			if batch_newest>int(c.get("command_sent_newest",0)):
+				if not c.has("command_sent_at"):
+					c.command_sent_at={}
+				c.command_sent_at[batch_newest]=now
+			c.command_sent_newest=maxi(int(c.get("command_sent_newest",0)),batch_newest)
+	c.command_bytes=int(c.get("command_bytes",0))+payload.size()
 	_send_unreliable(c,payload,COMMAND_LANE)
 
 func _varuints(bytes: PackedByteArray, offset: int, count: int) -> Array:
@@ -709,33 +774,48 @@ func _send_keyframe(c: Dictionary) -> void:
 	if _pending(c,KEYFRAME_LANE)>0:
 		return
 	# World snapshot + gameplay actors + the lockstep table, all at the newest tick.
-	var table: PackedByteArray=lockstep_server.pack_keyframe()
-	var body := PackedByteArray()
-	body.resize(8)
-	body.encode_u32(0,physics.get_tick())
-	body.encode_u32(4,table.size())
-	body.append_array(table)
-	body.append_array(gameplay.capture())
+	# Joining clients in the same tick share one capture.
+	if int(keyframe_cache.get("tick",-1))!=physics.get_tick():
+		var table: PackedByteArray=lockstep_server.pack_keyframe()
+		var captured := PackedByteArray()
+		captured.resize(8)
+		captured.encode_u32(0,physics.get_tick())
+		captured.encode_u32(4,table.size())
+		captured.append_array(table)
+		var capture_started := Time.get_ticks_usec()
+		captured.append_array(gameplay.capture())
+		keyframe_cache={"tick":physics.get_tick(),"body":captured}
+		if diagnostics.size()<400:
+			diagnostics.append([snappedf(now,0.01),"keyframe_capture",float(Time.get_ticks_usec()-capture_started)/1000.0,captured.size()])
+	c.kf_body=keyframe_cache.body
 	c.keyframe_id=int(c.get("keyframe_id",0))+1
-	var count: int=ceili(float(body.size())/KEYFRAME_CHUNK)
-	for index in range(count):
-		var chunk := "KF".to_ascii_buffer()
-		chunk.resize(12)
-		chunk.encode_u8(2,index)
-		chunk.encode_u8(3,count)
-		chunk.encode_u32(4,c.keyframe_id)
-		chunk.encode_u32(8,body.size())
-		chunk.append_array(body.slice(index*KEYFRAME_CHUNK,mini(body.size(),(index+1)*KEYFRAME_CHUNK)))
-		var ticket: Dictionary=c.session.enqueue_packet(chunk,KEYFRAME_LANE)
-		if ticket.error==OK:
-			ticket.at=Time.get_ticks_msec()
-			c.tickets.append(ticket)
+	c.kf_count=ceili(float(c.kf_body.size())/KEYFRAME_CHUNK)
+	c.kf_next=0
+	_send_keyframe_chunk(c)
 	c.keyframe_tick=physics.get_tick()
 	c.command_sent_newest=c.keyframe_tick
 	c.command_ack_seen=c.keyframe_tick
 	c.command_ack_at=now
 	c.resync=false
 	c.keyframes_sent=int(c.get("keyframes_sent",0))+1
+
+func _send_keyframe_chunk(c: Dictionary) -> void:
+	# One reliable chunk in flight per joiner: a slow link drains it at its own pace
+	# instead of queueing the whole keyframe behind itself.
+	var body: PackedByteArray=c.kf_body
+	var index: int=int(c.kf_next)
+	var chunk := "KF".to_ascii_buffer()
+	chunk.resize(12)
+	chunk.encode_u8(2,index)
+	chunk.encode_u8(3,int(c.kf_count))
+	chunk.encode_u32(4,c.keyframe_id)
+	chunk.encode_u32(8,body.size())
+	chunk.append_array(body.slice(index*KEYFRAME_CHUNK,mini(body.size(),(index+1)*KEYFRAME_CHUNK)))
+	var ticket: Dictionary=c.session.enqueue_packet(chunk,KEYFRAME_LANE)
+	if ticket.error==OK:
+		ticket.at=Time.get_ticks_msec()
+		c.tickets.append(ticket)
+		c.kf_next=index+1
 
 func _accept_human_inputs(c: Dictionary, bytes: PackedByteArray) -> void:
 	# C103: every client tick since the server's last received tick, sent redundantly
@@ -829,7 +909,11 @@ func _grounded(position: Vector3, velocity: Vector3) -> bool:
 	return false
 
 func _client_step(delta: float) -> void:
+	if role=="bots" and deterministic:
+		_bot_world_step()
 	for c in connections:
+		if role=="bots" and deterministic:
+			_bot_stream(c)
 		if role=="human" and deterministic and c.ready and c.pumped:
 			_retire_unreliable(c)
 			_read_keyframe(c)
@@ -840,13 +924,13 @@ func _client_step(delta: float) -> void:
 				if packet.error==OK:
 					if not _accept_state(c,packet.payload):
 						return
-					check(c.session.acknowledge_packet(packet.message,packet.binding_generation,lane)==OK,"Validated state application receipt")
+					_acked(c.session.acknowledge_packet(packet.message,packet.binding_generation,lane),"Validated state application receipt")
 		if c.ready and c.pumped:
 			var extra: Dictionary=c.session.read_packet(EXHIBIT)
 			if extra.error==OK:
 				if not _accept_exhibit(c,extra.payload):
 					return
-				check(c.session.acknowledge_packet(extra.message,extra.binding_generation,EXHIBIT)==OK,"Validated exhibit receipt")
+				_acked(c.session.acknowledge_packet(extra.message,extra.binding_generation,EXHIBIT),"Validated exhibit receipt")
 		var direction := Vector3.ZERO
 		var flags := 0
 		if role == "human":
@@ -899,6 +983,9 @@ func _client_step(delta: float) -> void:
 				flags|=1024
 			if position.distance_to(goal)<6:
 				flags|=2048
+		if role == "bots" and deterministic:
+			_bot_input(c,direction,flags)
+			continue
 		if role == "human":
 			_human_tick(c,direction,flags)
 			if deterministic:
@@ -945,7 +1032,7 @@ func _human_tick(c: Dictionary, direction: Vector3, flags: int) -> void:
 	var z8 := clampi(roundi(direction.z*127.0),-127,127)
 	var recorded := true
 	if deterministic:
-		var input: PackedByteArray=GAMEPLAY.encode_input(Vector3(x8/127.0,0,z8/127.0),flags,c.facing,c.ctick+1)
+		var input: PackedByteArray=GAMEPLAY.encode_input(Vector3(x8/127.0,0,z8/127.0),flags,c.facing)
 		recorded=lockstep_client.record_input(c.ctick+1,input)==OK
 	if recorded:
 		c.ctick+=1
@@ -1001,11 +1088,109 @@ func _human_tick(c: Dictionary, direction: Vector3, flags: int) -> void:
 			bytes.append_array(record)
 		_enqueue(c,bytes,INPUT)
 
+func _bot_stream(c: Dictionary) -> void:
+	if not c.ready or not c.pumped:
+		return
+	_retire_unreliable(c)
+	var lockstep: Object=c.lockstep
+	var packet: Dictionary=c.session.read_packet(KEYFRAME_LANE)
+	if packet.error==OK:
+		_acked(c.session.acknowledge_packet(packet.message,packet.binding_generation,KEYFRAME_LANE),"Bot keyframe receipt")
+		var bytes: PackedByteArray=packet.payload
+		if bytes.size()>=12 and bytes.slice(0,2).get_string_from_ascii()=="KF":
+			if int(bytes.decode_u32(4))!=int(c.kf.id):
+				c.kf.id=bytes.decode_u32(4)
+				c.kf.chunks={}
+			c.kf.chunks[bytes.decode_u8(2)]=bytes.slice(12)
+			if c.kf.chunks.size()==bytes.decode_u8(3):
+				var body := PackedByteArray()
+				for index in range(bytes.decode_u8(3)):
+					body.append_array(c.kf.chunks[index])
+				c.kf.chunks={}
+				var table_size: int=body.decode_u32(4)
+				if check(lockstep.load_keyframe(body.slice(8,8+table_size))==OK,"Bot keyframe join"):
+					c.kf.loaded=true
+					c.kf.keyframes+=1
+					# The first bot (or a rejoining feed) seeds this process's shared world.
+					if world_feed<0 or world_feed==c.id:
+						var restored=GAMEPLAY.new()
+						if check(restored.restore(body.slice(8+table_size),int(_tuning("physics_workers",1))),"Bot shared world restore"):
+							if gameplay!=null:
+								gameplay.close()
+							gameplay=restored
+							physics=gameplay.world
+							world_feed=c.id
+	# Drain every queued command batch, as a real client would each frame.
+	for _message in range(16):
+		packet=c.session.read_packet(COMMAND_LANE)
+		if packet.error!=OK:
+			break
+		var acked: int=c.session.acknowledge_packet(packet.message,packet.binding_generation,COMMAND_LANE)
+		_acked(acked,"Bot command receipt")
+		var bytes: PackedByteArray=packet.payload
+		if bytes.size()>=8:
+			lockstep.acknowledge_inputs(bytes.decode_u32(0))
+			c.received+=1
+			c.last_state=now
+			if c.kf.loaded:
+				lockstep.accept_commands(bytes.slice(8))
+		if acked!=OK:
+			break
+	# Non-feed bots consume their own stream (decode and apply the command tables).
+	if c.id!=world_feed:
+		while lockstep.advance_command()!=0:
+			c.kf.advanced+=1
+
+func _bot_world_step() -> void:
+	if world_feed<0 or gameplay==null:
+		return
+	var feed: Dictionary={}
+	for c in connections:
+		if c.id==world_feed:
+			feed=c
+	var lockstep: Object=feed.lockstep
+	var buffered: int=int(lockstep.get_status().get("buffered_commands",0))
+	var steps: int=mini(buffered,1 if buffered<=4 else 3)
+	for _step in range(steps):
+		var tick: int=lockstep.advance_command()
+		if tick==0:
+			break
+		var inputs := []
+		for slot in range(config.total):
+			inputs.append(lockstep.get_input(slot))
+		gameplay.step(tick,inputs)
+		feed.kf.advanced+=1
+	if steps>0:
+		# Fresh exact positions for every bot brain in this process.
+		var states: PackedFloat32Array=physics.get_body_states(gameplay.player_ids)
+		for id in range(config.total):
+			bot_positions[id]=Vector3(states[id*13],states[id*13+1],states[id*13+2])
+		for c in connections:
+			c.position=bot_positions.get(c.id,c.position)
+			var neighbours := {}
+			for id in bot_positions:
+				if id!=c.id and bot_positions[id].distance_squared_to(c.position)<9.0:
+					neighbours[id]=bot_positions[id]
+			c.neighbors=neighbours
+
+func _bot_input(c: Dictionary, direction: Vector3, flags: int) -> void:
+	# Real-client input path: one quantized input per tick, sent redundantly.
+	if c.stance&(64|128|256):
+		direction=Vector3.ZERO
+	c.direction=direction
+	if c.lockstep.record_input(int(c.ctick)+1,GAMEPLAY.encode_input(direction,flags,c.facing))==OK:
+		c.ctick+=1
+	# Bot associations pump every other frame: send on each pump (30 Hz, redundant).
+	if c.ready and c.pumped:
+		var batch: PackedByteArray=c.lockstep.pack_inputs(60,860)
+		if batch.size()>0:
+			_send_unreliable(c,batch,INPUT)
+
 func _read_keyframe(c: Dictionary) -> void:
 	var packet: Dictionary=c.session.read_packet(KEYFRAME_LANE)
 	if packet.error!=OK:
 		return
-	check(c.session.acknowledge_packet(packet.message,packet.binding_generation,KEYFRAME_LANE)==OK,"Keyframe receipt")
+	_acked(c.session.acknowledge_packet(packet.message,packet.binding_generation,KEYFRAME_LANE),"Keyframe receipt")
 	var bytes: PackedByteArray=packet.payload
 	if bytes.size()<12 or bytes.slice(0,2).get_string_from_ascii()!="KF":
 		return
@@ -1034,27 +1219,32 @@ func _read_keyframe(c: Dictionary) -> void:
 	det.tick=body.decode_u32(0)
 	det.playing=false
 	det.keyframes+=1
-	det.last_tick16=-1
+	det.last_processed=-1
 	_capture_render_state()
 	det.prev=det.curr.duplicate()
 	c.reconciled=false
 
 func _read_commands(c: Dictionary) -> void:
-	var packet: Dictionary=c.session.read_packet(COMMAND_LANE)
-	if packet.error!=OK:
-		return
-	check(c.session.acknowledge_packet(packet.message,packet.binding_generation,COMMAND_LANE)==OK,"Command receipt")
-	var bytes: PackedByteArray=packet.payload
-	if bytes.size()<8:
-		return
-	lockstep_client.acknowledge_inputs(bytes.decode_u32(0))
-	c.received+=1
-	c.last_state=now
-	if det.loaded:
-		lockstep_client.accept_commands(bytes.slice(8))
-		det.lag.append(bytes.decode_u32(4)-int(det.tick))
-		if det.lag.size()>300:
-			det.lag.pop_front()
+	# Drain every queued batch: one read per frame lets bunched arrivals overflow the
+	# unreliable receiver and turns jitter into gaps.
+	for _message in range(16):
+		var packet: Dictionary=c.session.read_packet(COMMAND_LANE)
+		if packet.error!=OK:
+			return
+		var acked: int=c.session.acknowledge_packet(packet.message,packet.binding_generation,COMMAND_LANE)
+		_acked(acked,"Command receipt")
+		var bytes: PackedByteArray=packet.payload
+		if bytes.size()>=8:
+			lockstep_client.acknowledge_inputs(bytes.decode_u32(0))
+			c.received+=1
+			c.last_state=now
+			if det.loaded:
+				lockstep_client.accept_commands(bytes.slice(8))
+				det.lag.append(bytes.decode_u32(4)-int(det.tick))
+				if det.lag.size()>300:
+					det.lag.pop_front()
+		if acked!=OK:
+			return
 
 func _capture_render_state() -> void:
 	# One native read for every rendered body; flags derived once per simulation tick.
@@ -1116,13 +1306,13 @@ func _advance_deterministic(c: Dictionary) -> void:
 		det.advanced+=1
 		_capture_render_state()
 		# Reconcile the predicted avatar against the exact world at the input it consumed.
-		var tick16: int=int(gameplay.actors[HUMAN].tick16)
+		# The server relays which of our own input ticks it consumed at this tick.
+		var processed: int=lockstep_client.get_processed_tick()
 		var own: Vector3=det.curr[HUMAN][0]
 		c.position=own
-		if tick16!=det.last_tick16:
-			det.last_tick16=tick16
-			var input_tick: int=c.ctick-((c.ctick-tick16)&65535)
-			_reconcile(c,own,input_tick,0)
+		if processed>0 and processed!=det.last_processed:
+			det.last_processed=processed
+			_reconcile(c,own,processed,0)
 
 func _reconcile(c: Dictionary, server: Vector3, processed: int, received: int) -> void:
 	c.server_received_tick=maxi(c.server_received_tick,received)
@@ -1164,7 +1354,7 @@ func _write_telemetry() -> void:
 	var rows: Array = []
 	for c in connections:
 		var stats: Dictionary = c.session.get_statistics()
-		rows.append({"id":c.id,"ready":c.ready,"terminal":c.session.get_state()=="NetworkFailed","ever_ready":c.ever_ready,"generation":c.generation,"recoveries":c.recoveries,"transport_errors":c.transport_errors,"sent":c.sent,"applied":c.applied,"received":c.received,"ack_ms":c.ack_ms,"ack_p95":_percentile(c.acks,0.95),"ack_p50":_percentile(c.acks,0.5),"state_age_p50_ms":_percentile(c.state_ages,0.5),"state_interval_p50_ms":_percentile(c.state_intervals,0.5),"error_p95":_percentile(c.errors,0.95),"score":c.score,"position":[c.position.x,c.position.y,c.position.z],"distance":c.distance,"max_pending":c.max_pending,"pending_tickets":c.tickets.size(),"ticket_lanes":c.tickets.map(func(t):return int(t.channel)),"oldest_ticket_ms":0 if c.tickets.is_empty() else Time.get_ticks_msec()-int(c.tickets[0].at),"send_period":c.period,"wire_bytes":c.wire_base+int(stats.get("charged_wire_bytes",0)),"rejected":c.rejected,"stale":c.stale,"corrections":c.corrections,"deterministic":det.loaded if role=="human" else deterministic,"det_tick":det.tick,"det_target":det.target,"det_starved":det.starved,"det_advanced":det.advanced,"keyframes":det.keyframes if role=="human" else int(c.get("keyframes_sent",0)),"det_lag_p95":_percentile(det.lag,0.95),"det_lag_p50":_percentile(det.lag,0.5),"det_buffered_p50":_percentile(det.buffered,0.5),"det_buffered_p95":_percentile(det.buffered,0.95),"det_step_ms_p95":_percentile(det.step_ms,0.95),"playout":lockstep_server.get_playout_status(c.id) if role=="server" and deterministic and c.id==HUMAN else {},"known_entities":c.neighbors.size(),"starvations":c.starvations,"buffer_target":c.buffer_target,"buffer_p50":_percentile(c.buffer_depths,0.5),"processed_tick":c.processed_tick,"received_tick":c.received_tick,"render_delay_ms":c.render_delay*1000,"exhibit_received":c.exhibit_received,"activities":c.activities,"state_age_p95_ms":_percentile(c.state_ages,0.95),"state_interval_p95_ms":_percentile(c.state_intervals,0.95)})
+		rows.append({"id":c.id,"ready":c.ready,"terminal":c.session.get_state()=="NetworkFailed","ever_ready":c.ever_ready,"generation":c.generation,"recoveries":c.recoveries,"transport_errors":c.transport_errors,"error_codes":c.get("error_codes",{}),"srtt_ms":float(stats.get("smoothed_rtt_us",0))/1000.0,"retry_ticks":int(stats.get("retry_ticks",0)),"cwnd":int(stats.get("congestion_window",0)),"sent":c.sent,"applied":c.applied,"received":c.received,"ack_ms":c.ack_ms,"ack_p95":_percentile(c.acks,0.95),"ack_p50":_percentile(c.acks,0.5),"state_age_p50_ms":_percentile(c.state_ages,0.5),"state_interval_p50_ms":_percentile(c.state_intervals,0.5),"error_p95":_percentile(c.errors,0.95),"score":c.score,"position":[c.position.x,c.position.y,c.position.z],"distance":c.distance,"max_pending":c.max_pending,"pending_tickets":c.tickets.size(),"ticket_lanes":c.tickets.map(func(t):return int(t.channel)),"oldest_ticket_ms":0 if c.tickets.is_empty() else Time.get_ticks_msec()-int(c.tickets[0].at),"send_period":c.period,"wire_bytes":c.wire_base+int(stats.get("charged_wire_bytes",0)),"rejected":c.rejected,"stale":c.stale,"corrections":c.corrections,"deterministic":det.loaded if role=="human" else deterministic,"det_tick":det.tick,"det_target":det.target,"det_starved":det.starved,"det_advanced":det.advanced,"keyframes":det.keyframes if role=="human" else int(c.kf.keyframes) if c.has("kf") else int(c.get("keyframes_sent",0)),"bot_advanced":int(c.kf.advanced) if c.has("kf") else 0,"bot_loaded":bool(c.kf.loaded) if c.has("kf") else false,"command_bytes":int(c.get("command_bytes",0)),"command_rtt_ms":float(c.get("command_rtt",0.0))*1000.0,"command_resends":int(c.get("command_resends",0)),"decoder":(lockstep_client.get_status() if role=="human" and lockstep_client!=null else c.lockstep.get_status() if c.has("lockstep") else {}),"server_ack":int(lockstep_server.get_playout_status(c.id).get("command_acknowledged",0)) if role=="server" and deterministic else 0,"sent_newest":int(c.get("command_sent_newest",0)),"server_tick":physics.get_tick() if physics!=null else 0,"det_lag_p95":_percentile(det.lag,0.95),"det_lag_p50":_percentile(det.lag,0.5),"det_buffered_p50":_percentile(det.buffered,0.5),"det_buffered_p95":_percentile(det.buffered,0.95),"det_step_ms_p95":_percentile(det.step_ms,0.95),"playout":lockstep_server.get_playout_status(c.id) if role=="server" and deterministic and c.id==HUMAN else {},"known_entities":c.neighbors.size(),"starvations":c.starvations,"buffer_target":c.buffer_target,"buffer_p50":_percentile(c.buffer_depths,0.5),"processed_tick":c.processed_tick,"received_tick":c.received_tick,"render_delay_ms":c.render_delay*1000,"exhibit_received":c.exhibit_received,"activities":c.activities,"state_age_p95_ms":_percentile(c.state_ages,0.95),"state_interval_p95_ms":_percentile(c.state_intervals,0.95)})
 	var report := {"diagnostics":diagnostics,"role":role,"start_unix":config.start_unix,"now":now,"failed":failed,"pid":OS.get_process_id(),"rows":rows,"physics_p95_ms":_percentile(physics_ms,0.95),"frames":frame,"performance":{"frame_p50_ms":_percentile(frame_times,0.5),"frame_p95_ms":_percentile(frame_times,0.95),"frame_p99_ms":_percentile(frame_times,0.99),"process_p95_ms":_percentile(process_times,0.95),"gpu_p95_ms":_percentile(gpu_times,0.95),"physics_interval_p95_ms":_percentile(step_intervals,0.95),"samples":frame_times.size(),"server_tick_rate":float(frame)/maxf(now+10,1),"network_p95_ms":_percentile(network_times,0.95),"application_p95_ms":_percentile(application_times,0.95),"control_p95_ms":_percentile(control_times,0.95),"replication_p95_ms":_percentile(replication_times,0.95),"publish_p95_ms":_percentile(publish_times,0.95),"application_max_ms":_percentile(application_times,1.0),"tick_p50_ms":_percentile(section_ms.tick,0.5),"tick_p95_ms":_percentile(section_ms.tick,0.95),"render_p50_ms":_percentile(section_ms.render,0.5),"render_p95_ms":_percentile(section_ms.render,0.95),"animate_p50_ms":_percentile(section_ms.animate,0.5),"animate_p95_ms":_percentile(section_ms.animate,0.95),"animated_p50":_percentile(section_ms.animated,0.5),"engine_process_p50_ms":_percentile(section_ms.engine_process,0.5),"engine_process_p95_ms":_percentile(section_ms.engine_process,0.95),"engine_physics_p50_ms":_percentile(section_ms.engine_physics,0.5),"engine_physics_p95_ms":_percentile(section_ms.engine_physics,0.95),"engine_physics_window_max_ms":Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)*1000}}
 	if role=="server":
 		var props: Array = []

@@ -22,6 +22,11 @@ struct CongestionConfig {
     // inter-datagram pacing; larger values let a single owner pump emit up to
     // this many paced datagrams while the long-run rate stays window/RTT.
     std::uint8_t burst_datagrams{1};
+    // Application rate floor in bytes per second (0 = none). The effective window
+    // never drops below this rate times the smoothed RTT, so random wireless loss
+    // cannot starve a real-time stream below its declared budget; growth and
+    // loss response above the floor stay NewReno.
+    std::uint64_t minimum_rate_bytes_per_second{0};
 };
 struct PacketAck {
     std::uint64_t largest{};
@@ -54,9 +59,13 @@ public:
     Result<CongestionReceipt> detect_loss(std::uint64_t now_us) noexcept;
     // A PTO alone is not proof of packet loss and does not collapse the window.
     Result<std::uint64_t> probe_timeout_us() const noexcept;
+    // Smoothed RTT + max(4 x variance, 1 ms) + maximum ACK delay, without probe
+    // backoff: the interval after which an unacknowledged retransmission is due.
+    [[nodiscard]] std::uint64_t retransmit_timeout_us() const noexcept;
     Status probe_timeout(std::uint64_t now_us) noexcept;
     [[nodiscard]] std::uint64_t bytes_in_flight() const noexcept { return flight_; }
-    [[nodiscard]] std::uint64_t congestion_window() const noexcept { return window_; }
+    // Effective window: the NewReno window or the rate floor, whichever is larger.
+    [[nodiscard]] std::uint64_t congestion_window() const noexcept { return effective_window(); }
     [[nodiscard]] std::uint64_t smoothed_rtt_us() const noexcept { return smoothed_rtt_; }
     [[nodiscard]] std::uint64_t next_send_us() const noexcept { return next_send_; }
     // True when the pacing bucket admits another datagram at now_us.
@@ -69,6 +78,7 @@ private:
     Result<std::uint64_t> admit(std::uint32_t, std::uint64_t, bool probe) noexcept;
     void pace(std::uint32_t, std::uint64_t) noexcept;
     std::uint64_t burst_us() const noexcept;
+    std::uint64_t effective_window() const noexcept;
     CongestionConfig config_{};
     std::span<PacketRecord> records_{};
     std::uint64_t next_number_{1}, last_sent_{}, last_time_{}, next_send_{};

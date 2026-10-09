@@ -295,6 +295,12 @@ Status Session::pump_frames(Tick now) noexcept {
         if(!sent) {if(sent.error()!=Error::Busy){s.failed=true;return sent;}if(!s.split_carriers)return sent;writable=false;blocked=true;}
     } return blocked?Status(fail(Error::Busy)):Status{};
 }
+Status Session::set_retry_ticks(Tick ticks) noexcept {
+    if(!impl_)return fail(Error::NotReady);
+    if(impl_->failed)return fail(Error::ChannelFailed);
+    for(auto& sender:impl_->senders)if(sender)if(auto set=sender->set_retry_ticks(ticks);!set)return set;
+    return {};
+}
 Result<DeliveryTicket> Session::send(std::span<const std::byte> bytes,Tick now,std::uint8_t channel) noexcept {
     if(!impl_)return fail(Error::NotReady); if(!impl_->owned())return fail(Error::PermissionDenied);
     if(!ready())return fail(Error::NotReady); if(channel>=impl_->config.logical_channels)return fail(Error::InvalidArgument);
@@ -332,7 +338,14 @@ Result<bool> Session::storage_overlaps(std::span<const std::byte> bytes) const n
 Status Session::applied(std::uint64_t message,std::uint8_t channel) noexcept {
     if(!impl_)return fail(Error::NotReady); if(!impl_->owned())return fail(Error::PermissionDenied);
     if(!ready())return fail(Error::NotReady); if(channel>=impl_->config.logical_channels)return fail(Error::InvalidArgument);
-    if(!impl_->receipt_capacity(channel,message))return fail(Error::Busy);
+    if(!impl_->receipt_capacity(channel,message)) {
+        // Receipts back up while a slow carrier is paced. A lossy channel applies
+        // without one (its sender retires unreliable tickets by timeout); a reliable
+        // channel reports Busy so the application retries after receipts drain.
+        const auto mode=impl_->config.channel_modes[channel];
+        if(mode!=DeliveryMode::Unreliable && mode!=DeliveryMode::UnreliableLatest)return fail(Error::Busy);
+        return impl_->receivers[channel]->applied(message);
+    }
     if(auto applied=impl_->receivers[channel]->applied(message);!applied)return applied;
     return impl_->receipt(channel,message,DeliveryStage::Applied);
 }

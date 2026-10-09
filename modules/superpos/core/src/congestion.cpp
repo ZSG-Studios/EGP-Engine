@@ -24,7 +24,8 @@ Result<PacketCongestion> PacketCongestion::create(CongestionConfig config,
         config.maximum_window > 64ULL * 1024 * 1024 || records.empty() ||
         records.size() > 65536 || !config.initial_rtt_us ||
         config.initial_rtt_us > 60000000 || config.maximum_ack_delay_us > 1000000 ||
-        !config.burst_datagrams || config.burst_datagrams > 16)
+        !config.burst_datagrams || config.burst_datagrams > 16 ||
+        config.minimum_rate_bytes_per_second > 1024ULL * 1024 * 1024)
         return fail(Error::InvalidArgument);
     return PacketCongestion(config, records);
 }
@@ -36,7 +37,8 @@ Status PacketCongestion::can_send(std::uint32_t bytes, std::uint64_t now) const 
     if (!bytes || bytes > config_.datagram_bytes || now < last_time_)
         return fail(Error::InvalidArgument);
     if (exhausted_) return fail(Error::CounterExhausted);
-    if (!pacing_allows(now) || bytes > window_ - std::min(flight_, window_))
+    const auto window = effective_window();
+    if (!pacing_allows(now) || bytes > window - std::min(flight_, window))
         return fail(Error::Busy);
     // Keep one record for a fresh PTO probe, except in the deliberately minimal
     // one-record profile (which cannot promise a full-window probe).
@@ -50,17 +52,25 @@ Result<std::uint64_t> PacketCongestion::sent(std::uint32_t bytes, std::uint64_t 
 Result<std::uint64_t> PacketCongestion::next_packet_number() const noexcept {
     return exhausted_?Result<std::uint64_t>(fail(Error::CounterExhausted)):Result<std::uint64_t>(next_number_);
 }
+std::uint64_t PacketCongestion::effective_window() const noexcept {
+    if(!config_.minimum_rate_bytes_per_second)return window_;
+    // rate (bytes/s) x RTT (us); both are validated-bounded so this cannot overflow.
+    const auto floor=config_.minimum_rate_bytes_per_second*smoothed_rtt_/1000000;
+    return std::max(window_,std::min<std::uint64_t>(config_.maximum_window,std::max<std::uint64_t>(floor,2ULL*config_.datagram_bytes)));
+}
 std::uint64_t PacketCongestion::burst_us() const noexcept {
     if(config_.burst_datagrams<=1)return 0;
-    const auto interval=(static_cast<std::uint64_t>(config_.datagram_bytes)*smoothed_rtt_+window_-1)/window_;
+    const auto window=effective_window();
+    const auto interval=(static_cast<std::uint64_t>(config_.datagram_bytes)*smoothed_rtt_+window-1)/window;
     return interval*(config_.burst_datagrams-1U);
 }
 bool PacketCongestion::pacing_allows(std::uint64_t now) const noexcept {
     return now>=next_send_ || next_send_-now<=burst_us();
 }
 void PacketCongestion::pace(std::uint32_t bytes,std::uint64_t now) noexcept {
+    const auto window=effective_window();
     const auto interval=std::max<std::uint64_t>(1,
-        (static_cast<std::uint64_t>(bytes)*smoothed_rtt_+window_-1)/window_);
+        (static_cast<std::uint64_t>(bytes)*smoothed_rtt_+window-1)/window);
     // Bucket debt accumulates from the later of now and the previous deadline;
     // with a one-datagram burst this is exactly now+interval as before.
     next_send_=saturating_add(std::max(next_send_,now),interval);last_time_=now;
@@ -102,7 +112,7 @@ Result<CongestionReceipt> PacketCongestion::acknowledge(PacketAck ack, std::uint
         (ack.largest < 64 && (ack.bits >> ack.largest) != 0))
         return fail(Error::ProtocolViolation);
     CongestionReceipt result{};
-    const bool window_limited = flight_ + config_.datagram_bytes >= window_;
+    const bool window_limited = flight_ + config_.datagram_bytes >= effective_window();
     PacketRecord *sample = nullptr;
     for (auto &record : records_) if (record.occupied && record.number <= ack.largest &&
         ack.largest - record.number < 64 && (ack.bits & (1ULL << (ack.largest - record.number)))) {
@@ -170,6 +180,10 @@ Result<CongestionReceipt> PacketCongestion::loss(std::uint64_t now) noexcept {
     return result;
 }
 Result<CongestionReceipt> PacketCongestion::detect_loss(std::uint64_t now) noexcept { return loss(now); }
+std::uint64_t PacketCongestion::retransmit_timeout_us() const noexcept {
+    return saturating_add(smoothed_rtt_,
+        saturating_add(std::max<std::uint64_t>(4 * variance_, 1000), config_.maximum_ack_delay_us));
+}
 Result<std::uint64_t> PacketCongestion::probe_timeout_us() const noexcept {
     const auto base = saturating_add(smoothed_rtt_,
         saturating_add(std::max<std::uint64_t>(4 * variance_, 1000), config_.maximum_ack_delay_us));

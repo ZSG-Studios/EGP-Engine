@@ -303,7 +303,8 @@ def main():
         if len(rows)!=count or len(server_rows)!=count:
             errors.append('Missing per-client telemetry')
         for row in rows:
-            if not row['ever_ready'] or not row['ready'] or row['received']<10 or row['applied']<10 or row['max_pending']>2 or row.get('exhibit_received',0)<2:
+            deterministic_row=row.get('bot_loaded') or row.get('deterministic')
+            if not row['ever_ready'] or not row['ready'] or row['received']<10 or row['applied']<10 or row['max_pending']>2 or (not deterministic_row and row.get('exhibit_received',0)<2) or (row['id']<100 and row.get('keyframes',1)<1):
                 errors.append('Client qualification failed id='+str(row['id']))
         for row in server_rows:
             if not row['ever_ready'] or not row['ready'] or row['received']<10 or (row['id']<args.bots and row['distance']<3):
@@ -318,6 +319,21 @@ def main():
             # Deterministic mode: the playable client joined by keyframe and simulated the world locally.
             if not human_row.get('deterministic') or human_row.get('keyframes',0)<1 or human_row.get('det_advanced',0)<120:
                 errors.append('Deterministic client did not join and simulate the relayed world')
+        # Deterministic command stream per network profile, measured at the server.
+        stream={}
+        for index,profile in enumerate(PROFILES):
+            cohort=[r for r in server_rows if index*20<=r['id']<(index+1)*20]
+            if cohort:
+                rates=sorted(r.get('command_bytes',0)/max(args.duration,1)/1000 for r in cohort)
+                stream[profile['name']]=dict(command_kBps_p50=round(rates[len(rates)//2],2),command_kBps_max=round(rates[-1],2),
+                    rtt_ms_p50=round(sorted(r.get('command_rtt_ms',0) for r in cohort)[len(cohort)//2],1),
+                    resends=sum(r.get('command_resends',0) for r in cohort),keyframes=sum(r.get('keyframes',0) for r in cohort),
+                    link_kBps=profile['rate']/1000)
+        print('LAB_STREAM '+json.dumps(stream),flush=True)
+        if any(r.get('bot_loaded') is not None for r in rows):
+            storms=[r['id'] for r in rows if r['id']<100 and r.get('keyframes',0)>3]
+            if storms:
+                errors.append('Keyframe storm: bots rejoined more than 3 times: '+str(storms[:10]))
         simulation=server_report.get('simulation',{})
         if simulation.get('backend')!='EGPBox3DWorld' or simulation.get('joints',0)<100 or not simulation.get('cloth_finite') or simulation.get('pin_error',1)>0.001 or simulation.get('cloth_deformation',0)<0.1 or simulation.get('joint_travel',0)<1:
             errors.append('Native cloth/joint qualification failed')
@@ -329,7 +345,7 @@ def main():
             activities={key for row in server_rows for key in row.get('activities',{})}
             if not {'8','16','32','64','256'}.issubset(activities):
                 errors.append('Replicated bot activities not exercised')
-        summary = dict(passed=not errors,errors=errors,scope=('Local' if args.local_server else 'Remote')+' native dedicated Box3D server; local independent native Superpos UDP/DTLS streams through seeded datagram impairment',bots=args.bots,human=not args.no_human,duration=args.duration,server=server_meta,local_engine_sha256=hashlib.sha256(engine.read_bytes()).hexdigest(),clients=rows,server_clients=server_rows,proxy=proxy.rows,profiles=PROFILES,physics_p95_ms=server_report.get('physics_p95_ms'),server_exit=server_exit,simulation=simulation,performance={report['role']:report.get('performance',{}) for report in reports if report['role']=='human'},server_performance=server_report.get('performance',{}),local_server=args.local_server,proxy_gaps=proxy_gaps,diagnostics={report['role']:report.get('diagnostics',[]) for report in reports if report['role']=='human'}|{'server':server_report.get('diagnostics',[])})
+        summary = dict(passed=not errors,errors=errors,scope=('Local' if args.local_server else 'Remote')+' native dedicated Box3D server; local independent native Superpos UDP/DTLS streams through seeded datagram impairment',bots=args.bots,human=not args.no_human,duration=args.duration,server=server_meta,local_engine_sha256=hashlib.sha256(engine.read_bytes()).hexdigest(),clients=rows,server_clients=server_rows,proxy=proxy.rows,profiles=PROFILES,physics_p95_ms=server_report.get('physics_p95_ms'),server_exit=server_exit,simulation=simulation,performance={report['role']:report.get('performance',{}) for report in reports if report['role']=='human'},server_performance=server_report.get('performance',{}),local_server=args.local_server,proxy_gaps=proxy_gaps,diagnostics={report['role']:report.get('diagnostics',[]) for report in reports if report['role']=='human'}|{'server':server_report.get('diagnostics',[])},command_stream=stream)
         atomic_json(OUT/'receipt.json',summary)
         print('LAB_'+('PASS' if not errors else 'FAIL')+' clients='+str(count)+' physics_p95_ms='+str(summary['physics_p95_ms']),flush=True)
         if errors:

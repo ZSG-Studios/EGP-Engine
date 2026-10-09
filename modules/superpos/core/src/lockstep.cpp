@@ -1,6 +1,7 @@
 #include "superpos/lockstep.hpp"
 #include "superpos/codec.hpp"
 #include <algorithm>
+#include <bit>
 #include <cstring>
 
 namespace superpos {
@@ -104,121 +105,278 @@ double InputPlayout::pace_advice() const noexcept {
     return std::clamp(difference/static_cast<double>(std::max<std::size_t>(state.target,1)),-1.0,1.0);
 }
 
-Result<CommandEncoder> CommandEncoder::create(std::size_t input_bytes,std::size_t slots) noexcept {
-    if(!valid_width(input_bytes) || !slots || slots>lockstep_slots)return fail(Error::InvalidArgument);
-    return CommandEncoder(input_bytes,slots);
+namespace {
+std::size_t mask_bytes(std::size_t input_bytes) noexcept { return (input_bytes+7)/8; }
+std::uint64_t zigzag(Tick value,Tick previous) noexcept {
+    const auto delta=static_cast<std::int64_t>(value-previous);
+    return (static_cast<std::uint64_t>(delta)<<1)^static_cast<std::uint64_t>(delta>>63);
+}
+Tick unzigzag(std::uint64_t value,Tick previous) noexcept {
+    const auto delta=static_cast<std::int64_t>(value>>1)^-static_cast<std::int64_t>(value&1);
+    return previous+static_cast<Tick>(delta);
+}
+Status valid_stream(const CommandStreamConfig& config) noexcept {
+    if(!valid_width(config.input_bytes) || !config.slots || config.slots>lockstep_slots ||
+        !config.history_ticks || config.history_ticks>lockstep_max_command_history ||
+        config.pending_batches>lockstep_max_pending_batches || (config.pending_batches && (config.pending_batch_bytes<8 || config.pending_batch_bytes>4096)))return fail(Error::InvalidArgument);
+    return {};
+}
+// Unless capped, every retained tick may change every slot.
+std::size_t stream_changes(const CommandStreamConfig& config) noexcept {
+    return config.change_capacity?config.change_capacity:config.history_ticks*config.slots;
+}
+std::uint32_t read_mask(std::span<const std::byte> raw) noexcept {
+    std::uint32_t mask=std::to_integer<std::uint32_t>(raw[0]);
+    if(raw.size()>1)mask|=std::to_integer<std::uint32_t>(raw[1])<<8;
+    return mask;
+}
+}
+
+Result<CommandEncoder> CommandEncoder::create(Allocator& allocator,CommandStreamConfig config) noexcept {
+    if(auto valid=valid_stream(config);!valid)return fail(valid.error());
+    config.change_capacity=stream_changes(config);
+    CommandEncoder encoder(allocator,config);
+    if(!encoder.changes_.resize(config.change_capacity*sizeof(Change)) || !encoder.meta_.resize(config.history_ticks*sizeof(TickMeta)) ||
+        !encoder.processed_.resize(config.history_ticks*config.slots*sizeof(Tick)))return fail(Error::OutOfMemory);
+    return encoder;
 }
 Status CommandEncoder::begin(Tick tick) noexcept {
     if(open_any_ || !tick || (sealed_any_ && tick!=newest_+1))return fail(Error::InvalidArgument);
-    staged_=table_;open_=tick;open_any_=true;return {};
+    staged_=table_;
+    if(sealed_any_)std::memcpy(staged_processed_.data(),processed()+(newest_%config_.history_ticks)*config_.slots,config_.slots*sizeof(Tick));
+    open_=tick;open_any_=true;return {};
 }
-Status CommandEncoder::set(std::uint16_t slot,std::span<const std::byte> input) noexcept {
-    if(!open_any_ || slot>=slots_ || input.size()!=input_bytes_)return fail(Error::InvalidArgument);
-    std::memcpy(staged_[slot].data(),input.data(),input.size());return {};
+Status CommandEncoder::set(std::uint16_t slot,std::span<const std::byte> input,Tick processed_tick) noexcept {
+    if(!open_any_ || slot>=config_.slots || input.size()!=config_.input_bytes)return fail(Error::InvalidArgument);
+    std::memcpy(staged_[slot].data(),input.data(),input.size());staged_processed_[slot]=processed_tick;return {};
 }
 Status CommandEncoder::end() noexcept {
     if(!open_any_)return fail(Error::InvalidArgument);
+    const auto history=config_.history_ticks,capacity_changes=config_.change_capacity,width=config_.input_bytes;
     std::size_t changed=0;
-    for(std::size_t slot=0;slot<slots_;++slot)changed+=!equal(staged_[slot],table_[slot],input_bytes_);
-    if(changed>change_capacity)return fail(Error::CapacityExceeded);
+    for(std::size_t slot=0;slot<config_.slots;++slot)changed+=!equal(staged_[slot],table_[slot],width);
+    if(changed>capacity_changes)return fail(Error::CapacityExceeded);
     // Evict the oldest sealed ticks until both history rings can hold this tick.
-    while(ticks_ && (ticks_==capacity || change_count_+changed>change_capacity)) {
-        const auto oldest=(newest_-ticks_+1)%capacity;
-        change_head_=(change_head_+tick_count_[oldest])%change_capacity;change_count_-=tick_count_[oldest];--ticks_;
+    while(ticks_ && (ticks_==history || change_count_+changed>capacity_changes)) {
+        const auto& oldest=meta()[(newest_-ticks_+1)%history];
+        change_head_=(change_head_+oldest.count)%capacity_changes;change_count_-=oldest.count;--ticks_;
     }
-    const auto index=open_%capacity;tick_first_[index]=(change_head_+change_count_)%change_capacity;tick_count_[index]=changed;
-    for(std::size_t slot=0;slot<slots_;++slot) if(!equal(staged_[slot],table_[slot],input_bytes_)) {
-        auto& change=changes_[(change_head_+change_count_)%change_capacity];
-        change.slot=static_cast<std::uint16_t>(slot);change.bytes=staged_[slot];++change_count_;
+    auto& tick=meta()[open_%history];
+    tick.first=(change_head_+change_count_)%capacity_changes;tick.count=changed;tick.bytes=varuint_size(changed);
+    std::size_t previous=0;bool any=false;
+    for(std::size_t slot=0;slot<config_.slots;++slot) {
+        std::uint16_t mask=0;
+        for(std::size_t i=0;i<width;++i)if(staged_[slot][i]!=table_[slot][i])mask|=static_cast<std::uint16_t>(1u<<i);
+        if(!mask)continue;
+        auto& change=changes()[(change_head_+change_count_)%capacity_changes];
+        change.slot=static_cast<std::uint16_t>(slot);change.mask=mask;change.bytes=staged_[slot];++change_count_;
+        tick.bytes+=varuint_size(any?slot-previous-1:slot)+mask_bytes(width)+static_cast<std::size_t>(std::popcount(mask));
+        previous=slot;any=true;
     }
+    std::memcpy(processed()+(open_%history)*config_.slots,staged_processed_.data(),config_.slots*sizeof(Tick));
     table_=staged_;newest_=open_;sealed_any_=true;open_any_=false;++ticks_;return {};
 }
-Result<std::size_t> CommandEncoder::encode(Tick after,std::span<std::byte> output) const noexcept {
-    if(!sealed_any_)return fail(Error::NotReady);
-    const Tick oldest=newest_-ticks_+1;
-    if(after+1<oldest)return fail(Error::StaleEpoch);
-    const Tick first=std::min(after+1,newest_+1);
-    // Size whole ticks into the output: a batch never splits a tick.
-    std::size_t ticks=0,size=0;
-    auto tick_size=[&](Tick tick) noexcept {
-        const auto index=tick%capacity;std::size_t bytes=varuint_size(tick_count_[index]);
-        for(std::size_t i=0;i<tick_count_[index];++i)bytes+=varuint_size(changes_[(tick_first_[index]+i)%change_capacity].slot)+input_bytes_;
-        return bytes;
-    };
-    for(Tick tick=first;tick<=newest_;++tick) {
-        const auto next=tick_size(tick);
-        if(2+varuint_size(first)+varuint_size(ticks+1)+size+next>output.size())break;
-        size+=next;++ticks;
+std::size_t CommandEncoder::fit_forward(Tick first,Tick last,std::size_t body,std::size_t capacity,std::uint32_t recipient) const noexcept {
+    const auto history=config_.history_ticks;
+    const bool with_processed=recipient!=lockstep_no_recipient;
+    const std::size_t fixed=2+varuint_size(first)+varuint_size(with_processed?std::uint64_t{recipient}+1:0);
+    Tick previous=with_processed&&last>=first?processed()[(last%history)*config_.slots+recipient]:0;
+    std::size_t ticks=last>=first?static_cast<std::size_t>(last-first+1):0;
+    for(Tick tick=first+ticks;tick<=newest_;++tick) {
+        std::size_t next=meta()[tick%history].bytes;
+        Tick value=0;
+        if(with_processed){value=processed()[(tick%history)*config_.slots+recipient];next+=varuint_size(zigzag(value,previous));}
+        if(fixed+varuint_size(ticks+1)+body+next>capacity)break;
+        body+=next;++ticks;previous=value;
     }
-    Writer writer(output);std::array<std::byte,2> head{std::byte{lockstep_wire_version},delta_kind};
-    if(!writer.raw(head)||!writer.varuint(first)||!writer.varuint(ticks))return fail(Error::Truncated);
+    return ticks;
+}
+Result<std::size_t> CommandEncoder::write(Tick first,std::size_t ticks,std::span<std::byte> output,std::uint32_t recipient) const noexcept {
+    const auto history=config_.history_ticks,width=config_.input_bytes;
+    const bool with_processed=recipient!=lockstep_no_recipient;
+    Writer writer(output);std::array<std::byte,2> head{std::byte{lockstep_command_wire_version},delta_kind};
+    if(!writer.raw(head)||!writer.varuint(first)||!writer.varuint(ticks)||!writer.varuint(with_processed?std::uint64_t{recipient}+1:0))return fail(Error::Truncated);
+    Tick previous=0;
+    std::array<std::byte,lockstep_input_bytes+2> scratch{};
     for(Tick tick=first;tick<first+ticks;++tick) {
-        const auto index=tick%capacity;
-        if(!writer.varuint(tick_count_[index]))return fail(Error::Truncated);
-        for(std::size_t i=0;i<tick_count_[index];++i) {
-            const auto& change=changes_[(tick_first_[index]+i)%change_capacity];
-            if(!writer.varuint(change.slot)||!writer.raw(std::span(change.bytes).first(input_bytes_)))return fail(Error::Truncated);
+        const auto& sealed=meta()[tick%history];
+        if(with_processed) {
+            const Tick value=processed()[(tick%history)*config_.slots+recipient];
+            if(!writer.varuint(zigzag(value,previous)))return fail(Error::Truncated);
+            previous=value;
+        }
+        if(!writer.varuint(sealed.count))return fail(Error::Truncated);
+        std::size_t last=0;
+        for(std::size_t i=0;i<sealed.count;++i) {
+            const auto& change=changes()[(sealed.first+i)%config_.change_capacity];
+            std::size_t n=0;
+            scratch[n++]=std::byte(change.mask&0xFF);
+            if(mask_bytes(width)>1)scratch[n++]=std::byte(change.mask>>8);
+            for(std::size_t b=0;b<width;++b)if(change.mask&(1u<<b))scratch[n++]=change.bytes[b];
+            if(!writer.varuint(i?change.slot-last-1:change.slot)||!writer.raw(std::span(scratch).first(n)))return fail(Error::Truncated);
+            last=change.slot;
         }
     }
     return writer.size();
+}
+Result<std::size_t> CommandEncoder::encode(Tick after,std::span<std::byte> output,std::uint32_t recipient) const noexcept {
+    if(!sealed_any_)return fail(Error::NotReady);
+    if(recipient!=lockstep_no_recipient && recipient>=config_.slots)return fail(Error::InvalidArgument);
+    if(after+1<oldest())return fail(Error::StaleEpoch);
+    // Size whole ticks into the output: a batch never splits a tick.
+    const Tick first=std::min(after+1,newest_+1);
+    return write(first,fit_forward(first,first-1,0,output.size(),recipient),output,recipient);
+}
+Result<std::size_t> CommandEncoder::encode_window(Tick acknowledged,Tick sent,std::span<std::byte> output,std::uint32_t recipient,std::size_t redundant) const noexcept {
+    if(!sealed_any_)return fail(Error::NotReady);
+    if(recipient!=lockstep_no_recipient && recipient>=config_.slots)return fail(Error::InvalidArgument);
+    if(acknowledged+1<oldest())return fail(Error::StaleEpoch);
+    const bool with_processed=recipient!=lockstep_no_recipient;
+    const auto history=config_.history_ticks;
+    auto processed_at=[&](Tick tick) noexcept { return with_processed?processed()[(tick%history)*config_.slots+recipient]:Tick{0}; };
+    auto delta=[&](Tick tick,Tick previous) noexcept { return with_processed?varuint_size(zigzag(processed_at(tick),previous)):std::size_t{0}; };
+    const std::size_t recipient_bytes=varuint_size(with_processed?std::uint64_t{recipient}+1:0);
+    // Fresh ticks first: everything after max(sent, acknowledged) that fits.
+    const Tick fresh=std::min(std::max(sent,acknowledged)+1,newest_+1);
+    std::size_t ticks=fit_forward(fresh,fresh-1,0,output.size(),recipient);
+    if(!ticks && fresh<=newest_)return write(fresh,0,output,recipient);
+    Tick first=ticks?fresh:newest_+1;
+    const Tick last=first+ticks-1;
+    // Body bytes of [first, last], the first tick's processed tick absolute.
+    std::size_t body=0;
+    for(Tick tick=first;tick<=last && ticks;++tick)body+=meta()[tick%history].bytes+delta(tick,tick==first?0:processed_at(tick-1));
+    // Then already-sent, unacknowledged ticks back toward the acknowledgement.
+    for(std::size_t extra=0;extra<redundant && first>acknowledged+1 && first>1;++extra) {
+        const Tick earlier=first-1;
+        std::size_t grown=body+meta()[earlier%history].bytes+delta(earlier,0);
+        if(ticks)grown=grown-delta(first,0)+delta(first,processed_at(earlier));
+        if(2+varuint_size(earlier)+varuint_size(ticks+1)+recipient_bytes+grown>output.size())break;
+        body=grown;first=earlier;++ticks;
+    }
+    return write(first,ticks,output,recipient);
 }
 Result<std::size_t> CommandEncoder::encode_table(std::span<std::byte> output) const noexcept {
     if(!sealed_any_)return fail(Error::NotReady);
-    Writer writer(output);std::array<std::byte,2> head{std::byte{lockstep_wire_version},table_kind};
-    if(!writer.raw(head)||!writer.varuint(newest_)||!writer.varuint(slots_)||!writer.varuint(input_bytes_))return fail(Error::Truncated);
-    for(std::size_t slot=0;slot<slots_;++slot)if(!writer.raw(std::span(table_[slot]).first(input_bytes_)))return fail(Error::Truncated);
+    Writer writer(output);std::array<std::byte,2> head{std::byte{lockstep_command_wire_version},table_kind};
+    if(!writer.raw(head)||!writer.varuint(newest_)||!writer.varuint(config_.slots)||!writer.varuint(config_.input_bytes))return fail(Error::Truncated);
+    for(std::size_t slot=0;slot<config_.slots;++slot)if(!writer.raw(std::span(table_[slot]).first(config_.input_bytes)))return fail(Error::Truncated);
     return writer.size();
 }
 
-Result<CommandDecoder> CommandDecoder::create(std::size_t input_bytes,std::size_t slots) noexcept {
-    if(!valid_width(input_bytes) || !slots || slots>lockstep_slots)return fail(Error::InvalidArgument);
-    return CommandDecoder(input_bytes,slots);
+Result<CommandDecoder> CommandDecoder::create(Allocator& allocator,CommandStreamConfig config) noexcept {
+    if(auto valid=valid_stream(config);!valid)return fail(valid.error());
+    config.change_capacity=stream_changes(config);
+    CommandDecoder decoder(allocator,config);
+    if(!decoder.changes_.resize(config.change_capacity*sizeof(Change)) || !decoder.meta_.resize(config.history_ticks*sizeof(TickMeta)) ||
+        !decoder.parked_bytes_.resize(config.pending_batches*config.pending_batch_bytes))return fail(Error::OutOfMemory);
+    return decoder;
 }
 Status CommandDecoder::load_table(std::span<const std::byte> bytes) noexcept {
     Reader reader(bytes);auto head=reader.raw(2);
-    if(!head || (*head)[0]!=std::byte{lockstep_wire_version} || (*head)[1]!=table_kind)return fail(Error::Unsupported);
+    if(!head || (*head)[0]!=std::byte{lockstep_command_wire_version} || (*head)[1]!=table_kind)return fail(Error::Unsupported);
     auto tick=reader.varuint(),slots=reader.varuint(),width=reader.varuint();
     if(!tick||!slots||!width)return fail(Error::NonCanonical);
-    if(*slots!=slots_ || *width!=input_bytes_)return fail(Error::ProtocolViolation);
-    auto payload=reader.raw(slots_*input_bytes_);if(!payload||!reader.empty())return fail(Error::NonCanonical);
-    for(std::size_t slot=0;slot<slots_;++slot)std::memcpy(table_[slot].data(),payload->data()+slot*input_bytes_,input_bytes_);
-    applied_=newest_=*tick;ticks_=tick_head_=change_head_=change_count_=0;synchronized_=true;return {};
+    if(*slots!=config_.slots || *width!=config_.input_bytes)return fail(Error::ProtocolViolation);
+    auto payload=reader.raw(config_.slots*config_.input_bytes);if(!payload||!reader.empty())return fail(Error::NonCanonical);
+    for(std::size_t slot=0;slot<config_.slots;++slot)std::memcpy(table_[slot].data(),payload->data()+slot*config_.input_bytes,config_.input_bytes);
+    latest_=table_;applied_=newest_=*tick;processed_tick_=0;
+    ticks_=tick_head_=change_head_=change_count_=0;synchronized_=true;
+    drain();return {};
 }
 Status CommandDecoder::accept(std::span<const std::byte> bytes) noexcept {
+    auto accepted=accept_contiguous(bytes);
+    if(accepted){drain();return accepted;}
+    // A validated batch beyond a gap waits for its repair instead of being lost.
+    if(accepted.error()==Error::Unsupported && park(bytes))return {};
+    return accepted;
+}
+std::size_t CommandDecoder::deferred() const noexcept {
+    std::size_t count=0;for(const auto& batch:parked_)count+=batch.occupied;return count;
+}
+bool CommandDecoder::park(std::span<const std::byte> bytes) noexcept {
+    if(!synchronized_ || !config_.pending_batches || bytes.size()>config_.pending_batch_bytes)return false;
+    Reader reader(bytes);auto head=reader.raw(2);auto first=reader.varuint(),ticks=reader.varuint();
+    if(!head || (*head)[0]!=std::byte{lockstep_command_wire_version} || (*head)[1]!=delta_kind || !first || !ticks || !*ticks || *first<=newest_+1)return false;
+    const Tick last=*first+*ticks-1;
+    Parked* chosen=nullptr;
+    for(std::size_t i=0;i<config_.pending_batches;++i) {
+        auto& batch=parked_[i];
+        if(batch.occupied && batch.first<=*first && batch.last>=last)return true; // already covered
+        if(!batch.occupied){if(!chosen || chosen->occupied)chosen=&batch;}
+        else if(!chosen || (chosen->occupied && batch.first>chosen->first))chosen=&batch;
+    }
+    // Full: the farthest-future batch yields to a nearer one; otherwise drop this one.
+    if(chosen->occupied && chosen->first<=*first)return true;
+    const auto index=static_cast<std::size_t>(chosen-parked_.data());
+    std::memcpy(parked_bytes_.bytes().data()+index*config_.pending_batch_bytes,bytes.data(),bytes.size());
+    *chosen={true,*first,last,bytes.size()};
+    return true;
+}
+void CommandDecoder::drain() noexcept {
+    for(bool progressed=true;progressed;) {
+        progressed=false;
+        for(std::size_t i=0;i<config_.pending_batches;++i) {
+            auto& batch=parked_[i];
+            if(!batch.occupied)continue;
+            if(batch.last<=newest_){batch={};continue;}
+            if(batch.first>newest_+1)continue;
+            auto applied=accept_contiguous(std::span<const std::byte>(parked_bytes_.bytes()).subspan(i*config_.pending_batch_bytes,batch.size));
+            if(!applied && applied.error()==Error::CapacityExceeded)return; // retry after the simulation drains
+            batch={};progressed=progressed||bool(applied);
+        }
+    }
+}
+Status CommandDecoder::accept_contiguous(std::span<const std::byte> bytes) noexcept {
     Reader reader(bytes);auto head=reader.raw(2);
-    if(!head || (*head)[0]!=std::byte{lockstep_wire_version} || (*head)[1]!=delta_kind)return fail(Error::Unsupported);
-    auto first=reader.varuint(),ticks=reader.varuint();
-    if(!first||!ticks)return fail(Error::NonCanonical);
-    if(!*first)return fail(Error::ProtocolViolation);
+    if(!head || (*head)[0]!=std::byte{lockstep_command_wire_version} || (*head)[1]!=delta_kind)return fail(Error::Unsupported);
+    auto first=reader.varuint(),ticks=reader.varuint(),recipient=reader.varuint();
+    if(!first||!ticks||!recipient)return fail(Error::NonCanonical);
+    if(!*first || *recipient>config_.slots)return fail(Error::ProtocolViolation);
+    const bool with_processed=*recipient!=0;
+    const auto width=config_.input_bytes,masks=mask_bytes(width);
+    const std::uint32_t legal=static_cast<std::uint32_t>((1u<<width)-1u);
     // Validate the complete batch before buffering anything.
     Reader check=reader;std::size_t fresh=0,fresh_changes=0;
     for(std::uint64_t i=0;i<*ticks;++i) {
-        auto changes=check.varuint();if(!changes || *changes>slots_)return fail(Error::NonCanonical);
-        for(std::uint64_t c=0;c<*changes;++c) {
-            auto slot=check.varuint();if(!slot || *slot>=slots_)return fail(Error::NonCanonical);
-            if(!check.raw(input_bytes_))return fail(Error::NonCanonical);
+        if(with_processed && !check.varuint())return fail(Error::NonCanonical);
+        auto count=check.varuint();if(!count || *count>config_.slots)return fail(Error::NonCanonical);
+        std::uint64_t slot=0;
+        for(std::uint64_t c=0;c<*count;++c) {
+            auto gap=check.varuint();if(!gap)return fail(Error::NonCanonical);
+            slot=c?slot+1+*gap:*gap;if(slot>=config_.slots)return fail(Error::NonCanonical);
+            auto mask_raw=check.raw(masks);if(!mask_raw)return fail(Error::NonCanonical);
+            const auto mask=read_mask(*mask_raw);
+            if(!mask || (mask&~legal))return fail(Error::NonCanonical);
+            if(!check.raw(static_cast<std::size_t>(std::popcount(mask))))return fail(Error::NonCanonical);
         }
-        if(*first+i>newest_ || !synchronized_){++fresh;fresh_changes+=*changes;}
+        if(*first+i>newest_ || !synchronized_){++fresh;fresh_changes+=*count;}
     }
     if(!check.empty())return fail(Error::NonCanonical);
     if(!synchronized_) {
         if(*first!=1)return fail(Error::Unsupported); // needs a keyframe table first
-        applied_=newest_=0;synchronized_=true;
+        latest_={};table_={};applied_=newest_=0;synchronized_=true;
     }
     if(*ticks && *first+*ticks-1<=newest_)return {};
     if(*ticks && *first>newest_+1)return fail(Error::Unsupported);
-    if(ticks_+fresh>capacity || change_count_+fresh_changes>change_capacity)return fail(Error::CapacityExceeded);
+    if(ticks_+fresh>config_.history_ticks || change_count_+fresh_changes>config_.change_capacity)return fail(Error::CapacityExceeded);
+    Tick processed_value=0;
     for(std::uint64_t i=0;i<*ticks;++i) {
-        const Tick tick=*first+i;auto changes=reader.varuint();
+        const Tick tick=*first+i;
+        if(with_processed)processed_value=unzigzag(*reader.varuint(),processed_value);
+        auto count=reader.varuint();
         const bool keep=tick>newest_;
-        const auto index=(tick_head_+ticks_)%capacity;
-        if(keep){tick_first_[index]=(change_head_+change_count_)%change_capacity;tick_count_[index]=*changes;}
-        for(std::uint64_t c=0;c<*changes;++c) {
-            auto slot=reader.varuint();auto input=reader.raw(input_bytes_);
-            if(keep) {
-                auto& change=changes_[(change_head_+change_count_)%change_capacity];
-                change.slot=static_cast<std::uint16_t>(*slot);std::memcpy(change.bytes.data(),input->data(),input_bytes_);++change_count_;
-            }
+        if(keep)meta()[(tick_head_+ticks_)%config_.history_ticks]={(change_head_+change_count_)%config_.change_capacity,static_cast<std::size_t>(*count),processed_value};
+        std::uint64_t slot=0;
+        for(std::uint64_t c=0;c<*count;++c) {
+            auto gap=reader.varuint();slot=c?slot+1+*gap:*gap;
+            const auto mask=read_mask(*reader.raw(masks));
+            auto values=reader.raw(static_cast<std::size_t>(std::popcount(mask)));
+            if(!keep)continue;
+            // Masked bytes patch the newest known input of this slot.
+            auto& row=latest_[slot];std::size_t v=0;
+            for(std::size_t b=0;b<width;++b)if(mask&(1u<<b))row[b]=(*values)[v++];
+            auto& change=changes()[(change_head_+change_count_)%config_.change_capacity];
+            change.slot=static_cast<std::uint16_t>(slot);change.bytes=row;++change_count_;
         }
         if(keep){newest_=tick;++ticks_;}
     }
@@ -226,16 +384,17 @@ Status CommandDecoder::accept(std::span<const std::byte> bytes) noexcept {
 }
 Result<Tick> CommandDecoder::advance() noexcept {
     if(!ticks_)return fail(Error::Busy);
-    const auto index=tick_head_;
-    for(std::size_t i=0;i<tick_count_[index];++i) {
-        const auto& change=changes_[(tick_first_[index]+i)%change_capacity];
-        std::memcpy(table_[change.slot].data(),change.bytes.data(),input_bytes_);
+    const auto& tick=meta()[tick_head_];
+    for(std::size_t i=0;i<tick.count;++i) {
+        const auto& change=changes()[(tick.first+i)%config_.change_capacity];
+        std::memcpy(table_[change.slot].data(),change.bytes.data(),config_.input_bytes);
     }
-    change_head_=(change_head_+tick_count_[index])%change_capacity;change_count_-=tick_count_[index];
-    tick_head_=(tick_head_+1)%capacity;--ticks_;return ++applied_;
+    processed_tick_=tick.processed;
+    change_head_=(change_head_+tick.count)%config_.change_capacity;change_count_-=tick.count;
+    tick_head_=(tick_head_+1)%config_.history_ticks;--ticks_;return ++applied_;
 }
 std::span<const std::byte> CommandDecoder::input(std::uint16_t slot) const noexcept {
-    if(slot>=slots_)return {};
-    return std::span<const std::byte>(table_[slot]).first(input_bytes_);
+    if(slot>=config_.slots)return {};
+    return std::span<const std::byte>(table_[slot]).first(config_.input_bytes);
 }
 }

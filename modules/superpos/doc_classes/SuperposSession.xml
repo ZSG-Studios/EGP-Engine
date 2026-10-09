@@ -51,7 +51,7 @@
 			<param index="7" name="admission_key" type="PackedByteArray" />
 			<param index="8" name="transport" type="Dictionary" default="{}" />
 			<description>Attaches one pre-provisioned native UDP server or client association with local/remote endpoints, session ID, peer identity and admission key. Check [method get_admission_state] for authenticated readiness. Old Yojimbo tokens are incompatible; never log the admission key.
-				The optional [param transport] profile accepts [code]bundle_frames[/code] (default [code]true[/code]: messages, delivery receipts, probes and a piggybacked acknowledgement share each datagram), [code]burst_datagrams[/code] (1-16, default 4 paced datagrams per pump), [code]receive_frames[/code] (1-64, default 64) and [code]channel_modes[/code], an [Array] of up to 32 delivery modes indexed by channel: [code]0[/code] reliable ordered (default), [code]1[/code] reliable unordered, [code]2[/code] unreliable latest (newer messages supersede older ones on the channel) and [code]3[/code] unreliable. Both peers must declare identical channel modes; admission rejects a mismatch. Unknown keys return [constant ERR_INVALID_PARAMETER].
+				The optional [param transport] profile accepts [code]bundle_frames[/code] (default [code]true[/code]: messages, delivery receipts, probes and a piggybacked acknowledgement share each datagram), [code]burst_datagrams[/code] (1-16, default 4 paced datagrams per pump), [code]receive_frames[/code] (1-64, default 64), [code]minimum_rate[/code] (bytes per second, default 0: a real-time budget floor under the congestion window, so random loss on a wireless link cannot starve the stream below it) and [code]channel_modes[/code], an [Array] of up to 32 delivery modes indexed by channel: [code]0[/code] reliable ordered (default), [code]1[/code] reliable unordered, [code]2[/code] unreliable latest (newer messages supersede older ones on the channel) and [code]3[/code] unreliable. Both peers must declare identical channel modes; admission rejects a mismatch. Unknown keys return [constant ERR_INVALID_PARAMETER].
 				[codeblock]
 				# Reliable controls on channel 0, latest-state snapshots on channel 1.
 				session.configure_udp(false, "127.0.0.1", 49000, "127.0.0.1", 48000, session_id, peer, key,
@@ -94,7 +94,7 @@
 		</method>
 		<method name="get_statistics" qualifiers="const">
 			<return type="Dictionary" />
-			<description>Returns a checked Dictionary of canonical world capacity, live objects, tick, binding generation, memory accounting and publication counts. An attached transport adds its counters and readiness. These counters do not establish application scene replication.</description>
+			<description>Returns a checked Dictionary of canonical world capacity, live objects, tick, binding generation, memory accounting and publication counts. An attached transport adds its counters and readiness; a native UDP/DTLS transport also reports [code]smoothed_rtt_us[/code], [code]retransmit_timeout_us[/code] and [code]retry_ticks[/code], the reliable retransmission interval in pump ticks derived from that timeout and the measured pump cadence. These counters do not establish application scene replication.</description>
 		</method>
 		<method name="predict_checked">
 			<return type="int" enum="Error" />

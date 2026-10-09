@@ -36,6 +36,8 @@ constexpr int64_t wire_ceiling = 4096;
 } // namespace
 
 struct SuperposLockstepClient::Impl {
+    // Declared first so it outlives the decoder storage it backs.
+    superpos::BudgetAllocator allocator{superpos::MemoryPlan::client()};
     std::optional<superpos::InputHistory> history;
     std::optional<superpos::CommandDecoder> commands;
     int64_t slots = 0;
@@ -44,12 +46,15 @@ struct SuperposLockstepClient::Impl {
 SuperposLockstepClient::SuperposLockstepClient() { impl = memnew(Impl); }
 SuperposLockstepClient::~SuperposLockstepClient() { memdelete(impl); }
 
-Error SuperposLockstepClient::configure(int64_t p_input_bytes, int64_t p_slots) {
+Error SuperposLockstepClient::configure(int64_t p_input_bytes, int64_t p_slots, int64_t p_buffer_ticks) {
     if (Thread::get_caller_id() != owner_thread) { return ERR_BUSY; }
     if (p_input_bytes < 1 || p_input_bytes > int64_t(superpos::lockstep_input_bytes) || p_slots < 1 || p_slots > int64_t(superpos::lockstep_slots)) { return ERR_INVALID_PARAMETER; }
+    if (p_buffer_ticks < 1 || p_buffer_ticks > int64_t(superpos::lockstep_max_command_history)) { return ERR_INVALID_PARAMETER; }
+    impl->commands.reset();
     auto history = superpos::InputHistory::create(size_t(p_input_bytes));
-    auto commands = superpos::CommandDecoder::create(size_t(p_input_bytes), size_t(p_slots));
-    if (!history || !commands) { return ERR_INVALID_PARAMETER; }
+    auto commands = superpos::CommandDecoder::create(impl->allocator, { size_t(p_input_bytes), size_t(p_slots), size_t(p_buffer_ticks) });
+    if (!history) { return ERR_INVALID_PARAMETER; }
+    if (!commands) { return lockstep_error(commands.error()); }
     impl->history.emplace(std::move(*history));
     impl->commands.emplace(std::move(*commands));
     impl->slots = p_slots;
@@ -94,6 +99,10 @@ int64_t SuperposLockstepClient::advance_command() {
     auto tick = impl->commands->advance();
     return tick ? superpos_egp::signed_bits(*tick) : 0;
 }
+int64_t SuperposLockstepClient::get_processed_tick() const {
+    if (Thread::get_caller_id() != owner_thread || !impl->commands) { return 0; }
+    return superpos_egp::signed_bits(impl->commands->processed());
+}
 PackedByteArray SuperposLockstepClient::get_input(int64_t p_slot) const {
     if (Thread::get_caller_id() != owner_thread || !impl->commands || p_slot < 0 || p_slot >= impl->slots) { return PackedByteArray(); }
     return packed(impl->commands->input(uint16_t(p_slot)));
@@ -107,11 +116,13 @@ Dictionary SuperposLockstepClient::get_status() const {
     result["applied_command_tick"] = superpos_egp::signed_bits(impl->commands->applied());
     result["newest_command_tick"] = superpos_egp::signed_bits(impl->commands->newest());
     result["buffered_commands"] = int64_t(impl->commands->buffered());
+    result["processed_tick"] = superpos_egp::signed_bits(impl->commands->processed());
+    result["deferred_commands"] = int64_t(impl->commands->deferred());
     return result;
 }
 
 void SuperposLockstepClient::_bind_methods() {
-    ClassDB::bind_method(D_METHOD("configure", "input_bytes", "slots"), &SuperposLockstepClient::configure);
+    ClassDB::bind_method(D_METHOD("configure", "input_bytes", "slots", "buffer_ticks"), &SuperposLockstepClient::configure, DEFVAL(128));
     ClassDB::bind_method(D_METHOD("record_input", "tick", "input"), &SuperposLockstepClient::record_input);
     ClassDB::bind_method(D_METHOD("acknowledge_inputs", "tick"), &SuperposLockstepClient::acknowledge_inputs);
     ClassDB::bind_method(D_METHOD("pack_inputs", "max_ticks", "max_bytes"), &SuperposLockstepClient::pack_inputs, DEFVAL(60), DEFVAL(880));
@@ -119,10 +130,13 @@ void SuperposLockstepClient::_bind_methods() {
     ClassDB::bind_method(D_METHOD("load_keyframe", "table"), &SuperposLockstepClient::load_keyframe);
     ClassDB::bind_method(D_METHOD("advance_command"), &SuperposLockstepClient::advance_command);
     ClassDB::bind_method(D_METHOD("get_input", "slot"), &SuperposLockstepClient::get_input);
+    ClassDB::bind_method(D_METHOD("get_processed_tick"), &SuperposLockstepClient::get_processed_tick);
     ClassDB::bind_method(D_METHOD("get_status"), &SuperposLockstepClient::get_status);
 }
 
 struct SuperposLockstepServer::Impl {
+    // Declared first so it outlives the command history it backs.
+    superpos::BudgetAllocator allocator;
     superpos::PlayoutConfig playout;
     std::array<std::unique_ptr<superpos::InputPlayout>, superpos::lockstep_slots> peers;
     std::optional<superpos::CommandEncoder> commands;
@@ -137,7 +151,7 @@ Error SuperposLockstepServer::configure(int64_t p_input_bytes, int64_t p_slots, 
     if (p_input_bytes < 1 || p_input_bytes > int64_t(superpos::lockstep_input_bytes) || p_slots < 1 || p_slots > int64_t(superpos::lockstep_slots)) { return ERR_INVALID_PARAMETER; }
     for (const Variant &key : p_playout.keys()) {
         const String name = key;
-        if (name != "initial_target" && name != "minimum_target" && name != "maximum_target" && name != "relax_ticks" && name != "catch_up_margin") { return ERR_INVALID_PARAMETER; }
+        if (name != "initial_target" && name != "minimum_target" && name != "maximum_target" && name != "relax_ticks" && name != "catch_up_margin" && name != "command_history_ticks" && name != "command_change_capacity") { return ERR_INVALID_PARAMETER; }
     }
     superpos::PlayoutConfig config;
     config.input_bytes = size_t(p_input_bytes);
@@ -147,8 +161,14 @@ Error SuperposLockstepServer::configure(int64_t p_input_bytes, int64_t p_slots, 
     config.relax_ticks = superpos::Tick(int64_t(p_playout.get("relax_ticks", int64_t(config.relax_ticks))));
     config.catch_up_margin = size_t(int64_t(p_playout.get("catch_up_margin", int64_t(config.catch_up_margin))));
     if (!superpos::InputPlayout::create(config)) { return ERR_INVALID_PARAMETER; }
-    auto commands = superpos::CommandEncoder::create(size_t(p_input_bytes), size_t(p_slots));
-    if (!commands) { return ERR_INVALID_PARAMETER; }
+    // The command history is the window in which a slow joiner or a stalled client
+    // still catches up without another keyframe.
+    const int64_t history_ticks = int64_t(p_playout.get("command_history_ticks", int64_t(superpos::lockstep_history_ticks)));
+    const int64_t change_capacity = int64_t(p_playout.get("command_change_capacity", int64_t(0)));
+    if (history_ticks < 1 || history_ticks > int64_t(superpos::lockstep_max_command_history) || change_capacity < 0) { return ERR_INVALID_PARAMETER; }
+    impl->commands.reset();
+    auto commands = superpos::CommandEncoder::create(impl->allocator, { size_t(p_input_bytes), size_t(p_slots), size_t(history_ticks), size_t(change_capacity) });
+    if (!commands) { return lockstep_error(commands.error()); }
     impl->playout = config;
     impl->commands.emplace(std::move(*commands));
     for (auto &peer : impl->peers) { peer.reset(); }
@@ -210,11 +230,12 @@ Error SuperposLockstepServer::begin_tick(int64_t p_tick) {
     auto begun = impl->commands->begin(superpos::Tick(p_tick));
     return begun ? OK : lockstep_error(begun.error());
 }
-Error SuperposLockstepServer::set_command(int64_t p_slot, const PackedByteArray &p_input) {
+Error SuperposLockstepServer::set_command(int64_t p_slot, const PackedByteArray &p_input, int64_t p_processed_tick) {
     if (Thread::get_caller_id() != owner_thread) { return ERR_BUSY; }
     if (!impl->commands) { return ERR_UNCONFIGURED; }
     if (p_slot < 0 || p_slot >= impl->slots) { return ERR_INVALID_PARAMETER; }
-    auto set = impl->commands->set(uint16_t(p_slot), bytes_of(p_input));
+    if (p_processed_tick < 0) { return ERR_INVALID_PARAMETER; }
+    auto set = impl->commands->set(uint16_t(p_slot), bytes_of(p_input), superpos::Tick(p_processed_tick));
     return set ? OK : lockstep_error(set.error());
 }
 Error SuperposLockstepServer::end_tick() {
@@ -223,15 +244,31 @@ Error SuperposLockstepServer::end_tick() {
     auto ended = impl->commands->end();
     return ended ? OK : lockstep_error(ended.error());
 }
-Dictionary SuperposLockstepServer::pack_commands(int64_t p_after_tick, int64_t p_max_bytes) const {
+Dictionary SuperposLockstepServer::pack_commands(int64_t p_after_tick, int64_t p_max_bytes, int64_t p_recipient) const {
     Dictionary result;
     result["error"] = ERR_UNCONFIGURED;
     result["payload"] = PackedByteArray();
     if (Thread::get_caller_id() != owner_thread) { result["error"] = ERR_BUSY; return result; }
     if (!impl->commands) { return result; }
-    if (p_after_tick < 0 || p_max_bytes < 8 || p_max_bytes > wire_ceiling) { result["error"] = ERR_INVALID_PARAMETER; return result; }
+    if (p_after_tick < 0 || p_max_bytes < 8 || p_max_bytes > wire_ceiling || p_recipient < -1 || p_recipient >= impl->slots) { result["error"] = ERR_INVALID_PARAMETER; return result; }
     std::array<std::byte, wire_ceiling> buffer{};
-    auto encoded = impl->commands->encode(superpos::Tick(p_after_tick), std::span(buffer).first(size_t(p_max_bytes)));
+    const uint32_t recipient = p_recipient < 0 ? superpos::lockstep_no_recipient : uint32_t(p_recipient);
+    auto encoded = impl->commands->encode(superpos::Tick(p_after_tick), std::span(buffer).first(size_t(p_max_bytes)), recipient);
+    if (!encoded) { result["error"] = lockstep_error(encoded.error()); return result; }
+    result["error"] = OK;
+    result["payload"] = packed(std::span<const std::byte>(buffer).first(*encoded));
+    return result;
+}
+Dictionary SuperposLockstepServer::pack_command_window(int64_t p_acknowledged_tick, int64_t p_sent_tick, int64_t p_max_bytes, int64_t p_recipient, int64_t p_redundant_ticks) const {
+    Dictionary result;
+    result["error"] = ERR_UNCONFIGURED;
+    result["payload"] = PackedByteArray();
+    if (Thread::get_caller_id() != owner_thread) { result["error"] = ERR_BUSY; return result; }
+    if (!impl->commands) { return result; }
+    if (p_acknowledged_tick < 0 || p_sent_tick < 0 || p_max_bytes < 8 || p_max_bytes > wire_ceiling || p_recipient < -1 || p_recipient >= impl->slots || p_redundant_ticks < 0) { result["error"] = ERR_INVALID_PARAMETER; return result; }
+    std::array<std::byte, wire_ceiling> buffer{};
+    const uint32_t recipient = p_recipient < 0 ? superpos::lockstep_no_recipient : uint32_t(p_recipient);
+    auto encoded = impl->commands->encode_window(superpos::Tick(p_acknowledged_tick), superpos::Tick(p_sent_tick), std::span(buffer).first(size_t(p_max_bytes)), recipient, size_t(p_redundant_ticks));
     if (!encoded) { result["error"] = lockstep_error(encoded.error()); return result; }
     result["error"] = OK;
     result["payload"] = packed(std::span<const std::byte>(buffer).first(*encoded));
@@ -239,13 +276,18 @@ Dictionary SuperposLockstepServer::pack_commands(int64_t p_after_tick, int64_t p
 }
 PackedByteArray SuperposLockstepServer::pack_keyframe() const {
     if (Thread::get_caller_id() != owner_thread || !impl->commands) { return PackedByteArray(); }
-    std::array<std::byte, wire_ceiling> buffer{};
+    // A full table (every slot at the widest input) plus its header.
+    std::array<std::byte, superpos::lockstep_slots * superpos::lockstep_input_bytes + 32> buffer{};
     auto encoded = impl->commands->encode_table(buffer);
     return encoded ? packed(std::span<const std::byte>(buffer).first(*encoded)) : PackedByteArray();
 }
 int64_t SuperposLockstepServer::get_command_tick() const {
     if (Thread::get_caller_id() != owner_thread || !impl->commands) { return 0; }
     return superpos_egp::signed_bits(impl->commands->newest());
+}
+int64_t SuperposLockstepServer::get_oldest_command_tick() const {
+    if (Thread::get_caller_id() != owner_thread || !impl->commands) { return 0; }
+    return superpos_egp::signed_bits(impl->commands->oldest());
 }
 
 void SuperposLockstepServer::_bind_methods() {
@@ -254,9 +296,11 @@ void SuperposLockstepServer::_bind_methods() {
     ClassDB::bind_method(D_METHOD("consume_inputs", "slot"), &SuperposLockstepServer::consume_inputs);
     ClassDB::bind_method(D_METHOD("get_playout_status", "slot"), &SuperposLockstepServer::get_playout_status);
     ClassDB::bind_method(D_METHOD("begin_tick", "tick"), &SuperposLockstepServer::begin_tick);
-    ClassDB::bind_method(D_METHOD("set_command", "slot", "input"), &SuperposLockstepServer::set_command);
+    ClassDB::bind_method(D_METHOD("set_command", "slot", "input", "processed_tick"), &SuperposLockstepServer::set_command, DEFVAL(0));
     ClassDB::bind_method(D_METHOD("end_tick"), &SuperposLockstepServer::end_tick);
-    ClassDB::bind_method(D_METHOD("pack_commands", "after_tick", "max_bytes"), &SuperposLockstepServer::pack_commands, DEFVAL(880));
+    ClassDB::bind_method(D_METHOD("pack_commands", "after_tick", "max_bytes", "recipient"), &SuperposLockstepServer::pack_commands, DEFVAL(880), DEFVAL(-1));
+    ClassDB::bind_method(D_METHOD("pack_command_window", "acknowledged_tick", "sent_tick", "max_bytes", "recipient", "redundant_ticks"), &SuperposLockstepServer::pack_command_window, DEFVAL(880), DEFVAL(-1), DEFVAL(0));
     ClassDB::bind_method(D_METHOD("pack_keyframe"), &SuperposLockstepServer::pack_keyframe);
     ClassDB::bind_method(D_METHOD("get_command_tick"), &SuperposLockstepServer::get_command_tick);
+    ClassDB::bind_method(D_METHOD("get_oldest_command_tick"), &SuperposLockstepServer::get_oldest_command_tick);
 }

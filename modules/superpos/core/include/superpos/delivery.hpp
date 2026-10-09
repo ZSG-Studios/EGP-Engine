@@ -24,7 +24,12 @@ struct DeliveryLimits {
     std::uint32_t max_message_bytes{65'536};
     std::uint16_t fragment_payload_bytes{896};
     std::uint16_t max_messages{8};
+    // Minimum retransmission interval; the owner may raise it to the measured
+    // retransmission timeout with DeliverySender::set_retry_ticks.
     Tick retry_ticks{6};
+    // Lifetime and progress deadlines start when a message's first fragment
+    // reaches the carrier, so queueing behind earlier messages on a slow link
+    // never expires a message; a never-sent message ages from admission.
     Tick timeout_ticks{600};
     Tick progress_timeout_ticks{300};
 };
@@ -170,6 +175,11 @@ public:
     Result<DeliveryStage> stage(std::uint64_t message) const noexcept;
     Status retire(std::uint64_t message) noexcept;
     Status expire(Tick now) noexcept;
+    // Retransmission interval in ticks, bounded below by limits.retry_ticks and
+    // above by half the progress timeout. Owners derive it from the carrier's
+    // measured round trip so a slow or deep-queued link is not resent spuriously.
+    Status set_retry_ticks(Tick ticks) noexcept;
+    [[nodiscard]] Tick retry_ticks() const noexcept { return retry_ticks_; }
 
     [[nodiscard]] std::size_t reserved_bytes() const noexcept;
     [[nodiscard]] std::size_t pending_messages() const noexcept;
@@ -184,6 +194,7 @@ private:
     DeliveryMode mode_{};
     Epoch epoch_{};
     DeliveryLimits limits_{};
+    Tick retry_ticks_{};
     std::span<DeliverySlot> slots_{};
     std::span<std::byte> arena_{};
     std::uint64_t next_message_{};

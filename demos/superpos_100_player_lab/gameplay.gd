@@ -9,7 +9,7 @@ const PLAYGROUND := preload("res://playground.gd")
 const PLAYER_BASE := 1000
 const PROP_BASE := 2000
 const TICK_RATE := 60
-const INPUT_BYTES := 8
+const INPUT_BYTES := 6
 # Persistent control bits (sprint and stances) versus one-shot actions.
 const PERSISTENT := 4|8|16|32|64|128|256
 const ONE_SHOT := 1|2|1024|2048
@@ -54,15 +54,14 @@ static func mass(half_height: float) -> float:
 	return 0.85*(PI*0.35*0.35*(half_height*2)+4.0/3.0*PI*pow(0.35,3))
 
 
-# Input wire: dx s8, dz s8, flags u16, facing u16, client tick low 16 bits.
-static func encode_input(direction: Vector3, flags: int, facing: float, tick: int) -> PackedByteArray:
+# Input wire: dx s8, dz s8, flags u16, facing u16. Only changed bytes travel.
+static func encode_input(direction: Vector3, flags: int, facing: float) -> PackedByteArray:
 	var bytes := PackedByteArray()
 	bytes.resize(INPUT_BYTES)
 	bytes.encode_s8(0, clampi(roundi(direction.x*127.0),-127,127))
 	bytes.encode_s8(1, clampi(roundi(direction.z*127.0),-127,127))
 	bytes.encode_u16(2, flags & 4095)
-	bytes.encode_u16(4, roundi((wrapf(facing,-PI,PI)+PI)/TAU*65535.0))
-	bytes.encode_u16(6, tick & 65535)
+	bytes.encode_u16(4, roundi((wrapf(facing,-PI,PI)+PI)/TAU*1024.0) & 1023)
 	return bytes
 
 
@@ -77,16 +76,13 @@ static func decode_flags(bytes: PackedByteArray) -> int:
 
 
 static func decode_facing(bytes: PackedByteArray) -> float:
-	return float(bytes.decode_u16(4))/65535.0*TAU-PI if bytes.size() == INPUT_BYTES else 0.0
+	return float(bytes.decode_u16(4))/1024.0*TAU-PI if bytes.size() == INPUT_BYTES else 0.0
 
-
-static func decode_tick16(bytes: PackedByteArray) -> int:
-	return bytes.decode_u16(6) if bytes.size() == INPUT_BYTES else 0
 
 
 func _new_actor(id: int) -> Dictionary:
 	return {"id":id, "position":spawn(id), "stance":0, "collider_height":0.55, "cooldown":0, "pose_until":0, "interact_until":0,
-		"facing":0.0, "sprinting":false, "direction":Vector3.ZERO, "score":0, "goal":id % 8, "tick16":0}
+		"facing":0.0, "sprinting":false, "direction":Vector3.ZERO, "score":0, "goal":id % 8}
 
 
 func _index_bodies() -> void:
@@ -194,8 +190,7 @@ func step(tick: int, inputs: Array) -> void:
 		if input.size() == INPUT_BYTES:
 			flags = input.decode_u16(2)
 			direction = Vector3(float(input.decode_s8(0))/127.0, 0, float(input.decode_s8(1))/127.0).limit_length(1.0)
-			a.facing = float(input.decode_u16(4))/65535.0*TAU-PI
-			a.tick16 = input.decode_u16(6)
+			a.facing = float(input.decode_u16(4))/1024.0*TAU-PI
 		a.sprinting = (flags&4) != 0
 		if flags&(1|2|32) and props.is_empty():
 			# Prop states are read only when a jump, shockwave or push needs them.

@@ -19,7 +19,7 @@ struct PacketTransportStats {
     std::uint64_t data_sent{}, probes_sent{}, acknowledgements_sent{};
     std::uint64_t charged_wire_bytes{}, received_data{}, dropped_data{};
     std::uint64_t bundles_sent{}, bundled_frames{}, piggybacked_acknowledgements{};
-    std::uint64_t bytes_in_flight{}, congestion_window{}, smoothed_rtt_us{};
+    std::uint64_t bytes_in_flight{}, congestion_window{}, smoothed_rtt_us{}, retransmit_timeout_us{};
     std::size_t queued_receive_frames{};
     bool owns_pending_send{};
 };

@@ -37,7 +37,7 @@
 			<param index="0" name="input_bytes" type="int" />
 			<param index="1" name="slots" type="int" />
 			<param index="2" name="playout" type="Dictionary" default="{}" />
-			<description>Sets the fixed input width (1-16 bytes), the slot count (1-256) and optional playout tuning: [code]initial_target[/code] (default 6 ticks), [code]minimum_target[/code] (2), [code]maximum_target[/code] (45, below 128), [code]relax_ticks[/code] (240) and [code]catch_up_margin[/code] (12). Unknown keys return [constant ERR_INVALID_PARAMETER].</description>
+			<description>Sets the fixed input width (1-16 bytes), the slot count (1-256) and optional playout tuning: [code]initial_target[/code] (default 6 ticks), [code]minimum_target[/code] (2), [code]maximum_target[/code] (45, below 128), [code]relax_ticks[/code] (240) and [code]catch_up_margin[/code] (12), and command-stream sizing: [code]command_history_ticks[/code] (128, up to 65536) is the window in which a slow joiner or a stalled client catches up without another keyframe, [code]command_change_capacity[/code] (0 sizes for every slot changing on every retained tick) caps the shared change entries. History is allocated once here. Unknown keys return [constant ERR_INVALID_PARAMETER].</description>
 		</method>
 		<method name="consume_inputs">
 			<return type="Array" />
@@ -46,11 +46,15 @@
 		</method>
 		<method name="end_tick">
 			<return type="int" enum="Error" />
-			<description>Seals the open command tick into the bounded change history (128 ticks). The oldest ticks are evicted when history is full.</description>
+			<description>Seals the open command tick into the bounded change history ([code]command_history_ticks[/code]). The oldest ticks are evicted when history is full.</description>
 		</method>
 		<method name="get_command_tick" qualifiers="const">
 			<return type="int" />
 			<description>Returns the newest sealed command tick, or [code]0[/code].</description>
+		</method>
+		<method name="get_oldest_command_tick" qualifiers="const">
+			<return type="int" />
+			<description>Returns the oldest retained command tick. [method pack_commands] can resume any client that acknowledged at least the tick before it.</description>
 		</method>
 		<method name="get_playout_status" qualifiers="const">
 			<return type="Dictionary" />
@@ -61,7 +65,17 @@
 			<return type="Dictionary" />
 			<param index="0" name="after_tick" type="int" />
 			<param index="1" name="max_bytes" type="int" default="880" />
-			<description>Encodes every sealed tick after [param after_tick] that fits whole in [param max_bytes]. Returns [code]error[/code] and [code]payload[/code]. [constant ERR_DOES_NOT_EXIST] means the requested ticks were evicted; send [method pack_keyframe] together with a world snapshot instead.</description>
+			<param index="2" name="recipient" type="int" default="-1" />
+			<description>Encodes every sealed tick after [param after_tick] that fits whole in [param max_bytes]. Each changed slot travels as a slot gap, a changed-byte mask and only the changed bytes. With [param recipient] set to a slot, that slot's processed client ticks (see [method set_command]) ride along so a predicting client reconciles without stamping ticks into its broadcast input. Returns [code]error[/code] and [code]payload[/code]. [constant ERR_DOES_NOT_EXIST] means the requested ticks were evicted; send [method pack_keyframe] together with a world snapshot instead.</description>
+		</method>
+		<method name="pack_command_window" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="acknowledged_tick" type="int" />
+			<param index="1" name="sent_tick" type="int" />
+			<param index="2" name="max_bytes" type="int" default="880" />
+			<param index="3" name="recipient" type="int" default="-1" />
+			<param index="4" name="redundant_ticks" type="int" default="0" />
+			<description>Fresh-first streaming for unreliable channels. Encodes every tick after [param sent_tick] that fits whole in [param max_bytes], then uses remaining space for up to [param redundant_ticks] already-sent ticks after [param acknowledged_tick], so an isolated lost batch heals without a round trip while fresh ticks never starve. With nothing fresh it resends the newest unacknowledged ticks. Returns [code]error[/code] and [code]payload[/code] like [method pack_commands]; rewind [param sent_tick] to [param acknowledged_tick] when acknowledgements stall for longer than a round trip.</description>
 		</method>
 		<method name="pack_keyframe" qualifiers="const">
 			<return type="PackedByteArray" />
@@ -71,7 +85,8 @@
 			<return type="int" enum="Error" />
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="input" type="PackedByteArray" />
-			<description>Sets the consumed input of [param slot] for the open tick.</description>
+			<param index="2" name="processed_tick" type="int" default="0" />
+			<description>Sets the consumed input of [param slot] for the open tick, and the client tick it came from ([code]0[/code] when held or invented). A slot left unset keeps both.</description>
 		</method>
 	</methods>
 </class>
