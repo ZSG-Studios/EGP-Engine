@@ -134,6 +134,7 @@
       },
       "sources": [
         "private/recovery/world_restore.cpp",
+        "private/recovery/native_authority.cpp",
         "private/recovery/restore_publisher.cpp"
       ],
       "fixture": "private/recovery/recovery_fixture.inc"

@@ -41,6 +41,9 @@ Error SuperposNativeReceiverAccess::attach(SuperposSession& session,
     ++session.callbacks_in_flight;
     struct CallbackGuard { SuperposSession& owner;~CallbackGuard(){owner._end_callback();} } callbacks{session};
     auto* owned=session.impl;if(owned->network->receiver)return ERR_ALREADY_IN_USE;
+#if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
+    if(owned->network->authority)return ERR_ALREADY_IN_USE;
+#endif
     auto access=owned->network->access();if(!access)return translate(access.error());
     auto authority=owned->world->world().authority_epoch();if(!authority || *authority!=config.authority_epoch)return ERR_INVALID_PARAMETER;
     auto* tree=SceneTree::get_singleton();if(!tree)return ERR_UNCONFIGURED;

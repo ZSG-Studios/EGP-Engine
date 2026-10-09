@@ -1,44 +1,57 @@
 // SPDX-License-Identifier: MIT
 #pragma once
-// Private C++23 publication of restored authority state to replica receivers.
+// Private C++23 fan-out of restored authority state to replica receivers,
+// through one core ReplicaAuthoritySession per client link. Core delivery owns
+// retransmission and receipts; repair requests are answered with FullRepair.
 #include "recovery_access.hpp"
 #include <superpos/lease.hpp>
 #include <superpos/replica_wire.hpp>
+#include "core/object/object_id.h"
+#include <array>
 
 class SuperposSession;
 
 namespace superpos_egp::recovery {
-struct PublishRoute {
-    // Wire context of the receiving peer. authority must equal the restored
-    // grant epoch; connection/replica come from that peer's admitted Session.
+struct LinkRoute {
+    // Wire context of that client's admitted link. authority must equal the
+    // restored grant epoch; connection must equal the link Session's epoch.
     superpos::ReplicaWireContext context{};
-    std::uint64_t incarnation{1}, encoding_epoch{1};
-    std::uint32_t control_channel{0}, bulk_channel{2};
+    superpos::PeerId client{};
+    std::uint32_t maximum_active{64}, maximum_transitions{16};
 };
-struct PublishResult {
-    std::uint32_t binds{}, baselines{};
-    std::uint64_t first_sequence{}, last_sequence{};
+struct LinkStatus {
+    bool attached{}, egress{};
+    std::uint32_t entities{}, queued{}, ready{}, repairs_answered{}, repairs_deferred{};
+    AuthorityTotals totals{};
 };
-// Typed outcomes. PermissionDenied/Timeout/NotReady come from the lease gate
-// and mean nothing was sent. StaleEpoch: the route or Session does not carry
-// the restored grant epoch. Partial transport acceptance is reported through
-// the Result error with no claim of delivery; Received/Applied are separate.
-class RestorePublisher {
+struct FanoutProgress {
+    std::uint32_t links{}, attached{}, converged{}, ready{}, waiting{};
+};
+// Typed outcomes. PermissionDenied/Timeout/NotReady/StaleEpoch come from the
+// restored-lease gate: every link's egress is closed and nothing is queued or
+// retransmitted until a later step authorizes again. Link failures carry the
+// core error; other links continue. Owner thread only.
+class RestoreFanout {
 public:
-    // Authorizes against the restored lease immediately before every send
-    // batch, then queues one Bind on the ordered Control route and one
-    // BaselineOffer per restored entity. Lifecycle sequences start after the
-    // previous publication on this publisher.
-    superpos::Result<PublishResult> publish(SuperposSession &authority, superpos::AuthorityLease &lease,
-        const superpos::AuthorityGrant &grant, const PublishRoute &) noexcept;
-    // Drains and acknowledges replies on the Control route, counting distinct
-    // SpawnApplied receipts for keys this publisher bound under the route.
-    superpos::Result<std::uint32_t> collect(SuperposSession &authority, const PublishRoute &) noexcept;
-    std::uint32_t applied() const noexcept { return applied_; }
-    std::uint32_t published() const noexcept { return published_; }
+    static constexpr std::size_t maximum_links = 8, maximum_entities = 64;
+    superpos::Result<std::uint32_t> add_link(SuperposSession &link, const LinkRoute &) noexcept;
+    // Call once per frame before Sessions advance.
+    superpos::Result<FanoutProgress> step(SuperposSession &world, superpos::AuthorityLease &,
+        const superpos::AuthorityGrant &, std::uint64_t now_milliseconds) noexcept;
+    superpos::Result<LinkStatus> status(std::uint32_t link) const noexcept;
+    // Closes egress on every attached link (lease lost or shutdown).
+    void close_egress() noexcept;
 private:
-    std::uint64_t sequence_{};
-    std::uint32_t published_{}, applied_{};
-    std::array<bool, 1024> applied_slots_{};
+    struct Link {
+        ObjectID session{};
+        LinkRoute route{};
+        bool attached{}, started{};
+        std::uint32_t entities{}, cursor{}, ready{}, repairs_answered{}, repairs_deferred{};
+        std::array<superpos::ReplicaBinding, maximum_entities> bindings{};
+        superpos::Error error{};
+    };
+    superpos::Status advance(Link &, SuperposSession &, std::span<const std::byte> payload, std::uint64_t now) noexcept;
+    std::array<Link, maximum_links> links_{};
+    std::uint32_t count_{};
 };
 }

@@ -6,6 +6,14 @@ option("superpos_lifecycle_fixture")
     set_description("Native lifecycle qualification only; never enable in release packages")
     set_showmenu(true)
 option_end()
+-- Opt-in embedded durable recovery (default off). The EGP engine graph selects
+-- it through its recipe option of the same name; this rule mirrors that
+-- selection for adapter-owned graphs that apply superpos.egp.native.sources.
+option("superpos_durable_recovery")
+    set_default(false)
+    set_description("Opt-in durable recovery services (SQLite journal, coordinator, canonical restore); requires superpos_dtls")
+    set_showmenu(true)
+option_end()
 option("superpos_rtc_embedded")
     set_default(false)
     set_description("Experimental native RTC build closure; requires trusted native host provisioning")
@@ -150,6 +158,30 @@ rule("superpos.egp.native.sources")
             end
             target:add("defines", 'MBEDTLS_CONFIG_FILE="godot_mbedtls_config.h"', 'TF_PSA_CRYPTO_CONFIG_FILE="godot_psa_config.h"', "SUPERPOS_HAS_DTLS=1")
             if target:is_plat("windows") then target:add("syslinks", "ws2_32", "bcrypt") end
+        end
+        if has_config("superpos_durable_recovery") then
+            assert(has_config("superpos_dtls"), "Durable recovery borrows EGP PSA through superpos_dtls")
+            local recovery = assert(manifest.features and manifest.features.durable_recovery, "Missing module-owned durable recovery contract")
+            assert(recovery.version == 1 and recovery.core_feature == "services", "Unsupported durable recovery contract")
+            local services = assert(core.features and core.features.services, "Core mirror lacks the services feature")
+            for _, directory in ipairs({"core/services/include", "core/services/src/control/include", "core/services/src", recovery.sqlite.directory}) do
+                target:add("includedirs", path.join(module_root, directory))
+            end
+            target:add("defines", "SUPERPOS_HAS_DURABLE_RECOVERY=1")
+            for _, source in ipairs(services.sources) do
+                assert(source:startswith("services/src/") and source:endswith(".cpp") and not source:find("..", 1, true), "Invalid services source")
+                target:add("files", path.join(module_root, "core", source))
+            end
+            for _, source in ipairs(recovery.sources) do
+                assert(source:startswith("private/recovery/") and source:endswith(".cpp") and not source:find("..", 1, true), "Invalid durable recovery source")
+                target:add("files", path.join(module_root, source))
+            end
+            local pin = json.loadfile(path.join(module_root, recovery.sqlite.manifest))
+            assert(pin.version == recovery.sqlite.version, "SQLite pin differs from the durable recovery contract")
+            for _, source in ipairs(pin.sources) do
+                assert(hash.sha256(path.join(module_root, recovery.sqlite.directory, source.path)) == source.sha256, "SQLite amalgamation differs from its pin: " .. source.path)
+            end
+            target:add("files", path.join(module_root, recovery.sqlite.directory, "sqlite3.c"), {defines = pin.build_definitions, warnings = "none"})
         end
         for _, source in ipairs(selected) do
             assert(source:startswith("src/") and not source:find("..", 1, true) and source:endswith(".cpp"), "Invalid core source")

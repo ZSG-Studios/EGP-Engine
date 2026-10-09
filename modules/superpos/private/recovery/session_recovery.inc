@@ -69,3 +69,39 @@ superpos::Result<superpos_egp::recovery::ApplyResult> SuperposRecoveryAccess::ap
     if (header->tick > impl->tick) impl->tick = header->tick;
     return superpos_egp::recovery::ApplyResult{spawned, preserved, impl->tick};
 }
+
+superpos::Status SuperposRecoveryAccess::attach_authority(SuperposSession &link, superpos::ReplicaConfig config,
+        superpos::ReplicaWireContext context) noexcept {
+    using superpos::Error;
+    if (auto ready = available(link); !ready) return ready;
+    auto *impl = link.impl;
+    if (link.pending_native_retirement || !impl->network || !impl->network->session || !impl->registry) return superpos::fail(Error::NotReady);
+#ifdef SUPERPOS_HAS_RTC
+    if (impl->network->rtc) return superpos::fail(Error::Unsupported);
+#endif
+    if (impl->network->receiver || impl->network->authority) return superpos::fail(Error::Busy);
+    if (!impl->network->session->ready()) return superpos::fail(Error::NotReady);
+    auto candidate = superpos_egp::captured_create<superpos_egp::recovery::NativeAuthority>(impl->allocator,
+        superpos::MemoryDomain::Replication, impl->allocator);
+    if (!candidate) return superpos::fail(candidate.error());
+    if (auto initialized = (*candidate)->initialize(*impl->network->session, *impl->registry, config, context, impl->capacity); !initialized)
+        return initialized;
+    impl->network->authority = std::move(*candidate);
+    return {};
+}
+
+superpos_egp::recovery::NativeAuthority *SuperposRecoveryAccess::authority(SuperposSession &link) noexcept {
+    if (!available(link) || !link.impl->network || !link.impl->network->authority) return nullptr;
+    return &*link.impl->network->authority;
+}
+
+superpos::Status SuperposRecoveryAccess::detach_authority(SuperposSession &link) noexcept {
+    if (auto ready = available(link); !ready) return ready;
+    if (link.impl->network) link.impl->network->authority = {};
+    return {};
+}
+
+superpos::Error SuperposRecoveryAccess::network_failure(SuperposSession &owner) noexcept {
+    if (Thread::get_caller_id() != owner.owner_thread || !owner.impl || !owner.impl->network) return superpos::Error::None;
+    return owner.impl->network->failure;
+}

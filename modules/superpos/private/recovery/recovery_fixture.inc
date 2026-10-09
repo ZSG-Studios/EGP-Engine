@@ -63,6 +63,29 @@ struct Capture final : sp::CheckpointParticipantVerifier {
     }
 };
 template <class T> bool error_is(const T &result, sp::Error error) { return !result && result.error() == error; }
+// In-memory datagram carrier. When armed, drops about a quarter of the
+// packets it sends, so core delivery must retransmit. A fixed-seed generator
+// keeps runs reproducible; a strict period could phase-lock with retransmits
+// and starve one message forever, which real loss does not do.
+struct LossyCarrier final : sp::TransportProvider {
+    LossyCarrier *remote{}; std::array<lifecycle_engine::fixture::Packet, 64> packets{}; std::size_t head{}, count{};
+    bool armed{}; std::uint32_t sends{}, dropped{}; std::uint64_t state{0x9e3779b97f4a7c15ull};
+    sp::TransportCapabilities capabilities() const noexcept override { return {true, true, true, false, 960}; }
+    bool ready() const noexcept override { return true; }
+    sp::Status advance() noexcept override { return {}; }
+    sp::Status send(std::span<const std::byte> bytes) noexcept override {
+        if (bytes.size() > 960 || remote->count == 64) return sp::fail(sp::Error::CapacityExceeded);
+        ++sends;
+        state = state * 6364136223846793005ull + 1442695040888963407ull;
+        if (armed && (state >> 33) % 4 == 0) { ++dropped; return {}; }
+        auto &packet = remote->packets[(remote->head + remote->count) % 64];
+        std::copy(bytes.begin(), bytes.end(), packet.bytes.begin()); packet.size = bytes.size(); ++remote->count; return {};
+    }
+    sp::Result<std::size_t> receive(std::span<std::byte> bytes) noexcept override {
+        if (!count) return sp::fail(sp::Error::Busy); auto &packet = packets[head]; if (bytes.size() < packet.size) return sp::fail(sp::Error::Truncated);
+        std::copy_n(packet.bytes.begin(), packet.size, bytes.begin()); const auto size = packet.size; head = (head + 1) % 64; --count; return size;
+    }
+};
 // AuthorityLease is immovable: its Result is constructed in place here.
 struct LeaseHolder {
     sp::Result<sp::AuthorityLease> made;
@@ -71,12 +94,17 @@ struct LeaseHolder {
 };
 
 struct Run {
-    // Producer, restored authority and one client.
-    Ref<SuperposSession> producer, authority, client;
-    std::array<lifecycle_engine::fixture::Carrier, 2> carriers;
+    // Producer; restored world owner (no transport); four authority-side link
+    // Sessions, each paired with one client Session and spawner. Link 1 is
+    // lossy; link 3's client joins after the first three have converged.
+    static constexpr unsigned clients_count = 4, lossy = 1, late = 3;
+    Ref<SuperposSession> producer, authority;
+    std::array<Ref<SuperposSession>, clients_count> links, clients;
+    std::array<std::array<LossyCarrier, 2>, clients_count> wires;
+    std::array<SuperposSpawner *, clients_count> spawners{};
+    std::array<bool, clients_count> bound{}, converged_at{};
     Ref<SuperposSpawnCatalog> catalog;
     TypedArray<SuperposSchema> schemas;
-    SuperposSpawner *spawner{};
     sp::CryptoRuntime crypto{sp::CryptoOwnership::Borrowed};
     std::optional<sp::PsaSha256> digest, worker_digest;
     std::optional<sp::PsaLeaseNonce> nonce;
@@ -96,10 +124,10 @@ struct Run {
     std::array<std::byte, 4096> final_payload{};
     std::size_t final_bytes{};
     std::uint32_t expected_objects{};
-    RestorePublisher publisher;
-    PublishRoute route;
+    RestoreFanout fanout;
+    std::uint64_t frame_ms{};
     char filename[1024]{};
-    unsigned stage{}, frames{};
+    unsigned stage{}, frames{}, dropped{};
     bool failed{};
     std::chrono::steady_clock::time_point deadline = std::chrono::steady_clock::now() + std::chrono::seconds(30);
 
@@ -123,7 +151,7 @@ struct Run {
     }
     bool configure(Ref<SuperposSession> &session, uint64_t epoch, uint64_t peer) {
         session.instantiate();
-        VERIFY(session->configure(schemas, 8, epoch, peer, 1 << 20) == OK);
+        VERIFY(session->configure(schemas, 8, epoch, peer, 4 << 20) == OK);
         return true;
     }
     PackedByteArray state(int value, int second) {
@@ -224,22 +252,31 @@ struct Run {
         VERIFY(gate().phase() == sp::LeasePhase::AwaitingRestore);
         return true;
     }
-    // The restored authority and its client both use the successor epoch;
-    // the client's spawner rebinds there, so old-epoch views are stale.
-    bool sessions() {
-        VERIFY(configure(authority, grant.epoch, 1)); VERIFY(configure(client, grant.epoch, 2));
-        carriers[0].remote = &carriers[1]; carriers[1].remote = &carriers[0];
-        std::array<Ref<SuperposSession>, 2> pair{authority, client};
-        for (unsigned i = 0; i < 2; ++i) {
-            sp::SessionConfig config; config.session_id = 300; config.epoch = 8;
-            config.local_peer = i + 1; config.remote_peer = 2 - i; config.logical_channels = 3;
+    // Every link and client uses the successor epoch; client spawners rebind
+    // there, so views from an older epoch are stale.
+    bool bind_pair(unsigned i) {
+        VERIFY(configure(clients[i], grant.epoch, 2));
+        wires[i][0].remote = &wires[i][1]; wires[i][1].remote = &wires[i][0];
+        std::array<Ref<SuperposSession>, 2> pair{links[i], clients[i]};
+        for (unsigned side = 0; side < 2; ++side) {
+            sp::SessionConfig config; config.session_id = 300 + i; config.epoch = 8;
+            config.local_peer = side + 1; config.remote_peer = 2 - side; config.logical_channels = 3;
             config.channel_modes[0] = sp::DeliveryMode::ReliableOrdered;
             config.channel_modes[1] = config.channel_modes[2] = sp::DeliveryMode::ReliableUnordered;
             config.channel_purposes[0] = sp::ChannelPurpose::Control;
-            VERIFY(SuperposNativeReceiverAccess::bind_fixture_transport(*pair[i].ptr(), carriers[i], config) == OK);
+            VERIFY(SuperposNativeReceiverAccess::bind_fixture_transport(*pair[side].ptr(), wires[i][side], config) == OK);
         }
-        route.context = {grant.epoch, 8, 9};
+        bound[i] = true;
         return true;
+    }
+    bool sessions() {
+        VERIFY(configure(authority, grant.epoch, 1));
+        for (unsigned i = 0; i < clients_count; ++i) VERIFY(configure(links[i], grant.epoch, 1));
+        for (unsigned i = 0; i < clients_count; ++i) if (i != late) VERIFY(bind_pair(i));
+        return true;
+    }
+    bool ready(unsigned i) {
+        return bound[i] && links[i]->get_state() == String("NetworkReady") && clients[i]->get_state() == String("NetworkReady");
     }
     sp::Result<std::size_t> authority_live() { return SuperposRecoveryAccess::live_count(*authority.ptr()); }
     sp::Result<sp::AllocatedOwner<svc::CanonicalRestore>> restore_for(const svc::RestoreReadCapability &cap, WorldParticipant &participant) {
@@ -257,7 +294,10 @@ struct Run {
     // Negatives that must leave the target Session and lease untouched,
     // then renewal, the stale superseded capability, and the real restore.
     bool restore() {
-        VERIFY(error_is(publisher.publish(*authority.ptr(), gate(), grant, route), sp::Error::NotReady));
+        for (unsigned i = 0; i < clients_count; ++i) VERIFY(fanout.add_link(*links[i].ptr(), {{grant.epoch, 8, 9}, 2, 8, 8}).value_or(99) == i);
+        // Before the seal and lease restoration nothing is attached or sent.
+        VERIFY(error_is(fanout.step(*authority.ptr(), gate(), grant, frame_ms), sp::Error::NotReady));
+        for (unsigned i = 0; i < clients_count; ++i) { auto link = fanout.status(i); VERIFY(link && !link->attached); }
         std::optional<WorldParticipant> participant; VERIFY(participant_for(*authority.ptr(), participant));
         {
             auto made = restore_for(*capability, *participant); VERIFY(made); auto &driver = **made;
@@ -306,24 +346,28 @@ struct Run {
         VERIFY(gate().phase() == sp::LeasePhase::Active);
         // A different authority/kind is refused by the lease gate.
         sp::AuthorityGrant foreign = grant; foreign.owner += 1;
-        VERIFY(error_is(publisher.publish(*authority.ptr(), gate(), foreign, route), sp::Error::PermissionDenied));
+        VERIFY(error_is(fanout.step(*authority.ptr(), gate(), foreign, frame_ms), sp::Error::PermissionDenied));
         return true;
     }
-    bool start_client() {
+    bool make_catalog() {
         auto *node = memnew(SuperposRecoveryFixtureNode);
         Ref<PackedScene> scene; scene.instantiate(); VERIFY(scene->pack(node) == OK); memdelete(node);
         Ref<SuperposSpawnEntry> entry; entry.instantiate(); entry->set_schema_id(19); entry->set_resource_id(101); entry->set_scene(scene);
         Dictionary mappings;
         for (int64_t id = 1; id <= 2; ++id) { Dictionary mapping; mapping["node"] = NodePath(); mapping["property"] = id == 1 ? "value" : "second"; mappings[id] = mapping; }
         entry->set_fields(mappings); catalog.instantiate(); TypedArray<SuperposSpawnEntry> entries; entries.append(entry); catalog->set_entries(entries);
-        spawner = memnew(SuperposSpawner); spawner->set_session(client); spawner->set_catalog(catalog);
-        SceneTree::get_singleton()->get_root()->add_child(spawner);
+        return true;
+    }
+    bool start_client(unsigned i) {
+        auto *spawner = memnew(SuperposSpawner); spawner->set_session(clients[i]); spawner->set_catalog(catalog);
+        SceneTree::get_singleton()->get_root()->add_child(spawner); spawners[i] = spawner;
         Dictionary config; config["replica_epoch"] = 9; config["maximum_active"] = 8; config["maximum_transitions"] = 8; config["native_bytes"] = 1 << 20;
         VERIFY(spawner->start(config) == OK); spawner->set_process(false);
         return true;
     }
     // Every restored entity is a ready replica with exactly the sealed values.
-    bool converged() {
+    bool converged(unsigned i) {
+        auto *spawner = spawners[i]; if (!spawner) return false;
         TypedArray<SuperposReplicaView> views = spawner->get_replicas();
         if (views.size() != int(expected_objects) || spawner->get_child_count() != int(expected_objects)) return false;
         std::array<bool, 8> matched{};
@@ -331,38 +375,47 @@ struct Run {
         auto checked = for_each_entity(std::span<const std::byte>(final_payload.data(), final_bytes), [&](const WorldEntity &entity) -> sp::Status {
             const int value = int(detail::u32(entity.state.data())), second = int(detail::u32(entity.state.data() + 4));
             bool found = false;
-            for (int i = 0; i < spawner->get_child_count() && !found; ++i) {
-                Node *child = spawner->get_child(i);
-                if (!matched[i] && int(child->get("value")) == value && int(child->get("second")) == second) { matched[i] = true; found = true; }
+            for (int c = 0; c < spawner->get_child_count() && !found; ++c) {
+                Node *child = spawner->get_child(c);
+                if (!matched[c] && int(child->get("value")) == value && int(child->get("second")) == second) { matched[c] = true; found = true; }
             }
             complete = complete && found;
             return {};
         });
         if (!checked || !complete) return false;
-        for (int i = 0; i < views.size(); ++i) {
-            Ref<SuperposReplicaView> view = views[i];
+        for (int v = 0; v < views.size(); ++v) {
+            Ref<SuperposReplicaView> view = views[v];
             Dictionary status = view->read_status(); Dictionary scene = status["scene"];
             if (int(status["error"]) != OK || !bool(status["canonical_ready"]) || String(scene["scene_phase"]) != String("ready")) return false;
         }
         return true;
     }
+    // Lease lapse: minting and restore time out, and the fan-out closes every
+    // link's egress, so nothing more is sent or retransmitted.
     bool expiry() {
         const auto expires = capability->expires_us();
         observe_to(expires);
         VERIFY(error_is(coordinator->restore_read(verified, 16), sp::Error::Timeout));
-        std::optional<WorldParticipant> participant; VERIFY(participant_for(*client.ptr(), participant));
+        std::optional<WorldParticipant> participant; VERIFY(participant_for(*clients[0].ptr(), participant));
         auto made = restore_for(*capability, *participant); VERIFY(made);
         VERIFY(error_is((*made)->start(), sp::Error::Timeout) && !participant->active());
-        const auto before = authority_live(); VERIFY(before && *before == expected_objects);
-        VERIFY(error_is(publisher.publish(*authority.ptr(), gate(), grant, route), sp::Error::Timeout));
+        VERIFY(error_is(fanout.step(*authority.ptr(), gate(), grant, frame_ms), sp::Error::Timeout));
+        std::array<std::uint64_t, clients_count> sent{};
+        for (unsigned i = 0; i < clients_count; ++i) { auto link = fanout.status(i); VERIFY(link && !link->egress); sent[i] = link->totals.sent; }
+        for (unsigned n = 0; n < 4; ++n) for (auto &session : links) VERIFY(session->advance_tick() == OK);
+        for (unsigned i = 0; i < clients_count; ++i) { auto link = fanout.status(i); VERIFY(link && link->totals.sent == sent[i] && link->totals.gated >= 4); }
         VERIFY(authority_live().value_or(0) == expected_objects);
         return true;
     }
     bool cleanup() {
-        if (spawner) { (void)spawner->stop(); memdelete(spawner); spawner = nullptr; }
-        for (auto *session : {&authority, &client, &producer}) if (session->is_valid()) { (void)(*session)->close_checked(); }
+        for (auto *&spawner : spawners) if (spawner) { (void)spawner->stop(); memdelete(spawner); spawner = nullptr; }
+        for (auto &session : links) if (session.is_valid()) { (void)SuperposRecoveryAccess::detach_authority(*session.ptr()); (void)session->close_checked(); }
+        for (auto &session : clients) if (session.is_valid()) (void)session->close_checked();
+        for (auto *session : {&authority, &producer}) if (session->is_valid()) (void)(*session)->close_checked();
         SuperposNativeReceiverAccess::drain();
-        authority.unref(); client.unref(); producer.unref(); catalog.unref();
+        for (auto &session : links) session.unref();
+        for (auto &session : clients) session.unref();
+        authority.unref(); producer.unref(); catalog.unref();
         SuperposNativeReceiverAccess::drain();
         coordinator.reset(); bootstrap.reset();
         if (worker) { VERIFY(worker->request_stop()); VERIFY(until([&] { return bool(worker->poll_join(10)); })); VERIFY(worker->failure() == sp::Error::None); worker.reset(); }
@@ -370,32 +423,83 @@ struct Run {
         path(filename, "superpos-recovery-fixture.sqlite");
         return true;
     }
+    void report() {
+        for (unsigned i = 0; i < clients_count; ++i) {
+            auto link = fanout.status(i);
+            std::printf("RECOVERY_LINK index=%u ok=%d error=%u attached=%d egress=%d entities=%u queued=%u ready=%u sent=%llu applied=%llu backpressured=%llu dropped=%u\n",
+                i, int(bool(link)), link ? 0u : unsigned(link.error()), link ? int(link->attached) : 0, link ? int(link->egress) : 0,
+                link ? link->entities : 0u, link ? link->queued : 0u, link ? link->ready : 0u,
+                (unsigned long long)(link ? link->totals.sent : 0), (unsigned long long)(link ? link->totals.transport_applied : 0),
+                (unsigned long long)(link ? link->totals.backpressured : 0), wires[i][0].dropped + wires[i][1].dropped);
+        }
+        std::fflush(stdout);
+    }
+    bool advance_all() {
+        for (unsigned i = 0; i < clients_count; ++i) if (bound[i]) for (unsigned side = 0; side < 2; ++side) {
+            auto &session = side ? clients[i] : links[i];
+            const Error advanced = session->advance_tick();
+            if (advanced != OK && advanced != ERR_BUSY) {
+                std::printf("RECOVERY_PUMP link=%u side=%s error=%d core=%u state=%s stage=%u frames=%u\n", i, side ? "client" : "link",
+                    int(advanced), unsigned(SuperposRecoveryAccess::network_failure(*session.ptr())), session->get_state().utf8().get_data(), stage, frames);
+                report();
+            }
+            VERIFY(advanced == OK || advanced == ERR_BUSY);
+        }
+        return true;
+    }
     bool step() {
         if (failed) return false;
+        if (std::chrono::steady_clock::now() >= deadline) report();
         VERIFY(std::chrono::steady_clock::now() < deadline);
+        frame_ms += 16;
         if (!stage) {
             VERIFY(crypto.initialize());
             auto made = sp::PsaSha256::create(crypto); VERIFY(made); digest.emplace(std::move(*made));
             auto other = sp::PsaSha256::create(crypto); VERIFY(other); worker_digest.emplace(std::move(*other));
             auto random = sp::PsaLeaseNonce::create(crypto); VERIFY(random); nonce.emplace(std::move(*random));
-            VERIFY(produce()); VERIFY(takeover()); VERIFY(sessions());
+            VERIFY(produce()); VERIFY(takeover()); VERIFY(sessions()); VERIFY(make_catalog());
             stage = 1;
         }
-        for (auto *session : {&authority, &client}) if (session->is_valid()) {
-            const Error advanced = (*session)->advance_tick(); VERIFY(advanced == OK || advanced == ERR_BUSY);
+        if (stage >= 2) {
+            auto progress = fanout.step(*authority.ptr(), gate(), grant, frame_ms); VERIFY(progress);
         }
+        VERIFY(advance_all());
         if (stage == 1) {
-            if (authority->get_state() != String("NetworkReady") || client->get_state() != String("NetworkReady")) return false;
-            VERIFY(restore()); VERIFY(start_client());
-            auto sent = publisher.publish(*authority.ptr(), gate(), grant, route);
-            VERIFY(sent && sent->binds == expected_objects && sent->baselines == expected_objects && sent->first_sequence == 1);
+            for (unsigned i = 0; i < clients_count; ++i) if (i != late && !ready(i)) return false;
+            // Loss starts only after admission; delivery must retransmit.
+            wires[lossy][0].armed = wires[lossy][1].armed = true;
+            VERIFY(restore());
+            for (unsigned i = 0; i < clients_count; ++i) if (i != late) VERIFY(start_client(i));
             stage = 2; return false;
         }
+        for (unsigned i = 0; i < clients_count; ++i) if (spawners[i]) (void)spawners[i]->project_pending();
         if (stage == 2) {
-            (void)spawner->project_pending();
-            auto applied = publisher.collect(*authority.ptr(), route); VERIFY(applied);
-            if (!converged() || *applied < expected_objects) { ++frames; return false; }
-            VERIFY(*applied == expected_objects && publisher.published() == expected_objects);
+            ++frames;
+            for (unsigned i = 0; i < clients_count; ++i) if (i != late && !converged_at[i]) converged_at[i] = converged(i);
+            for (unsigned i = 0; i < clients_count; ++i) if (i != late && !converged_at[i]) return false;
+            // The late client is admitted only now; its link attaches on admission.
+            auto waiting = fanout.status(late); VERIFY(waiting && !waiting->attached);
+            VERIFY(bind_pair(late)); stage = 3; return false;
+        }
+        if (stage == 3) {
+            ++frames;
+            if (!ready(late)) return false;
+            if (!spawners[late]) VERIFY(start_client(late));
+            if (!converged(late)) return false;
+            // Sender-side readiness follows the clients' SpawnApplied receipts,
+            // which the bridge consumes on a later pump than client projection.
+            for (unsigned i = 0; i < clients_count; ++i) {
+                auto link = fanout.status(i); VERIFY(link);
+                if (!link->attached || link->ready != expected_objects) return false;
+            }
+            for (unsigned i = 0; i < clients_count; ++i) {
+                auto link = fanout.status(i);
+                VERIFY(link && link->attached && link->egress && link->entities == expected_objects && link->ready == expected_objects);
+                VERIFY(link->queued == 2 * expected_objects && link->totals.sent > 0 && link->totals.pumps > 0);
+                VERIFY(converged(i));
+            }
+            VERIFY(wires[lossy][0].dropped + wires[lossy][1].dropped > 0);
+            dropped = wires[lossy][0].dropped + wires[lossy][1].dropped;
             VERIFY(expiry()); VERIFY(cleanup());
             return true;
         }
@@ -409,10 +513,11 @@ void idle() {
     if (!run) run = memnew(Run);
     if (run->step()) {
         finished = true;
-        const unsigned frames = run->frames;
+        const unsigned frames = run->frames, dropped = run->dropped;
         memdelete(run); run = nullptr;
-        std::printf("EGP_RECOVERY_RESTORE_OK checks=%u cases=6 sealed_restore=1 apply=1 lease_restored=1 publication=1 client_converged=1 "
-            "publish_before_restore=refused abort_untouched=1 superseded_capability=stale expired_capability=timeout convergence_frames=%u\n", checks, frames);
+        std::printf("EGP_RECOVERY_RESTORE_OK checks=%u cases=8 sealed_restore=1 apply=1 lease_restored=1 publication=replica_authority_session "
+            "clients=4 client_converged=1 late_join=1 lossy_link=1 dropped_packets=%u publish_before_restore=refused abort_untouched=1 "
+            "superseded_capability=stale expired_capability=timeout egress_closed=1 convergence_frames=%u\n", checks, dropped, frames);
         std::fflush(stdout); SceneTree::get_singleton()->quit(0);
     }
 }

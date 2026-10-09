@@ -13,6 +13,9 @@
 #include "superpos_spawner.h"
 #include "private/spawning/receiver_public_access.hpp"
 #include "private/spawning/spawn_runtime.hpp"
+#if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
+#include "private/recovery/native_authority.hpp"
+#endif
 #include "scene/main/scene_tree.h"
 #include "core/object/callable_mp.h"
 
@@ -392,6 +395,10 @@ struct EngineNetwork {
 
     std::optional<superpos::Session> session;
     superpos_egp::CapturedOwner<superpos_egp::lifecycle_engine::NativeReceiver> receiver;
+#if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
+    // Declared after session: destroyed first. It borrows only the Session.
+    superpos_egp::CapturedOwner<superpos_egp::recovery::NativeAuthority> authority;
+#endif
     ObjectID spawn_runtime;
     uint64_t spawn_binding = 0;
 
@@ -416,6 +423,10 @@ struct EngineNetwork {
     }
 
     superpos::Status pump(superpos_egp::SessionAccess& access,uint64_t generation,superpos::Tick tick) noexcept {
+#if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
+        // The authority bridge pumps its Session; never pump it twice a tick.
+        if(authority){auto result=authority->pump(tick);return result?superpos::Status{}:superpos::fail(result.error());}
+#endif
         if(receiver && receiver->drained())return {};
         if(receiver){auto result=receiver->pump(*access.operator->(),generation,tick);return result?superpos::Status{}:superpos::fail(result.error());}
 #ifdef SUPERPOS_HAS_DTLS
@@ -487,6 +498,8 @@ struct EngineNetwork {
     superpos::Fingerprint simulation{};
 
     Error error = OK;
+    // Exact core error behind a translated pump failure, for typed diagnostics.
+    superpos::Error failure{};
 
     EngineNetwork() noexcept = default; // RTC borrows the process host; no UDP crypto initialization.
 
@@ -1164,6 +1177,7 @@ Error SuperposSession::step_tick() {
 
         if (!pumped && pumped.error() != superpos::Error::Busy) {
 
+            impl->network->failure = pumped.error();
             impl->network->error = translate(pumped.error());
 
             return last_error = impl->network->error;
@@ -1520,6 +1534,10 @@ Dictionary SuperposSession::enqueue_packet(const PackedByteArray &p_payload, uin
     if (impl->network->error != OK) { result["error"] = impl->network->error; return result; }
 
     if(impl->network->receiver && !impl->network->receiver->raw_allowed(p_channel)){ result["error"] = ERR_BUSY; return result; }
+#if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
+
+    if(impl->network->authority && !impl->network->authority->raw_allowed(p_channel)){ result["error"] = ERR_BUSY; return result; }
+#endif
     auto accessed=impl->network->access();
 
     if(!accessed){ result["error"]=translate(accessed.error()); return result; }
@@ -1571,6 +1589,10 @@ Dictionary SuperposSession::read_packet(uint32_t p_channel) const {
     if (!authority) { result["error"] = translate(authority.error()); return result; }
 
     if(impl->network->receiver && !impl->network->receiver->raw_allowed(p_channel)){ result["error"] = ERR_BUSY; return result; }
+#if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
+
+    if(impl->network->authority && !impl->network->authority->raw_allowed(p_channel)){ result["error"] = ERR_BUSY; return result; }
+#endif
     auto accessed=impl->network->access();
 
     if(!accessed){ result["error"]=translate(accessed.error()); return result; }
@@ -1632,6 +1654,10 @@ Error SuperposSession::acknowledge_packet(uint64_t p_message, uint64_t p_binding
     if (!p_message || p_channel >= 32 || p_binding_generation != impl->binding_generation) { return last_error = ERR_INVALID_PARAMETER; }
 
     if(impl->network->receiver && !impl->network->receiver->raw_allowed(p_channel)){ return last_error = ERR_BUSY; }
+#if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
+
+    if(impl->network->authority && !impl->network->authority->raw_allowed(p_channel)){ return last_error = ERR_BUSY; }
+#endif
     auto accessed=impl->network->access();
 
     if(!accessed){ return translate(accessed.error()); }
@@ -1669,6 +1695,10 @@ Dictionary SuperposSession::get_packet_outcome(uint64_t p_message, uint64_t p_bi
     if (!p_message || p_channel >= 32 || p_binding_generation != impl->binding_generation) { result["error"] = ERR_INVALID_PARAMETER; return result; }
 
     if(impl->network->receiver && !impl->network->receiver->raw_allowed(p_channel)){ result["error"] = ERR_BUSY; return result; }
+#if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
+
+    if(impl->network->authority && !impl->network->authority->raw_allowed(p_channel)){ result["error"] = ERR_BUSY; return result; }
+#endif
     auto accessed=impl->network->access();
 
     if(!accessed){ result["error"]=translate(accessed.error()); return result; }
@@ -1710,6 +1740,10 @@ Error SuperposSession::retire_packet(uint64_t p_message, uint64_t p_binding_gene
     if (!p_message || p_channel >= 32 || p_binding_generation != impl->binding_generation) { return last_error = ERR_INVALID_PARAMETER; }
 
     if(impl->network->receiver && !impl->network->receiver->raw_allowed(p_channel)){ return last_error = ERR_BUSY; }
+#if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
+
+    if(impl->network->authority && !impl->network->authority->raw_allowed(p_channel)){ return last_error = ERR_BUSY; }
+#endif
     auto accessed=impl->network->access();
 
     if(!accessed){ return translate(accessed.error()); }
@@ -2350,6 +2384,9 @@ void SuperposSession::_end_callback() {
 Error SuperposSession::_reload_preflight() const {
 #if defined(SUPERPOS_HAS_DTLS) || defined(SUPERPOS_HAS_RTC)
     if(impl && impl->network && impl->network->receiver)return ERR_BUSY;
+#endif
+#if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
+    if(impl && impl->network && impl->network->authority)return ERR_BUSY;
 #endif
 
     if (!Thread::is_main_thread() || Thread::get_caller_id() != owner_thread) { return ERR_UNAVAILABLE; }
