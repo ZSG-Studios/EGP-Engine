@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
-"""Exercise explicit C++ Net/Box3D ownership through two actual compatible DLL reloads."""
-if __name__ == "__main__":
-    raise SystemExit("This networking fixture is retired. Use validate_superpos.py with the current engine; legacy transport results do not qualify Superpos.")
+"""Exercise explicit C++ Net/Box3D ownership through two actual compatible DLL reloads.
+
+Part of the preserved old-network-only egp_net profile (module_egp_net_enabled=y
+module_superpos_enabled=n); results never qualify Superpos.
+"""
 
 
 import argparse

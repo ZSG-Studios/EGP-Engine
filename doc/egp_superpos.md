@@ -6,8 +6,10 @@ ClassDB implementation to GDScript, generated C# and generated godot-cpp.
 Public engine and extension headers remain C++17-compatible.
 
 The default desktop build selects Superpos and its authenticated UDP/DTLS
-foundation. The previous Yojimbo `egp_net` module has been removed. Superpos is a
-different implementation and API from the retired **Superposition** nodes.
+foundation. The previous Yojimbo `egp_net` module is not part of the default
+build; it is preserved only as an opt-in old-network-only migration profile until
+the Superpos cutover gates pass (see the [migration guide](egp_superpos_migration.md)).
+Superpos is a different implementation and API from the retired **Superposition** nodes.
 Changing names in an existing project does not migrate its protocol or scenes.
 
 ## Native API

@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Build and run EGP's native real-UDP networking qualification."""
-if __name__ == "__main__":
-    raise SystemExit("This networking fixture is retired. Use validate_superpos.py with the current engine; legacy transport results do not qualify Superpos.")
+"""Qualify the preserved old-network-only (Yojimbo egp_net) profile.
+
+Opt-in legacy migration profile from the Superpos plan, step 8. Use an engine
+built with module_egp_net_enabled=y module_superpos_enabled=n. Results never
+qualify Superpos; validate_superpos.py qualifies the default build.
+"""
 
 
 import argparse

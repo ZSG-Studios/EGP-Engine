@@ -36,6 +36,8 @@ function configure(env, options, explicit)
     for _, key in ipairs({"use_llvm", "use_mingw", "debug_crt", "use_asan", "use_ubsan", "use_tsan", "use_lsan", "use_msan"}) do options[key] = enabled(options[key]) end
     platform_policy.normalize(options, json.loadfile(path.join(env.graph.root, "build/xmake/defaults.json")), enabled)
     local platform, target = options.platform, options.target
+    assert(not (options.module_egp_net_enabled == true and options.module_superpos_enabled == true),
+        "Select one networking stack: Superpos or the explicit legacy migration profile")
     assert(table.contains({"windows", "linuxbsd", "macos", "android", "ios", "visionos", "web"}, platform), "Unsupported platform")
     assert(table.contains({"editor", "template_debug", "template_release"}, target), "Unsupported target")
     options.arch = options.arch or (platform == "web" and "wasm32" or (table.contains({"android", "ios", "visionos"}, platform) and "arm64" or "x86_64"))

@@ -1,4 +1,4 @@
-> **Legacy migration source:** this guide and its fixtures use the retired networking module. They are disabled in the default Superpos build and do not qualify Superpos. See ../../doc/egp_superpos.md for the replacement API.
+> **Legacy migration source:** this guide and its fixtures use the retired networking module, preserved only as the opt-in old-network-only profile (`module_egp_net_enabled=y module_superpos_enabled=n`) until the Superpos cutover gates pass. It is never in the default build and its results do not qualify Superpos. See ../../doc/egp_superpos_migration.md.
 
 # EGP native networking
 

@@ -1337,3 +1337,10 @@ from [godot-box3d](https://github.com/bearlikelion/godot-box3d), revision
 `dd7964f7091d8c74fb21fdd47d6a536eccbcc20f`, MIT, Mark Arneman 2026. Its original
 license and source provenance are retained beside the modified files. It shares
 the pinned Box3D solver; it does not vendor another solver or godot-cpp runtime.
+
+## Yojimbo (EGP native networking)
+
+- Upstream: https://github.com/mas-bandwidth/yojimbo
+- Version: 1.13.5, commit 272153a10f32135bb44bb60e7467072baf48f762
+- BSD-3-Clause, with bundled netcode/reliable/serialize/TLSF and ISC libsodium notices retained.
+- File hashes and the ephemeral bind-port integration patch are in yojimbo/EGP-UPSTREAM.json.

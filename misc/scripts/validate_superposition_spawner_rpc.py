@@ -1,6 +1,7 @@
-"""Qualify native scene spawning and allowlisted RPC with authenticated OS processes."""
-if __name__ == "__main__":
-    raise SystemExit("This networking fixture is retired. Use validate_superpos.py with the current engine; legacy transport results do not qualify Superpos.")
+"""Qualify old-network-only scene spawning and allowlisted RPC with authenticated OS processes.
+
+Part of the preserved legacy egp_net profile; results never qualify Superpos.
+"""
 
 
 import argparse
