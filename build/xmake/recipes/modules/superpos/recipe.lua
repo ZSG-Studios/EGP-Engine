@@ -22,6 +22,9 @@ function main(graph)
         superpos_env:add({["CCFLAGS"] = {"-fno-fast-math", "-ffp-contract=off"}})
     end
     superpos_env:prepend({["CPPPATH"] = {"#modules/superpos/core/include"}})
+    -- Private adapter sources include the module's public headers by name; the module root
+    -- comes last so it can never shadow an engine header (clean builds failed with C1083).
+    superpos_env:add({["CPPPATH"] = {"#modules/superpos"}})
     if R.truthy((function() local v = R.index(env, "superpos_dtls"); if not R.truthy(v) then return v end; return not R.truthy(env:get("builtin_mbedtls", false)) end)()) then
         raise("Superpos-EGP initially qualifies EGP's builtin MbedTLS profile only")
     end
