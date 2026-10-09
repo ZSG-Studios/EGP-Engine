@@ -1,6 +1,24 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="SuperposField" inherits="Resource" is_experimental="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
-  <brief_description>Explicit native field author declaration.</brief_description>
-  <description>Compiled into the EGP engine through its native Superpos module. Full-width unsigned values use signed opaque Variant bits in GDScript and unsigned native metadata in generated C# and C++ bindings.</description>
-  <tutorials></tutorials>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposField" inherits="Resource" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>Explicit native field author declaration.</brief_description>
+	<description>Compiled into the EGP engine through its native Superpos module. Full-width unsigned values use signed opaque Variant bits in GDScript and unsigned native metadata in generated C# and C++ bindings.</description>
+	<tutorials />
+	<members>
+		<member name="audience" type="int" setter="set_audience" getter="get_audience" default="0">
+		</member>
+		<member name="codec_id" type="int" setter="set_codec_id" getter="get_codec_id" default="3">
+		</member>
+		<member name="field_id" type="int" setter="set_field_id" getter="get_field_id" default="1">
+		</member>
+		<member name="field_name" type="StringName" setter="set_field_name" getter="get_field_name" default="&amp;&quot;value&quot;">
+		</member>
+		<member name="max_bytes" type="int" setter="set_max_bytes" getter="get_max_bytes" default="8">
+		</member>
+		<member name="maximum" type="float" setter="set_maximum" getter="get_maximum" default="0.0">
+		</member>
+		<member name="minimum" type="float" setter="set_minimum" getter="get_minimum" default="0.0">
+		</member>
+		<member name="quantization_levels" type="int" setter="set_quantization_levels" getter="get_quantization_levels" default="0">
+		</member>
+	</members>
 </class>

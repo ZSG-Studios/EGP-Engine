@@ -11,11 +11,12 @@
   "preservation_sha256": "03087b35269ac9ff3d01e77ebb119fe435d8c8c15335e89c0839e6d39cef2e02",
   "files": {
     "config.py": "88acdf2008dc94544088ab8ebc44e274bf34a1d849baa595fdfecc4b94094eb8",
-    "doc_classes/SuperposField.xml": "b3be02b04c9e91981c5cc2e1a06a23561b9f968c53518691b4b39cce33fbad8b",
-    "doc_classes/SuperposSchema.xml": "5fee6469b739b0da8282d93efb6c2e6cf4a0d62a019e890076fb277c7580e743",
-    "doc_classes/SuperposSession.xml": "d9702e9fdc24de16b076e335137493ab4fd4a618916e9f9c685ea598d62e1c74",
-    "doc_classes/SuperposUInt64.xml": "81f91c8650d846c1f20eb2b647aa34d9c7ba44dede744a4f12ee268f84ec2b63",
-    "doc_classes/SuperposWorld.xml": "11a7c86e47dffb613413ff95b5c3fa4f54deb098e3fbb38b98819145e180e70f",
+    "doc_classes/SuperposField.xml": "446515e9ae75aadb12f48ab455f0bf8f8b1c99039ef1a3d26190d1a4fbe48234",
+    "doc_classes/SuperposSchema.xml": "cca32d7a8b213dcf25f8fe7c278329340e3cc023a5e4ed2e547b0f5f3ab468d7",
+    "doc_classes/SuperposSession.xml": "106985b5df1eaad0442ba45158987a3cfb327abf470656aaf38d9098eeaf7d50",
+    "doc_classes/SuperposSimulationProvider.xml": "9041152a6ce95b896b98bb5a488dcd9502674305a2496f65705eb06eeabfbbd4",
+    "doc_classes/SuperposUInt64.xml": "a184e4ab5f891a5bc150f16fad8a7aa50cbe97c045d58cf7fb9e04e052f8c068",
+    "doc_classes/SuperposWorld.xml": "1e8a6b6b06ec347602feb30a751eb0042383e7591f9226039a54f15cba393262",
     "private/allocation_probe.h": "2b97e9d7ff004693588ac65157cb24e735f17599ff918084efb5ea2e00a51799",
     "private/captured_owner.hpp": "5a83a96a02b848b5b6a6c7e115bd3b7b22677a95cc21f49109cdfee0823e5586",
     "private/charged_array.hpp": "2ff6095a4b615da333b34d7dd6edcebe8620f292ecbb6aa80bbc2dcf7217b0b4",
@@ -2188,8 +2189,7 @@
   },
   "retained_unselected_files": {
     "superpos-core-refresh.json": "e546d14200624913eff7bb6941520e3505413b56d67b460aca812db46814b587",
-    "superpos-xmake-integration.json": "37af45b32c51b6b4214b28c997ab7ddc4f02948954499d4a1c6848996b344a6d",
-    "doc_classes/SuperposSimulationProvider.xml": "cb8bfcd5753d52e39321f996991bb217dd5280d7c22cbe9f3802d6bf08fd6f20"
+    "superpos-xmake-integration.json": "37af45b32c51b6b4214b28c997ab7ddc4f02948954499d4a1c6848996b344a6d"
   },
   "materialization_sha256": "68dde940970229cffceb324dd957c732f3112fed3f1a2c4efd80d4137eb8e60e",
   "helper_correction_receipt": "C:\\Users\\Rose-X\\Documents\\EGP Workspace\\Third Party Dev\\Superpos-EGP\\.build\\rtc-engine-runtime\\current-fold\\portable-memory-policy.json",
@@ -2197,5 +2197,9 @@
   "helper_delta_qualification": {
     "path": "C:\\Users\\Rose-X\\Documents\\EGP Workspace\\Third Party Dev\\Superpos-EGP\\.build\\rtc-engine-runtime\\current-fold\\helper-delta-qualification.json",
     "sha256": "567c79b0f1dfd1a329fd21ff9092113d8347334d2ccbb8091a39b2d2964f81d1"
+  },
+  "docs_qualification": {
+    "path": "C:\\Users\\Rose-X\\Documents\\EGP Workspace\\Third Party Dev\\Superpos-EGP\\.build\\rtc-engine-runtime\\current-fold\\docs-publication-preservation.json",
+    "sha256": "a386f4047abb1d8451d61af994b331748aa8b91f91bc358cb6ced9ba5905c454"
   }
 }

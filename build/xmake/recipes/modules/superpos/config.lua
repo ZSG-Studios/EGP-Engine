@@ -12,7 +12,7 @@ function configure(env)
     env:module_add_dependencies("superpos", {"mbedtls"})
 end
 function get_doc_classes()
-    return {"SuperposUInt64", "SuperposField", "SuperposSchema", "SuperposSession", "SuperposWorld"}
+    return {"SuperposUInt64", "SuperposField", "SuperposSchema", "SuperposSimulationProvider", "SuperposSession", "SuperposWorld"}
 end
 function get_doc_path()
     return "doc_classes"

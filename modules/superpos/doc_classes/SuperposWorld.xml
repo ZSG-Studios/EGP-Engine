@@ -1,6 +1,55 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="SuperposWorld" inherits="Node" is_experimental="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
-  <brief_description>EGP scene owner for a native Superpos session.</brief_description>
-  <description>Compiled into the EGP engine through its native Superpos module. Full-width unsigned values use signed opaque Variant bits in GDScript and unsigned native metadata in generated C# and C++ bindings.</description>
-  <tutorials></tutorials>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposWorld" inherits="Node" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>EGP scene owner for a native Superpos session.</brief_description>
+	<description>Compiled into the EGP engine through its native Superpos module. Full-width unsigned values use signed opaque Variant bits in GDScript and unsigned native metadata in generated C# and C++ bindings.</description>
+	<tutorials />
+	<methods>
+		<method name="advance_tick">
+			<return type="int" enum="Error" />
+			<description>
+			</description>
+		</method>
+		<method name="close">
+			<return type="void" />
+			<description>
+			</description>
+		</method>
+		<method name="close_checked">
+			<return type="int" enum="Error" />
+			<description>
+			</description>
+		</method>
+		<method name="configure">
+			<return type="int" enum="Error" />
+			<description>
+			</description>
+		</method>
+		<method name="get_session" qualifiers="const">
+			<return type="SuperposSession" />
+			<description>
+			</description>
+		</method>
+		<method name="read_configuration" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="read_session" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="authority_epoch" type="int" setter="set_authority_epoch" getter="get_authority_epoch" default="1">
+		</member>
+		<member name="authority_peer" type="int" setter="set_authority_peer" getter="get_authority_peer" default="0">
+		</member>
+		<member name="automatic_ticks" type="bool" setter="set_automatic_ticks" getter="get_automatic_ticks" default="false">
+		</member>
+		<member name="max_objects" type="int" setter="set_max_objects" getter="get_max_objects" default="4096">
+		</member>
+		<member name="schemas" type="SuperposSchema[]" setter="set_schemas" getter="get_schemas" default="[]">
+		</member>
+	</members>
 </class>

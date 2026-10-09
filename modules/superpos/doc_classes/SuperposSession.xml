@@ -1,6 +1,203 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="SuperposSession" inherits="RefCounted" is_experimental="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
-  <brief_description>Owner-thread canonical core World access and packed publication.</brief_description>
-  <description>Compiled into the EGP engine through its native Superpos module. Full-width unsigned values use signed opaque Variant bits in GDScript and unsigned native metadata in generated C# and C++ bindings.</description>
-  <tutorials></tutorials>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposSession" inherits="RefCounted" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>Owner-thread canonical core World access and packed publication.</brief_description>
+	<description>Compiled into the EGP engine through its native Superpos module. Full-width unsigned values use signed opaque Variant bits in GDScript and unsigned native metadata in generated C# and C++ bindings.</description>
+	<tutorials />
+	<methods>
+		<method name="acknowledge_packet">
+			<return type="int" enum="Error" />
+			<param index="0" name="message" type="int" />
+			<param index="1" name="binding_generation" type="int" />
+			<param index="2" name="channel" type="int" default="0" />
+			<description>
+			</description>
+		</method>
+		<method name="advance_tick">
+			<return type="int" enum="Error" />
+			<description>
+			</description>
+		</method>
+		<method name="close">
+			<return type="void" />
+			<description>
+			</description>
+		</method>
+		<method name="close_checked">
+			<return type="int" enum="Error" />
+			<description>
+			</description>
+		</method>
+		<method name="configure">
+			<return type="int" enum="Error" />
+			<param index="0" name="schemas" type="SuperposSchema[]" />
+			<param index="1" name="max_objects" type="int" default="4096" />
+			<param index="2" name="authority_epoch" type="int" default="1" />
+			<param index="3" name="authority_peer" type="int" default="0" />
+			<param index="4" name="state_budget" type="int" default="268435456" />
+			<description>
+			</description>
+		</method>
+		<method name="configure_udp">
+			<return type="int" enum="Error" />
+			<param index="0" name="server" type="bool" />
+			<param index="1" name="local_address" type="String" />
+			<param index="2" name="local_port" type="int" />
+			<param index="3" name="remote_address" type="String" />
+			<param index="4" name="remote_port" type="int" />
+			<param index="5" name="session_id" type="int" />
+			<param index="6" name="peer_identity" type="int" />
+			<param index="7" name="admission_key" type="PackedByteArray" />
+			<description>
+			</description>
+		</method>
+		<method name="destroy_object">
+			<return type="int" enum="Error" />
+			<param index="0" name="handle" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="enqueue_packet">
+			<return type="Dictionary" />
+			<param index="0" name="payload" type="PackedByteArray" />
+			<param index="1" name="channel" type="int" default="0" />
+			<description>
+			</description>
+		</method>
+		<method name="get_admission_state" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="get_last_error" qualifiers="const">
+			<return type="int" enum="Error" />
+			<description>
+			</description>
+		</method>
+		<method name="get_packet_outcome" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="message" type="int" />
+			<param index="1" name="binding_generation" type="int" />
+			<param index="2" name="channel" type="int" default="0" />
+			<description>
+			</description>
+		</method>
+		<method name="get_state" qualifiers="const">
+			<return type="String" />
+			<description>
+			</description>
+		</method>
+		<method name="get_statistics" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="predict_checked">
+			<return type="int" enum="Error" />
+			<param index="0" name="binding" type="int" />
+			<param index="1" name="epoch" type="int" />
+			<param index="2" name="tick" type="int" />
+			<param index="3" name="input" type="PackedByteArray" />
+			<description>
+			</description>
+		</method>
+		<method name="publish_packed">
+			<return type="int" enum="Error" />
+			<param index="0" name="operations" type="PackedByteArray" />
+			<description>
+			</description>
+		</method>
+		<method name="read_authority_epoch" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="read_binding_generation" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="read_object" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="handle" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="read_packet" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="channel" type="int" default="0" />
+			<description>
+			</description>
+		</method>
+		<method name="read_prediction">
+			<return type="Dictionary" />
+			<param index="0" name="binding" type="int" />
+			<param index="1" name="epoch" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="read_prediction_info">
+			<return type="Dictionary" />
+			<param index="0" name="binding" type="int" />
+			<param index="1" name="epoch" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="read_simulation_profile" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="read_tick" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="reconcile_checked">
+			<return type="Dictionary" />
+			<param index="0" name="binding" type="int" />
+			<param index="1" name="epoch" type="int" />
+			<param index="2" name="tick" type="int" />
+			<param index="3" name="revision" type="int" />
+			<param index="4" name="canonical" type="PackedByteArray" />
+			<description>
+			</description>
+		</method>
+		<method name="retire_packet">
+			<return type="int" enum="Error" />
+			<param index="0" name="message" type="int" />
+			<param index="1" name="binding_generation" type="int" />
+			<param index="2" name="channel" type="int" default="0" />
+			<description>
+			</description>
+		</method>
+		<method name="spawn_object">
+			<return type="int" />
+			<param index="0" name="schema" type="int" />
+			<param index="1" name="owner" type="int" />
+			<param index="2" name="canonical" type="PackedByteArray" />
+			<description>
+			</description>
+		</method>
+		<method name="transfer_ownership">
+			<return type="int" enum="Error" />
+			<param index="0" name="handle" type="int" />
+			<param index="1" name="owner" type="int" />
+			<param index="2" name="expected_revision" type="int" />
+			<description>
+			</description>
+		</method>
+	</methods>
+	<signals>
+		<signal name="canonical_published">
+			<param index="0" name="publication" type="int" />
+			<param index="1" name="tick" type="int" />
+			<description>
+			</description>
+		</signal>
+		<signal name="simulation_tick">
+			<param index="0" name="tick" type="int" />
+			<description>
+			</description>
+		</signal>
+	</signals>
 </class>

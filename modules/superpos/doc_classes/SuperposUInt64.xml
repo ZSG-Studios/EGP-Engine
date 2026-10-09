@@ -1,6 +1,54 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="SuperposUInt64" inherits="RefCounted" is_experimental="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
-  <brief_description>Native unsigned integer helpers preserving all 64 bits.</brief_description>
-  <description>Compiled into the EGP engine through its native Superpos module. Full-width unsigned values use signed opaque Variant bits in GDScript and unsigned native metadata in generated C# and C++ bindings.</description>
-  <tutorials></tutorials>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposUInt64" inherits="RefCounted" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>Native unsigned integer helpers preserving all 64 bits.</brief_description>
+	<description>Compiled into the EGP engine through its native Superpos module. Full-width unsigned values use signed opaque Variant bits in GDScript and unsigned native metadata in generated C# and C++ bindings.</description>
+	<tutorials />
+	<methods>
+		<method name="bounded_difference" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="later" type="int" />
+			<param index="1" name="earlier" type="int" />
+			<param index="2" name="limit" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="checked_add" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="a" type="int" />
+			<param index="1" name="b" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="compare" qualifiers="static">
+			<return type="int" />
+			<param index="0" name="a" type="int" />
+			<param index="1" name="b" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="from_bytes" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="bytes" type="PackedByteArray" />
+			<description>
+			</description>
+		</method>
+		<method name="from_decimal" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="text" type="String" />
+			<description>
+			</description>
+		</method>
+		<method name="to_bytes" qualifiers="static">
+			<return type="PackedByteArray" />
+			<param index="0" name="value" type="int" />
+			<description>
+			</description>
+		</method>
+		<method name="to_decimal" qualifiers="static">
+			<return type="String" />
+			<param index="0" name="value" type="int" />
+			<description>
+			</description>
+		</method>
+	</methods>
 </class>

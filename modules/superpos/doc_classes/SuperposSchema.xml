@@ -1,6 +1,26 @@
 <?xml version="1.0" encoding="UTF-8" ?>
-<class name="SuperposSchema" inherits="Resource" is_experimental="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
-  <brief_description>Native schema authoring and bounded callback-free bake.</brief_description>
-  <description>Compiled into the EGP engine through its native Superpos module. Full-width unsigned values use signed opaque Variant bits in GDScript and unsigned native metadata in generated C# and C++ bindings.</description>
-  <tutorials></tutorials>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposSchema" inherits="Resource" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>Native schema authoring and bounded callback-free bake.</brief_description>
+	<description>Compiled into the EGP engine through its native Superpos module. Full-width unsigned values use signed opaque Variant bits in GDScript and unsigned native metadata in generated C# and C++ bindings.</description>
+	<tutorials />
+	<methods>
+		<method name="bake" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+			</description>
+		</method>
+		<method name="get_fingerprint" qualifiers="const">
+			<return type="String" />
+			<description>
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="fields" type="SuperposField[]" setter="set_fields" getter="get_fields" default="[]">
+		</member>
+		<member name="revision" type="int" setter="set_revision" getter="get_revision" default="1">
+		</member>
+		<member name="schema_id" type="int" setter="set_schema_id" getter="get_schema_id" default="1">
+		</member>
+	</members>
 </class>
