@@ -53,7 +53,7 @@ def sync_remote_project():
     encoded=base64.b64encode(create.encode('utf-16le')).decode()
     subprocess.run(SSH+['powershell -NoProfile -NonInteractive -EncodedCommand '+encoded],capture_output=True,check=True,timeout=20)
     uploader=subprocess.Popen(SSH+[f'tar -C "{destination}" -xzf -'],stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
-    packer=subprocess.Popen(['tar','-C',str(HERE),'-czf','-','project.godot','main.tscn','lab.gd','character_view.gd','simulation_world.gd','exhibit_view.gd','playground.gd','remote_server.py'],stdout=uploader.stdin,stderr=subprocess.PIPE)
+    packer=subprocess.Popen(['tar','-C',str(HERE),'-czf','-','project.godot','main.tscn','lab.gd','gameplay.gd','character_view.gd','simulation_world.gd','exhibit_view.gd','playground.gd','remote_server.py'],stdout=uploader.stdin,stderr=subprocess.PIPE)
     uploader.stdin.close()
     _,packing_error=packer.communicate()
     uploader.communicate()

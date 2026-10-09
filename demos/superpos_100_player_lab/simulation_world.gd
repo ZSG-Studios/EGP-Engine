@@ -67,6 +67,11 @@ func setup(target: EGPBox3DWorld, _total: int, create_bodies: bool = true) -> bo
 	for i in range(CLOTH_SIZE*CLOTH_SIZE):
 		original.append(_cloth_rest(i))
 	active = true
+	# Native Box3D fluid volume (Archimedes lift and drag inside step_tick). Fluid
+	# configuration is not part of snapshots, so every peer applies it here.
+	world.configure_fluid(Vector3(WATER.x-5.8,-4,WATER.z-5.8),Vector3(WATER.x+5.8,WATER.y,WATER.z+5.8),1.0,2.0,1.0)
+	for i in range(6):
+		world.set_body_buoyant(FLOAT_BASE+i)
 	if not create_bodies:
 		# A joining client restored every exhibit body and joint from the snapshot.
 		return true
@@ -136,14 +141,6 @@ func step(target: EGPBox3DWorld, actors: Array[Dictionary], time: float) -> void
 				ids.append(CLOTH_BASE+i)
 				impulses.append_array(PackedFloat32Array([0.0006*sin(time+i*0.2),0,0.0028+0.002*sin(time*1.7)]))
 		world.queue_impulses(ids,300,impulses)
-	for i in range(6):
-		var state := world.get_body_state(FLOAT_BASE+i)
-		var p: Vector3 = state.position
-		if in_water(p):
-			var submerged := clampf(WATER.y-(p.y-0.5),0,1)
-			var mass: float = FLOAT_DENSITIES[i%3]
-			var drag: Vector3 = -state.linear_velocity*mass*submerged*2.0/60.0
-			world.queue_impulse(FLOAT_BASE+i,200,Vector3.UP*(9.81*submerged/60.0)+drag)
 	samples += 1
 
 

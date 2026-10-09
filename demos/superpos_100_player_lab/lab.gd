@@ -1025,15 +1025,11 @@ func _movable_ids() -> Array:
 	return movable
 
 func _grounded(position: Vector3, velocity: Vector3) -> bool:
+	# A Box3D ray from the standing capsule's centre to just past its bottom.
 	if absf(velocity.y)>1.0:
 		return false
-	if position.y<=PLAYGROUND.support_height(position)+1.06:
-		return true
-	for state in prop_states.values():
-		var p: Vector3 = state.position
-		if absf(position.y-(p.y+1.45))<0.12 and absf(position.x-p.x)<0.85 and absf(position.z-p.z)<0.85:
-			return true
-	return false
+	var hits: Dictionary=physics.cast_rays(PackedVector3Array([position]),PackedVector3Array([Vector3(0,-(0.9+GAMEPLAY.GROUND_REACH),0)]))
+	return hits.hit[0]==1
 
 func _client_step(delta: float) -> void:
 	if role=="bots" and deterministic:

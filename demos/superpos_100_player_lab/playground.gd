@@ -79,20 +79,6 @@ static func create(world: EGPBox3DWorld) -> bool:
 	return ok
 
 
-static var cached_static: Array = []
-
-
-static func support_height(p: Vector3) -> float:
-	# Top of the static geometry under p, or the floor. Used for grounded checks.
-	if cached_static.is_empty():
-		cached_static=static_bodies()
-	var top := 0.0
-	for body in cached_static:
-		var centre: Vector3=body[0]
-		var half: Vector3=body[1]
-		if absf(p.x-centre.x)<half.x+0.3 and absf(p.z-centre.z)<half.z+0.3:
-			top=maxf(top,centre.y+half.y)
-	return top
 
 
 static func mesh_for(body: Array) -> Mesh:

@@ -22,6 +22,8 @@ static var grid_spacing := 5.1
 const GOALS := [Vector3(-24,0,-24),Vector3(-13,0,-11),Vector3(24,0,-24),Vector3(13,0,-11),Vector3(24,0,24),Vector3(13,0,11),Vector3(-24,0,24),Vector3(-13,0,11)]
 const STANCE_ORDER := [256,128,64,16,8,32]
 const CHAIR := Vector3(0,0,-27)
+# How far below a capsule's bottom a supporting surface still counts as ground.
+const GROUND_REACH := 0.15
 
 var world: EGPBox3DWorld
 var simulation: RefCounted
@@ -31,6 +33,8 @@ var movable: Array[int] = []
 var dynamic_count := 0
 var player_ids := PackedInt64Array()
 var movable_ids := PackedInt64Array()
+# Per player: 1 when the latest tick's ground ray hit (jumping, animation flags).
+var on_ground := PackedByteArray()
 
 
 static func configure_players(total: int) -> void:
@@ -105,6 +109,12 @@ func _new_actor(id: int) -> Dictionary:
 		"facing":0.0, "sprinting":false, "direction":Vector3.ZERO, "score":0, "goal":id % 8}
 
 
+# Players float in the native water volume like every other buoyant body.
+func _make_players_buoyant() -> void:
+	for id in range(total):
+		world.set_body_buoyant(PLAYER_BASE+id)
+
+
 func _index_bodies() -> void:
 	dynamic_count = PLAYGROUND.dynamic_bodies().size()
 	movable.clear()
@@ -137,7 +147,9 @@ func create(player_count: int, workers: int = 1) -> bool:
 		actors.append(_new_actor(id))
 	_index_bodies()
 	simulation = SIMULATION.new()
-	return ok and simulation.setup(world, total, true)
+	ok = ok and simulation.setup(world, total, true)
+	_make_players_buoyant()
+	return ok
 
 
 # Join keyframe: world snapshot plus gameplay actor state, zstd-compressed.
@@ -180,19 +192,27 @@ func restore(packed: PackedByteArray, workers: int = 1) -> bool:
 	_index_bodies()
 	simulation = SIMULATION.new()
 	# World bodies came from the snapshot; only the local cloth/joint scene is created.
-	return actors.size() == total and simulation.setup(world, total, false)
+	var ok: bool = actors.size() == total and simulation.setup(world, total, false)
+	_make_players_buoyant()
+	return ok
 
 
-func grounded(position: Vector3, velocity: Vector3, props: Dictionary) -> bool:
-	if absf(velocity.y) > 1.0:
-		return false
-	if position.y <= PLAYGROUND.support_height(position)+1.06:
-		return true
-	for state in props.values():
-		var p: Vector3 = state
-		if absf(position.y-(p.y+1.45)) < 0.12 and absf(position.x-p.x) < 0.85 and absf(position.z-p.z) < 0.85:
-			return true
-	return false
+# Ground contact for every player from one batched Box3D ray query: a ray from the
+# capsule centre reaching just past its bottom. Rays ignore the capsule they start in.
+func _update_ground(states: PackedFloat32Array) -> void:
+	var origins := PackedVector3Array()
+	var rays := PackedVector3Array()
+	origins.resize(total)
+	rays.resize(total)
+	for a in actors:
+		var o: int = int(a.id)*13
+		origins[a.id] = Vector3(states[o],states[o+1],states[o+2])
+		rays[a.id] = Vector3(0,-(float(a.collider_height)+0.35+GROUND_REACH),0)
+	var hits: Dictionary = world.cast_rays(origins,rays)
+	var hit: PackedByteArray = hits.hit
+	on_ground.resize(total)
+	for id in range(total):
+		on_ground[id] = 1 if hit[id] == 1 and absf(states[id*13+8]) <= 1.0 else 0
 
 
 # One authoritative tick. inputs[slot] is the 8-byte command input of that player.
@@ -204,6 +224,7 @@ func step(tick: int, inputs: Array) -> void:
 	var props := {}
 	# One native read for every player; one batched write for every upright mover.
 	var states: PackedFloat32Array = world.get_body_states(player_ids)
+	_update_ground(states)
 	var moved_ids := PackedInt64Array()
 	var moved := PackedFloat32Array()
 	for a in actors:
@@ -216,8 +237,8 @@ func step(tick: int, inputs: Array) -> void:
 			direction = decode_direction(input)
 			a.facing = decode_facing(input)
 		a.sprinting = (flags&4) != 0
-		if flags&(1|2|32) and props.is_empty():
-			# Prop states are read only when a jump, shockwave or push needs them.
+		if flags&(2|32) and props.is_empty():
+			# Prop states are read only when a shockwave or push needs them.
 			var prop_states: PackedFloat32Array = world.get_body_states(movable_ids)
 			for i in range(movable.size()):
 				props[movable[i]] = Vector3(prop_states[i*13],prop_states[i*13+1],prop_states[i*13+2])
@@ -270,14 +291,9 @@ func step(tick: int, inputs: Array) -> void:
 			moved.append_array(PackedFloat32Array([p.x,p.y,p.z,0,0,0,1,direction.x*move_speed,velocity.y,direction.z*move_speed,0,0,0]))
 		else:
 			world.queue_body_state(PLAYER_BASE+id,state_sequence,p,Quaternion.IDENTITY,Vector3(direction.x*move_speed,velocity.y,direction.z*move_speed),Vector3.ZERO)
-		if flags&1 and not immobilized and (grounded(p,velocity,props) or wet) and tick > a.cooldown:
+		if flags&1 and not immobilized and (on_ground[id] == 1 or wet) and tick > a.cooldown:
 			world.queue_impulse(PLAYER_BASE+id,3,Vector3.UP*(mass(a.collider_height)*5.5))
 			a.cooldown = tick+45
-		if wet:
-			var fraction := clampf((SIMULATION.WATER.y-(p.y-a.collider_height-0.35))/(2*(a.collider_height+0.35)),0,1)
-			var body_mass := mass(a.collider_height)
-			# Hydrostatic displacement and drag applied to the native body.
-			world.queue_impulse(PLAYER_BASE+id,4,Vector3.UP*(body_mass/0.85*9.81*fraction/60.0)-velocity*body_mass*fraction*1.8/60.0)
 		if a.stance&32 and not immobilized:
 			for prop in movable:
 				if props[prop].distance_to(p) < 2.1:
@@ -309,7 +325,7 @@ func step(tick: int, inputs: Array) -> void:
 # Replicated animation flags for presentation, derived from the deterministic state.
 func motion_flags(id: int, tick: int, p: Vector3, velocity: Vector3) -> int:
 	var a: Dictionary = actors[id]
-	var flags := (1 if grounded(p,velocity,{}) else 0) | (2 if tick < int(a.pose_until) else 0) | int(a.stance) | (4 if a.sprinting else 0) | (512 if SIMULATION.in_water(p) and p.y < 2.5 else 0)
+	var flags := (1 if id < on_ground.size() and on_ground[id] == 1 else 0) | (2 if tick < int(a.pose_until) else 0) | int(a.stance) | (4 if a.sprinting else 0) | (512 if SIMULATION.in_water(p) and p.y < 2.5 else 0)
 	return flags
 
 
