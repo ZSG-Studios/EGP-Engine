@@ -121,7 +121,7 @@
 			<param index="0" name="joint_id" type="int" />
 			<description>
 				Reads the joint's [code]type[/code], [code]body_a[/code], [code]body_b[/code], frames, tuning, every type field and its state: [code]constraint_force[/code], [code]constraint_torque[/code], [code]linear_separation[/code], [code]angular_separation[/code] and, by type, [code]angle[/code], [code]translation[/code], [code]speed[/code], [code]current_length[/code], [code]motor_torque[/code], [code]motor_force[/code], [code]twist_angle[/code], [code]steering_angle[/code] and so on. Generic joint parameters are write-only.
-				Every field is range-checked when queued: Box3D's non-negative stiffness, damping, motor and threshold fields, a target angle within PI, a cone angle in [0, PI], a positive length, and lower/upper limit pairs that stay ordered when merged with the joint's current values. Height fields and compounds need a static body, and a body holding a compound keeps its type.
+				Every field is range-checked when queued: Box3D's non-negative stiffness, damping, motor and threshold fields, a target angle within PI, a cone angle from 0 to PI, a positive length, and lower/upper limit pairs that stay ordered when merged with the joint's current values. Height fields and compounds need a static body, and a body holding a compound keeps its type.
 			</description>
 		</method>
 		<method name="get_joint_count" qualifiers="const">
@@ -475,6 +475,24 @@
 		</constant>
 		<constant name="JOINT_PRISMATIC" value="2" enum="JointKind">
 			Prismatic joint: translation only along [code]axis[/code], optionally sprung and limited.
+		</constant>
+		<constant name="APPLY_FORCE" value="0" enum="ApplyKind">
+			A force at the centre of mass, acting over the next step.
+		</constant>
+		<constant name="APPLY_FORCE_AT_POINT" value="1" enum="ApplyKind">
+			A force at a world point, acting over the next step.
+		</constant>
+		<constant name="APPLY_TORQUE" value="2" enum="ApplyKind">
+			A torque, acting over the next step.
+		</constant>
+		<constant name="APPLY_IMPULSE" value="3" enum="ApplyKind">
+			A linear impulse at the centre of mass.
+		</constant>
+		<constant name="APPLY_IMPULSE_AT_POINT" value="4" enum="ApplyKind">
+			A linear impulse at a world point.
+		</constant>
+		<constant name="APPLY_ANGULAR_IMPULSE" value="5" enum="ApplyKind">
+			An angular impulse.
 		</constant>
 	</constants>
 </class>

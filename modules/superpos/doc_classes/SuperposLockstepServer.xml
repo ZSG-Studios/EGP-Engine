@@ -67,7 +67,7 @@
 		<method name="get_playout_status" qualifiers="const">
 			<return type="Dictionary" />
 			<param index="0" name="slot" type="int" />
-			<description>Returns [code]active[/code], [code]received_tick[/code], [code]consumed_tick[/code], [code]command_acknowledged[/code], [code]buffered[/code], [code]target[/code], [code]starvations[/code], [code]duplicates[/code], [code]late[/code], [code]skipped[/code], [code]playing[/code] and [code]pace_advice[/code] in [-1, 1]. A positive value asks that client to simulate slightly faster, a negative value slightly slower. Send [code]received_tick[/code] back to the client for [method SuperposLockstepClient.acknowledge_inputs].</description>
+			<description>Returns [code]active[/code], [code]received_tick[/code], [code]consumed_tick[/code], [code]command_acknowledged[/code], [code]buffered[/code], [code]target[/code], [code]starvations[/code], [code]duplicates[/code], [code]late[/code], [code]skipped[/code], [code]playing[/code] and [code]pace_advice[/code] from -1 to 1. A positive value asks that client to simulate slightly faster, a negative value slightly slower. Send [code]received_tick[/code] back to the client for [method SuperposLockstepClient.acknowledge_inputs].</description>
 		</method>
 		<method name="pack_commands" qualifiers="const">
 			<return type="Dictionary" />
