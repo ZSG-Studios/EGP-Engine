@@ -1,0 +1,7 @@
+config_version=5
+
+[application]
+config/name="EGP Box2D Native Qualification"
+
+[physics]
+box_2d/pixels_per_meter=1

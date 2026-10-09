@@ -1,0 +1,353 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="EGPBox2DWorld" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Explicit fixed-tick Box2D simulation with stable entity identifiers, every Box2D feature and local rollback.
+	</brief_description>
+	<description>
+		The 2D counterpart of [EGPBox3DWorld]. Owns a Box2D world independent of the scene physics server: call [method configure], queue commands, then call [method step_tick] once per simulation tick. Commands execute in entity ID and sequence order; world commands run after body commands, joints after both. Use one constructing thread for every call.
+		Every Box2D feature is available through Dictionaries of named fields: bodies with any number of circle, capsule, box, polygon, segment and chain shapes and their materials, filters and events; every joint type; forces, torques, impulses and wind; world settings and explosions. Readback, per-step events and queries map Box2D shapes back to entity and shape index. Snapshots restore in place and keep every identity. They hold solver state for trusted local history on a compatible build only; never restore bytes received from a peer.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="apply_queued_commands">
+			<return type="int" enum="Error" />
+			<description>
+				Validates the entire sorted batch, then applies it without advancing the tick. Use for a baseline or an authoritative correction before capturing a snapshot.
+			</description>
+		</method>
+		<method name="capture_snapshot">
+			<return type="PackedByteArray" />
+			<description>
+				Captures the Box2D world image and the identity tables at a boundary with no queued commands. Bounded to 64 MiB; empty on failure.
+			</description>
+		</method>
+		<method name="cast_rays" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="origins" type="PackedVector2Array" />
+			<param index="1" name="translations" type="PackedVector2Array" />
+			<param index="2" name="mask" type="int" default="-1" />
+			<description>
+				Closest hit per ray as parallel arrays: [code]hit[/code], [code]fraction[/code], [code]point[/code], [code]normal[/code], [code]entity[/code], [code]shape[/code]. [param mask] filters by shape category.
+			</description>
+		</method>
+		<method name="cast_shape" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="shape" type="Dictionary" />
+			<param index="1" name="position" type="Vector2" />
+			<param index="2" name="angle" type="float" />
+			<param index="3" name="translation" type="Vector2" />
+			<param index="4" name="mask" type="int" default="-1" />
+			<param index="5" name="ignore_entity" type="int" default="0" />
+			<description>
+				Sweeps a circle, capsule, box, polygon or segment along [param translation] and returns the closest hit ([code]hit[/code], [code]fraction[/code], [code]point[/code], [code]normal[/code], [code]entity[/code], [code]shape[/code]); equal fractions resolve by identity.
+			</description>
+		</method>
+		<method name="clear_pending_commands">
+			<return type="void" />
+			<description>
+				Clears a rejected or cancelled batch.
+			</description>
+		</method>
+		<method name="configure">
+			<return type="int" enum="Error" />
+			<param index="0" name="tick_rate" type="int" default="60" />
+			<param index="1" name="substeps" type="int" default="4" />
+			<param index="2" name="worker_count" type="int" default="1" />
+			<param index="3" name="gravity" type="Vector2" default="Vector2(0, 980)" />
+			<description>
+				Creates the Box2D world once. Lengths are in Box2D length units, which EGP sets to [code]physics/box_2d/pixels_per_meter[/code] for the whole process, so worlds use the same pixel scale as 2D scenes (the default gravity is Godot's 980 pixels per second squared, Y down). The units are part of [method get_simulation_fingerprint] and of snapshots. Worker counts above 1 run solver tasks on the engine [WorkerThreadPool]; results do not depend on scheduling.
+			</description>
+		</method>
+		<method name="get_body" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="entity_id" type="int" />
+			<description>
+				Reads every body field plus [code]world_center_of_mass[/code], [code]shape_count[/code], [code]joint_count[/code] and [code]shapes[/code] (the shape indices). Empty for an unknown body.
+			</description>
+		</method>
+		<method name="get_body_count" qualifiers="const">
+			<return type="int" />
+			<description>
+				The number of bodies.
+			</description>
+		</method>
+		<method name="get_body_states" qualifiers="const">
+			<return type="PackedFloat32Array" />
+			<param index="0" name="entity_ids" type="PackedInt64Array" />
+			<description>
+				Six floats per body: position xy, angle, linear velocity xy, angular velocity. Unknown bodies read as NaN.
+			</description>
+		</method>
+		<method name="get_entities" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<description>
+				Every body entity, ascending.
+			</description>
+		</method>
+		<method name="get_events" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Box2D events of the latest [method step_tick], with the same keys as [method EGPBox3DWorld.get_events]: shape pairs flattened as entity A, shape A, entity B, shape B ([code]contact_begin[/code], [code]contact_end[/code], [code]sensor_begin[/code], [code]sensor_end[/code], [code]contact_hit[/code] with [code]contact_hit_point[/code], [code]contact_hit_normal[/code] and [code]contact_hit_speed[/code]); [code]moved[/code] with [code]moved_transforms[/code] (3 floats each: position xy, angle); [code]fell_asleep[/code]; [code]joint_threshold[/code].
+			</description>
+		</method>
+		<method name="get_field_names" qualifiers="static">
+			<return type="Dictionary" />
+			<param index="0" name="set" type="String" />
+			<description>
+				Every field of a set ([code]"world"[/code], [code]"body"[/code], [code]"shape"[/code] or [code]"joint"[/code]) mapped to its [enum Variant.Type].
+			</description>
+		</method>
+		<method name="get_joint" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="joint_id" type="int" />
+			<description>
+				Reads the joint's [code]type[/code], [code]body_a[/code], [code]body_b[/code], frames, tuning, type fields and state: [code]constraint_force[/code], [code]constraint_torque[/code], [code]linear_separation[/code], [code]angular_separation[/code] and, by type, [code]angle[/code], [code]translation[/code], [code]speed[/code], [code]current_length[/code], [code]motor_torque[/code], [code]motor_force[/code].
+			</description>
+		</method>
+		<method name="get_joint_count" qualifiers="const">
+			<return type="int" />
+			<description>
+				The number of joints.
+			</description>
+		</method>
+		<method name="get_joint_ids" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<description>
+				Every joint identifier, ascending.
+			</description>
+		</method>
+		<method name="get_shape" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="entity_id" type="int" />
+			<param index="1" name="shape_index" type="int" />
+			<description>
+				Reads shape material, density, filter, sensor and event flags and bounds. A chain reads as its first segment plus [code]segment_count[/code].
+			</description>
+		</method>
+		<method name="get_simulation_fingerprint" qualifiers="const">
+			<return type="String" />
+			<description>
+				Solver revision, numeric profile, tick rate, substeps and configured gravity.
+			</description>
+		</method>
+		<method name="get_state_hash" qualifiers="const">
+			<return type="String" />
+			<description>
+				Diagnostic hash of tick, settings, stable ids, poses, velocities and joint forces.
+			</description>
+		</method>
+		<method name="get_tick" qualifiers="const">
+			<return type="int" />
+			<description>
+				The last completed tick.
+			</description>
+		</method>
+		<method name="get_world" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Reads world settings and counters ([code]awake_body_count[/code], [code]body_count[/code], [code]shape_count[/code], [code]contact_count[/code], [code]joint_count[/code], [code]island_count[/code], [code]bounds_lower[/code], [code]bounds_upper[/code], [code]tick[/code]).
+			</description>
+		</method>
+		<method name="move_capsule" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="position" type="Vector2" />
+			<param index="1" name="point_a" type="Vector2" />
+			<param index="2" name="point_b" type="Vector2" />
+			<param index="3" name="radius" type="float" />
+			<param index="4" name="translation" type="Vector2" />
+			<param index="5" name="mask" type="int" default="-1" />
+			<description>
+				Box2D character mover: collides, solves planes and sweeps a capsule ([param point_a] to [param point_b] around [param position]) through shapes matching [param mask]. Returns [code]position[/code] and [code]clipped[/code] (the translation clipped by the contact planes). Give the character's own body a category outside [param mask].
+			</description>
+		</method>
+		<method name="overlap_aabb" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="lower" type="Vector2" />
+			<param index="1" name="upper" type="Vector2" />
+			<param index="2" name="mask" type="int" default="-1" />
+			<description>
+				Shapes whose bounds overlap the box, as entity and shape index pairs sorted by identity.
+			</description>
+		</method>
+		<method name="overlap_shape" qualifiers="const">
+			<return type="PackedInt64Array" />
+			<param index="0" name="shape" type="Dictionary" />
+			<param index="1" name="position" type="Vector2" />
+			<param index="2" name="angle" type="float" default="0.0" />
+			<param index="3" name="mask" type="int" default="-1" />
+			<description>
+				Shapes overlapping a circle, capsule, box, polygon or segment placed at [param position] and [param angle], as entity and shape index pairs sorted by identity.
+			</description>
+		</method>
+		<method name="queue_add_shape">
+			<return type="int" enum="Error" />
+			<param index="0" name="entity_id" type="int" />
+			<param index="1" name="sequence" type="int" />
+			<param index="2" name="shape_index" type="int" />
+			<param index="3" name="shape" type="Dictionary" />
+			<description>
+				Attaches a shape (same Dictionary as [method queue_create_body]) at an unused [param shape_index] below 256. Shape indices are the stable identities used by events and queries, and they survive snapshots. All segments of a chain share its index.
+			</description>
+		</method>
+		<method name="queue_apply">
+			<return type="int" enum="Error" />
+			<param index="0" name="entity_id" type="int" />
+			<param index="1" name="sequence" type="int" />
+			<param index="2" name="kind" type="int" enum="EGPBox2DWorld.ApplyKind" />
+			<param index="3" name="value" type="Vector2" />
+			<param index="4" name="scalar" type="float" default="0.0" />
+			<param index="5" name="point" type="Vector2" default="Vector2(0, 0)" />
+			<description>
+				Applies a force (acting over the next step), torque or impulse. Linear kinds use [param value]; [constant APPLY_TORQUE] and [constant APPLY_ANGULAR_IMPULSE] use [param scalar]; [param point] is the world point for [constant APPLY_FORCE_AT_POINT] and [constant APPLY_IMPULSE_AT_POINT].
+			</description>
+		</method>
+		<method name="queue_apply_wind">
+			<return type="int" enum="Error" />
+			<param index="0" name="entity_id" type="int" />
+			<param index="1" name="sequence" type="int" />
+			<param index="2" name="shape_index" type="int" />
+			<param index="3" name="wind" type="Vector2" />
+			<param index="4" name="drag" type="float" />
+			<param index="5" name="lift" type="float" />
+			<description>
+				Applies Box2D's aerodynamic wind to one shape with drag and lift coefficients (for example leaves, flags or sails).
+			</description>
+		</method>
+		<method name="queue_create_body">
+			<return type="int" enum="Error" />
+			<param index="0" name="entity_id" type="int" />
+			<param index="1" name="sequence" type="int" />
+			<param index="2" name="body" type="Dictionary" />
+			<param index="3" name="shapes" type="Dictionary[]" />
+			<description>
+				Creates a body from any Box2D body fields (see [method get_field_names] with [code]"body"[/code]) and attaches [param shapes] as shape indices 0, 1, 2 and so on. [code]type[/code] accepts [code]"static"[/code], [code]"kinematic"[/code], [code]"dynamic"[/code] or 0-2; [code]rotation[/code] is an angle in radians. [code]fast_rotation[/code] applies at creation only.
+				Each shape is a [Dictionary] with a [code]type[/code] ([code]"circle"[/code], [code]"capsule"[/code], [code]"box"[/code], [code]"polygon"[/code], [code]"segment"[/code], [code]"chain"[/code]), geometry keys and any shape fields ([code]friction[/code], [code]restitution[/code], [code]rolling_resistance[/code], [code]tangent_speed[/code], [code]density[/code], [code]category[/code], [code]mask[/code], [code]group[/code], [code]sensor[/code], [code]contact_events[/code] and so on). Geometry keys: [code]radius[/code] (circle, capsule, or rounding of box and polygon), [code]center[/code] and [code]angle[/code] (local placement), [code]half_height[/code] or [code]point_a[/code]/[code]point_b[/code] (capsule, segment), [code]half_extents[/code] (box), [code]points[/code] (polygon hull of up to 8 points; chain points) and [code]loop[/code] (chains are one-sided segments from 4 points or more; an open chain's first and last points are ghost vertices).
+				[codeblock]
+				world.queue_create_body(3, 0, {"type": "dynamic", "position": Vector2(0, 4), "bullet": true},
+				        [{"type": "capsule", "radius": 0.3, "half_height": 0.5, "friction": 0.2},
+				        {"type": "box", "half_extents": Vector2(0.2, 0.1), "center": Vector2(0, 0.9), "angle": 0.3}])
+				[/codeblock]
+			</description>
+		</method>
+		<method name="queue_destroy_body">
+			<return type="int" enum="Error" />
+			<param index="0" name="entity_id" type="int" />
+			<param index="1" name="sequence" type="int" />
+			<description>
+				Destroys a body with its shapes and the joints attached to it.
+			</description>
+		</method>
+		<method name="queue_destroy_joint">
+			<return type="int" enum="Error" />
+			<param index="0" name="joint_id" type="int" />
+			<param index="1" name="sequence" type="int" />
+			<description>
+				Destroys a joint and wakes its bodies.
+			</description>
+		</method>
+		<method name="queue_destroy_shape">
+			<return type="int" enum="Error" />
+			<param index="0" name="entity_id" type="int" />
+			<param index="1" name="sequence" type="int" />
+			<param index="2" name="shape_index" type="int" />
+			<description>
+				Removes one shape or chain and updates the body's mass.
+			</description>
+		</method>
+		<method name="queue_explode">
+			<return type="int" enum="Error" />
+			<param index="0" name="sequence" type="int" />
+			<param index="1" name="position" type="Vector2" />
+			<param index="2" name="radius" type="float" />
+			<param index="3" name="falloff" type="float" />
+			<param index="4" name="impulse_per_length" type="float" />
+			<param index="5" name="mask" type="int" default="-1" />
+			<description>
+				Box2D explosion pushing shapes whose category matches [param mask] within [param radius] (plus [param falloff]) of [param position].
+			</description>
+		</method>
+		<method name="queue_joint">
+			<return type="int" enum="Error" />
+			<param index="0" name="joint_id" type="int" />
+			<param index="1" name="sequence" type="int" />
+			<param index="2" name="type" type="String" />
+			<param index="3" name="body_a" type="int" />
+			<param index="4" name="body_b" type="int" />
+			<param index="5" name="fields" type="Dictionary" default="{}" />
+			<description>
+				Creates any Box2D joint: [code]"distance"[/code], [code]"filter"[/code], [code]"motor"[/code], [code]"prismatic"[/code], [code]"revolute"[/code], [code]"weld"[/code] or [code]"wheel"[/code]. Common fields: [code]anchor_a[/code], [code]rotation_a[/code], [code]anchor_b[/code], [code]rotation_b[/code] (body-local frames; prismatic and wheel joints slide along the frame's X axis), [code]collide_connected[/code], [code]force_threshold[/code], [code]torque_threshold[/code], [code]constraint_hertz[/code], [code]constraint_damping_ratio[/code]. Type fields use Box2D's names in snake case, for example [code]length[/code], [code]enable_spring[/code], [code]hertz[/code], [code]enable_limit[/code], [code]lower_angle[/code], [code]enable_motor[/code], [code]motor_speed[/code], [code]max_motor_torque[/code], [code]lower_translation[/code]. Joints are created after the batch's body commands.
+			</description>
+		</method>
+		<method name="queue_set_body">
+			<return type="int" enum="Error" />
+			<param index="0" name="entity_id" type="int" />
+			<param index="1" name="sequence" type="int" />
+			<param index="2" name="fields" type="Dictionary" />
+			<description>
+				Changes body fields through Box2D's runtime setters: type, transform, velocities, damping, gravity scale, motion locks, sleep, bullet, enabled, mass data, contact and hit events, and [code]target_position[/code]/[code]target_rotation[/code] (a kinematic move reaching the target in [code]target_time[/code], one tick by default).
+			</description>
+		</method>
+		<method name="queue_set_joint">
+			<return type="int" enum="Error" />
+			<param index="0" name="joint_id" type="int" />
+			<param index="1" name="sequence" type="int" />
+			<param index="2" name="fields" type="Dictionary" />
+			<description>
+				Changes joint fields through Box2D's runtime setters. Applied after joint creation in the same batch.
+			</description>
+		</method>
+		<method name="queue_set_shape">
+			<return type="int" enum="Error" />
+			<param index="0" name="entity_id" type="int" />
+			<param index="1" name="sequence" type="int" />
+			<param index="2" name="shape_index" type="int" />
+			<param index="3" name="fields" type="Dictionary" />
+			<description>
+				Changes shape fields: surface material, [code]density[/code] (with [code]update_body_mass[/code]), filter ([code]category[/code], [code]mask[/code], [code]group[/code]) and event flags. On a chain, material applies to every segment material and filter and events to every segment.
+			</description>
+		</method>
+		<method name="queue_set_world">
+			<return type="int" enum="Error" />
+			<param index="0" name="sequence" type="int" />
+			<param index="1" name="fields" type="Dictionary" />
+			<description>
+				Changes world settings: [code]gravity[/code], [code]restitution_threshold[/code], [code]hit_event_threshold[/code], [code]maximum_linear_speed[/code], [code]sleep[/code], [code]continuous[/code], [code]warm_starting[/code], [code]speculative[/code], [code]contact_recycle_distance[/code], and [code]contact_hertz[/code], [code]contact_damping_ratio[/code] and [code]contact_speed[/code] (always set together). World commands run after the batch's body commands and are part of snapshots.
+			</description>
+		</method>
+		<method name="restore_snapshot">
+			<return type="int" enum="Error" />
+			<param index="0" name="bytes" type="PackedByteArray" />
+			<description>
+				Restores a snapshot of this build and profile in place: ids, events and identities are rebuilt and the tick returns to the snapshot's. Only restore trusted local history.
+			</description>
+		</method>
+		<method name="step_tick">
+			<return type="int" enum="Error" />
+			<param index="0" name="expected_tick" type="int" />
+			<description>
+				Applies queued commands in entity and sequence order, then steps exactly one tick. [param expected_tick] must be the next tick.
+			</description>
+		</method>
+	</methods>
+	<constants>
+		<constant name="APPLY_FORCE" value="0" enum="ApplyKind">
+			Force at the centre of mass, acting over the next step.
+		</constant>
+		<constant name="APPLY_FORCE_AT_POINT" value="1" enum="ApplyKind">
+			Force at a world point, acting over the next step.
+		</constant>
+		<constant name="APPLY_TORQUE" value="2" enum="ApplyKind">
+			Torque, acting over the next step.
+		</constant>
+		<constant name="APPLY_IMPULSE" value="3" enum="ApplyKind">
+			Linear impulse at the centre of mass.
+		</constant>
+		<constant name="APPLY_IMPULSE_AT_POINT" value="4" enum="ApplyKind">
+			Linear impulse at a world point.
+		</constant>
+		<constant name="APPLY_ANGULAR_IMPULSE" value="5" enum="ApplyKind">
+			Angular impulse.
+		</constant>
+	</constants>
+</class>

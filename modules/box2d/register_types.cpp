@@ -4,6 +4,7 @@
 #include "bodies/box2d_direct_body_state_2d.h"
 #include "box2d_physics_server_2d.h"
 #include "box2d_project_settings.h"
+#include "egp_box2d_world.h"
 
 #include "servers/physics_2d/physics_server_2d_manager.h"
 
@@ -15,6 +16,10 @@ static PhysicsServer2D *create_box2d_server() {
 }
 
 void initialize_box2d_module(ModuleInitializationLevel p_level) {
+	if (p_level == MODULE_INITIALIZATION_LEVEL_SCENE) {
+		GDREGISTER_CLASS(EGPBox2DWorld);
+		return;
+	}
 	if (p_level != MODULE_INITIALIZATION_LEVEL_SERVERS) {
 		return;
 	}

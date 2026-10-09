@@ -6,7 +6,7 @@ end
 function configure(env)
 end
 function get_doc_classes()
-    return {"Box2DDirectSpaceState2D", "Box2DPhysicsServer2D"}
+    return {"Box2DDirectSpaceState2D", "Box2DPhysicsServer2D", "EGPBox2DWorld"}
 end
 function get_doc_path()
     return "doc_classes"
