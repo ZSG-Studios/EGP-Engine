@@ -2,7 +2,8 @@
 <class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposSession" inherits="RefCounted" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
 	<brief_description>Owner-thread canonical core World access and packed publication.</brief_description>
 	<description>Compiled into the EGP engine through its native Superpos module. Full-width unsigned values use signed opaque Variant bits in GDScript and unsigned native metadata in generated C# and C++ bindings.</description>
-	<tutorials />
+	<tutorials>
+	</tutorials>
 	<methods>
 		<method name="acknowledge_packet">
 			<return type="int" enum="Error" />

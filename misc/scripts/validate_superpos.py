@@ -36,14 +36,20 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, required=True)
     parser.add_argument("--pack", type=Path, help="Test an exported probe pack with an export template; editor API dump is verified separately")
+    parser.add_argument("--embedded-project", action="store_true", help="Test a normal exported executable with its embedded project, preserving shipping path-override restrictions")
     parser.add_argument("--output", type=Path, default=ROOT / ".build/diagnostics/superpos")
     args = parser.parse_args()
+    if args.pack and args.embedded_project:
+        parser.error("Choose --pack or --embedded-project")
     engine, output = args.engine.resolve(), args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
     pack = args.pack.resolve() if args.pack else None
-    project_args = ["--main-pack", str(pack)] if pack else ["--path", str(LAB)]
+    packaged = pack is not None or args.embedded_project
+    project_args = ["--main-pack", str(pack)] if pack else ([] if args.embedded_project else ["--path", str(LAB)])
     def script_args(name):
-        return ["--script", "res://" + name] if pack else ["--script", str(LAB / name)]
+        if args.embedded_project:
+            return []
+        return ["--script", "res://" + name] if packaged else ["--script", str(LAB / name)]
     flags = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
     receipt = {"engine": str(engine), "engine_sha256": sha(engine), "passed": False,
                "scope": "current_full_native_engine_API_canonical_state_owner_lifecycle_loopback_UDP_only",
@@ -51,7 +57,8 @@ def main():
 
     if pack:
         receipt["pack_sha256"] = sha(pack)
-        receipt["scope"] = "exported_pack_template_canonical_state_owner_lifecycle_loopback_UDP_only;editor_API_verified_separately"
+    if packaged:
+        receipt["scope"] = "exported_project_canonical_state_owner_lifecycle_loopback_UDP_only;editor_API_verified_separately"
 
     def execute(name, arguments, marker=None):
         log = output / (name + ".log")
@@ -66,7 +73,7 @@ def main():
             raise RuntimeError(f"Failed {name}; see {log}")
 
     try:
-        if not pack:
+        if not packaged:
             execute("api", ["--headless", "--dump-extension-api"])
             api = json.loads((output / "extension_api.json").read_text())
             names = {row["name"] for row in api["classes"]}
