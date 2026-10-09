@@ -1,18 +1,18 @@
 {
   "format": 1,
-  "engine_root": "C:\\Users\\Rose-X\\Documents\\EGP Workspace\\EGP-Engine",
+  "engine_root": "C:\\EGP Workspace\\EGP-Engine",
   "engine_head": "2c10fe90ea99e8ce2f777acbeea2f54a02fdd577",
-  "adapter_root": "C:\\Users\\Rose-X\\Documents\\EGP Workspace\\Third Party Dev\\Superpos-EGP",
-  "core_root": "C:\\Users\\Rose-X\\Documents\\EGP Workspace\\Third Party Dev\\Superpos",
+  "adapter_root": "C:\\EGP Workspace\\Third Party Dev\\Superpos-EGP",
+  "core_root": "C:\\EGP Workspace\\Third Party Dev\\Superpos",
   "source_features": [
     "rtc_embedded"
   ],
-  "preservation_receipt": "C:\\Users\\Rose-X\\Documents\\EGP Workspace\\Third Party Dev\\Superpos-EGP\\.build\\rtc-engine-runtime\\current-fold\\live-closure-migration.json",
+  "preservation_receipt": "C:\\EGP Workspace\\Third Party Dev\\Superpos-EGP\\.build\\rtc-engine-runtime\\current-fold\\live-closure-migration.json",
   "preservation_sha256": "03087b35269ac9ff3d01e77ebb119fe435d8c8c15335e89c0839e6d39cef2e02",
   "files": {
     "config.py": "88acdf2008dc94544088ab8ebc44e274bf34a1d849baa595fdfecc4b94094eb8",
     "doc_classes/SuperposField.xml": "58353a174ba9df67013b3c93928003b7481d2315f51693d76bc1e4dc33f45d7d",
-    "doc_classes/SuperposSchema.xml": "b721ab7d4cdcfb52d0b5d515bdb0aefd9c20097fd48fc41bea80dd3a758ca7fc",
+    "doc_classes/SuperposSchema.xml": "68d3cfe8cc39fd504aa515e06cf119dc9b90d5a1bc39360c1728537425b9c009",
     "doc_classes/SuperposSession.xml": "055a4ce6b48534551f53d62ec0f1ae186cb4d0b4051d4c33d86750dc4f7236f7",
     "doc_classes/SuperposSimulationProvider.xml": "9041152a6ce95b896b98bb5a488dcd9502674305a2496f65705eb06eeabfbbd4",
     "doc_classes/SuperposUInt64.xml": "df34e805dacc7e00a505332d6ebfb9567821ef9b7d8fe451bbff9e353258cce2",

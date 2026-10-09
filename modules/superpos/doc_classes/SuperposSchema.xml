@@ -6,7 +6,7 @@
 	<methods>
 		<method name="bake" qualifiers="const">
 			<return type="Dictionary" />
-			<description>Validates and sorts the authored field descriptors, then returns a Dictionary containing [code]error[/code]. On success it also contains [code]manifest[/code], [code]fingerprint[/code], [code]schema_id[/code], [code]revision[/code] and [code]state_bytes[/code]. Duplicate IDs and invalid codec bounds are rejected. Baking does not configure a session.</description>
+			<description>Validates and sorts the authored field descriptors, then returns a Dictionary containing [code]error[/code]. On success it also contains [code]manifest[/code], [code]fingerprint[/code], [code skip-lint]schema_id[/code], [code skip-lint]revision[/code] and [code]state_bytes[/code]. Duplicate IDs and invalid codec bounds are rejected. Baking does not configure a session.</description>
 		</method>
 		<method name="get_fingerprint" qualifiers="const">
 			<return type="String" />
