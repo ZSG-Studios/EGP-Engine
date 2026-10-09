@@ -106,7 +106,8 @@
       ],
       "factories": "native_only_weak_ObjectID",
       "retirement": "whole_Impl_custody",
-      "managed_reload": "rejected_while_receiver_attached"
+      "managed_reload": "rejected_while_receiver_attached",
+      "fixture_source": "private/lifecycle_engine/staged/engine_fixture.cpp"
     }
   }
 }

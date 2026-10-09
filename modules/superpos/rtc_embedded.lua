@@ -51,6 +51,14 @@ local function selection(library, options, engine_root)
         assert(not seen[filename],"Duplicate native RTC source");seen[filename]=true
         table.insert(extra,{path=filename,policy=body_policy})
     end
+    if config.get("superpos_lifecycle_fixture") then
+        local lifecycle=assert(module_manifest.features.native_lifecycle,"Missing native lifecycle feature")
+        local name=assert(lifecycle.fixture_source,"Missing lifecycle fixture source")
+        assert(name=="private/lifecycle_engine/staged/engine_fixture.cpp","Unsupported lifecycle fixture source")
+        local filename="modules/superpos/"..name
+        assert(not seen[filename],"Duplicate native lifecycle fixture source")
+        table.insert(extra,{path=filename,policy=body_policy})
+    end
     return extra,feature,root
 end
 
@@ -102,6 +110,11 @@ function capture(graph, engine_root)
         assert(graph.options.target=="editor" and graph.options.dev_build==true and config.get("mode")=="debug",
                "RTC fixture requires the debug development editor")
     end
+    if config.get("superpos_lifecycle_fixture") then
+        assert(config.get("superpos_rtc_embedded"),"Native lifecycle fixture requires embedded RTC qualification profile")
+        assert(graph.options.target=="editor" and graph.options.dev_build==true and config.get("mode")=="debug",
+               "Native lifecycle fixture requires the debug development editor")
+    end
     if not config.get("superpos_rtc_embedded") then return end
     local found=false
     for _,library in ipairs(graph.libraries) do
@@ -131,6 +144,7 @@ function configure(target, library, options, engine_root)
     target:add("deps",captured.backend_target,{inherit=false})
     target:add("defines","SUPERPOS_HAS_RTC=1")
     if config.get("superpos_rtc_fixture") then target:add("defines","SUPERPOS_RTC_EMBEDDED_FIXTURE=1") end
+    if config.get("superpos_lifecycle_fixture") then target:add("defines","SUPERPOS_LIFECYCLE_FIXTURE=1") end
     target:set("runtimes",feature.crt)
     target:add("cxxflags","/GR-",{force=true})
     target:add("includedirs",path.join(engine_root,"modules/superpos"))
