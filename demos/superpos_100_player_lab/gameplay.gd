@@ -9,7 +9,9 @@ const PLAYGROUND := preload("res://playground.gd")
 const PLAYER_BASE := 1000
 const PROP_BASE := 2000
 const TICK_RATE := 60
-const INPUT_BYTES := 6
+const INPUT_BYTES := 5
+# Move speed levels (flags bits 12-13): still, walk, jog, full.
+const MOVE_LEVELS := [0.0, 0.33, 0.66, 1.0]
 # Persistent control bits (sprint and stances) versus one-shot actions.
 const PERSISTENT := 4|8|16|32|64|128|256
 const ONE_SHOT := 1|2|1024|2048
@@ -64,29 +66,37 @@ static func mass(half_height: float) -> float:
 	return 0.85*(PI*0.35*0.35*(half_height*2)+4.0/3.0*PI*pow(0.35,3))
 
 
-# Input wire: dx s8, dz s8, flags u16, facing u16. Only changed bytes travel.
+# Input wire (5 bytes): move direction (256 steps), flags u16 with the move speed
+# level in bits 12-13, facing u16 (1024 steps). A player moving or turning steadily
+# changes one byte, so the relayed command stream stays small at 256 players.
 static func encode_input(direction: Vector3, flags: int, facing: float) -> PackedByteArray:
 	var bytes := PackedByteArray()
 	bytes.resize(INPUT_BYTES)
-	bytes.encode_s8(0, clampi(roundi(direction.x*127.0),-127,127))
-	bytes.encode_s8(1, clampi(roundi(direction.z*127.0),-127,127))
-	bytes.encode_u16(2, flags & 4095)
-	bytes.encode_u16(4, roundi((wrapf(facing,-PI,PI)+PI)/TAU*1024.0) & 1023)
+	var magnitude := minf(Vector2(direction.x, direction.z).length(), 1.0)
+	var level := 0 if magnitude < 0.15 else 1 if magnitude < 0.45 else 2 if magnitude < 0.8 else 3
+	var angle := roundi((atan2(direction.x, direction.z)+PI)/TAU*256.0) & 255 if level > 0 else 0
+	bytes.encode_u8(0, angle)
+	bytes.encode_u16(1, (flags & 4095) | (level << 12))
+	bytes.encode_u16(3, roundi((wrapf(facing,-PI,PI)+PI)/TAU*1024.0) & 1023)
 	return bytes
 
 
 static func decode_direction(bytes: PackedByteArray) -> Vector3:
 	if bytes.size() != INPUT_BYTES:
 		return Vector3.ZERO
-	return Vector3(float(bytes.decode_s8(0))/127.0, 0, float(bytes.decode_s8(1))/127.0).limit_length(1.0)
+	var level := (bytes.decode_u16(1) >> 12) & 3
+	if level == 0:
+		return Vector3.ZERO
+	var angle := float(bytes.decode_u8(0))/256.0*TAU-PI
+	return Vector3(sin(angle), 0, cos(angle)) * float(MOVE_LEVELS[level])
 
 
 static func decode_flags(bytes: PackedByteArray) -> int:
-	return bytes.decode_u16(2) if bytes.size() == INPUT_BYTES else 0
+	return bytes.decode_u16(1) & 4095 if bytes.size() == INPUT_BYTES else 0
 
 
 static func decode_facing(bytes: PackedByteArray) -> float:
-	return float(bytes.decode_u16(4))/1024.0*TAU-PI if bytes.size() == INPUT_BYTES else 0.0
+	return float(bytes.decode_u16(3) & 1023)/1024.0*TAU-PI if bytes.size() == INPUT_BYTES else 0.0
 
 
 
@@ -202,9 +212,9 @@ func step(tick: int, inputs: Array) -> void:
 		var flags := 0
 		var direction := Vector3.ZERO
 		if input.size() == INPUT_BYTES:
-			flags = input.decode_u16(2)
-			direction = Vector3(float(input.decode_s8(0))/127.0, 0, float(input.decode_s8(1))/127.0).limit_length(1.0)
-			a.facing = float(input.decode_u16(4))/1024.0*TAU-PI
+			flags = decode_flags(input)
+			direction = decode_direction(input)
+			a.facing = decode_facing(input)
 		a.sprinting = (flags&4) != 0
 		if flags&(1|2|32) and props.is_empty():
 			# Prop states are read only when a jump, shockwave or push needs them.

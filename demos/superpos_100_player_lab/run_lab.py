@@ -302,6 +302,13 @@ def main():
                 for process in processes[1:]:
                     if process.poll() not in (None,0):
                         raise RuntimeError('A native client failed; inspect fixed diagnostics logs')
+                # A script that fails to parse leaves the engine idling: fail fast.
+                for log in [*OUT.glob('clients-*-error.log'),OUT/'human-error.log',OUT/'server-error.log']:
+                    try:
+                        if 'Parse Error' in log.read_text(errors='replace'):
+                            raise RuntimeError('Script parse error in '+log.name)
+                    except OSError:
+                        pass
                 if remote.poll() not in (None,0):
                     raise RuntimeError('Remote server failed; inspect server error log')
             if all(p.poll() is not None for p in processes):

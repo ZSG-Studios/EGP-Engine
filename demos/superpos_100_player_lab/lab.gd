@@ -94,11 +94,13 @@ var section_ms := {"tick":[],"render":[],"animate":[],"animated":[],"engine_proc
 var gameplay: RefCounted
 var keyframe_cache := {}
 var telemetry_cache := {}
+var input_recording := PackedByteArray()
+var input_recorded := false
 # Starved ticks hold stance and facing but never invent movement or actions; a
 # catch-up tick keeps the one-shot actions (jump, pulse, respawn, interact) of
 # every input it consumed.
-var HOLD_MASK := PackedByteArray([0,0,0xFC,0x01,0xFF,0xFF])
-var MERGE_MASK := PackedByteArray([0,0,0x03,0x0C,0,0])
+var HOLD_MASK := PackedByteArray([0xFF,0xFC,0x01,0xFF,0xFF])
+var MERGE_MASK := PackedByteArray([0,0x03,0x0C,0,0])
 # Server: clients whose join (or rejoin) keyframe is not finished.
 var joining: Array = []
 var pump_profile := [0,0,0]
@@ -284,8 +286,8 @@ func _open(c: Dictionary) -> void:
 	if role=="server" and deterministic and lockstep_server!=null:
 		# The native batch service serves this slot through its new association.
 		lockstep_server.bind_session(c.id,session)
-		# Bot associations pump at 30 Hz, the human's at 60 Hz.
-		lockstep_server.set_stream_interval(c.id,1 if c.id==HUMAN else 2)
+		# Every client receives its command stream at 60 Hz.
+		lockstep_server.set_stream_interval(c.id,1)
 	c.tickets = []
 	c.ready = false
 	c.pumped=false
@@ -360,8 +362,8 @@ func _physics_step(delta: float) -> void:
 		if desired > c.generation:
 			c.generation = desired
 			_open(c)
-		# Stagger bot associations at 30 Hz; keep the human's association at 60 Hz.
-		c.pumped=(c.id==HUMAN or (frame+c.id)%2==0)
+		# Every association (bots and the human) pumps at the 60 Hz tick rate.
+		c.pumped=true
 		if not c.pumped:
 			continue
 		var pump_started := Time.get_ticks_usec()
@@ -496,10 +498,20 @@ func _server_step_deterministic() -> void:
 	var tick: int=physics.get_tick()+1
 	var inputs: Array=lockstep_server.step_commands(tick,HOLD_MASK,MERGE_MASK)
 	check(inputs.size()==config.total,"Lockstep tick")
+	if bool(_tuning("record_inputs",0)) and now>0 and not input_recorded:
+		# Encoding research: every slot's relayed input, one row per tick.
+		for slot_input in inputs:
+			input_recording.append_array(slot_input)
+		if now>=float(config.duration) and not input_recording.is_empty():
+			var recorded := FileAccess.open(config.telemetry.get_base_dir().path_join("inputs-%d.bin" % config.total),FileAccess.WRITE)
+			if recorded:
+				recorded.store_buffer(input_recording)
+			input_recording=PackedByteArray()
+			input_recorded=true
 	if tick%10==0:
 		# Sampled activity census (qualification evidence), not a per-tick loop.
 		for c in connections:
-			var flags: int=inputs[c.id].decode_u16(2)
+			var flags: int=GAMEPLAY.decode_flags(inputs[c.id])
 			var stance := 0
 			for candidate in [256,128,64,16,8,32]:
 				if flags&candidate:
@@ -732,11 +744,8 @@ func _tick_input(c: Dictionary) -> PackedByteArray:
 		var one_shot := 0
 		for item in items:
 			one_shot|=GAMEPLAY.decode_flags(item.input)&GAMEPLAY.ONE_SHOT
-		latest.encode_u16(2,GAMEPLAY.decode_flags(latest)|one_shot)
-		var hold: PackedByteArray=latest.duplicate()
-		hold.encode_s8(0,0)
-		hold.encode_s8(1,0)
-		hold.encode_u16(2,GAMEPLAY.decode_flags(latest)&GAMEPLAY.PERSISTENT)
+		latest=GAMEPLAY.encode_input(GAMEPLAY.decode_direction(latest),GAMEPLAY.decode_flags(latest)|one_shot,GAMEPLAY.decode_facing(latest))
+		var hold: PackedByteArray=GAMEPLAY.encode_input(Vector3.ZERO,GAMEPLAY.decode_flags(latest)&GAMEPLAY.PERSISTENT,GAMEPLAY.decode_facing(latest))
 		c.hold_input=hold
 		c.processed_tick=int(items.back().tick)
 		c.last_input=now
@@ -1058,6 +1067,7 @@ func _client_step(delta: float) -> void:
 			# Each brain sees its own delayed AOI, never the server's diagnostic world.
 			var goal := _goal(c.goal)
 			var position: Vector3 = c.position
+			# Steering is decided every 60 Hz tick, like a client sampling input each frame.
 			direction = Vector3(goal.x-position.x,0,goal.z-position.z).normalized()
 			c.facing=atan2(direction.x,direction.z)
 			var avoidance := Vector3.ZERO
@@ -1162,7 +1172,8 @@ func _human_tick(c: Dictionary, direction: Vector3, flags: int) -> void:
 	respawn_requested=false
 	interact_requested=false
 	c.stance=_client_stance(c,flags)
-	var move := Vector3(x8/127.0,0,z8/127.0).limit_length(1.0)
+	# Predict with exactly the quantized movement the server will simulate.
+	var move: Vector3=GAMEPLAY.decode_direction(GAMEPLAY.encode_input(Vector3(x8/127.0,0,z8/127.0),flags,c.facing)) if deterministic else Vector3(x8/127.0,0,z8/127.0).limit_length(1.0)
 	if c.stance&(64|128|256):
 		move=Vector3.ZERO
 	c.direction=move
@@ -1300,7 +1311,7 @@ func _bot_input(c: Dictionary, direction: Vector3, flags: int) -> void:
 		recorded=c.lockstep.record_input(int(c.ctick)+1,input)
 	if recorded==OK:
 		c.ctick+=1
-	# Bot associations pump every other frame: send on each pump (30 Hz, redundant).
+	# Inputs go out every 60 Hz pump, each batch resending the unacknowledged window.
 	if c.ready and c.pumped and _unreliable_waiting(c,INPUT)<2:
 		var batch: PackedByteArray=c.lockstep.pack_inputs(30,860)
 		if batch.size()>0:
