@@ -5,7 +5,7 @@
 #endif
 #include "superpos_schema.h"
 #include "superpos_session.h"
-#include "native_receiver_access.hpp"
+#include "private/lifecycle_engine/staged/native_receiver_access.hpp"
 #ifdef SUPERPOS_LIFECYCLE_FIXTURE
 void superpos_register_lifecycle_fixture();
 #endif
