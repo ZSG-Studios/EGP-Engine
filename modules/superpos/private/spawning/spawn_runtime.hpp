@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: MIT
 #pragma once
-#include "superpos_spawn_catalog.h"
+#include "../../superpos_spawn_catalog.h"
 #include "superpos_replica_view.h"
 #include "projection_queue.hpp"
 #include "private/lifecycle_engine/staged/native_receiver.hpp"
