@@ -1,10 +1,13 @@
 extends SceneTree
 
 var checks := 0
+# Release builds compile assert() out; the final exit code keeps any failure.
+var failed := false
 
 func check(condition: bool, message: String) -> void:
 	checks += 1
 	if not condition:
+		failed = true
 		push_error(message)
 		quit(1)
 		assert(condition, message)
@@ -153,5 +156,9 @@ func _initialize() -> void:
 		reentrant.simulation_tick.connect(func(_tick: int): callback_close[0] = reentrant.close_checked(), CONNECT_ONE_SHOT)
 		check(reentrant.advance_tick() == OK and callback_close[0] == ERR_BUSY and reentrant.get_state() == "Configured", "tick callback close refuses without partial mutation")
 		check(reentrant.close_checked() == OK and reentrant.get_state() == "Closed", "owner closes after callback boundary")
+	if failed:
+		print("SUPERPOS_EGP_RUNTIME_FAILED checks=", checks)
+		quit(1)
+		return
 	print("SUPERPOS_EGP_RUNTIME_OK checks=", checks)
 	quit(0)

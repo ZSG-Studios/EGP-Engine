@@ -18,20 +18,37 @@ var resize_armed := false
 var resize_rejected := false
 # Set before quit(): the world is freed and must not be touched again.
 var finished := false
+# A dispatch loop (see export_loop.gd) attaches this script and defers
+# _initialize, so the first frame may arrive first. Setup runs exactly once,
+# from whichever comes first; frames before a successful setup do nothing.
+var setup_started := false
+var fixture_ready := false
+# Release builds compile assert() out, so a failed check must also stop the
+# fixture explicitly: frames after a failure never touch native objects.
+var failed := false
 
 func check(condition: bool, message: String) -> void:
 	checks += 1
 	if not condition:
+		failed = true
 		push_error(message)
 		quit(1)
 		assert(condition, message)
 
 func _initialize() -> void:
+	_setup()
+
+func _setup() -> void:
+	if setup_started:
+		return
+	setup_started = true
 	var arguments := OS.get_cmdline_user_args()
 	var probe_argument := arguments.find("--superpos-native-reload-probe")
 	if probe_argument >= 0:
 		arguments.remove_at(probe_argument)
 	check(arguments.size() == 4, "four fixture arguments")
+	if failed:
+		return
 	server = arguments[0] == "server"
 	family = arguments[2]
 	scenario = arguments[3]
@@ -48,6 +65,9 @@ func _initialize() -> void:
 	world.automatic_ticks = true
 	check(world.configure() == OK, "native owner World configured")
 	session = world.get_session()
+	check(session != null, "native owner World exposes its Session")
+	if failed:
+		return
 	check(session.advance_tick() == ERR_BUSY and world.advance_tick() == ERR_BUSY, "manual stepping rejected while physics phase owns clock")
 	var key := PackedByteArray()
 	key.resize(32)
@@ -65,6 +85,8 @@ func _initialize() -> void:
 	check(session.configure_udp(server, ip, port, ip, port + 1, session_id, identity, zero_key) == ERR_UNAUTHORIZED, "zero admission key rejected")
 	var configured := session.configure_udp(server, ip, port if server else port + 1, ip, port + 1 if server else port, session_id, identity, key)
 	check(configured == OK, "native borrowed-PSA authenticated UDP configured")
+	if failed:
+		return
 	check(session.get_state() == "NetworkConnecting" and not session.get_admission_state().ready, "connection is not admission readiness")
 	check(session.get_admission_state().simulation_sha256.length() == 64, "actual codec SHA256 declared")
 	check(session.enqueue_packet(PackedByteArray([1])).error != OK, "send rejected before capability admission")
@@ -72,11 +94,16 @@ func _initialize() -> void:
 	if server:
 		check(session.spawn_object(schema.schema_id, 0, canonical) != 0, "server canonical object created")
 	root.add_child(world)
+	fixture_ready = not failed
 
 func _process(_delta: float) -> bool:
-	# Exported dispatch loops attach this script and defer _initialize, so a frame
-	# can arrive before the session exists; quit() also lands after the frame.
-	if finished or session == null:
+	# quit() lands after the current frame; a failed or finished fixture and a
+	# frame that arrives before setup never call into a missing or retired
+	# native object. Release GDScript does not null-check typed method calls.
+	if not setup_started:
+		_setup()
+		return false
+	if finished or failed or not fixture_ready:
 		return false
 	var elapsed := Time.get_ticks_msec() - started
 	if completed:
