@@ -48,7 +48,13 @@ func run_command(command: Dictionary) -> void:
 			result.passed = panels.size() == 1
 			if result.passed:
 				panel = panels[0]
-				result.passed = panel.create_extension("reload") == OK
+				# The harness pins xmake so personal editor settings cannot redirect the build.
+				if FileAccess.file_exists("res://xmake_path.txt"):
+					var field: LineEdit = panel.find_child("xmakePath", true, false)
+					result.passed = field != null
+					if field:
+						field.text = FileAccess.get_file_as_string("res://xmake_path.txt").strip_edges()
+				result.passed = result.passed and panel.create_extension("reload") == OK
 		"build":
 			result.passed = panel.build_extension("reload", false) == OK
 			var deadline := Time.get_ticks_msec() + 900000

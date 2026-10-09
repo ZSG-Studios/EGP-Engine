@@ -12,6 +12,8 @@ import time
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+from egp_hot_reload_box3d_evidence import box3d_failure
+
 ROOT = Path(__file__).resolve().parents[2]
 PROBE = """using Godot;
 using System.Runtime.Loader;
@@ -35,6 +37,25 @@ public partial class ReloadProbe : Node, ISerializationListener {
         });
         thread.IsBackground = true;
         thread.Start();
+    }
+    // Box3D mode: this probe owns stepping of the game's live EGPBox3DWorld, once per
+    // physics frame, through reloads; exported state survives assembly unload.
+    [Export] public Godot.Collections.Dictionary Box { get; set; } = new();
+    [Export] public int BoxSteps { get; set; }
+    [Export] public int BoxStepFailures { get; set; }
+    public override void _PhysicsProcess(double delta) {
+        if (!Box.ContainsKey("world")) return;
+        var world = Box["world"].AsGodotObject();
+        var tick = world.Call("get_tick").AsInt64() + 1;
+        if ((Error)world.Call("step_tick", tick).AsInt32() == Error.Ok) BoxSteps++; else BoxStepFailures++;
+    }
+    public Godot.Collections.Dictionary BoxState() {
+        if (!Box.ContainsKey("world")) return new();
+        var world = Box["world"].AsGodotObject();
+        var state = world.Call("get_body_state", 10000).AsGodotDictionary();
+        state["tick"] = world.Call("get_tick");
+        state["hash"] = world.Call("get_state_hash");
+        return state;
     }
     public void OnBeforeSerialize() { BeforeCount++; }
     public void OnAfterDeserialize() { AfterCount++; }
@@ -79,6 +100,12 @@ def main():
         action="store_true",
         help="Exercise changed method signatures and rejected base-class repair",
     )
+    parser.add_argument("--xmake", type=Path, help="xmake for the C++ panel (default: the engine's pinned .build/xmake)")
+    parser.add_argument(
+        "--box3d",
+        action="store_true",
+        help="Also step one live EGPBox3DWorld from C#, read it from C++, and prove reloads leave it exact",
+    )
     args = parser.parse_args()
     if args.disable_runtime and args.feature_override:
         parser.error("--disable-runtime and --feature-override are mutually exclusive")
@@ -92,6 +119,10 @@ def main():
     engine = args.engine.resolve()
     env = os.environ.copy()
     env["NUGET_PACKAGES"] = str(output / "nuget-packages")
+    # vcvarsall appends to PATH inside cmd's 8191-character line limit; drop entries that
+    # no longer exist (stale per-run dotnet tool homes) so MSVC can initialise.
+    entries = [entry for entry in env.get("PATH", "").split(os.pathsep) if entry and os.path.isdir(entry)]
+    env["PATH"] = os.pathsep.join(dict.fromkeys(entries))
     options = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
     receipt = {"passed": False, "engine": str(engine), "engine_sha256": digest(engine), "steps": [], "samples": []}
     fixture_paths = [
@@ -100,6 +131,7 @@ def main():
             "egp_hot_reload_game.gd",
             "egp_hot_reload_editor.gd",
             "validate_egp_hot_reload.py",
+            "egp_hot_reload_box3d_evidence.py",
         )
     ]
     receipt["source_commit"] = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
@@ -213,6 +245,9 @@ def main():
             state["cpp_hits"] == state["cs_hits"] == state["receiver_hits"],
             "Signal/delegate subscription lost or duplicated",
         )
+        if args.box3d:
+            failure = box3d_failure(state, previous)
+            require(failure is None, failure or "")
         if previous:
             require(
                 all(state[key] == previous[key] for key in ("cpp_id", "cs_id", "receiver_id")),
@@ -234,6 +269,7 @@ def main():
                 if args.disable_runtime
                 else "true"
             )
+            + ("\n[egp_reload]\nbox3d=true" if args.box3d else "")
             + "\n[editor]\nrun/main_run_args="
             + json.dumps(
                 f'--headless --max-fps 60 --ignore-error-breaks --log-file "{(output / "game.log").as_posix()}"'
@@ -262,6 +298,10 @@ def main():
         (project / "ReloadProbe.cs").write_text(probe_source.replace("VERSION", "1"), encoding="utf-8")
         (project / "ReloadReceiver.cs").write_text(RECEIVER, encoding="utf-8")
         run("managed-initial", ["dotnet", "build", "--nologo", "-v", "minimal"])
+        xmake = args.xmake.resolve() if args.xmake else ROOT / ".build/xmake/xmake/xmake.exe"
+        require(xmake.is_file(), "Pinned xmake not found: " + str(xmake))
+        (project / "xmake_path.txt").write_text(str(xmake), encoding="utf-8")
+        receipt["xmake"] = {"path": str(xmake), "sha256": digest(xmake)}
         editor_command = [str(engine), "--headless", "--editor", "--path", str(project), "--max-fps", "30"]
         receipt["editor_command"] = editor_command
         stream = (output / "editor.log").open("w", encoding="utf-8")
@@ -278,6 +318,20 @@ def main():
             "public:\n",
             "public:\n\tint counter = 1;\n\tvoid set_counter(int value) { counter = value; }\n\tint get_counter() const { return counter; }\n",
         )
+        if args.box3d:
+            # The C++ node holds the live world through reloads and reads it natively.
+            source = source.replace(
+                'ClassDB::bind_method(D_METHOD("get_message"), &EGP_reload_Node::get_message);',
+                'ClassDB::bind_method(D_METHOD("get_message"), &EGP_reload_Node::get_message);\n\t\tClassDB::bind_method(D_METHOD("set_world", "world"), &EGP_reload_Node::set_world);\n\t\tClassDB::bind_method(D_METHOD("get_world"), &EGP_reload_Node::get_world);\n\t\tADD_PROPERTY(PropertyInfo(Variant::OBJECT, "world"), "set_world", "get_world");\n\t\tClassDB::bind_method(D_METHOD("get_physics_state"), &EGP_reload_Node::get_physics_state);',
+            )
+            source = source.replace(
+                "public:\n",
+                "public:\n\tVariant world;\n\tvoid set_world(const Variant &value) { world = value; }\n\tVariant get_world() const { return world; }\n"
+                "\tDictionary get_physics_state() const {\n\t\tObject *target = world;\n\t\tif (!target) return Dictionary();\n"
+                "\t\tDictionary state = target->call(\"get_body_state\", 10000);\n\t\tstate[\"tick\"] = target->call(\"get_tick\");\n"
+                "\t\tstate[\"hash\"] = target->call(\"get_state_hash\");\n\t\treturn state;\n\t}\n",
+                1,
+            )
         require("Hello from reload!" in source, "Unexpected scaffold template")
         source = source.replace("Hello from reload!", "VERSION")
         if args.native_abi_recovery:
@@ -615,6 +669,7 @@ def main():
                     "diagnostics": diagnostics,
                     "scope": "Dynamic methods and Callable lookup; cached raw MethodBind pointers and arbitrary ABI changes remain open",
                 }
+            receipt["box3d"] = args.box3d
             receipt["reloads"] = 3 + int(args.assembly_recovery) + int(args.unload_recovery) + int(args.native_recovery)
         command("close")
         require(process.wait(timeout=60) == 0, "Editor/game teardown failed")
