@@ -8,6 +8,7 @@
 #include "superpos_simulation_provider.h"
 #include "superpos_uint64.h"
 #include "superpos_world.h"
+#include "superpos_replicator.h"
 #include "superpos_managed_reload.h"
 #include "core/object/class_db.h"
 #ifdef TOOLS_ENABLED
@@ -31,6 +32,7 @@ void initialize_superpos_module(ModuleInitializationLevel p_level) {
     GDREGISTER_ABSTRACT_CLASS(SuperposSimulationProvider);
     GDREGISTER_CLASS(SuperposSession);
     GDREGISTER_CLASS(SuperposWorld);
+    GDREGISTER_CLASS(SuperposReplicator);
 #ifdef SUPERPOS_RTC_EMBEDDED_FIXTURE
     superpos_egp_register_embedded_fixture();
 #endif

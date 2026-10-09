@@ -13,7 +13,8 @@
     "superpos_uint64_editor.cpp",
     "superpos_managed_reload.cpp",
     "private/module_memory.cpp",
-    "private/box2d_replay.cpp"
+    "private/box2d_replay.cpp",
+    "superpos_replicator.cpp"
   ],
   "core_manifest": "core/source_manifest.json",
   "required_engine_modules": [
@@ -29,7 +30,8 @@
     "SuperposSchema",
     "SuperposSimulationProvider",
     "SuperposSession",
-    "SuperposWorld"
+    "SuperposWorld",
+    "SuperposReplicator"
   ],
   "tools_only": [
     "superpos_uint64_editor.cpp"
