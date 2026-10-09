@@ -111,9 +111,38 @@ function capture(graph, engine_root)
                "RTC fixture requires the debug development editor")
     end
     if config.get("superpos_lifecycle_fixture") then
-        assert(config.get("superpos_rtc_embedded"),"Native lifecycle fixture requires embedded RTC qualification profile")
         assert(graph.options.target=="editor" and graph.options.dev_build==true and config.get("mode")=="debug",
                "Native lifecycle fixture requires the debug development editor")
+        -- The fixture bodies are portable. Without embedded RTC, select the
+        -- fixture source and its define in the captured module sources here;
+        -- the RTC path adds both through its own selection and configure.
+        if not config.get("superpos_rtc_embedded") then
+            local module_manifest=json.loadfile(path.join(engine_root,"modules/superpos/source_manifest.json"))
+            local lifecycle=assert(module_manifest.features and module_manifest.features.native_lifecycle,"Missing native lifecycle feature")
+            local name=assert(lifecycle.fixture_source,"Missing lifecycle fixture source")
+            assert(name=="private/lifecycle_engine/staged/engine_fixture.cpp","Unsupported lifecycle fixture source")
+            local filename="modules/superpos/"..name
+            local found=false
+            for _,library in ipairs(graph.libraries) do
+                if library.name=="module_superpos" then
+                    local base,present=nil,false
+                    for _,source in ipairs(library.sources) do
+                        -- Clone before adding the define: policies may be shared tables.
+                        source.policy=table.clone(source.policy);source.policy.CPPDEFINES=table.copy(source.policy.CPPDEFINES or {})
+                        table.insert(source.policy.CPPDEFINES,{"SUPERPOS_LIFECYCLE_FIXTURE",1})
+                        if source.path=="modules/superpos/superpos_session.cpp" then base=source.policy end
+                        if source.path==filename then present=true end
+                    end
+                    assert(base,"Lifecycle fixture requires the captured Session source policy")
+                    if not present then
+                        local policy=table.clone(base);policy.CPPDEFINES=table.copy(base.CPPDEFINES)
+                        table.insert(library.sources,{path=filename,policy=policy})
+                    end
+                    found=true
+                end
+            end
+            assert(found,"Captured graph lacks Superpos module")
+        end
     end
     if not config.get("superpos_rtc_embedded") then return end
     local found=false
