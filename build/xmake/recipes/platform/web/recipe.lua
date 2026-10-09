@@ -9,8 +9,8 @@ function main(graph)
         env:sources(web_files, "editor/*.cpp")
     end
     sys_env = env:clone()
-    sys_env:AddJSLibraries({"js/libs/library_godot_audio.js", "js/libs/library_godot_display.js", "js/libs/library_godot_emscripten.js", "js/libs/library_godot_fetch.js", "js/libs/library_godot_webmidi.js", "js/libs/library_godot_os.js", "js/libs/library_godot_runtime.js", "js/libs/library_godot_input.js", "js/libs/library_godot_webgl2.js", "js/libs/library_godot_debugger.js"})
-    sys_env:AddJSExterns({"js/libs/library_godot_webgl2.externs.js"})
+    sys_env:AddJSLibraries({"js/libs/library_godot_audio.js", "js/libs/library_godot_display.js", "js/libs/library_godot_emscripten.js", "js/libs/library_godot_fetch.js", "js/libs/library_godot_webmidi.js", "js/libs/library_godot_os.js", "js/libs/library_godot_runtime.js", "js/libs/library_godot_input.js", "js/libs/library_godot_debugger.js"})
+    -- library_godot_webgl2.js and its externs were removed with the legacy renderers (a524995a13).
     sys_env:AddJSPost({"js/patches/patch_em_gl.js"})
     if R.truthy(R.index(env, "javascript_eval")) then
         sys_env:AddJSLibraries({"js/libs/library_godot_javascript_singleton.js"})
