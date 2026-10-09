@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="Superposition" inherits="Node" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Inspector configured, server authoritative gameplay property replication.
+	</brief_description>
+	<description>
+		Replicates selected gameplay properties from the authoritative server. Add below a [SuperpositionWorld], choose the gameplay target, and select Replicate checkboxes in the Inspector. Selections create [SuperpositionProperty] resources in [member config]. An explicit [member session_path] or [method set_session] also supports existing session owners. Matching peers share the schema. An empty key uses the target scene path; explicit keys must be unique for the entity kind in the session. Spawned scenes receive stable instance keys from [SuperpositionSpawner].
+		States are validated and quantized before change detection and use the native reliable entity lifecycle. Unchanged states do not generate updates. Optional [member SuperpositionConfig.delta_replication] sends acknowledgment-dependent byte patches with full-baseline recovery. Use this stream for gameplay values; independently send high-rate physical poses on the unreliable snapshot stream and present them with [EGPNetSnapshotInterpolator]. Property easing is cosmetic and does not modify deterministic physics. [SuperpositionPrediction] separately journals complete local simulation state and input reconciliation.
+		Envelopes are bounded to 4096 bytes and 32 typed properties, with object decoding disabled and the whole schema validated before setters. Supported values are Boolean, integer, finite float, String, Vector2, Vector3 and Color. Spatial interest is relevance optimization, not a confidentiality boundary: initial creation may precede observer filtering. Unspecified observers see the entity. Supply current observer positions explicitly and discard disconnected observers. Inspect the read-only Status fields or [method get_statistics] for errors.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="apply_state">
+			<return type="int" enum="Error" />
+			<param index="0" name="bytes" type="PackedByteArray" />
+			<description>
+				Validates the complete bounded envelope before applying selected replica properties. Rejects calls on a listening server; recursive property operations return [constant ERR_BUSY]. If a custom getter or setter destroys/removes the target or component, changes the session/configuration, or invalidates the schema, aborts remaining writes with [constant ERR_UNAVAILABLE]. Already invoked setter side effects cannot be rolled back. This method is not an input RPC.
+			</description>
+		</method>
+		<method name="capture_state">
+			<return type="PackedByteArray" />
+			<description>
+				Produces a bounded quantized protocol envelope. Returns an empty array for invalid values, recursive property operations, or a getter that invalidates the target, session or schema during capture. Custom property callbacks must keep gameplay side effects separate from serialization.
+			</description>
+		</method>
+		<method name="clear_observer">
+			<return type="void" />
+			<param index="0" name="peer_id" type="int" />
+			<description>
+				Removes the observer and restores unrestricted visibility when the peer is still connected.
+			</description>
+		</method>
+		<method name="get_session" qualifiers="const">
+			<return type="EGPNetSession" />
+			<description>
+				Returns the bound session.
+			</description>
+		</method>
+		<method name="get_statistics" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Returns entity, captures, sent, dirty_skips, applied, rejected, last_error and state_bytes, push_skips and priority. Failures also emit [signal replication_error].
+			</description>
+		</method>
+		<method name="mark_dirty">
+			<return type="void" />
+			<description>
+				Notifies pushed capture that selected gameplay properties changed. Calls coalesce until the configured update interval. New entities and changed schemas always capture a complete baseline.
+			</description>
+		</method>
+		<method name="replicate_now">
+			<return type="int" enum="Error" />
+			<description>
+				Captures a server state or applies the client's latest native entity revision. Automatic processing calls this at the configured rate.
+			</description>
+		</method>
+		<method name="set_observer_position">
+			<return type="int" enum="Error" />
+			<param index="0" name="peer_id" type="int" />
+			<param index="1" name="position" type="Vector3" />
+			<description>
+				Sets a finite observer position for spatial interest. At most 64 observers are stored.
+			</description>
+		</method>
+		<method name="set_session">
+			<return type="void" />
+			<param index="0" name="session" type="EGPNetSession" />
+			<description>
+				Explicitly binds a native session, retiring any previously owned entity. A nonnull assignment takes precedence over automatic providers, even when it equals the currently discovered session. Target or schema changes preserve this binding mode. Assign null to resume provider discovery; changing [member session_path] also clears the explicit binding.
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="config" type="SuperpositionConfig" setter="set_config" getter="get_config">
+			Reusable property schema and scheduling policy.
+		</member>
+		<member name="enabled" type="bool" setter="set_enabled" getter="is_enabled" default="true">
+			Enables automatic replication and smoothing.
+		</member>
+		<member name="entity_kind" type="int" setter="set_entity_kind" getter="get_entity_kind" default="32001">
+			Native entity kind reserved by the game for this replication schema.
+		</member>
+		<member name="replication_key" type="String" setter="set_replication_key" getter="get_replication_key" default="&quot;&quot;">
+			Stable server/client identity. Empty uses the target scene path. Duplicate explicit identities are rejected.
+		</member>
+		<member name="session_path" type="NodePath" setter="set_session_path" getter="get_session_path" default="NodePath(&quot;&quot;)">
+			Optional node providing get_session() or a session property. With an empty path, discovers the nearest ancestor session provider, normally [SuperpositionWorld]. Provider references are refreshed each frame so replacement sessions retire stale bindings.
+		</member>
+		<member name="target_path" type="NodePath" setter="set_target_path" getter="get_target_path" default="NodePath(&quot;..&quot;)">
+			Gameplay node whose selected properties replicate.
+		</member>
+	</members>
+	<signals>
+		<signal name="replication_error">
+			<param index="0" name="error" type="int" />
+			<param index="1" name="message" type="String" />
+			<description>
+				Observable validation, authority, transport or interest error.
+			</description>
+		</signal>
+		<signal name="state_applied">
+			<description>
+				Emitted after a complete valid received state has been accepted.
+			</description>
+		</signal>
+	</signals>
+</class>

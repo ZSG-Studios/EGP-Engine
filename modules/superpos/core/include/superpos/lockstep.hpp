@@ -172,10 +172,12 @@ private:
 // is behind needs goodput, not copies). The caller supplies the recipient's
 // newest in-order acknowledgement and the carrier's smoothed RTT.
 //
-// Gap repair: when the recipient reports holding a tick beyond its acknowledgement
-// (a batch parked past a lost one), the stream resends from the acknowledgement at
-// once, at most once per smoothed RTT for the same gap, so a loss costs about one
-// round trip instead of the stall timer. With adaptive redundancy a recipient whose
+// Gap repair: when the recipient reports holding ticks beyond its acknowledgement
+// (batches parked past a missing one), the gap is declared lost QUIC-style, once
+// reorder_ticks later ticks are held or the gap has persisted a quarter RTT, and the
+// stream resends from the acknowledgement, at most once per smoothed RTT for the same
+// gap. A loss costs about one round trip instead of the stall timer, and plain
+// reordering costs nothing. With adaptive redundancy a recipient whose
 // stream has gone `clean_batches` batches without a repair or stall gets no
 // redundant tick (half the bandwidth on clean links); any loss restores it.
 struct CommandStreamPolicy {
@@ -186,6 +188,10 @@ struct CommandStreamPolicy {
     bool adaptive_redundancy{true};
     std::uint64_t clean_batches{1200};
     std::uint64_t minimum_repair_us{20000};
+    // Loss declaration: held ticks past the gap (QUIC's packet threshold) or the time
+    // the gap persisted, max(srtt / 4, minimum_reorder_us).
+    Tick reorder_ticks{3};
+    std::uint64_t minimum_reorder_us{10000};
 };
 struct CommandStreamStatus {
     Tick acknowledged{}, sent{};
@@ -209,8 +215,8 @@ private:
         return policy_.adaptive_redundancy && clean_ >= policy_.clean_batches ? 0 : policy_.redundant_ticks;
     }
     CommandStreamPolicy policy_{};
-    Tick acknowledged_{}, sent_{}, repaired_{};
-    std::uint64_t acknowledged_at_{}, batches_{}, rewinds_{}, repairs_{}, repaired_at_{}, clean_{};
+    Tick acknowledged_{}, sent_{}, repaired_{}, gap_{};
+    std::uint64_t acknowledged_at_{}, batches_{}, rewinds_{}, repairs_{}, repaired_at_{}, gap_since_{}, clean_{};
     bool started_{};
 };
 

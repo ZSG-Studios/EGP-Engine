@@ -1,0 +1,398 @@
+/*
+    Yojimbo Client/Server Network Library.
+
+    Copyright © 2016 - 2026, Más Bandwidth LLC.
+
+    Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+        1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+        2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer 
+           in the documentation and/or other materials provided with the distribution.
+
+        3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived 
+           from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, 
+    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE 
+    DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, 
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR 
+    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, 
+    WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+    USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+#include "yojimbo_address.h"
+#include "yojimbo_platform.h"
+#include "yojimbo_utils.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <errno.h>
+
+#if YOJIMBO_PLATFORM == YOJIMBO_PLATFORM_WINDOWS
+
+    #ifndef NOMINMAX
+    #define NOMINMAX
+    #endif
+    #define _WINSOCK_DEPRECATED_NO_WARNINGS
+    #include <winsock2.h>
+    #include <ws2tcpip.h>
+    #include <ws2ipdef.h>
+    #pragma comment( lib, "WS2_32.lib" )
+
+    #ifdef SetPort
+    #undef SetPort
+    #endif // #ifdef SetPort
+
+#elif YOJIMBO_PLATFORM == YOJIMBO_PLATFORM_MAC || YOJIMBO_PLATFORM == YOJIMBO_PLATFORM_UNIX
+
+    #include <netdb.h>
+    #include <sys/types.h>
+    #include <sys/socket.h>
+    #include <netinet/in.h>
+    #include <net/if.h>
+    #include <fcntl.h>
+    #include <netdb.h>
+    #include <arpa/inet.h>
+    #include <unistd.h>
+    #include <errno.h>
+    
+#else
+
+    #error yojimbo unknown platform!
+
+#endif
+
+#include <memory.h>
+#include <stdlib.h>
+#include <string.h>
+
+namespace yojimbo
+{
+    Address::Address()
+    {
+        Clear();
+    }
+
+    Address::Address( uint8_t a, uint8_t b, uint8_t c, uint8_t d, uint16_t port )
+        : m_type( ADDRESS_IPV4 )
+    {
+        
+        m_address.ipv4[0] = a;
+        m_address.ipv4[1] = b;
+        m_address.ipv4[2] = c;
+        m_address.ipv4[3] = d;
+        m_port = port;
+    }
+
+    Address::Address( const uint8_t address[], uint16_t port )
+        : m_type( ADDRESS_IPV4 )
+    {
+        for ( int i = 0; i < 4; ++i )
+            m_address.ipv4[i] = address[i];
+        m_port = port;
+    }
+
+    Address::Address( uint16_t a, uint16_t b, uint16_t c, uint16_t d, uint16_t e, uint16_t f, uint16_t g, uint16_t h, uint16_t port )
+        : m_type( ADDRESS_IPV6 )
+    {
+        m_address.ipv6[0] = a;
+        m_address.ipv6[1] = b;
+        m_address.ipv6[2] = c;
+        m_address.ipv6[3] = d;
+        m_address.ipv6[4] = e;
+        m_address.ipv6[5] = f;
+        m_address.ipv6[6] = g;
+        m_address.ipv6[7] = h;
+        m_port = port;
+    }
+
+    Address::Address( const uint16_t address[], uint16_t port )
+        : m_type( ADDRESS_IPV6 )
+    {
+        for ( int i = 0; i < 8; ++i )
+            m_address.ipv6[i] = address[i];
+        m_port = port;
+    }
+
+    Address::Address( const char * address )
+    {
+        Parse( address );
+    }
+
+    Address::Address( const char * address, uint16_t port )
+    {
+        Parse( address );
+        m_port = port;
+    }
+
+    // Parse a port string. The whole string must be a decimal number in [0,65535] and nothing
+    // else: at least one digit, no sign, no leading space, no trailing characters, no overflow.
+    // strtol alone stops at the first character it cannot use and reports success on what it
+    // read, so "40k" parsed as 40, "" as 0, and "99999999999999999999" saturated to LONG_MAX --
+    // all of them accepted addresses that the documented contract calls invalid (YJ-11).
+    static bool ParsePort( const char * string, uint16_t & port )
+    {
+        if ( string[0] < '0' || string[0] > '9' )
+            return false;                                   // no digits, or a sign or space first
+        char * end = NULL;
+        errno = 0;
+        const unsigned long value = strtoul( string, &end, 10 );
+        if ( errno == ERANGE )
+            return false;                                   // more digits than an unsigned long
+        if ( *end != '\0' )
+            return false;                                   // trailing junk
+        if ( value > 65535 )
+            return false;
+        port = (uint16_t) value;
+        return true;
+    }
+
+    void Address::Parse( const char * address_in )
+    {
+        // first try to parse as an IPv6 address:
+        // 1. if the first character is '[' then it's probably an ipv6 in form "[addr6]:portnum"
+        // 2. otherwise try to parse as raw IPv6 address, parse using inet_pton
+
+        yojimbo_assert( address_in );
+
+        char buffer[MaxAddressLength];
+        char * address = buffer;
+        yojimbo_copy_string( address, address_in, MaxAddressLength );
+
+        int addressLength = (int) strlen( address );
+        m_port = 0;
+        if ( address[0] == '[' )
+        {
+            // Bracketed IPv6: exactly "[addr6]" or "[addr6]:port", and nothing else. Locate the
+            // closing bracket, then treat only a ':' immediately after it as the port separator.
+            // Scanning for ':' from the end (as we do for IPv4 below) is wrong here because
+            // addr6 itself is full of colons, so "[::1]" with no port would misparse a colon
+            // inside the address.
+            //
+            // A missing bracket, or anything at all after the closing one other than ":port",
+            // is invalid: "[::1" and "[::1]junk" used to be accepted, the first because the
+            // opening bracket was simply skipped and the second because everything past the
+            // bracket was truncated away unread (YJ-11).
+            char * closing = strchr( address, ']' );
+            if ( !closing )
+            {
+                Clear();
+                return;
+            }
+            if ( closing[1] == ':' )
+            {
+                if ( !ParsePort( closing + 2, m_port ) )
+                {
+                    Clear();
+                    return;
+                }
+            }
+            else if ( closing[1] != '\0' )
+            {
+                Clear();
+                return;
+            }
+            *closing = '\0';
+            address += 1;
+        }
+        struct in6_addr sockaddr6;
+        if ( inet_pton( AF_INET6, address, &sockaddr6 ) == 1 )
+        {
+            int i;
+            for ( i = 0; i < 8; ++i )
+            {
+                m_address.ipv6[i] = ntohs( ( (uint16_t*) &sockaddr6 ) [i] );
+            }
+            m_type = ADDRESS_IPV6;
+            return;
+        }
+
+        // otherwise it's probably an IPv4 address:
+        // 1. look for ":portnum", if found save the portnum and strip it out
+        // 2. parse remaining ipv4 address via inet_pton
+
+        addressLength = (int) strlen( address );
+        const int base_index = addressLength - 1;
+        for ( int i = 0; i < 6; ++i )
+        {
+            const int index = base_index - i;
+            if ( index < 0 )
+                break;
+            if ( address[index] == ':' )
+            {
+                if ( !ParsePort( &address[index+1], m_port ) )
+                {
+                    Clear();
+                    return;
+                }
+                address[index] = '\0';
+            }
+        }
+
+        struct sockaddr_in sockaddr4;
+        if ( inet_pton( AF_INET, address, &sockaddr4.sin_addr ) == 1 )
+        {
+            m_type = ADDRESS_IPV4;
+            m_address.ipv4[3] = (uint8_t) ( ( sockaddr4.sin_addr.s_addr & 0xFF000000 ) >> 24 );
+            m_address.ipv4[2] = (uint8_t) ( ( sockaddr4.sin_addr.s_addr & 0x00FF0000 ) >> 16 );
+            m_address.ipv4[1] = (uint8_t) ( ( sockaddr4.sin_addr.s_addr & 0x0000FF00 ) >> 8  );
+            m_address.ipv4[0] = (uint8_t) ( ( sockaddr4.sin_addr.s_addr & 0x000000FF )       );
+        }
+        else
+        {
+            // Not a valid IPv4 address. Set address as invalid.
+            Clear();
+        }
+    }
+
+    void Address::Clear()
+    {
+        m_type = ADDRESS_NONE;
+        memset( &m_address, 0, sizeof( m_address ) );
+        m_port = 0;
+    }
+
+    const uint8_t * Address::GetAddress4() const
+    {
+        yojimbo_assert( m_type == ADDRESS_IPV4 );
+        return m_address.ipv4;
+    }
+
+    const uint16_t * Address::GetAddress6() const
+    {
+        yojimbo_assert( m_type == ADDRESS_IPV6 );
+        return m_address.ipv6;
+    }
+
+    void Address::SetPort( uint16_t port )
+    {
+        m_port = port;
+    }
+
+    uint16_t Address::GetPort() const 
+    {
+        return m_port;
+    }
+
+    AddressType Address::GetType() const
+    {
+        return m_type;
+    }
+
+    const char * Address::ToString( char buffer[], int bufferSize ) const
+    {
+        yojimbo_assert( bufferSize >= MaxAddressLength );
+
+        if ( m_type == ADDRESS_IPV4 )
+        {
+            const uint8_t a = m_address.ipv4[0];
+            const uint8_t b = m_address.ipv4[1];
+            const uint8_t c = m_address.ipv4[2];
+            const uint8_t d = m_address.ipv4[3];
+            if ( m_port != 0 )
+                snprintf( buffer, bufferSize, "%d.%d.%d.%d:%d", a, b, c, d, m_port );
+            else
+                snprintf( buffer, bufferSize, "%d.%d.%d.%d", a, b, c, d );
+            return buffer;
+        }
+        else if ( m_type == ADDRESS_IPV6 )
+        {
+            if ( m_port == 0 )
+            {
+                uint16_t address6[8];
+                for ( int i = 0; i < 8; ++i )
+                    address6[i] = ntohs( ((uint16_t*) &m_address.ipv6)[i] );
+                inet_ntop( AF_INET6, address6, buffer, bufferSize );
+                return buffer;
+            }
+            else
+            {
+                char addressString[INET6_ADDRSTRLEN];
+                uint16_t address6[8];
+                for ( int i = 0; i < 8; ++i )
+                    address6[i] = ntohs( ((uint16_t*) &m_address.ipv6)[i] );
+                inet_ntop( AF_INET6, address6, addressString, INET6_ADDRSTRLEN );
+                snprintf( buffer, bufferSize, "[%s]:%d", addressString, m_port );
+                return buffer;
+            }
+        }
+        else
+        {
+            snprintf( buffer, bufferSize, "%s", "NONE" );
+            return buffer;
+        }
+    }
+
+    bool Address::IsValid() const
+    {
+        return m_type != ADDRESS_NONE;
+    }
+
+    bool Address::IsLinkLocal() const
+    {
+        // fe80::/10 -- the prefix is 10 bits, so mask rather than compare the whole group.
+        // Comparing == 0xfe80 matched only fe80::/16 and missed the rest of the range.
+        return m_type == ADDRESS_IPV6 && ( m_address.ipv6[0] & 0xffc0 ) == 0xfe80;
+    }
+
+    bool Address::IsSiteLocal() const
+    {
+        // fec0::/10
+        return m_type == ADDRESS_IPV6 && ( m_address.ipv6[0] & 0xffc0 ) == 0xfec0;
+    }
+
+    bool Address::IsMulticast() const
+    {
+        // ff00::/8. Comparing == 0xff00 matched only the single group ff00 and missed every
+        // real multicast address, including ff02::1 (all nodes).
+        return m_type == ADDRESS_IPV6 && ( m_address.ipv6[0] & 0xff00 ) == 0xff00;
+    }
+
+    bool Address::IsLoopback() const
+    {
+        return ( m_type == ADDRESS_IPV4 && m_address.ipv4[0] == 127 
+                                        && m_address.ipv4[1] == 0
+                                        && m_address.ipv4[2] == 0
+                                        && m_address.ipv4[3] == 1 )
+                                            ||
+               ( m_type == ADDRESS_IPV6 && m_address.ipv6[0] == 0
+                                        && m_address.ipv6[1] == 0
+                                        && m_address.ipv6[2] == 0
+                                        && m_address.ipv6[3] == 0
+                                        && m_address.ipv6[4] == 0
+                                        && m_address.ipv6[5] == 0
+                                        && m_address.ipv6[6] == 0
+                                        && m_address.ipv6[7] == 0x0001 );
+    }
+
+    bool Address::IsGlobalUnicast() const
+    {
+        // Defined as the negation of the others, so a missed classification above did not
+        // merely return false here -- it returned TRUE, reporting multicast as global unicast.
+        return m_type == ADDRESS_IPV6 && !IsLinkLocal()
+                                      && !IsSiteLocal()
+                                      && !IsMulticast()
+                                      && !IsLoopback();
+    }
+
+    bool Address::operator ==( const Address & other ) const
+    {
+        if ( m_type != other.m_type )
+            return false;
+        if ( m_port != other.m_port )
+            return false;
+        if ( m_type == ADDRESS_IPV4 && memcmp( m_address.ipv4, other.m_address.ipv4, sizeof( m_address.ipv4 ) ) == 0 )
+            return true;
+        else if ( m_type == ADDRESS_IPV6 && memcmp( m_address.ipv6, other.m_address.ipv6, sizeof( m_address.ipv6 ) ) == 0 )
+            return true;
+        else
+            return false;
+    }
+
+    bool Address::operator !=( const Address & other ) const
+    {
+        return !( *this == other );
+    }
+}

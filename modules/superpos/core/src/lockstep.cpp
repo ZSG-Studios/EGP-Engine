@@ -365,9 +365,18 @@ Result<std::size_t> CommandStream::next(const CommandEncoder& encoder,Tick ackno
         sent_=acknowledged_;acknowledged_at_=now;++rewinds_;clean_=0;
     }
     // The recipient holds ticks past its acknowledgement: the batch carrying the next
-    // one was lost. Resend from there now, once per RTT for the same gap.
+    // one is missing. It is lost (not merely reordered) once enough later ticks are
+    // held or the gap outlived the reorder window; then resend from the acknowledgement,
+    // once per RTT for the same gap.
+    if(held>acknowledged_) {
+        if(gap_!=acknowledged_){gap_=acknowledged_;gap_since_=now;}
+    } else {
+        gap_=0;
+    }
+    const std::uint64_t reorder=std::max(policy_.minimum_reorder_us,srtt/4);
+    const bool lost=held>acknowledged_ && (held-acknowledged_>policy_.reorder_ticks || (now>=gap_since_ && now-gap_since_>=reorder));
     const std::uint64_t guard=std::max(policy_.minimum_repair_us,srtt+srtt/4);
-    if(held>acknowledged_ && sent_>acknowledged_ && (repaired_!=acknowledged_ || now<repaired_at_ || now-repaired_at_>=guard)) {
+    if(lost && sent_>acknowledged_ && (repaired_!=acknowledged_ || now<repaired_at_ || now-repaired_at_>=guard)) {
         sent_=acknowledged_;repaired_=acknowledged_;repaired_at_=now;acknowledged_at_=now;++repairs_;clean_=0;
     }
     const bool behind=encoder.newest()>acknowledged_+policy_.catch_up_ticks;

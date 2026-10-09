@@ -1,6 +1,6 @@
 {
   "version": 1,
-  "engine_head": "38ad4c07f286d609eb6597263607e2164840ae88",
+  "engine_head": "b6b3390dbb161642fd5379d24eeceee429463a25",
   "core_root": "C:\\EGP Workspace\\Third Party Dev\\Superpos",
   "files": {
     "core/source_manifest.json": "b4f948e52518dd00c7f42fadf09bf51584266f5ce8410c2a1bcc1cfe1527afd6",
@@ -16,7 +16,7 @@
     "core/include/superpos/dtls.hpp": "47137204a0efac7984c92a4c4bc4c6a1d39cc45873cee8537006749b39f9b5b8",
     "core/include/superpos/gameplay.hpp": "8f557946c2bd5d9d637aebfdf07408c8ba8e2b401ee5d6b1a76fcd6568284e7f",
     "core/include/superpos/lease.hpp": "b54b698d0c97d560b8cfc18e92ab872693883ed19cb3fc2b766852b8f79de40c",
-    "core/include/superpos/lockstep.hpp": "8b9fe9f2033a6e7cc45cb433688b269b0fc337f011364d74f66d73c6bbed341a",
+    "core/include/superpos/lockstep.hpp": "c0d4cbc597646dbc36072953048108a9393a6bda80f011984de2b6b94c83f265",
     "core/include/superpos/packet_transport.hpp": "7a1ad41bfdcb3732f23dcd9df88de6c83b30fc03cf229ae0726366a8e1de566f",
     "core/include/superpos/platform_clock.hpp": "de4e95c8ed8f3c6bd806d640c79b52abc2d1d7fe51e190e9431a923b17966672",
     "core/include/superpos/receiver.hpp": "337fc529dd996009dc8fa51f3041756adb8a9c86f5e7edc526f4dfc486b623e7",
@@ -51,7 +51,7 @@
     "core/src/dtls.cpp": "a8e5a07127fea56e77999ce03d306fde99ff38dd0a5c8279ee7fdc4b8bcfad12",
     "core/src/gameplay.cpp": "4a8d201eacd76188c64c9e3783056e83c6e3ccbd569967788d08b7f2f39bbd50",
     "core/src/lease.cpp": "36ced3341d7f5786da7916da9c2907bdf1531046e7fc30a6568c631fe5cfb17b",
-    "core/src/lockstep.cpp": "bc44f4ea235c8c8095fa2b8214bec68303128b556c81368ef8aef02f595ae30f",
+    "core/src/lockstep.cpp": "d3c27867c079bafc54ecfb50d6bc5bab8d80121ec76898d5ff0206632ab9a655",
     "core/src/packet_transport.cpp": "73a5bce43b090fdf41ab5ef9ef770723e08cf19e35432d979bb218a5762a73eb",
     "core/src/platform_clock.cpp": "34036344864959cd97e29b4a12eb85e56d8a5db9924ff460b18a488bfd0b6ba0",
     "core/src/receiver.cpp": "ab6db02138c46c2c04bf496ec474a3d753bd9f43f275e0606af727762c4b3a37",
@@ -122,7 +122,7 @@
     "core/dependencies/sqlite-amalgamation-3530400/sqlite3.c": "b1dd5d74ec7f29055a6684fa06fb3c2f6821c87dd38f9a458dfd2e8a1db28189",
     "core/dependencies/sqlite-amalgamation-3530400/sqlite3.h": "919e7f2e8ed1d8f56ac17b412b8971c76aa5d1a879752cc6058f75e7d5910e1d"
   },
-  "preservation": "C:\\EGP Workspace\\Third Party Dev\\Superpos-EGP\\.build\\core-history\\20261009T203121084022Z\\preservation.json",
+  "preservation": "C:\\EGP Workspace\\Third Party Dev\\Superpos-EGP\\.build\\core-history\\20261009T204243632998Z\\preservation.json",
   "features_supported": [
     "foundation",
     "dtls",
@@ -144,7 +144,6 @@
     "core/include/superpos/relay_wire.hpp",
     "core/include/superpos/session.hpp",
     "core/include/superpos/transport.hpp",
-    "core/include/superpos/world.hpp",
     "core/services/include/superpos/canonical_restore.hpp",
     "core/services/include/superpos/canonical_state.hpp",
     "core/services/include/superpos/checkpoint.hpp",
@@ -192,8 +191,7 @@
     "core/src/relay_psa.cpp",
     "core/src/relay_wire.cpp",
     "core/src/session.cpp",
-    "core/src/udp.cpp",
-    "core/src/world.cpp"
+    "core/src/udp.cpp"
   ],
   "metadata_only": false
 }

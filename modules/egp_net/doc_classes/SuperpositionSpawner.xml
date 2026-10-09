@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SuperpositionSpawner" inherits="Node" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Automatic authoritative scene spawning, ownership and lifecycle.
+	</brief_description>
+	<description>
+		Replicates the membership of allowlisted local scenes. Add below a [SuperpositionWorld], assign [member scenes], and choose [member spawn_path]. The server calls [method spawn]; compatible clients instantiate their own matching scene. Export-stable scene manifests include prefab IDs, local resource identity, node structure, declared script method/property interfaces and nested property schemas. They do not hash script implementation bytes; use game_protocol and a build-version contract to reject incompatible gameplay implementations. Mismatching peers fail closed. Spawn envelopes carry bounded scalar metadata, not scene paths or objects. Nested [Superposition] components receive stable per-instance keys. Ownership uses the authenticated client identity associated with a live connection, while recipient and visibility APIs use connection-generation peer IDs.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="despawn">
+			<return type="int" enum="Error" />
+			<param index="0" name="entity" type="int" />
+			<description>
+				Server-only: retires the membership entity and local instance. Nested property entities are retired with the scene. Returns an error for a stale or foreign handle.
+			</description>
+		</method>
+		<method name="get_entity_for_node" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="node" type="Node" />
+			<description>
+				Returns the membership handle for a spawned scene root or its descendant, or 0 if the node is outside this spawner's live instances.
+			</description>
+		</method>
+		<method name="get_owner_client_id" qualifiers="const">
+			<return type="int" />
+			<param index="0" name="entity" type="int" />
+			<description>
+				Returns the authenticated owner client ID stored with a live membership entity, or -1 for server ownership or an absent entity. This is not a connection-generation peer ID.
+			</description>
+		</method>
+		<method name="get_scene_fingerprint" qualifiers="const">
+			<return type="String" />
+			<description>
+				Returns the deterministic scene manifest digest used by the compatibility handshake. Matching local prefab mappings, resource identity, node structure, declared script interfaces and nested property schemas are required. This is an interface compatibility check, not script implementation authentication; enforce your build version through the native game protocol.
+			</description>
+		</method>
+		<method name="get_session" qualifiers="const">
+			<return type="EGPNetSession" />
+			<description>
+				Returns the currently bound session, or null while unconfigured.
+			</description>
+		</method>
+		<method name="get_spawned_node" qualifiers="const">
+			<return type="Node" />
+			<param index="0" name="entity" type="int" />
+			<description>
+				Returns the live local scene root for [param entity], or null if absent or retired.
+			</description>
+		</method>
+		<method name="get_statistics" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Returns local instance and lifecycle counters, schema fingerprint and the latest error. Counters describe this spawner, not transport acknowledgment or gameplay bandwidth.
+			</description>
+		</method>
+		<method name="has_entity" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="entity" type="int" />
+			<description>
+				Returns whether this spawner currently owns a live local instance for [param entity].
+			</description>
+		</method>
+		<method name="is_peer_compatible" qualifiers="const">
+			<return type="bool" />
+			<param index="0" name="peer" type="int" />
+			<description>
+				Returns whether the current connection-generation [param peer] has completed a matching scene handshake. Reconnects must negotiate again.
+			</description>
+		</method>
+		<method name="set_session">
+			<return type="void" />
+			<param index="0" name="session" type="EGPNetSession" />
+			<description>
+				Explicitly binds a native session and retires previous local instances and server membership bindings. An automatic provider can replace this binding when [member session_path] or an ancestor [SuperpositionWorld] is used.
+			</description>
+		</method>
+		<method name="set_visible">
+			<return type="int" enum="Error" />
+			<param index="0" name="entity" type="int" />
+			<param index="1" name="peer" type="int" />
+			<param index="2" name="visible" type="bool" />
+			<description>
+				Server-only: changes membership visibility for one live [param peer]. Hiding removes the client's local instance and nested property entities; re-entry creates a fresh instance with current baselines. Visibility changes retain the same server membership identity.
+			</description>
+		</method>
+		<method name="spawn">
+			<return type="int" />
+			<param index="0" name="prefab_id" type="int" />
+			<param index="1" name="owner_peer" type="int" default="-1" />
+			<param index="2" name="data" type="Dictionary" default="{}" />
+			<description>
+				Server-only: creates a membership entity and local instance for an allowlisted [param prefab_id]. [param owner_peer] is a currently admitted server peer ID, or -1 for server ownership; its authenticated client identity is stored with the instance. [param data] allows at most 16 string keys (64 UTF-8 bytes each), with null, Boolean, integer, finite float, finite Vector3 or strings of at most 256 UTF-8 bytes. The complete envelope must fit 4096 bytes. Returns a positive entity handle on success or 0 and [signal spawn_error] on failure. Metadata is attached as superposition_spawn_data and passed to [signal spawned].
+			</description>
+		</method>
+		<method name="synchronize">
+			<return type="int" enum="Error" />
+			<description>
+				Advances schema negotiation and reconciles local instances with native membership entities. The node performs this automatically each frame. Invalid or mismatching envelopes produce [signal spawn_error].
+			</description>
+		</method>
+	</methods>
+	<members>
+		<member name="entity_kind" type="int" setter="set_entity_kind" getter="get_entity_kind" default="32002">
+			Native entity kind reserved for this spawner's membership envelopes. Keep it distinct from property component kinds and other spawners.
+		</member>
+		<member name="max_instances" type="int" setter="set_max_instances" getter="get_max_instances" default="256">
+			Maximum number of locally tracked instances, from 1 to 4096. Native session entity capacity and transport quotas also apply.
+		</member>
+		<member name="replication_key" type="String" setter="set_replication_key" getter="get_replication_key" default="&quot;world&quot;">
+			Shared namespace for this spawner's membership envelopes and RPC routing. Use a unique key for each independent spawner in one session, matching across peers.
+		</member>
+		<member name="scenes" type="SuperpositionScene[]" setter="set_scenes" getter="get_scenes" default="[]">
+			One to 64 trusted prefab resources with unique IDs and nonnull PackedScenes. Configure the same scene manifest on all peers.
+		</member>
+		<member name="session_path" type="NodePath" setter="set_session_path" getter="get_session_path" default="NodePath(&quot;&quot;)">
+			Optional session provider node. With an empty path, discovers the nearest ancestor exposing get_session(), normally [SuperpositionWorld].
+		</member>
+		<member name="spawn_path" type="NodePath" setter="set_spawn_path" getter="get_spawn_path" default="NodePath(&quot;..&quot;)">
+			Local parent under which replicated scene roots are instantiated. Must resolve inside the running scene.
+		</member>
+	</members>
+	<signals>
+		<signal name="despawned">
+			<param index="0" name="entity" type="int" />
+			<description>
+				Emitted when a local instance is retired, including visibility removal and session replacement.
+			</description>
+		</signal>
+		<signal name="peer_schema_checked">
+			<param index="0" name="peer" type="int" />
+			<param index="1" name="compatible" type="bool" />
+			<description>
+				Emitted after checking a peer's manifest, with the compatibility result. False prevents that peer's membership replication.
+			</description>
+		</signal>
+		<signal name="spawn_error">
+			<param index="0" name="error" type="int" />
+			<param index="1" name="message" type="String" />
+			<description>
+				Emitted for invalid configuration, unauthorized operations, malformed membership data or lifecycle failures. Inspect the error and message before retrying.
+			</description>
+		</signal>
+		<signal name="spawned">
+			<param index="0" name="entity" type="int" />
+			<param index="1" name="node" type="Node" />
+			<param index="2" name="data" type="Dictionary" />
+			<description>
+				Emitted after a local scene root is instantiated and its nested replication components are bound. [param data] is validated spawn metadata.
+			</description>
+		</signal>
+	</signals>
+</class>

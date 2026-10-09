@@ -1,0 +1,6 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://snapshot_interpolation.gd" id="1"]
+
+[node name="SnapshotInterpolation" type="Node"]
+script = ExtResource("1")

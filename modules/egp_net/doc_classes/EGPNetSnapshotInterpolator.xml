@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="EGPNetSnapshotInterpolator" inherits="RefCounted" api_type="core" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>
+		Bounded native snapshot presentation for replicated 3D entities.
+	</brief_description>
+	<description>
+		Bounded presentation history for authoritative 3D snapshots: up to 32 samples per entity and 1024 entities. Submit accepted samples, advance once per render frame, then sample visible entities. Interpolates position and shortest-arc rotation; sparse updates use bounded linear and world-space angular velocity extrapolation. Correction offsets decay in presentation space while preserving transform scale. The global presentation clock never reverses or runs beyond the newest global snapshot during an outage. Explicit discontinuity epochs clear per-entity history for teleports or respawns and reject older epochs. Legacy samples without epochs retain the eight-unit teleport heuristic. An optional bounded adaptive delay margin absorbs sparse authoritative sample cadence. Methods belong to the creating thread. This helper never changes authoritative physics or establishes deterministic input prediction.
+	</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="advance">
+			<return type="float" />
+			<param index="0" name="delta" type="float" />
+			<description>
+				Advances the monotonic presentation clock with bounded rate correction and returns its tick. Call once per render frame.
+			</description>
+		</method>
+		<method name="clear">
+			<return type="void" />
+			<description>
+				Clears all histories, clock state, and diagnostics for a fresh connection.
+			</description>
+		</method>
+		<method name="configure">
+			<return type="int" enum="Error" />
+			<param index="0" name="tick_rate" type="float" default="60.0" />
+			<param index="1" name="delay_seconds" type="float" default="0.2" />
+			<param index="2" name="max_extrapolation_seconds" type="float" default="0.1" />
+			<param index="3" name="max_adaptive_delay_seconds" type="float" default="0.0" />
+			<description>
+				Sets timing and clears history. [param tick_rate] is the shared authority tick frequency; [param delay_seconds] sets the base buffer; [param max_extrapolation_seconds] bounds sparse-entity extrapolation. A positive [param max_adaptive_delay_seconds] enables a ceiling at least as large as the base delay; zero keeps the fixed buffer. Adaptation follows observed authoritative tick spacing, not RTT. Rejects invalid or nonfinite values without changing configuration.
+			</description>
+		</method>
+		<method name="get_statistics" qualifiers="const">
+			<return type="Dictionary" />
+			<description>
+				Returns render clock and buffer timing, tracked entities, interpolation/extrapolation/hold/priming/correction counters, teleport and epoch-reset/rejection counters and largest linear/angular correction. The entities dictionary includes each track's epoch, history and held-motion diagnostics. Counters describe presentation evaluations, not packet delivery or simulation accuracy.
+			</description>
+		</method>
+		<method name="remove">
+			<return type="void" />
+			<param index="0" name="entity" type="int" />
+			<description>
+				Removes an entity's history on despawn.
+			</description>
+		</method>
+		<method name="sample">
+			<return type="Transform3D" />
+			<param index="0" name="entity" type="int" />
+			<param index="1" name="delta" type="float" default="0.0" />
+			<description>
+				Samples an entity and decays its presentation correction with delta. Call once per visible entity per frame. Missing entities return identity.
+			</description>
+		</method>
+		<method name="submit">
+			<return type="bool" />
+			<param index="0" name="entity" type="int" />
+			<param index="1" name="tick" type="int" />
+			<param index="2" name="pose" type="Transform3D" />
+			<param index="3" name="velocity" type="Vector3" />
+			<param index="4" name="discontinuity_epoch" type="int" default="-1" />
+			<param index="5" name="angular_velocity" type="Vector3" default="Vector3(0, 0, 0)" />
+			<description>
+				Accepts strictly increasing [param tick] values for a positive [param entity], with a finite [param pose], [param velocity] and world-space [param angular_velocity] in radians per second. Angular speed is bounded to 1000 radians per second. Ticks and explicit epochs must be exact integers up to 2^53 minus one. [param discontinuity_epoch] of -1 selects legacy behavior; a higher explicit epoch clears history/corrections, while lower epochs are rejected. Epoch changes do not permit the shared tick timeline to reverse. All entities must share the same authority tick timeline. Returns false for stale, invalid or capacity-exceeding samples.
+			</description>
+		</method>
+	</methods>
+</class>

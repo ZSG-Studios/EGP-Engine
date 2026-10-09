@@ -1,0 +1,11 @@
+config_version=5
+
+[application]
+config/name="EGP Trilingual Networking"
+run/main_scene="res://Main.tscn"
+
+[dotnet]
+project/assembly_name="NetInterop"
+
+[rendering]
+renderer/rendering_method="forward_plus"

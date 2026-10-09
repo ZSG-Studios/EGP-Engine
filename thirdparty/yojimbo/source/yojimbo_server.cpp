@@ -1,0 +1,370 @@
+/*
+    Yojimbo Client/Server Network Library.
+
+    Copyright © 2016 - 2026, Más Bandwidth LLC.
+
+    Redistribution and use in source and binary forms, with or without modification, are permitted provided that the following conditions are met:
+
+        1. Redistributions of source code must retain the above copyright notice, this list of conditions and the following disclaimer.
+
+        2. Redistributions in binary form must reproduce the above copyright notice, this list of conditions and the following disclaimer
+           in the documentation and/or other materials provided with the distribution.
+
+        3. Neither the name of the copyright holder nor the names of its contributors may be used to endorse or promote products derived
+           from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+    INCLUDING, BUT NOT LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+    DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+    SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY,
+    WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE
+    USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+*/
+
+#include "yojimbo_server.h"
+#include "yojimbo_connection.h"
+#include "yojimbo_adapter.h"
+#include "yojimbo_network_simulator.h"
+#include "yojimbo_address_conversion.h"
+#include "reliable.h"
+#include "netcode.h"
+
+namespace yojimbo
+{
+    Server::Server( Allocator & allocator, const uint8_t privateKey[], const Address & address, const ClientServerConfig & config, Adapter & adapter, double time )
+        : BaseServer( allocator, config, adapter, time )
+    {
+        yojimbo_assert( KeyBytes == NETCODE_KEY_BYTES );
+        yojimbo_assert( DefaultMaxConnectTokenLifetime == NETCODE_DEFAULT_MAX_CONNECT_TOKEN_LIFETIME );
+        memcpy( m_privateKey, privateKey, NETCODE_KEY_BYTES );
+        m_address = address;
+        m_boundAddress = address;
+        m_config = config;
+        m_server = NULL;
+        m_stopping = false;
+    }
+
+    Server::~Server()
+    {
+        // IMPORTANT: Please stop the server before destroying it!
+        yojimbo_assert( !m_server );
+    }
+
+    bool Server::Start( int maxClients )
+    {
+        yojimbo_assert( maxClients <= MaxClients );
+
+        if ( !BaseServer::Start( maxClients ) )
+            return false;
+
+        char addressString[MaxAddressLength];
+        m_address.ToString( addressString, MaxAddressLength );
+
+        struct netcode_server_config_t netcodeConfig;
+        netcode_default_server_config(&netcodeConfig);
+        netcodeConfig.protocol_id = m_config.protocolId;
+        memcpy(netcodeConfig.private_key, m_privateKey, NETCODE_KEY_BYTES);
+        netcodeConfig.allocator_context = &GetGlobalAllocator();
+        netcodeConfig.allocate_function = StaticAllocateFunction;
+        netcodeConfig.free_function     = StaticFreeFunction;
+        netcodeConfig.max_connect_token_lifetime = m_config.maxConnectTokenLifetime;
+        netcodeConfig.callback_context = this;
+        netcodeConfig.connect_disconnect_callback = StaticConnectDisconnectCallbackFunction;
+        netcodeConfig.send_loopback_packet_callback = StaticSendLoopbackPacketCallbackFunction;
+        const bool useCustomPacketIO = GetAdapter().UseCustomPacketIO();
+        if ( useCustomPacketIO )
+        {
+            netcodeConfig.override_send_and_receive = 1;
+            netcodeConfig.send_packet_override = StaticSendPacketOverride;
+            netcodeConfig.receive_packet_override = StaticReceivePacketOverride;
+        }
+
+        m_server = netcode_server_create(addressString, &netcodeConfig, GetTime());
+
+        if ( !m_server )
+        {
+            Stop();
+            return false;
+        }
+
+        netcode_server_start( m_server, maxClients );
+
+        if ( !useCustomPacketIO )
+            m_boundAddress.SetPort( netcode_server_get_port( m_server ) );
+
+        return true;
+    }
+
+    void Server::Stop()
+    {
+        // Stop-in-progress guard: netcode_server_stop below sends disconnect packets and fires
+        // OnServerClientDisconnected, so an adapter callback can call Stop from inside this
+        // teardown. That reentrant call must be a harmless no-op — the outer call completes the
+        // teardown exactly once. Without this, the inner call reaches BaseServer::Stop and
+        // destroys the global allocator while the netcode server (allocated from it) still lives.
+        if ( m_stopping )
+            return;
+        m_stopping = true;
+        if ( m_server )
+        {
+            m_boundAddress = m_address;
+            // Clear the member before stopping, so an adapter that calls Stop from inside a
+            // teardown-time SendPacket callback (disconnect packets sent by netcode_server_stop)
+            // can't re-enter here and stop/destroy the same netcode server twice.
+            // ConnectDisconnectCallbackFunction handles m_server being NULL during this window.
+            netcode_server_t * server = m_server;
+            m_server = NULL;
+            netcode_server_stop( server );
+            netcode_server_destroy( server );
+        }
+        BaseServer::Stop();
+        m_stopping = false;
+    }
+
+    void Server::DisconnectClient( int clientIndex )
+    {
+        yojimbo_assert( m_server );
+        // Record the kick, but only if no reason is set yet: when the disconnect comes from
+        // BaseServer::AdvanceTime, the specific connection error reason is already recorded
+        // and must not be overwritten with the generic "kicked".
+        if ( IsClientConnected( clientIndex ) && GetClientDisconnectReason( clientIndex ) == YOJIMBO_SERVER_CLIENT_DISCONNECT_REASON_NONE )
+        {
+            SetClientDisconnectReason( clientIndex, YOJIMBO_SERVER_CLIENT_DISCONNECT_REASON_KICKED );
+        }
+        netcode_server_disconnect_client( m_server, clientIndex );
+        ResetClient( clientIndex );
+    }
+
+    void Server::DisconnectAllClients()
+    {
+        yojimbo_assert( m_server );
+        const int maxClients = GetMaxClients();
+        for ( int i = 0; i < maxClients; ++i )
+        {
+            if ( IsClientConnected( i ) && GetClientDisconnectReason( i ) == YOJIMBO_SERVER_CLIENT_DISCONNECT_REASON_NONE )
+            {
+                SetClientDisconnectReason( i, YOJIMBO_SERVER_CLIENT_DISCONNECT_REASON_KICKED );
+            }
+        }
+        netcode_server_disconnect_all_clients( m_server );
+        for ( int i = 0; i < maxClients; ++i )
+        {
+            ResetClient( i );
+        }
+    }
+
+    void Server::SendPackets()
+    {
+        if ( m_server )
+        {
+            const int maxClients = GetMaxClients();
+            for ( int i = 0; i < maxClients; ++i )
+            {
+                if ( IsClientConnected( i ) )
+                {
+                    uint8_t * packetData = GetPacketBuffer();
+                    int packetBytes;
+                    uint16_t packetSequence = reliable_endpoint_next_packet_sequence( GetClientEndpoint(i) );
+                    if ( GetClientConnection(i).GeneratePacket( GetContext(), packetSequence, packetData, m_config.maxPacketSize, packetBytes ) )
+                    {
+                        reliable_endpoint_send_packet( GetClientEndpoint(i), packetData, packetBytes );
+                    }
+                }
+            }
+        }
+    }
+
+    void Server::ReceivePackets()
+    {
+        if ( m_server )
+        {
+            const int maxClients = GetMaxClients();
+            for ( int clientIndex = 0; clientIndex < maxClients; ++clientIndex )
+            {
+                while ( true )
+                {
+                    int packetBytes;
+                    uint64_t packetSequence;
+                    uint8_t * packetData = netcode_server_receive_packet( m_server, clientIndex, &packetBytes, &packetSequence );
+                    if ( !packetData )
+                        break;
+                    reliable_endpoint_receive_packet( GetClientEndpoint( clientIndex ), packetData, packetBytes );
+                    netcode_server_free_packet( m_server, packetData );
+                }
+            }
+        }
+    }
+
+    void Server::AdvanceTime( double time )
+    {
+        if ( m_server )
+        {
+            netcode_server_update( m_server, time );
+        }
+        BaseServer::AdvanceTime( time );
+        NetworkSimulator * networkSimulator = GetNetworkSimulator();
+        if ( networkSimulator && networkSimulator->IsActive() )
+        {
+            // Drain the simulator in fixed size batches, so stack usage here doesn't scale
+            // with maxSimulatorPackets. Each batch scans the simulator ring again, but the
+            // simulator is a development tool, not a production path.
+            const int MaxBatchPackets = 64;
+            uint8_t * packetData[MaxBatchPackets];
+            int packetBytes[MaxBatchPackets];
+            int to[MaxBatchPackets];
+            while ( true )
+            {
+                const int numPackets = networkSimulator->ReceivePackets( MaxBatchPackets, packetData, packetBytes, to );
+                if ( numPackets == 0 )
+                    break;
+                for ( int i = 0; i < numPackets; ++i )
+                {
+                    netcode_server_send_packet( m_server, to[i], packetData[i], packetBytes[i] );
+                    YOJIMBO_FREE( networkSimulator->GetAllocator(), packetData[i] );
+                }
+            }
+        }
+    }
+
+    bool Server::IsClientConnected( int clientIndex ) const
+    {
+        return netcode_server_client_connected( m_server, clientIndex ) != 0;
+    }
+
+    uint64_t Server::GetClientId( int clientIndex ) const
+    {
+        return netcode_server_client_id( m_server, clientIndex );
+    }
+
+    const uint8_t * Server::GetClientUserData( int clientIndex ) const
+    {
+        return (const uint8_t*)netcode_server_client_user_data( m_server, clientIndex );
+    }
+
+    netcode_address_t * Server::GetClientAddress( int clientIndex ) const
+    {
+        return netcode_server_client_address( m_server, clientIndex );
+    }
+
+    int Server::GetNumConnectedClients() const
+    {
+        return netcode_server_num_connected_clients( m_server );
+    }
+
+    void Server::ConnectLoopbackClient( int clientIndex, uint64_t clientId, const uint8_t * userData )
+    {
+        netcode_server_connect_loopback_client( m_server, clientIndex, clientId, userData );
+    }
+
+    void Server::DisconnectLoopbackClient( int clientIndex )
+    {
+        // Same recording rule as DisconnectClient: disconnecting a loopback client is a kick,
+        // and must not overwrite a more specific reason recorded before the disconnect.
+        if ( IsClientConnected( clientIndex ) && GetClientDisconnectReason( clientIndex ) == YOJIMBO_SERVER_CLIENT_DISCONNECT_REASON_NONE )
+        {
+            SetClientDisconnectReason( clientIndex, YOJIMBO_SERVER_CLIENT_DISCONNECT_REASON_KICKED );
+        }
+        netcode_server_disconnect_loopback_client( m_server, clientIndex );
+    }
+
+    bool Server::IsLoopbackClient( int clientIndex ) const
+    {
+        return netcode_server_client_loopback( m_server, clientIndex ) != 0;
+    }
+
+    void Server::ProcessLoopbackPacket( int clientIndex, const uint8_t * packetData, int packetBytes, uint64_t packetSequence )
+    {
+        netcode_server_process_loopback_packet( m_server, clientIndex, packetData, packetBytes, packetSequence );
+    }
+
+    void Server::TransmitPacketFunction( int clientIndex, uint16_t packetSequence, uint8_t * packetData, int packetBytes )
+    {
+        (void) packetSequence;
+        NetworkSimulator * networkSimulator = GetNetworkSimulator();
+        if ( networkSimulator && networkSimulator->IsActive() )
+        {
+            networkSimulator->SendPacket( clientIndex, packetData, packetBytes );
+        }
+        else
+        {
+            netcode_server_send_packet( m_server, clientIndex, packetData, packetBytes );
+        }
+    }
+
+    int Server::ProcessPacketFunction( int clientIndex, uint16_t packetSequence, uint8_t * packetData, int packetBytes )
+    {
+        return (int) GetClientConnection(clientIndex).ProcessPacket( GetContext(), packetSequence, packetData, packetBytes );
+    }
+
+    void Server::ConnectDisconnectCallbackFunction( int clientIndex, int connected )
+    {
+        if ( connected == 0 )
+        {
+            // If no reason was recorded before the transport-level disconnect (connection error,
+            // kick), ask netcode why: the client either timed out or cleanly disconnected.
+            // Record it before the adapter callback, so OnServerClientDisconnected can query it.
+            if ( GetClientDisconnectReason( clientIndex ) == YOJIMBO_SERVER_CLIENT_DISCONNECT_REASON_NONE )
+            {
+                // m_server is NULL while Stop tears the netcode server down (cleared before
+                // netcode_server_stop, see Server::Stop). Disconnects delivered during that
+                // window are always netcode SERVER_DISCONNECT, never TIMED_OUT.
+                const int netcodeReason = m_server ? netcode_server_client_disconnect_reason( m_server, clientIndex )
+                                                   : NETCODE_SERVER_CLIENT_DISCONNECT_REASON_SERVER_DISCONNECT;
+                SetClientDisconnectReason( clientIndex, netcodeReason == NETCODE_SERVER_CLIENT_DISCONNECT_REASON_TIMED_OUT
+                                                            ? YOJIMBO_SERVER_CLIENT_DISCONNECT_REASON_TIMED_OUT
+                                                            : YOJIMBO_SERVER_CLIENT_DISCONNECT_REASON_DISCONNECTED );
+            }
+            GetAdapter().OnServerClientDisconnected( clientIndex );
+            reliable_endpoint_reset( GetClientEndpoint( clientIndex ) );
+            GetClientConnection( clientIndex ).Reset();
+            NetworkSimulator * networkSimulator = GetNetworkSimulator();
+            if ( networkSimulator && networkSimulator->IsActive() )
+            {
+                networkSimulator->DiscardClientPackets( clientIndex );
+            }
+        }
+        else
+        {
+            // This slot now belongs to a new client: clear any disconnect reason left behind by
+            // the previous occupant of the slot.
+            SetClientDisconnectReason( clientIndex, YOJIMBO_SERVER_CLIENT_DISCONNECT_REASON_NONE );
+            GetAdapter().OnServerClientConnected( clientIndex );
+        }
+    }
+
+    void Server::SendLoopbackPacketCallbackFunction( int clientIndex, const uint8_t * packetData, int packetBytes, uint64_t packetSequence )
+    {
+        GetAdapter().ServerSendLoopbackPacket( clientIndex, packetData, packetBytes, packetSequence );
+    }
+
+    void Server::StaticConnectDisconnectCallbackFunction( void * context, int clientIndex, int connected )
+    {
+        Server * server = (Server*) context;
+        server->ConnectDisconnectCallbackFunction( clientIndex, connected );
+    }
+
+    void Server::StaticSendLoopbackPacketCallbackFunction( void * context, int clientIndex, const uint8_t * packetData, int packetBytes, uint64_t packetSequence )
+    {
+        Server * server = (Server*) context;
+        server->SendLoopbackPacketCallbackFunction( clientIndex, packetData, packetBytes, packetSequence );
+    }
+
+    void Server::StaticSendPacketOverride( void * context, netcode_address_t * to, const uint8_t * packetData, int packetBytes )
+    {
+        Server * server = (Server*) context;
+        const Address address = AddressFromNetcode( *to );
+        if ( address.IsValid() )
+            server->GetAdapter().SendPacket( address, packetData, packetBytes );
+    }
+
+    int Server::StaticReceivePacketOverride( void * context, netcode_address_t * from, uint8_t * packetData, int maxPacketBytes )
+    {
+        Server * server = (Server*) context;
+        Address address;
+        const int packetBytes = server->GetAdapter().ReceivePacket( address, packetData, maxPacketBytes );
+        if ( packetBytes <= 0 || packetBytes > maxPacketBytes || !AddressToNetcode( address, *from ) )
+            return 0;
+        return packetBytes;
+    }
+}
