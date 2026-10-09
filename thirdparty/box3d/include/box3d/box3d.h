@@ -199,6 +199,9 @@ B3_API void b3World_Explode( b3WorldId worldId, const b3ExplosionDef* explosionD
 /// @note Advanced feature
 B3_API void b3World_SetContactTuning( b3WorldId worldId, float hertz, float dampingRatio, float contactSpeed );
 
+/// EGP: read the contact tuning set by b3World_SetContactTuning.
+B3_API void b3World_GetContactTuning( b3WorldId worldId, float* hertz, float* dampingRatio, float* contactSpeed );
+
 /// Set the contact point recycling distance. Setting this to zero disables contact point recycling.
 /// Usually in meters.
 B3_API void b3World_SetContactRecycleDistance( b3WorldId worldId, float recycleDistance );
@@ -261,6 +264,9 @@ B3_API void b3World_DumpShapeBounds( b3WorldId worldId, b3BodyType type );
 
 /// This is for internal testing
 B3_API void b3World_EnableSpeculative( b3WorldId worldId, bool flag );
+
+/// EGP: is speculative collision enabled?
+B3_API bool b3World_IsSpeculativeEnabled( b3WorldId worldId );
 
 /**
  * @defgroup recording Recording

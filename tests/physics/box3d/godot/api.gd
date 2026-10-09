@@ -8,6 +8,7 @@ const RAMP := 3
 const COMPOUND := 10
 const HULL := 11
 const SENSOR := 12
+const BAKED := 13
 const CHAIN := 20
 const JOINT_TYPES := ["distance", "spherical", "prismatic", "motor", "revolute", "weld", "wheel", "filter", "parallel", "generic"]
 
@@ -29,7 +30,17 @@ func build(world) -> void:
 			heights.append(0.2 * sin(x) * cos(z))
 	require(world.queue_create_body(FIELD, 0, {"type": "static", "position": Vector3(40, 0, 0)}, [{"type": "height_field", "heights": heights, "count_x": 5, "count_z": 5, "scale": Vector3(2, 1, 2)}]) == OK, "height field failed")
 	var ramp := PackedVector3Array([Vector3(-3, 0, -3), Vector3(3, 0, -3), Vector3(3, 2, 3), Vector3(-3, 2, 3)])
-	require(world.queue_create_body(RAMP, 0, {"type": "static", "position": Vector3(-20, 0, 0)}, [{"type": "mesh", "points": ramp, "indices": PackedInt32Array([0, 2, 1, 0, 3, 2])}]) == OK, "mesh failed")
+	# Per-triangle materials: the second triangle uses table entry 1.
+	require(world.queue_create_body(RAMP, 0, {"type": "static", "position": Vector3(-20, 0, 0)}, [{"type": "mesh", "points": ramp, "indices": PackedInt32Array([0, 2, 1, 0, 3, 2]),
+			"friction": 0.6, "materials": [{"friction": 0.05, "restitution": 0.2}], "material_indices": PackedByteArray([0, 1])}]) == OK, "mesh failed")
+	# Baked compound: many children populate the broad-phase as one static shape.
+	var hull_points := PackedVector3Array([Vector3(-0.4, 0, -0.4), Vector3(0.4, 0, -0.4), Vector3(0, 0, 0.5), Vector3(0, 0.7, 0)])
+	require(world.queue_create_body(BAKED, 0, {"type": "static", "position": Vector3(20, 0, -10)}, [{"type": "compound", "children": [
+			{"type": "box", "half_extents": Vector3(2, 0.25, 2), "center": Vector3(0, 0.25, 0), "friction": 0.9},
+			{"type": "sphere", "radius": 0.5, "center": Vector3(1, 1, 0)},
+			{"type": "capsule", "radius": 0.2, "half_height": 0.6, "center": Vector3(-1, 1, 0), "rotation": Quaternion(Vector3.FORWARD, 1.2)},
+			{"type": "hull", "points": hull_points, "center": Vector3(0, 0.5, 1)},
+			{"type": "mesh", "points": ramp, "indices": PackedInt32Array([0, 2, 1]), "scale": Vector3(0.3, 0.3, 0.3), "center": Vector3(0, 0.6, -1)}]}]) == OK, "compound failed")
 	require(world.queue_create_body(COMPOUND, 0, {"type": "dynamic", "position": Vector3(0, 3, 0), "angular_damping": 0.5, "bullet": true},
 			[{"type": "capsule", "radius": 0.4, "half_height": 0.5, "contact_events": true, "hit_events": true, "sensor_events": true},
 			{"type": "sphere", "radius": 0.3, "center": Vector3(0, 1.2, 0), "density": 0.5, "sensor_events": true}]) == OK, "compound failed")
@@ -67,7 +78,8 @@ func drive(world, tick: int) -> void:
 		require(world.queue_set_shape(COMPOUND, 2, 1, {"friction": 0.1, "density": 0.8}) == OK, "set shape failed")
 		require(world.queue_add_shape(HULL, 2, 4, {"type": "box", "half_extents": Vector3(0.2, 0.2, 0.2), "center": Vector3(0, 1.0, 0), "rotation": Quaternion(Vector3.FORWARD, 0.3)}) == OK, "add shape failed")
 	if tick == 30:
-		require(world.queue_set_world(0, {"gravity": Vector3(0, -12, 0), "contact_hertz": 40.0, "contact_damping_ratio": 8.0, "contact_speed": 2.5}) == OK, "set world failed")
+		require(world.queue_set_world(0, {"gravity": Vector3(0, -12, 0), "contact_hertz": 40.0, "speculative": false}) == OK, "set world failed")
+		require(world.queue_set_shape(RAMP, 2, 0, {"friction": 0.9}, 1) == OK, "set mesh material failed")
 		require(world.queue_set_joint(100 + JOINT_TYPES.find("revolute"), 1, {"motor_speed": -1.0}) == OK, "set joint failed")
 		require(world.queue_set_body(HULL, 3, {"gravity_scale": 0.5, "lock_angular": Vector3(1, 0, 1)}) == OK, "set body failed")
 	if tick == 40:
@@ -85,15 +97,32 @@ func _initialize() -> void:
 	var twin := EGPBox3DWorld.new()
 	build(world)
 	build(twin)
-	require(world.get_body_count() == 6 + JOINT_TYPES.size() * 2, "body count")
+	require(world.get_body_count() == 7 + JOINT_TYPES.size() * 2, "body count")
 	require(world.get_joint_count() == JOINT_TYPES.size(), "joint count")
 	# Rejections.
 	require(world.queue_set_body(COMPOUND, 9, {"no_such_field": 1.0}) != OK, "unknown field accepted")
-	require(world.queue_set_world(9, {"contact_hertz": 30.0}) != OK, "partial contact tuning accepted")
+	require(world.queue_set_body(COMPOUND, 9, {"linear_damping": -1.0}) != OK, "negative damping accepted")
+	require(world.queue_set_shape(COMPOUND, 9, 0, {"friction": -0.5}) != OK, "negative friction accepted")
+	require(world.queue_joint(900, 9, "revolute", COMPOUND, HULL, {"enable_limit": true, "lower_angle": 1.0, "upper_angle": -1.0}) != OK, "inverted limits accepted")
+	require(world.queue_joint(901, 9, "distance", COMPOUND, HULL, {"length": 0.0}) != OK, "zero length accepted")
+	require(world.queue_create_body(98, 9, {"type": "static"}, [{"type": "compound", "sensor": true, "children": [{"type": "sphere"}]}]) != OK, "compound sensor accepted")
 	require(world.queue_create_body(99, 9, {}, [{"type": "box", "half_extents": Vector3(-1, 1, 1)}]) != OK, "negative box accepted")
 	require(world.queue_set_shape(COMPOUND, 9, 7, {"friction": 0.5}) == OK, "missing shape not queued")
 	require(world.apply_queued_commands() == ERR_INVALID_DATA, "missing shape batch applied")
 	world.clear_pending_commands()
+	# Batch-level rules: static-only shapes, compound bodies keep their type, limits merge
+	# with the joint's current values, material indices stay inside the table.
+	var batch_rejections := [
+		func(): return world.queue_add_shape(COMPOUND, 9, 5, {"type": "height_field", "heights": PackedFloat32Array([0, 0, 0, 0]), "count_x": 2, "count_z": 2}),
+		func(): return world.queue_set_body(BAKED, 9, {"type": "dynamic"}),
+		func(): return world.queue_set_joint(100 + JOINT_TYPES.find("revolute"), 9, {"lower_angle": 0.9}),
+		func(): return world.queue_set_shape(RAMP, 9, 0, {"friction": 0.3}, 2),
+		func(): return world.queue_set_shape(BAKED, 9, 0, {"friction": 0.3}),
+	]
+	for queue_rejected in batch_rejections:
+		require(queue_rejected.call() == OK, "batch rule command not queued")
+		require(world.apply_queued_commands() == ERR_INVALID_DATA, "batch rule not enforced")
+		world.clear_pending_commands()
 
 	var hashes: Array[String] = []
 	var snapshot := PackedByteArray()
@@ -124,7 +153,13 @@ func _initialize() -> void:
 	require(world.get_body(HULL).shapes == PackedInt32Array([0]), "destroyed shape still listed")
 	require(is_equal_approx(world.get_body(HULL).gravity_scale, 0.5), "gravity scale readback")
 	require(is_equal_approx(world.get_shape(COMPOUND, 1).friction, 0.1), "shape friction readback")
-	require(world.get_world().gravity.is_equal_approx(Vector3(0, -12, 0)), "world gravity readback")
+	var settings: Dictionary = world.get_world()
+	require(settings.gravity.is_equal_approx(Vector3(0, -12, 0)), "world gravity readback")
+	require(is_equal_approx(settings.contact_hertz, 40.0) and settings.contact_damping_ratio > 0.0 and not settings.speculative, "partial contact tuning readback")
+	var ramp_shape: Dictionary = world.get_shape(RAMP, 0)
+	require(ramp_shape.type == "mesh" and ramp_shape.material_count == 2 and is_equal_approx(ramp_shape.materials[0].friction, 0.9), "mesh material table readback")
+	require(world.get_shape(BAKED, 0).type == "compound", "compound readback")
+	require(world.get_joint(100 + JOINT_TYPES.find("wheel")).has("angular_separation"), "wheel angular separation missing")
 	for i in JOINT_TYPES.size():
 		var joint: Dictionary = world.get_joint(100 + i)
 		require(joint.get("type", "") == JOINT_TYPES[i], "joint type readback " + JOINT_TYPES[i])
@@ -137,6 +172,8 @@ func _initialize() -> void:
 	require(inside.size() >= 2 and inside.size() % 2 == 0, "overlap aabb")
 	var touching: PackedInt64Array = world.overlap_shape({"type": "sphere", "radius": 1.0}, Vector3(0, 0.2, 0))
 	require(touching.has(GROUND), "overlap shape")
+	var on_compound: Dictionary = world.cast_rays(PackedVector3Array([Vector3(20, 5, -10)]), PackedVector3Array([Vector3(0, -10, 0)]))
+	require(on_compound.hit[0] == 1 and on_compound.entity[0] == BAKED, "ray hits baked compound")
 	var sweep: Dictionary = world.cast_shape({"type": "box", "half_extents": Vector3(0.3, 0.3, 0.3)}, Vector3(5, 5, -5), Quaternion(), Vector3(0, -10, 0))
 	require(sweep.hit and sweep.entity == GROUND, "cast shape")
 

@@ -158,26 +158,34 @@
   },
   "egp_patches": [
     {
-      "name": "physics-server-joints-v1",
-      "path": "modules/box3d/upstream_patches/physics-server-joints.patch",
-      "sha256": "6043b01f3042306433cf0c926e15cc8e9bc62e6f527c40274fd640cb966d8581",
-      "purpose": "Cone spans through pi and native per-axis Generic6DOF limits, motors, springs, recording and warm starts.",
+      "name": "egp-box3d-v2",
+      "path": "modules/box3d/upstream_patches/egp-box3d.patch",
+      "sha256": "5e27259cc0beb30bf7bbbeb8df47d877462b32c168abaf99bb3fef02a1db751d",
+      "purpose": "Cone spans through pi and native per-axis Generic6DOF limits, motors, springs, recording and warm starts; wheel-joint angular separation (upstream asserts); world contact tuning and speculative getters for complete readback. Getters only beyond v1: simulation trajectories are unchanged.",
       "files": {
         "include/box3d/box3d.h": {
           "upstream_sha256": "0d95999f7c4dd98467fa7a6fd5691d20a88e1ba19edc45a98d389c415891a4ed",
-          "patched_sha256": "6fe005670f4f7348656bb7b40b37b6d699c159b6ef3328c14ce26c13c9e58ab8"
+          "patched_sha256": "2dae0f615e3b6d54b316805a0cc7e414689778842fc1a518c47e0d4a351d72f0"
         },
         "include/box3d/types.h": {
           "upstream_sha256": "825f0747ad024875a8f70344097ac871bc5aa8816e8bbf879d3d439fdeb19d5e",
           "patched_sha256": "fbe5fe7aafd950e52c4dfcc489d15e0ec06bb6795dc1b94e641b670be7ae8b82"
         },
+        "src/generic_joint.c": {
+          "upstream_sha256": null,
+          "patched_sha256": "efb68b1d1fe4998ff920e80088ede088fee89f26e372e432b64f56072ba95a84"
+        },
         "src/joint.c": {
           "upstream_sha256": "7ba2f12e489722f108d628b2530822f6c60c61e4646c8e954ad5670fcbef67ac",
-          "patched_sha256": "8353172f23dc53c93637031818ff60483acee24d189146e5f87b85f50096bc2e"
+          "patched_sha256": "2feb4948f0a6ec55ef54793dc1250144f18319011ee2185765d1adae2fd73575"
         },
         "src/joint.h": {
           "upstream_sha256": "9a2e325d3e3ad2d1504bb9826d9489f30dbaa98503d2fd14eb59b5734f1d5cc8",
           "patched_sha256": "ee481681c369b19ab95d0ab7eb2d3a7c060ef67993e311a3fff00a0167506e27"
+        },
+        "src/physics_world.c": {
+          "upstream_sha256": "2e1f951a9d3c30c8cf8299876e2c3c0ba5e1c3c16d9854bde5979b15295d9327",
+          "patched_sha256": "c6dd8ed627fe6f7e7c2da2dc735e0445d7e9c680561c95dc4b69dee04121008e"
         },
         "src/recording.h": {
           "upstream_sha256": "2f3e1a8e33c32e4d99c5351ffb0abeaab358c995b2849066f2660af5197a6c15",
@@ -194,10 +202,6 @@
         "src/spherical_joint.c": {
           "upstream_sha256": "bd9e5af8ce312cc255e75a7875bab3ac2b8de77fe701336edb7aae59b2a58ada",
           "patched_sha256": "d67c90c63d4f504176dbebebb403d48f94a569abe3bf6e413007e188c6bfe730"
-        },
-        "src/generic_joint.c": {
-          "upstream_sha256": null,
-          "patched_sha256": "efb68b1d1fe4998ff920e80088ede088fee89f26e372e432b64f56072ba95a84"
         }
       }
     }

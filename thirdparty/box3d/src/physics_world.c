@@ -2215,6 +2215,22 @@ float b3World_GetMaximumLinearSpeed( b3WorldId worldId )
 	return world->maxLinearSpeed;
 }
 
+// EGP
+void b3World_GetContactTuning( b3WorldId worldId, float* hertz, float* dampingRatio, float* contactSpeed )
+{
+	b3World* world = b3GetWorldFromId( worldId );
+	*hertz = world->contactHertz;
+	*dampingRatio = world->contactDampingRatio;
+	*contactSpeed = world->contactSpeed;
+}
+
+// EGP
+bool b3World_IsSpeculativeEnabled( b3WorldId worldId )
+{
+	b3World* world = b3GetWorldFromId( worldId );
+	return world->enableSpeculative;
+}
+
 b3Profile b3World_GetProfile( b3WorldId worldId )
 {
 	b3World* world = b3GetUnlockedWorldFromId( worldId );

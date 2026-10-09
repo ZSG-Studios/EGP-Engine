@@ -1467,9 +1467,24 @@ float b3Joint_GetAngularSeparation( b3JointId jointId )
 		}
 
 		case b3_wheelJoint:
-			// todo
-			B3_ASSERT( false );
-			return 0.0f;
+		{
+			// EGP: error of the wheel's collinearity constraint, measured in the joint frames.
+			// Steering frees rotation about the suspension axis (frame A x), so only the spin
+			// axis (frame B z) must stay perpendicular to it; otherwise only spin is free.
+			b3Quat qA = b3MulQuat( xfA.q, base->localFrameA.q );
+			b3Quat qB = b3MulQuat( xfB.q, base->localFrameB.q );
+			if ( base->wheelJoint.enableSteering )
+			{
+				b3Matrix3 matrixA = b3MakeMatrixFromQuat( qA );
+				b3Matrix3 matrixB = b3MakeMatrixFromQuat( qB );
+				float c = b3ClampFloat( b3Dot( matrixA.cx, matrixB.cz ), -1.0f, 1.0f );
+				return b3AbsFloat( b3Atan2( c, sqrtf( 1.0f - c * c ) ) );
+			}
+
+			b3Quat frameQ = b3InvMulQuat( qA, qB );
+			frameQ.v.z = 0.0f;
+			return b3GetQuatAngle( frameQ );
+		}
 
 		default:
 			B3_ASSERT( false );

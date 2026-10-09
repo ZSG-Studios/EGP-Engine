@@ -62,15 +62,17 @@ bool joint_type_from_name(const char *p_name, JointType &r_type);
 const char *joint_type_name(JointType p_type);
 b3JointType box3d_joint_type(JointType p_type);
 
-// Shape geometry. Every shape takes a local offset (center) and rotation. Mesh and
-// height-field data are owned by the world that created the shape (Box3D references
-// them); hulls are copied by Box3D.
+// Shape geometry. Every shape takes a local offset (center) and rotation. Mesh,
+// height-field and baked compound data are owned by the world that created the shape
+// (Box3D references them); hulls are copied by Box3D. Height fields and compounds are
+// static only.
 enum class ShapeType : uint8_t { SPHERE,
 	CAPSULE,
 	BOX,
 	HULL,
 	MESH,
-	HEIGHT_FIELD };
+	HEIGHT_FIELD,
+	COMPOUND };
 bool shape_type_from_name(const char *p_name, ShapeType &r_type);
 const char *shape_type_name(ShapeType p_type);
 struct Geometry {
@@ -92,13 +94,26 @@ struct Geometry {
 	std::vector<uint8_t> holes;
 	int32_t count_x = 0;
 	int32_t count_z = 0;
+	// Per-triangle (mesh) or per-cell (height field) material: an index into the shape's
+	// material table, where 0 is the shape's own material and 1.. are extra_materials.
+	std::vector<uint8_t> material_indices;
+	std::vector<b3SurfaceMaterial> extra_materials;
+	// Baked compound (static): sphere, capsule, box, hull and mesh children, each with
+	// its own placement and material (mesh children may also carry per-triangle tables).
+	std::vector<Geometry> children;
+	b3SurfaceMaterial material = b3DefaultSurfaceMaterial();
 };
+constexpr size_t MAX_COMPOUND_CHILDREN = 4096;
 bool valid_geometry(const Geometry &p_geometry);
+bool valid_material(const b3SurfaceMaterial &p_material);
+// Height fields and compounds require a static body (and compounds a non-sensor shape).
+bool static_only(ShapeType p_type);
 
 // Owns Box3D geometry data that shapes reference for the lifetime of a world.
 class GeometryStore {
 	std::vector<b3MeshData *> meshes;
 	std::vector<b3HeightFieldData *> height_fields;
+	std::vector<b3CompoundData *> compounds;
 
 public:
 	GeometryStore() = default;
@@ -107,7 +122,7 @@ public:
 	~GeometryStore() { clear(); }
 	// Only call once no world references the data any more.
 	void clear();
-	b3ShapeId create_shape(b3BodyId p_body, const b3ShapeDef &p_def, const Geometry &p_geometry);
+	b3ShapeId create_shape(b3BodyId p_body, b3ShapeDef p_def, const Geometry &p_geometry);
 };
 
 // Shape-cast proxy (point cloud plus radius) for sphere, capsule, box and hull
@@ -127,12 +142,23 @@ void apply_body(b3BodyId p_body, const Props &p_props, float p_step);
 // Body fields Box3D has no definition slot for (mass override, hit events, kinematic
 // target); applied right after the body's shapes are created.
 void apply_body_extras(b3BodyId p_body, const Props &p_props, float p_step);
-void apply_shape(b3ShapeId p_shape, const Props &p_props);
+// p_material_index >= 0 changes one entry of a mesh or height field's material table
+// (0 is the shape's own material) instead of the shape material.
+void apply_shape(b3ShapeId p_shape, const Props &p_props, int32_t p_material_index = -1);
 void apply_joint(b3JointId p_joint, const Props &p_props);
 
-// Finite values, unit quaternions, known ids and complete groups (contact tuning is set
-// as hertz, damping ratio and speed together).
+// Finite values, unit quaternions, known ids and every range Box3D asserts on
+// (non-negative stiffness, damping, limits and thresholds; angles; positive lengths).
 bool validate_props(FieldSet p_set, const Props &p_props);
+// Merged lower/upper pairs (props over the joint's current values, or over the type's
+// defaults when p_existing is null) stay ordered.
+bool joint_limits_ordered(JointType p_type, const b3JointId *p_existing, const Props &p_props);
+// Queries used by batch validation.
+bool props_body_type(const Props &p_props, int &r_type);
+bool props_sensor(const Props &p_props);
+bool props_material(const Props &p_props);
+// A material from shape fields over a base (compound children, extra materials).
+b3SurfaceMaterial material_from(const Props &p_props, b3SurfaceMaterial p_base);
 
 // Readback: every readable field plus derived state (mass, joint angles, forces).
 struct Value {
@@ -145,6 +171,7 @@ using Values = std::vector<Value>;
 void read_world(b3WorldId p_world, Values &r_values);
 void read_body(b3BodyId p_body, Values &r_values);
 void read_shape(b3ShapeId p_shape, Values &r_values);
+void read_material(const b3SurfaceMaterial &p_material, Values &r_values);
 void read_joint(b3JointId p_joint, Values &r_values);
 
 } // namespace egp::box3d

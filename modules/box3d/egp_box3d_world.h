@@ -98,7 +98,7 @@ public:
 	Error queue_create_body(int64_t p_entity, int64_t p_sequence, const Dictionary &p_body, const TypedArray<Dictionary> &p_shapes);
 	Error queue_set_body(int64_t p_entity, int64_t p_sequence, const Dictionary &p_fields);
 	Error queue_add_shape(int64_t p_entity, int64_t p_sequence, int64_t p_shape_index, const Dictionary &p_shape);
-	Error queue_set_shape(int64_t p_entity, int64_t p_sequence, int64_t p_shape_index, const Dictionary &p_fields);
+	Error queue_set_shape(int64_t p_entity, int64_t p_sequence, int64_t p_shape_index, const Dictionary &p_fields, int64_t p_material_index = -1);
 	Error queue_destroy_shape(int64_t p_entity, int64_t p_sequence, int64_t p_shape_index);
 	Error queue_joint(int64_t p_joint, int64_t p_sequence, const String &p_type, int64_t p_body_a, int64_t p_body_b, const Dictionary &p_fields);
 	Error queue_set_joint(int64_t p_joint, int64_t p_sequence, const Dictionary &p_fields);

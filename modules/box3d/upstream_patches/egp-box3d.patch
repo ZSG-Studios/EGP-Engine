@@ -1,6 +1,28 @@
+diff --git a/include/box3d/box3d.h b/include/box3d/box3d.h
+index 7385973..65cb949 100644
 --- a/include/box3d/box3d.h
 +++ b/include/box3d/box3d.h
-@@ -1629,6 +1629,15 @@
+@@ -199,6 +199,9 @@ B3_API void b3World_Explode( b3WorldId worldId, const b3ExplosionDef* explosionD
+ /// @note Advanced feature
+ B3_API void b3World_SetContactTuning( b3WorldId worldId, float hertz, float dampingRatio, float contactSpeed );
+ 
++/// EGP: read the contact tuning set by b3World_SetContactTuning.
++B3_API void b3World_GetContactTuning( b3WorldId worldId, float* hertz, float* dampingRatio, float* contactSpeed );
++
+ /// Set the contact point recycling distance. Setting this to zero disables contact point recycling.
+ /// Usually in meters.
+ B3_API void b3World_SetContactRecycleDistance( b3WorldId worldId, float recycleDistance );
+@@ -262,6 +265,9 @@ B3_API void b3World_DumpShapeBounds( b3WorldId worldId, b3BodyType type );
+ /// This is for internal testing
+ B3_API void b3World_EnableSpeculative( b3WorldId worldId, bool flag );
+ 
++/// EGP: is speculative collision enabled?
++B3_API bool b3World_IsSpeculativeEnabled( b3WorldId worldId );
++
+ /**
+  * @defgroup recording Recording
+  * @brief Record and replay world state for debugging.
+@@ -1629,6 +1635,15 @@ B3_API float b3SphericalJoint_GetMaxMotorTorque( b3JointId jointId );
  
  /// Create a weld joint
  /// @see b3WeldJointDef for details
@@ -16,9 +38,11 @@
  B3_API b3JointId b3CreateWeldJoint( b3WorldId worldId, const b3WeldJointDef* def );
  
  /// Set the weld joint linear stiffness in Hertz. 0 is rigid.
+diff --git a/include/box3d/types.h b/include/box3d/types.h
+index 20c9745..6fd1b1e 100644
 --- a/include/box3d/types.h
 +++ b/include/box3d/types.h
-@@ -624,6 +624,8 @@
+@@ -624,6 +624,8 @@ typedef enum b3JointType
  	b3_sphericalJoint,
  	b3_weldJoint,
  	b3_wheelJoint,
@@ -27,251 +51,9 @@
  } b3JointType;
  
  /// Base joint definition used by all joint types. The local frames are measured from the
---- a/src/CMakeLists.txt
-+++ b/src/CMakeLists.txt
-@@ -42,6 +42,7 @@
- 	island.c
- 	island.h
- 	joint.c
-+	generic_joint.c
- 	joint.h
- 	manifold.c
- 	manifold.h
---- a/src/joint.c
-+++ b/src/joint.c
-@@ -626,7 +626,7 @@
- b3JointId b3CreateSphericalJoint( b3WorldId worldId, const b3SphericalJointDef* def )
- {
- 	B3_CHECK_JOINT_DEF( def );
--	B3_ASSERT( 0.0f <= def->coneAngle && def->coneAngle <= 0.99f * B3_PI );
-+	B3_ASSERT( 0.0f <= def->coneAngle && def->coneAngle <= B3_PI );
- 	B3_ASSERT( b3IsValidQuat( def->targetRotation ) );
- 
- 	b3World* world = b3GetUnlockedWorldFromId( worldId );
-@@ -643,7 +643,7 @@
- 	joint->sphericalJoint.hertz = def->hertz;
- 	joint->sphericalJoint.dampingRatio = def->dampingRatio;
- 	joint->sphericalJoint.targetRotation = def->targetRotation;
--	joint->sphericalJoint.coneAngle = b3ClampFloat( def->coneAngle, 0.0f, 0.5f * B3_PI );
-+	joint->sphericalJoint.coneAngle = b3ClampFloat( def->coneAngle, 0.0f, B3_PI );
- 
- 	float lowerAngle = b3MinFloat( def->lowerTwistAngle, def->upperTwistAngle );
- 	float upperAngle = b3MaxFloat( def->lowerTwistAngle, def->upperTwistAngle );
-@@ -660,6 +660,30 @@
- 	b3JointId jointId = { joint->jointId + 1, world->worldId, pair.joint->generation };
- 	B3_REC_CREATE( world, CreateSphericalJoint, jointId, worldId, *def );
- 	return jointId;
-+}
-+
-+b3JointId b3CreateGenericJoint( b3WorldId worldId, const b3WeldJointDef* def )
-+{
-+	B3_CHECK_JOINT_DEF( def );
-+	b3World* world = b3GetUnlockedWorldFromId( worldId );
-+	if ( world == NULL ) { return b3_nullJointId; }
-+	b3JointPair pair = b3CreateJoint( world, &def->base, b3_genericJoint );
-+	b3GenericJoint* joint = &pair.jointSim->genericJoint;
-+	joint->targetRotation = b3Quat_identity;
-+	for ( int i = 0; i < 3; ++i )
-+	{
-+		joint->flags[i][0] = true; joint->flags[i][1] = true;
-+		joint->parameters[i][2] = 0.7f; joint->parameters[i][3] = 0.5f;
-+		joint->parameters[i][4] = 1.0f; joint->parameters[i][6] = 0.0f;
-+		joint->parameters[i][8] = 0.01f; joint->parameters[i][12] = 0.5f;
-+		joint->parameters[i][13] = 1.0f; joint->parameters[i][15] = 0.0f;
-+		joint->parameters[i][16] = 0.5f; joint->parameters[i][18] = 0.0f;
-+		joint->parameters[i][20] = 0.01f;
-+		joint->parameters[i][22] = FLT_MAX; joint->parameters[i][23] = FLT_MAX;
-+	}
-+	b3JointId id = { pair.jointSim->jointId + 1, world->worldId, pair.joint->generation };
-+	B3_REC_CREATE( world, CreateGenericJoint, id, worldId, *def );
-+	return id;
- }
- 
- b3JointId b3CreateWeldJoint( b3WorldId worldId, const b3WeldJointDef* def )
-@@ -1024,6 +1048,11 @@
- 
- 	switch ( sim->type )
- 	{
-+		case b3_genericJoint:
-+			linearImpulse = b3Length( sim->genericJoint.reactionForce );
-+			angularImpulse = b3Length( sim->genericJoint.reactionTorque );
-+			break;
-+
- 		case b3_parallelJoint:
- 		{
- 			b3ParallelJoint* joint = &sim->parallelJoint;
-@@ -1155,6 +1184,8 @@
- 		case b3_sphericalJoint:
- 			return b3GetSphericalJointForce( world, base );
- 
-+		case b3_genericJoint:
-+			return b3MulSV( world->inv_h, base->genericJoint.reactionForce );
- 		case b3_weldJoint:
- 			return b3GetWeldJointForce( world, base );
- 
-@@ -1194,6 +1225,8 @@
- 		case b3_sphericalJoint:
- 			return b3GetSphericalJointTorque( world, base );
- 
-+		case b3_genericJoint:
-+			return b3MulSV( world->inv_h, base->genericJoint.reactionTorque );
- 		case b3_weldJoint:
- 			return b3GetWeldJointTorque( world, base );
- 
-@@ -1235,6 +1268,8 @@
- 
- 	switch ( joint->type )
- 	{
-+		case b3_genericJoint:
-+			return b3GetGenericJointSeparation( base, xfA, xfB, false );
- 		case b3_parallelJoint:
- 			return 0.0f;
- 
-@@ -1357,6 +1392,8 @@
- 
- 	switch ( joint->type )
- 	{
-+		case b3_genericJoint:
-+			return b3GetGenericJointSeparation( base, xfA, xfB, true );
- 		case b3_parallelJoint:
- 		{
- 			// Remove hinge angle
-@@ -1514,6 +1551,10 @@
- 			b3PrepareSphericalJoint( joint, context );
- 			break;
- 
-+		case b3_genericJoint:
-+			b3PrepareGenericJoint( joint, context );
-+			break;
-+
- 		case b3_weldJoint:
- 			b3PrepareWeldJoint( joint, context );
- 			break;
-@@ -1558,6 +1599,10 @@
- 			b3WarmStartSphericalJoint( joint, context );
- 			break;
- 
-+		case b3_genericJoint:
-+			b3WarmStartGenericJoint( joint, context );
-+			break;
-+
- 		case b3_weldJoint:
- 			b3WarmStartWeldJoint( joint, context );
- 			break;
-@@ -1602,6 +1647,10 @@
- 
- 		case b3_sphericalJoint:
- 			b3SolveSphericalJoint( joint, context, useBias );
-+			break;
-+
-+		case b3_genericJoint:
-+			b3SolveGenericJoint( joint, context, useBias );
- 			break;
- 
- 		case b3_weldJoint:
---- a/src/joint.h
-+++ b/src/joint.h
-@@ -304,6 +304,27 @@
- 	bool enableSteeringMotor;
- } b3WheelJoint;
- 
-+struct b3JointSim;
-+
-+// EGP generic constraint state is POD so native world seeds preserve all impulses.
-+typedef struct b3GenericJoint
-+{
-+	float parameters[3][24];
-+	bool flags[3][6];
-+	b3Quat targetRotation;
-+	float lowerImpulse[6], upperImpulse[6], motorImpulse[6], springImpulse[6];
-+	float initialVelocity[6];
-+	b3Vec3 reactionForce, reactionTorque;
-+	int indexA, indexB;
-+	b3Transform frameA, frameB;
-+	b3Vec3 deltaCenter;
-+} b3GenericJoint;
-+
-+float b3GetGenericJointSeparation( const struct b3JointSim* base, b3WorldTransform a, b3WorldTransform b, bool angular );
-+void b3PrepareGenericJoint( struct b3JointSim* base, b3StepContext* context );
-+void b3WarmStartGenericJoint( struct b3JointSim* base, b3StepContext* context );
-+void b3SolveGenericJoint( struct b3JointSim* base, b3StepContext* context, bool useBias );
-+
- /// The base joint class. Joints are used to constraint two bodies together in
- /// various fashions. Some joints also feature limits and motors.
- typedef struct b3JointSim
-@@ -342,6 +363,7 @@
- 		b3PrismaticJoint prismaticJoint;
- 		b3WeldJoint weldJoint;
- 		b3WheelJoint wheelJoint;
-+		b3GenericJoint genericJoint;
- 	};
- } b3JointSim;
- 
---- a/src/recording.h
-+++ b/src/recording.h
-@@ -52,7 +52,7 @@
- 
- // Minor tracks op-stream additions that keep the 48 byte header shape.
- // Minor version 7 made the contact body sim locators persistent
--#define B3_REC_VERSION_MINOR 8
-+#define B3_REC_VERSION_MINOR 9 // EGP Generic6DOF operations and joint seed layout
- 
- // File header, fixed 48 bytes. Contains the registry locator so the player
- // can load geometry before replaying any ops.
---- a/src/recording_ops.inl
-+++ b/src/recording_ops.inl
-@@ -236,3 +236,9 @@
- 
- // Accumulated world bounds over the whole recording, written once at stop.
- B3_REC_OP( 0xF2, RecordingBounds, RET_NONE, ARG( AABB, bounds ) )
-+
-+// EGP generic constraint extension, preserving the existing opcode range.
-+B3_REC_OP( 0xF3, CreateGenericJoint, RET_JOINTID, ARG( WORLDID, world ) ARG( WELDJOINTDEF, def ) )
-+B3_REC_OP( 0xF4, GenericJointSetParam, RET_NONE, ARG( JOINTID, joint ) ARG( I32, axis ) ARG( I32, param ) ARG( F32, value ) )
-+B3_REC_OP( 0xF5, GenericJointSetFlag, RET_NONE, ARG( JOINTID, joint ) ARG( I32, axis ) ARG( I32, flag ) ARG( BOOL, value ) )
-+B3_REC_OP( 0xF6, GenericJointSetTargetRotation, RET_NONE, ARG( JOINTID, joint ) ARG( QUAT, rotation ) )
---- a/src/recording_replay.c
-+++ b/src/recording_replay.c
-@@ -1266,6 +1266,28 @@
- 	def.base.bodyIdA = b3RecMakeBodyId( rdr, def.base.bodyIdA );
- 	def.base.bodyIdB = b3RecMakeBodyId( rdr, def.base.bodyIdB );
- 	b3RecCheckJointId( rdr, b3CreateSphericalJoint( rdr->replayWorldId, &def ), recId );
-+}
-+
-+static void b3RecDispatch_CreateGenericJoint( const b3RecArgs_CreateGenericJoint* a, b3RecReader* rdr )
-+{
-+	b3JointId recId = b3RecR_JOINTID( rdr );
-+	b3WeldJointDef def = a->def;
-+	def.base.bodyIdA = b3RecMakeBodyId( rdr, def.base.bodyIdA );
-+	def.base.bodyIdB = b3RecMakeBodyId( rdr, def.base.bodyIdB );
-+	b3RecCheckJointId( rdr, b3CreateGenericJoint( rdr->replayWorldId, &def ), recId );
-+}
-+
-+static void b3RecDispatch_GenericJointSetParam( const b3RecArgs_GenericJointSetParam* a, b3RecReader* rdr )
-+{
-+	b3GenericJoint_SetParam( b3RecMakeJointId( rdr, a->joint ), a->axis, a->param, a->value );
-+}
-+static void b3RecDispatch_GenericJointSetFlag( const b3RecArgs_GenericJointSetFlag* a, b3RecReader* rdr )
-+{
-+	b3GenericJoint_SetFlag( b3RecMakeJointId( rdr, a->joint ), a->axis, a->flag, a->value );
-+}
-+static void b3RecDispatch_GenericJointSetTargetRotation( const b3RecArgs_GenericJointSetTargetRotation* a, b3RecReader* rdr )
-+{
-+	b3GenericJoint_SetTargetRotation( b3RecMakeJointId( rdr, a->joint ), a->rotation );
- }
- 
- static void b3RecDispatch_CreateWeldJoint( const b3RecArgs_CreateWeldJoint* a, b3RecReader* rdr )
---- a/src/spherical_joint.c
-+++ b/src/spherical_joint.c
-@@ -39,7 +39,7 @@
- 
- void b3SphericalJoint_SetConeLimit( b3JointId jointId, float angleRadians )
- {
--	B3_ASSERT( b3IsValidFloat( angleRadians ) && 0 <= angleRadians && angleRadians <= 0.5f * B3_PI );
-+	B3_ASSERT( b3IsValidFloat( angleRadians ) && 0 <= angleRadians && angleRadians <= B3_PI );
- 	b3World* world = b3GetWorld( jointId.world0 );
- 	B3_REC( world, SphericalJointSetConeLimit, jointId, angleRadians );
- 	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_sphericalJoint );
+diff --git a/current/src/generic_joint.c b/src/generic_joint.c
+new file mode 100644
+index 0000000..9205c55
 --- /dev/null
 +++ b/src/generic_joint.c
 @@ -0,0 +1,285 @@
@@ -560,3 +342,315 @@
 +			joint->reactionForce = b3MulAdd( joint->reactionForce, total, g.axis );
 +	}
 +}
+diff --git a/src/joint.c b/src/joint.c
+index 068a29d..24b13a9 100644
+--- a/src/joint.c
++++ b/src/joint.c
+@@ -626,7 +626,7 @@ b3JointId b3CreateRevoluteJoint( b3WorldId worldId, const b3RevoluteJointDef* de
+ b3JointId b3CreateSphericalJoint( b3WorldId worldId, const b3SphericalJointDef* def )
+ {
+ 	B3_CHECK_JOINT_DEF( def );
+-	B3_ASSERT( 0.0f <= def->coneAngle && def->coneAngle <= 0.99f * B3_PI );
++	B3_ASSERT( 0.0f <= def->coneAngle && def->coneAngle <= B3_PI );
+ 	B3_ASSERT( b3IsValidQuat( def->targetRotation ) );
+ 
+ 	b3World* world = b3GetUnlockedWorldFromId( worldId );
+@@ -643,7 +643,7 @@ b3JointId b3CreateSphericalJoint( b3WorldId worldId, const b3SphericalJointDef*
+ 	joint->sphericalJoint.hertz = def->hertz;
+ 	joint->sphericalJoint.dampingRatio = def->dampingRatio;
+ 	joint->sphericalJoint.targetRotation = def->targetRotation;
+-	joint->sphericalJoint.coneAngle = b3ClampFloat( def->coneAngle, 0.0f, 0.5f * B3_PI );
++	joint->sphericalJoint.coneAngle = b3ClampFloat( def->coneAngle, 0.0f, B3_PI );
+ 
+ 	float lowerAngle = b3MinFloat( def->lowerTwistAngle, def->upperTwistAngle );
+ 	float upperAngle = b3MaxFloat( def->lowerTwistAngle, def->upperTwistAngle );
+@@ -662,6 +662,30 @@ b3JointId b3CreateSphericalJoint( b3WorldId worldId, const b3SphericalJointDef*
+ 	return jointId;
+ }
+ 
++b3JointId b3CreateGenericJoint( b3WorldId worldId, const b3WeldJointDef* def )
++{
++	B3_CHECK_JOINT_DEF( def );
++	b3World* world = b3GetUnlockedWorldFromId( worldId );
++	if ( world == NULL ) { return b3_nullJointId; }
++	b3JointPair pair = b3CreateJoint( world, &def->base, b3_genericJoint );
++	b3GenericJoint* joint = &pair.jointSim->genericJoint;
++	joint->targetRotation = b3Quat_identity;
++	for ( int i = 0; i < 3; ++i )
++	{
++		joint->flags[i][0] = true; joint->flags[i][1] = true;
++		joint->parameters[i][2] = 0.7f; joint->parameters[i][3] = 0.5f;
++		joint->parameters[i][4] = 1.0f; joint->parameters[i][6] = 0.0f;
++		joint->parameters[i][8] = 0.01f; joint->parameters[i][12] = 0.5f;
++		joint->parameters[i][13] = 1.0f; joint->parameters[i][15] = 0.0f;
++		joint->parameters[i][16] = 0.5f; joint->parameters[i][18] = 0.0f;
++		joint->parameters[i][20] = 0.01f;
++		joint->parameters[i][22] = FLT_MAX; joint->parameters[i][23] = FLT_MAX;
++	}
++	b3JointId id = { pair.jointSim->jointId + 1, world->worldId, pair.joint->generation };
++	B3_REC_CREATE( world, CreateGenericJoint, id, worldId, *def );
++	return id;
++}
++
+ b3JointId b3CreateWeldJoint( b3WorldId worldId, const b3WeldJointDef* def )
+ {
+ 	B3_CHECK_JOINT_DEF( def );
+@@ -1024,6 +1048,11 @@ void b3GetJointReaction( b3World* world, b3JointSim* sim, float invTimeStep, flo
+ 
+ 	switch ( sim->type )
+ 	{
++		case b3_genericJoint:
++			linearImpulse = b3Length( sim->genericJoint.reactionForce );
++			angularImpulse = b3Length( sim->genericJoint.reactionTorque );
++			break;
++
+ 		case b3_parallelJoint:
+ 		{
+ 			b3ParallelJoint* joint = &sim->parallelJoint;
+@@ -1155,6 +1184,8 @@ static b3Vec3 b3GetJointConstraintForce( b3World* world, b3Joint* joint )
+ 		case b3_sphericalJoint:
+ 			return b3GetSphericalJointForce( world, base );
+ 
++		case b3_genericJoint:
++			return b3MulSV( world->inv_h, base->genericJoint.reactionForce );
+ 		case b3_weldJoint:
+ 			return b3GetWeldJointForce( world, base );
+ 
+@@ -1194,6 +1225,8 @@ static b3Vec3 b3GetJointConstraintTorque( b3World* world, b3Joint* joint )
+ 		case b3_sphericalJoint:
+ 			return b3GetSphericalJointTorque( world, base );
+ 
++		case b3_genericJoint:
++			return b3MulSV( world->inv_h, base->genericJoint.reactionTorque );
+ 		case b3_weldJoint:
+ 			return b3GetWeldJointTorque( world, base );
+ 
+@@ -1235,6 +1268,8 @@ float b3Joint_GetLinearSeparation( b3JointId jointId )
+ 
+ 	switch ( joint->type )
+ 	{
++		case b3_genericJoint:
++			return b3GetGenericJointSeparation( base, xfA, xfB, false );
+ 		case b3_parallelJoint:
+ 			return 0.0f;
+ 
+@@ -1357,6 +1392,8 @@ float b3Joint_GetAngularSeparation( b3JointId jointId )
+ 
+ 	switch ( joint->type )
+ 	{
++		case b3_genericJoint:
++			return b3GetGenericJointSeparation( base, xfA, xfB, true );
+ 		case b3_parallelJoint:
+ 		{
+ 			// Remove hinge angle
+@@ -1430,9 +1467,24 @@ float b3Joint_GetAngularSeparation( b3JointId jointId )
+ 		}
+ 
+ 		case b3_wheelJoint:
+-			// todo
+-			B3_ASSERT( false );
+-			return 0.0f;
++		{
++			// EGP: error of the wheel's collinearity constraint, measured in the joint frames.
++			// Steering frees rotation about the suspension axis (frame A x), so only the spin
++			// axis (frame B z) must stay perpendicular to it; otherwise only spin is free.
++			b3Quat qA = b3MulQuat( xfA.q, base->localFrameA.q );
++			b3Quat qB = b3MulQuat( xfB.q, base->localFrameB.q );
++			if ( base->wheelJoint.enableSteering )
++			{
++				b3Matrix3 matrixA = b3MakeMatrixFromQuat( qA );
++				b3Matrix3 matrixB = b3MakeMatrixFromQuat( qB );
++				float c = b3ClampFloat( b3Dot( matrixA.cx, matrixB.cz ), -1.0f, 1.0f );
++				return b3AbsFloat( b3Atan2( c, sqrtf( 1.0f - c * c ) ) );
++			}
++
++			b3Quat frameQ = b3InvMulQuat( qA, qB );
++			frameQ.v.z = 0.0f;
++			return b3GetQuatAngle( frameQ );
++		}
+ 
+ 		default:
+ 			B3_ASSERT( false );
+@@ -1514,6 +1566,10 @@ void b3PrepareJoint( b3JointSim* joint, b3StepContext* context )
+ 			b3PrepareSphericalJoint( joint, context );
+ 			break;
+ 
++		case b3_genericJoint:
++			b3PrepareGenericJoint( joint, context );
++			break;
++
+ 		case b3_weldJoint:
+ 			b3PrepareWeldJoint( joint, context );
+ 			break;
+@@ -1558,6 +1614,10 @@ void b3WarmStartJoint( b3JointSim* joint, b3StepContext* context )
+ 			b3WarmStartSphericalJoint( joint, context );
+ 			break;
+ 
++		case b3_genericJoint:
++			b3WarmStartGenericJoint( joint, context );
++			break;
++
+ 		case b3_weldJoint:
+ 			b3WarmStartWeldJoint( joint, context );
+ 			break;
+@@ -1604,6 +1664,10 @@ void b3SolveJoint( b3JointSim* joint, b3StepContext* context, bool useBias )
+ 			b3SolveSphericalJoint( joint, context, useBias );
+ 			break;
+ 
++		case b3_genericJoint:
++			b3SolveGenericJoint( joint, context, useBias );
++			break;
++
+ 		case b3_weldJoint:
+ 			b3SolveWeldJoint( joint, context, useBias );
+ 			break;
+diff --git a/src/joint.h b/src/joint.h
+index 64171b9..b98a308 100644
+--- a/src/joint.h
++++ b/src/joint.h
+@@ -304,6 +304,27 @@ typedef struct b3WheelJoint
+ 	bool enableSteeringMotor;
+ } b3WheelJoint;
+ 
++struct b3JointSim;
++
++// EGP generic constraint state is POD so native world seeds preserve all impulses.
++typedef struct b3GenericJoint
++{
++	float parameters[3][24];
++	bool flags[3][6];
++	b3Quat targetRotation;
++	float lowerImpulse[6], upperImpulse[6], motorImpulse[6], springImpulse[6];
++	float initialVelocity[6];
++	b3Vec3 reactionForce, reactionTorque;
++	int indexA, indexB;
++	b3Transform frameA, frameB;
++	b3Vec3 deltaCenter;
++} b3GenericJoint;
++
++float b3GetGenericJointSeparation( const struct b3JointSim* base, b3WorldTransform a, b3WorldTransform b, bool angular );
++void b3PrepareGenericJoint( struct b3JointSim* base, b3StepContext* context );
++void b3WarmStartGenericJoint( struct b3JointSim* base, b3StepContext* context );
++void b3SolveGenericJoint( struct b3JointSim* base, b3StepContext* context, bool useBias );
++
+ /// The base joint class. Joints are used to constraint two bodies together in
+ /// various fashions. Some joints also feature limits and motors.
+ typedef struct b3JointSim
+@@ -342,6 +363,7 @@ typedef struct b3JointSim
+ 		b3PrismaticJoint prismaticJoint;
+ 		b3WeldJoint weldJoint;
+ 		b3WheelJoint wheelJoint;
++		b3GenericJoint genericJoint;
+ 	};
+ } b3JointSim;
+ 
+diff --git a/src/physics_world.c b/src/physics_world.c
+index c48253d..2f58bc4 100644
+--- a/src/physics_world.c
++++ b/src/physics_world.c
+@@ -2215,6 +2215,22 @@ float b3World_GetMaximumLinearSpeed( b3WorldId worldId )
+ 	return world->maxLinearSpeed;
+ }
+ 
++// EGP
++void b3World_GetContactTuning( b3WorldId worldId, float* hertz, float* dampingRatio, float* contactSpeed )
++{
++	b3World* world = b3GetWorldFromId( worldId );
++	*hertz = world->contactHertz;
++	*dampingRatio = world->contactDampingRatio;
++	*contactSpeed = world->contactSpeed;
++}
++
++// EGP
++bool b3World_IsSpeculativeEnabled( b3WorldId worldId )
++{
++	b3World* world = b3GetWorldFromId( worldId );
++	return world->enableSpeculative;
++}
++
+ b3Profile b3World_GetProfile( b3WorldId worldId )
+ {
+ 	b3World* world = b3GetUnlockedWorldFromId( worldId );
+diff --git a/src/recording.h b/src/recording.h
+index bcc6608..1b0d740 100644
+--- a/src/recording.h
++++ b/src/recording.h
+@@ -52,7 +52,7 @@ typedef struct b3World b3World;
+ 
+ // Minor tracks op-stream additions that keep the 48 byte header shape.
+ // Minor version 7 made the contact body sim locators persistent
+-#define B3_REC_VERSION_MINOR 8
++#define B3_REC_VERSION_MINOR 9 // EGP Generic6DOF operations and joint seed layout
+ 
+ // File header, fixed 48 bytes. Contains the registry locator so the player
+ // can load geometry before replaying any ops.
+diff --git a/src/recording_ops.inl b/src/recording_ops.inl
+index d2c992b..7af7539 100644
+--- a/src/recording_ops.inl
++++ b/src/recording_ops.inl
+@@ -236,3 +236,9 @@ B3_REC_OP( 0xF1, StateHash, RET_NONE, ARG( WORLDID, world ) ARG( U64, hash ) )
+ 
+ // Accumulated world bounds over the whole recording, written once at stop.
+ B3_REC_OP( 0xF2, RecordingBounds, RET_NONE, ARG( AABB, bounds ) )
++
++// EGP generic constraint extension, preserving the existing opcode range.
++B3_REC_OP( 0xF3, CreateGenericJoint, RET_JOINTID, ARG( WORLDID, world ) ARG( WELDJOINTDEF, def ) )
++B3_REC_OP( 0xF4, GenericJointSetParam, RET_NONE, ARG( JOINTID, joint ) ARG( I32, axis ) ARG( I32, param ) ARG( F32, value ) )
++B3_REC_OP( 0xF5, GenericJointSetFlag, RET_NONE, ARG( JOINTID, joint ) ARG( I32, axis ) ARG( I32, flag ) ARG( BOOL, value ) )
++B3_REC_OP( 0xF6, GenericJointSetTargetRotation, RET_NONE, ARG( JOINTID, joint ) ARG( QUAT, rotation ) )
+diff --git a/src/recording_replay.c b/src/recording_replay.c
+index 9c0247c..533a51a 100644
+--- a/src/recording_replay.c
++++ b/src/recording_replay.c
+@@ -1268,6 +1268,28 @@ static void b3RecDispatch_CreateSphericalJoint( const b3RecArgs_CreateSphericalJ
+ 	b3RecCheckJointId( rdr, b3CreateSphericalJoint( rdr->replayWorldId, &def ), recId );
+ }
+ 
++static void b3RecDispatch_CreateGenericJoint( const b3RecArgs_CreateGenericJoint* a, b3RecReader* rdr )
++{
++	b3JointId recId = b3RecR_JOINTID( rdr );
++	b3WeldJointDef def = a->def;
++	def.base.bodyIdA = b3RecMakeBodyId( rdr, def.base.bodyIdA );
++	def.base.bodyIdB = b3RecMakeBodyId( rdr, def.base.bodyIdB );
++	b3RecCheckJointId( rdr, b3CreateGenericJoint( rdr->replayWorldId, &def ), recId );
++}
++
++static void b3RecDispatch_GenericJointSetParam( const b3RecArgs_GenericJointSetParam* a, b3RecReader* rdr )
++{
++	b3GenericJoint_SetParam( b3RecMakeJointId( rdr, a->joint ), a->axis, a->param, a->value );
++}
++static void b3RecDispatch_GenericJointSetFlag( const b3RecArgs_GenericJointSetFlag* a, b3RecReader* rdr )
++{
++	b3GenericJoint_SetFlag( b3RecMakeJointId( rdr, a->joint ), a->axis, a->flag, a->value );
++}
++static void b3RecDispatch_GenericJointSetTargetRotation( const b3RecArgs_GenericJointSetTargetRotation* a, b3RecReader* rdr )
++{
++	b3GenericJoint_SetTargetRotation( b3RecMakeJointId( rdr, a->joint ), a->rotation );
++}
++
+ static void b3RecDispatch_CreateWeldJoint( const b3RecArgs_CreateWeldJoint* a, b3RecReader* rdr )
+ {
+ 	b3JointId recId = b3RecR_JOINTID( rdr );
+diff --git a/src/spherical_joint.c b/src/spherical_joint.c
+index c2c1054..7787e6c 100644
+--- a/src/spherical_joint.c
++++ b/src/spherical_joint.c
+@@ -39,7 +39,7 @@ float b3SphericalJoint_GetConeLimit( b3JointId jointId )
+ 
+ void b3SphericalJoint_SetConeLimit( b3JointId jointId, float angleRadians )
+ {
+-	B3_ASSERT( b3IsValidFloat( angleRadians ) && 0 <= angleRadians && angleRadians <= 0.5f * B3_PI );
++	B3_ASSERT( b3IsValidFloat( angleRadians ) && 0 <= angleRadians && angleRadians <= B3_PI );
+ 	b3World* world = b3GetWorld( jointId.world0 );
+ 	B3_REC( world, SphericalJointSetConeLimit, jointId, angleRadians );
+ 	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_sphericalJoint );
+--- a/src/CMakeLists.txt
++++ b/src/CMakeLists.txt
+@@ -42,6 +42,7 @@
+ 	island.c
+ 	island.h
+ 	joint.c
++	generic_joint.c
+ 	joint.h
+ 	manifold.c
+ 	manifold.h

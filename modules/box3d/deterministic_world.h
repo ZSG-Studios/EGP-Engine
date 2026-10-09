@@ -108,6 +108,9 @@ struct Command {
 	float falloff = 0.0f;
 	float impulse_per_area = 0.0f;
 	uint64_t mask = UINT64_MAX;
+	// SET_SHAPE: -1 changes the shape; 0.. one entry of a mesh or height field's
+	// material table (0 is the shape's own material).
+	int32_t material_index = -1;
 };
 
 // A shape by stable identity: body entity and shape index (entity 0: no longer exists).
@@ -239,6 +242,8 @@ public:
 	bool read_world(Values &r_values) const;
 	bool read_body(uint64_t p_entity, Values &r_values) const;
 	bool read_shape(uint64_t p_entity, uint32_t p_index, Values &r_values) const;
+	// Every entry of a shape's material table (index 0 is the shape's own material).
+	bool read_shape_materials(uint64_t p_entity, uint32_t p_index, std::vector<Values> &r_materials) const;
 	bool read_joint(uint64_t p_joint, Values &r_values, JointType &r_type, uint64_t &r_body_a, uint64_t &r_body_b) const;
 	std::vector<uint32_t> get_shape_indices(uint64_t p_entity) const;
 	std::vector<uint64_t> get_entities() const;

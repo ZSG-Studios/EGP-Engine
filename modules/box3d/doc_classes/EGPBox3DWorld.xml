@@ -121,6 +121,7 @@
 			<param index="0" name="joint_id" type="int" />
 			<description>
 				Reads the joint's [code]type[/code], [code]body_a[/code], [code]body_b[/code], frames, tuning, every type field and its state: [code]constraint_force[/code], [code]constraint_torque[/code], [code]linear_separation[/code], [code]angular_separation[/code] and, by type, [code]angle[/code], [code]translation[/code], [code]speed[/code], [code]current_length[/code], [code]motor_torque[/code], [code]motor_force[/code], [code]twist_angle[/code], [code]steering_angle[/code] and so on. Generic joint parameters are write-only.
+				Every field is range-checked when queued: Box3D's non-negative stiffness, damping, motor and threshold fields, a target angle within PI, a cone angle in [0, PI], a positive length, and lower/upper limit pairs that stay ordered when merged with the joint's current values. Height fields and compounds need a static body, and a body holding a compound keeps its type.
 			</description>
 		</method>
 		<method name="get_joint_count" qualifiers="const">
@@ -140,7 +141,7 @@
 			<param index="0" name="entity_id" type="int" />
 			<param index="1" name="shape_index" type="int" />
 			<description>
-				Reads shape material, density, filter, sensor and event flags, and its bounds ([code]aabb_lower[/code], [code]aabb_upper[/code]). Empty for an unknown shape.
+				Reads the shape's Box3D [code]type[/code] (boxes are hulls), material, density, filter, sensor and event flags, bounds ([code]aabb_lower[/code], [code]aabb_upper[/code]), [code]material_count[/code] and, for meshes and height fields with a table, [code]materials[/code] (entries 1 and up). Empty for an unknown shape.
 			</description>
 		</method>
 		<method name="get_simulation_fingerprint" qualifiers="const">
@@ -164,7 +165,7 @@
 		<method name="get_world" qualifiers="const">
 			<return type="Dictionary" />
 			<description>
-				Reads world settings and counters ([code]awake_body_count[/code], [code]body_count[/code], [code]shape_count[/code], [code]contact_count[/code], [code]joint_count[/code], [code]island_count[/code], [code]bounds_lower[/code], [code]bounds_upper[/code], [code]tick[/code]). Contact tuning and the speculative flag are write-only.
+				Reads world settings and counters ([code]awake_body_count[/code], [code]body_count[/code], [code]shape_count[/code], [code]contact_count[/code], [code]joint_count[/code], [code]island_count[/code], [code]bounds_lower[/code], [code]bounds_upper[/code], [code]tick[/code]).
 			</description>
 		</method>
 		<method name="move_capsule" qualifiers="const">
@@ -245,7 +246,7 @@
 			<param index="3" name="shapes" type="Dictionary[]" />
 			<description>
 				Creates a body from any Box3D body fields (see [method get_field_names] with [code]"body"[/code]) and attaches [param shapes] as shape indices 0, 1, 2 and so on. [code]type[/code] accepts [code]"static"[/code], [code]"kinematic"[/code], [code]"dynamic"[/code] or 0-2. Fields Box3D has no definition slot for ([code]mass[/code], [code]center_of_mass[/code], [code]inertia[/code], [code]hit_events[/code], [code]target_position[/code]) are applied right after the shapes.
-				Each shape is a [Dictionary] with a [code]type[/code] ([code]"sphere"[/code], [code]"capsule"[/code], [code]"box"[/code], [code]"hull"[/code], [code]"mesh"[/code], [code]"height_field"[/code]), geometry keys and any shape fields ([code]friction[/code], [code]restitution[/code], [code]density[/code], [code]category[/code], [code]mask[/code], [code]sensor[/code], [code]contact_events[/code] and so on). Geometry keys: [code]radius[/code], [code]center[/code] and [code]rotation[/code] (local placement), [code]half_height[/code] or [code]point_a[/code]/[code]point_b[/code] (capsule), [code]half_extents[/code] (box), [code]points[/code] and [code]scale[/code] (hull), [code]points[/code], [code]indices[/code] and [code]scale[/code] (mesh; collides with static bodies only), [code]heights[/code], [code]count_x[/code], [code]count_z[/code], [code]holes[/code] and [code]scale[/code] (height field, placed by its body).
+				Each shape is a [Dictionary] with a [code]type[/code] ([code]"sphere"[/code], [code]"capsule"[/code], [code]"box"[/code], [code]"hull"[/code], [code]"mesh"[/code], [code]"height_field"[/code], [code]"compound"[/code]), geometry keys and any shape fields ([code]friction[/code], [code]restitution[/code], [code]density[/code], [code]category[/code], [code]mask[/code], [code]sensor[/code], [code]contact_events[/code] and so on). Geometry keys: [code]radius[/code], [code]center[/code] and [code]rotation[/code] (local placement), [code]half_height[/code] or [code]point_a[/code]/[code]point_b[/code] (capsule), [code]half_extents[/code] (box), [code]points[/code] and [code]scale[/code] (hull), [code]points[/code], [code]indices[/code] and [code]scale[/code] (mesh; collides with static bodies only), [code]heights[/code], [code]count_x[/code], [code]count_z[/code], [code]holes[/code] and [code]scale[/code] (height field, placed by its body; static bodies only), [code]children[/code] (baked compound for static bodies: an [Array] of sphere, capsule, box, hull and mesh Dictionaries, each with its own placement and material fields). Meshes and height fields take per-triangle or per-cell materials: [code]materials[/code] (an [Array] of material Dictionaries, table indices 1 and up after the shape's own material 0) and [code]material_indices[/code] (a [PackedByteArray] with one index per triangle or cell).
 				[codeblock]
 				world.queue_create_body(7, 0, {"type": "dynamic", "position": Vector3(0, 4, 0), "bullet": true},
 				        [{"type": "capsule", "radius": 0.4, "half_height": 0.5, "friction": 0.2},
@@ -413,8 +414,9 @@
 			<param index="1" name="sequence" type="int" />
 			<param index="2" name="shape_index" type="int" />
 			<param index="3" name="fields" type="Dictionary" />
+			<param index="4" name="material_index" type="int" default="-1" />
 			<description>
-				Changes shape fields: surface material ([code]friction[/code], [code]restitution[/code], [code]rolling_resistance[/code], [code]tangent_velocity[/code], [code]user_material[/code]), [code]density[/code] (with [code]update_body_mass[/code]), filter ([code]category[/code], [code]mask[/code], [code]group[/code]) and event flags.
+				Changes shape fields: surface material ([code]friction[/code], [code]restitution[/code], [code]rolling_resistance[/code], [code]tangent_velocity[/code], [code]user_material[/code]), [code]density[/code] (with [code]update_body_mass[/code]), filter ([code]category[/code], [code]mask[/code], [code]group[/code]) and event flags. With [param material_index] 0 or above, the material fields change that entry of a mesh or height field's material table instead (0 is the shape's own material). Compound materials are fixed at creation.
 			</description>
 		</method>
 		<method name="queue_set_world">
@@ -422,7 +424,7 @@
 			<param index="0" name="sequence" type="int" />
 			<param index="1" name="fields" type="Dictionary" />
 			<description>
-				Changes world settings: [code]gravity[/code], [code]restitution_threshold[/code], [code]restitution_iterations[/code], [code]restitution_propagation[/code], [code]hit_event_threshold[/code], [code]maximum_linear_speed[/code], [code]sleep[/code], [code]continuous[/code], [code]warm_starting[/code], [code]speculative[/code], [code]contact_recycle_distance[/code], and [code]contact_hertz[/code], [code]contact_damping_ratio[/code] and [code]contact_speed[/code] (always set together). World commands run after the batch's body commands. Settings are part of snapshots.
+				Changes world settings: [code]gravity[/code], [code]restitution_threshold[/code], [code]restitution_iterations[/code], [code]restitution_propagation[/code], [code]hit_event_threshold[/code], [code]maximum_linear_speed[/code], [code]sleep[/code], [code]continuous[/code], [code]warm_starting[/code], [code]speculative[/code], [code]contact_recycle_distance[/code], and [code]contact_hertz[/code], [code]contact_damping_ratio[/code] and [code]contact_speed[/code]. World commands run after the batch's body commands. Settings are part of snapshots.
 			</description>
 		</method>
 		<method name="restore_snapshot">

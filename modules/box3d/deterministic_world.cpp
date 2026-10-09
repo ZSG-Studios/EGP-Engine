@@ -213,7 +213,7 @@ Result DeterministicWorld::queue(const Command &c) {
 				return Result::INVALID_ARGUMENT;
 			}
 			for (const ShapeSpec &shape : c.shapes) {
-				if (!valid_geometry(shape.geometry) || !validate_props(FieldSet::SHAPE, shape.props)) {
+				if (!valid_geometry(shape.geometry) || !validate_props(FieldSet::SHAPE, shape.props) || (shape.geometry.type == ShapeType::COMPOUND && props_sensor(shape.props))) {
 					return Result::INVALID_ARGUMENT;
 				}
 			}
@@ -224,17 +224,17 @@ Result DeterministicWorld::queue(const Command &c) {
 			}
 			break;
 		case Operation::ADD_SHAPE:
-			if (c.shapes.size() != 1 || c.shape_index >= MAX_SHAPES_PER_BODY || !valid_geometry(c.shapes[0].geometry) || !validate_props(FieldSet::SHAPE, c.shapes[0].props)) {
+			if (c.shapes.size() != 1 || c.shape_index >= MAX_SHAPES_PER_BODY || !valid_geometry(c.shapes[0].geometry) || !validate_props(FieldSet::SHAPE, c.shapes[0].props) || (c.shapes[0].geometry.type == ShapeType::COMPOUND && props_sensor(c.shapes[0].props))) {
 				return Result::INVALID_ARGUMENT;
 			}
 			break;
 		case Operation::SET_SHAPE:
-			if (!validate_props(FieldSet::SHAPE, c.props)) {
+			if (!validate_props(FieldSet::SHAPE, c.props) || c.material_index < -1 || c.material_index > 255) {
 				return Result::INVALID_ARGUMENT;
 			}
 			break;
 		case Operation::CREATE_TYPED_JOINT:
-			if (uint32_t(c.joint_type) >= JOINT_TYPE_COUNT || c.body_a == 0 || c.body_b == 0 || c.body_a == c.body_b || c.body_a > uint64_t(INT64_MAX) || c.body_b > uint64_t(INT64_MAX) || !validate_props(FieldSet::JOINT, c.props)) {
+			if (uint32_t(c.joint_type) >= JOINT_TYPE_COUNT || c.body_a == 0 || c.body_b == 0 || c.body_a == c.body_b || c.body_a > uint64_t(INT64_MAX) || c.body_b > uint64_t(INT64_MAX) || !validate_props(FieldSet::JOINT, c.props) || !joint_limits_ordered(c.joint_type, nullptr, c.props)) {
 				return Result::INVALID_ARGUMENT;
 			}
 			break;
@@ -302,7 +302,6 @@ Result DeterministicWorld::apply_queued_commands() {
 	size_t live_count = bodies.size();
 	uint64_t current_entity = 0;
 	bool entity_live = false;
-	std::set<uint32_t> entity_shapes;
 	std::set<uint64_t> created, destroyed, new_joints;
 	for (const Command &c : pending) {
 		if (creates(c.operation)) {
@@ -334,6 +333,56 @@ Result DeterministicWorld::apply_queued_commands() {
 			return Result::INVALID_BATCH;
 		}
 	}
+	// Joint limits stay ordered through every change in the batch, merged in command order
+	// over the creation fields or the joint's current values.
+	{
+		std::map<uint64_t, std::pair<JointType, Props>> merged;
+		for (const Command &c : pending) {
+			if (c.operation == Operation::CREATE_TYPED_JOINT) {
+				merged[c.entity] = { c.joint_type, c.props };
+			} else if (c.operation == Operation::CREATE_JOINT) {
+				merged[c.entity] = { JointType(c.joint_kind), Props() };
+			}
+		}
+		for (const Command &c : pending) {
+			if (c.operation != Operation::SET_JOINT) {
+				continue;
+			}
+			const auto created_here = merged.find(c.entity);
+			if (created_here != merged.end()) {
+				Props &props = created_here->second.second;
+				props.insert(props.end(), c.props.begin(), c.props.end());
+				if (!joint_limits_ordered(created_here->second.first, nullptr, props)) {
+					return Result::INVALID_BATCH;
+				}
+				continue;
+			}
+			auto &entry = merged[c.entity];
+			const JointRecord &record = joints.find(c.entity)->second;
+			entry.first = JointType(record.kind);
+			entry.second.insert(entry.second.end(), c.props.begin(), c.props.end());
+			if (!b3Joint_IsValid(record.id) || !joint_limits_ordered(entry.first, &record.id, entry.second)) {
+				return Result::INVALID_BATCH;
+			}
+		}
+	}
+	// Per body: static or not, and each shape's kind. Height fields and compounds need a
+	// static body, a body holding a compound cannot change type, compounds take no
+	// material changes, and material indices stay inside a shape's material table.
+	struct ShapeKind {
+		bool static_only = false;
+		bool compound = false;
+		int materials = 1;
+	};
+	std::map<uint32_t, ShapeKind> kinds;
+	bool entity_static = false;
+	auto kind_of = [](const ShapeSpec &spec) {
+		ShapeKind kind;
+		kind.static_only = static_only(spec.geometry.type);
+		kind.compound = spec.geometry.type == ShapeType::COMPOUND;
+		kind.materials = 1 + int(spec.geometry.extra_materials.size());
+		return kind;
+	};
 	for (const Command &c : pending) {
 		if (!body_operation(c.operation)) {
 			continue;
@@ -342,12 +391,18 @@ Result DeterministicWorld::apply_queued_commands() {
 			current_entity = c.entity;
 			const auto found = bodies.find(c.entity);
 			entity_live = found != bodies.end();
-			entity_shapes.clear();
+			kinds.clear();
+			entity_static = entity_live && b3Body_GetType(found->second) == b3_staticBody;
 			if (entity_live) {
 				const auto indices = shapes.find(c.entity);
 				if (indices != shapes.end()) {
 					for (const auto &entry : indices->second) {
-						entity_shapes.insert(entry.first);
+						ShapeKind kind;
+						const b3ShapeType type = b3Shape_GetType(entry.second);
+						kind.compound = type == b3_compoundShape;
+						kind.static_only = kind.compound || type == b3_heightShape;
+						kind.materials = b3Shape_GetMeshMaterialCount(entry.second);
+						kinds[entry.first] = kind;
 					}
 				}
 			}
@@ -360,10 +415,20 @@ Result DeterministicWorld::apply_queued_commands() {
 			if (++live_count > MAX_BODIES) {
 				return Result::LIMIT_REACHED;
 			}
-			entity_shapes.clear();
-			const uint32_t count = c.operation == Operation::CREATE_BODY ? uint32_t(c.shapes.size()) : 1;
-			for (uint32_t index = 0; index < count; ++index) {
-				entity_shapes.insert(index);
+			kinds.clear();
+			if (c.operation == Operation::CREATE_BODY) {
+				int type = b3_staticBody;
+				props_body_type(c.props, type);
+				entity_static = type == b3_staticBody;
+				for (uint32_t index = 0; index < c.shapes.size(); ++index) {
+					kinds[index] = kind_of(c.shapes[index]);
+					if (kinds[index].static_only && !entity_static) {
+						return Result::INVALID_BATCH;
+					}
+				}
+			} else {
+				entity_static = c.body_type == b3_staticBody;
+				kinds[0] = ShapeKind();
 			}
 			continue;
 		}
@@ -373,21 +438,38 @@ Result DeterministicWorld::apply_queued_commands() {
 		switch (c.operation) {
 			case Operation::DESTROY:
 				entity_live = false;
-				entity_shapes.clear();
+				kinds.clear();
 				--live_count;
 				break;
-			case Operation::ADD_SHAPE:
-				if (entity_shapes.size() >= MAX_SHAPES_PER_BODY || !entity_shapes.insert(c.shape_index).second) {
+			case Operation::SET_BODY: {
+				int type = 0;
+				if (props_body_type(c.props, type)) {
+					for (const auto &entry : kinds) {
+						if (entry.second.compound || (entry.second.static_only && type != b3_staticBody)) {
+							return Result::INVALID_BATCH;
+						}
+					}
+					entity_static = type == b3_staticBody;
+				}
+				break;
+			}
+			case Operation::ADD_SHAPE: {
+				const ShapeKind kind = kind_of(c.shapes[0]);
+				if (kinds.size() >= MAX_SHAPES_PER_BODY || kinds.count(c.shape_index) || (kind.static_only && !entity_static)) {
+					return Result::INVALID_BATCH;
+				}
+				kinds[c.shape_index] = kind;
+				break;
+			}
+			case Operation::SET_SHAPE: {
+				const auto kind = kinds.find(c.shape_index);
+				if (kind == kinds.end() || c.material_index >= kind->second.materials || (kind->second.compound && (c.material_index >= 0 || props_material(c.props)))) {
 					return Result::INVALID_BATCH;
 				}
 				break;
-			case Operation::SET_SHAPE:
-				if (!entity_shapes.count(c.shape_index)) {
-					return Result::INVALID_BATCH;
-				}
-				break;
+			}
 			case Operation::DESTROY_SHAPE:
-				if (!entity_shapes.erase(c.shape_index)) {
+				if (!kinds.erase(c.shape_index)) {
 					return Result::INVALID_BATCH;
 				}
 				break;
@@ -539,7 +621,7 @@ void DeterministicWorld::apply_body_command(const Command &c, b3BodyId body) {
 		case Operation::SET_SHAPE: {
 			const b3ShapeId shape = shapes[c.entity][c.shape_index];
 			if (b3Shape_IsValid(shape)) {
-				apply_shape(shape, c.props);
+				apply_shape(shape, c.props, c.material_index);
 			}
 			break;
 		}
@@ -1206,6 +1288,25 @@ bool DeterministicWorld::read_shape(uint64_t entity, uint32_t index, Values &out
 		return false;
 	}
 	egp::box3d::read_shape(found->second, out);
+	return true;
+}
+
+bool DeterministicWorld::read_shape_materials(uint64_t entity, uint32_t index, std::vector<Values> &out) const {
+	std::lock_guard<std::recursive_mutex> guard(get_simulation_mutex());
+	out.clear();
+	const auto body = shapes.find(entity);
+	if (body == shapes.end()) {
+		return false;
+	}
+	const auto found = body->second.find(index);
+	if (found == body->second.end() || !b3Shape_IsValid(found->second)) {
+		return false;
+	}
+	const int count = b3Shape_GetMeshMaterialCount(found->second);
+	out.resize(size_t(count));
+	for (int i = 0; i < count; ++i) {
+		read_material(b3Shape_GetMeshSurfaceMaterial(found->second, i), out[size_t(i)]);
+	}
 	return true;
 }
 

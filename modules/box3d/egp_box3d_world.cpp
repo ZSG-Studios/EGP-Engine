@@ -84,7 +84,7 @@ void EGPBox3DWorld::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("queue_create_body", "entity_id", "sequence", "body", "shapes"), &EGPBox3DWorld::queue_create_body);
 	ClassDB::bind_method(D_METHOD("queue_set_body", "entity_id", "sequence", "fields"), &EGPBox3DWorld::queue_set_body);
 	ClassDB::bind_method(D_METHOD("queue_add_shape", "entity_id", "sequence", "shape_index", "shape"), &EGPBox3DWorld::queue_add_shape);
-	ClassDB::bind_method(D_METHOD("queue_set_shape", "entity_id", "sequence", "shape_index", "fields"), &EGPBox3DWorld::queue_set_shape);
+	ClassDB::bind_method(D_METHOD("queue_set_shape", "entity_id", "sequence", "shape_index", "fields", "material_index"), &EGPBox3DWorld::queue_set_shape, DEFVAL(-1));
 	ClassDB::bind_method(D_METHOD("queue_destroy_shape", "entity_id", "sequence", "shape_index"), &EGPBox3DWorld::queue_destroy_shape);
 	ClassDB::bind_method(D_METHOD("queue_joint", "joint_id", "sequence", "type", "body_a", "body_b", "fields"), &EGPBox3DWorld::queue_joint, DEFVAL(Dictionary()));
 	ClassDB::bind_method(D_METHOD("queue_set_joint", "joint_id", "sequence", "fields"), &EGPBox3DWorld::queue_set_joint);
@@ -573,7 +573,7 @@ bool to_prop(bx::FieldSet set, const bx::FieldInfo &info, const Variant &value, 
 	return false;
 }
 
-const char *const GEOMETRY_KEYS[] = { "type", "radius", "center", "rotation", "half_height", "point_a", "point_b", "half_extents", "scale", "points", "indices", "heights", "holes", "count_x", "count_z" };
+const char *const GEOMETRY_KEYS[] = { "type", "radius", "center", "rotation", "half_height", "point_a", "point_b", "half_extents", "scale", "points", "indices", "heights", "holes", "count_x", "count_z", "children", "materials", "material_indices" };
 
 bool geometry_key(const String &name) {
 	for (const char *key : GEOMETRY_KEYS) {
@@ -597,7 +597,7 @@ Error to_props(bx::FieldSet set, const Dictionary &fields, bx::Props &props, boo
 		ERR_FAIL_COND_V_MSG(!to_prop(set, *info, fields[key], prop), ERR_INVALID_PARAMETER, "EGPBox3DWorld field " + name + " expects " + Variant::get_type_name(variant_type(info->kind)) + ".");
 		props.push_back(prop);
 	}
-	ERR_FAIL_COND_V_MSG(!bx::validate_props(set, props), ERR_INVALID_PARAMETER, "EGPBox3DWorld fields out of range (finite values, unit rotations; contact_hertz, contact_damping_ratio and contact_speed together).");
+	ERR_FAIL_COND_V_MSG(!bx::validate_props(set, props), ERR_INVALID_PARAMETER, "EGPBox3DWorld fields out of range (finite values, unit rotations, non-negative stiffness, damping, materials and thresholds, angles within PI, positive lengths).");
 	return OK;
 }
 
@@ -639,6 +639,38 @@ Error to_geometry(const Dictionary &shape, bx::Geometry &g) {
 	g.holes.assign(holes.ptr(), holes.ptr() + holes.size());
 	g.count_x = int32_t(int64_t(shape.get("count_x", 0)));
 	g.count_z = int32_t(int64_t(shape.get("count_z", 0)));
+	// Per-triangle (mesh) or per-cell (height field) material tables: extra materials are
+	// indices 1.. after the shape's own material.
+	const Array materials = shape.get("materials", Array());
+	for (int64_t i = 0; i < materials.size(); ++i) {
+		ERR_FAIL_COND_V_MSG(materials[i].get_type() != Variant::DICTIONARY, ERR_INVALID_PARAMETER, "EGPBox3DWorld materials are Dictionaries of material fields.");
+		bx::Props props;
+		const Error error = to_props(bx::FieldSet::SHAPE, materials[i], props);
+		if (error != OK) {
+			return error;
+		}
+		g.extra_materials.push_back(bx::material_from(props, b3DefaultSurfaceMaterial()));
+	}
+	const PackedByteArray material_indices = shape.get("material_indices", PackedByteArray());
+	g.material_indices.assign(material_indices.ptr(), material_indices.ptr() + material_indices.size());
+	// Baked compound children: geometry plus their own material fields.
+	const Array children = shape.get("children", Array());
+	for (int64_t i = 0; i < children.size(); ++i) {
+		ERR_FAIL_COND_V_MSG(children[i].get_type() != Variant::DICTIONARY, ERR_INVALID_PARAMETER, "EGPBox3DWorld compound children are shape Dictionaries.");
+		const Dictionary child = children[i];
+		bx::Geometry geometry;
+		Error error = to_geometry(child, geometry);
+		if (error != OK) {
+			return error;
+		}
+		bx::Props props;
+		error = to_props(bx::FieldSet::SHAPE, child, props, true);
+		if (error != OK) {
+			return error;
+		}
+		geometry.material = bx::material_from(props, b3DefaultSurfaceMaterial());
+		g.children.push_back(std::move(geometry));
+	}
 	ERR_FAIL_COND_V_MSG(!bx::valid_geometry(g), ERR_INVALID_PARAMETER, "Invalid EGPBox3DWorld " + type + " geometry.");
 	return OK;
 }
@@ -748,7 +780,7 @@ Error EGPBox3DWorld::queue_add_shape(int64_t entity, int64_t sequence, int64_t i
 	return error != OK ? error : queue_command(c);
 }
 
-Error EGPBox3DWorld::queue_set_shape(int64_t entity, int64_t sequence, int64_t index, const Dictionary &fields) {
+Error EGPBox3DWorld::queue_set_shape(int64_t entity, int64_t sequence, int64_t index, const Dictionary &fields, int64_t material_index) {
 	ERR_FAIL_COND_V(Thread::get_caller_id() != owner_thread, ERR_BUSY);
 	ERR_FAIL_COND_V(!valid_ids(entity, sequence) || index < 0 || index > int64_t(UINT32_MAX), ERR_INVALID_PARAMETER);
 	egp::box3d::Command c;
@@ -756,6 +788,8 @@ Error EGPBox3DWorld::queue_set_shape(int64_t entity, int64_t sequence, int64_t i
 	c.sequence = uint32_t(sequence);
 	c.operation = egp::box3d::Operation::SET_SHAPE;
 	c.shape_index = uint32_t(index);
+	ERR_FAIL_COND_V(material_index < -1 || material_index > 255, ERR_INVALID_PARAMETER);
+	c.material_index = int32_t(material_index);
 	const Error error = to_props(bx::FieldSet::SHAPE, fields, c.props);
 	return error != OK ? error : queue_command(c);
 }
@@ -867,7 +901,21 @@ Dictionary EGPBox3DWorld::get_shape(int64_t entity, int64_t index) const {
 	if (entity <= 0 || index < 0 || index > int64_t(UINT32_MAX) || !simulation.read_shape(uint64_t(entity), uint32_t(index), values)) {
 		return Dictionary();
 	}
-	return to_dictionary(values);
+	Dictionary result = to_dictionary(values);
+	// Box3D shape type by name.
+	static const char *const TYPES[] = { "capsule", "compound", "height_field", "hull", "mesh", "sphere" };
+	const int64_t type = result.get("box3d_type", -1);
+	result.erase("box3d_type");
+	result["type"] = type >= 0 && type < 6 ? String(TYPES[type]) : String("unknown");
+	std::vector<bx::Values> materials;
+	if (int64_t(result.get("material_count", 1)) > 1 && simulation.read_shape_materials(uint64_t(entity), uint32_t(index), materials)) {
+		Array table;
+		for (size_t i = 1; i < materials.size(); ++i) {
+			table.push_back(to_dictionary(materials[i]));
+		}
+		result["materials"] = table;
+	}
+	return result;
 }
 
 Dictionary EGPBox3DWorld::get_joint(int64_t joint) const {

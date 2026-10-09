@@ -99,8 +99,9 @@ Patches:
 - Version: 0.1.0 development (e77352cd606dc1a34209094076199549a52ea0a1)
 - License: MIT
 
-The `include`, `src`, `test`, and `shared` directories, top-level `CMakeLists.txt`
-and `LICENSE` are vendored unchanged. `UPSTREAM.json` records normalized hashes.
+The `include`, `src`, `test`, and `shared` directories and `LICENSE` are vendored
+with one recorded EGP patch (`modules/box3d/upstream_patches/egp-box3d.patch`).
+`UPSTREAM.json` records normalized upstream and patched hashes.
 EGP's adapter and deterministic compilation policy live in `modules/box3d`.
 
 

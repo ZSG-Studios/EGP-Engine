@@ -365,7 +365,7 @@ void put_quat(Values &out, const char *name, b3Quat value) {
 }
 
 const char *const JOINT_NAMES[JOINT_TYPE_COUNT] = { "distance", "spherical", "prismatic", "motor", "revolute", "weld", "wheel", "filter", "parallel", "generic" };
-const char *const SHAPE_NAMES[] = { "sphere", "capsule", "box", "hull", "mesh", "height_field" };
+const char *const SHAPE_NAMES[] = { "sphere", "capsule", "box", "hull", "mesh", "height_field", "compound" };
 constexpr uint32_t SHAPE_TYPE_COUNT = sizeof(SHAPE_NAMES) / sizeof(SHAPE_NAMES[0]);
 
 } // namespace
@@ -383,13 +383,204 @@ const std::vector<FieldInfo> &all_fields(FieldSet set) {
 	return table(set);
 }
 
+namespace {
+enum class Rule : uint8_t { ANY,
+	NONNEGATIVE,
+	POSITIVE,
+	ANGLE,
+	CONE };
+
+// Ranges Box3D asserts on. Validated before any mutation so a bad command is rejected
+// instead of reaching the solver.
+Rule rule(FieldSet set, uint16_t id) {
+	switch (set) {
+		case FieldSet::WORLD:
+			switch (id) {
+				case world_field::RESTITUTION_THRESHOLD:
+				case world_field::HIT_EVENT_THRESHOLD:
+				case world_field::CONTACT_HERTZ:
+				case world_field::CONTACT_DAMPING_RATIO:
+				case world_field::CONTACT_SPEED:
+				case world_field::CONTACT_RECYCLE_DISTANCE:
+					return Rule::NONNEGATIVE;
+				case world_field::MAXIMUM_LINEAR_SPEED:
+					return Rule::POSITIVE;
+				default:
+					return Rule::ANY;
+			}
+		case FieldSet::BODY:
+			switch (id) {
+				case body_field::LINEAR_DAMPING:
+				case body_field::ANGULAR_DAMPING:
+				case body_field::SLEEP_THRESHOLD:
+				case body_field::SAFETY_FACTOR:
+				case body_field::MASS:
+				case body_field::INERTIA:
+					return Rule::NONNEGATIVE;
+				case body_field::TARGET_TIME:
+					return Rule::POSITIVE;
+				default:
+					return Rule::ANY;
+			}
+		case FieldSet::SHAPE:
+			switch (id) {
+				case shape_field::FRICTION:
+				case shape_field::RESTITUTION:
+				case shape_field::ROLLING_RESISTANCE:
+				case shape_field::DENSITY:
+				case shape_field::EXPLOSION_SCALE:
+					return Rule::NONNEGATIVE;
+				default:
+					return Rule::ANY;
+			}
+		case FieldSet::JOINT:
+			switch (id) {
+				case joint_field::FORCE_THRESHOLD:
+				case joint_field::TORQUE_THRESHOLD:
+				case joint_field::CONSTRAINT_HERTZ:
+				case joint_field::CONSTRAINT_DAMPING_RATIO:
+				case joint_field::HERTZ:
+				case joint_field::DAMPING_RATIO:
+				case joint_field::MAX_MOTOR_FORCE:
+				case joint_field::MAX_MOTOR_TORQUE:
+				case joint_field::MAX_VELOCITY_FORCE:
+				case joint_field::MAX_VELOCITY_TORQUE:
+				case joint_field::LINEAR_HERTZ:
+				case joint_field::LINEAR_DAMPING_RATIO:
+				case joint_field::ANGULAR_HERTZ:
+				case joint_field::ANGULAR_DAMPING_RATIO:
+				case joint_field::MAX_SPRING_FORCE:
+				case joint_field::MAX_SPRING_TORQUE:
+				case joint_field::SUSPENSION_HERTZ:
+				case joint_field::SUSPENSION_DAMPING_RATIO:
+				case joint_field::MAX_SPIN_TORQUE:
+				case joint_field::STEERING_HERTZ:
+				case joint_field::STEERING_DAMPING_RATIO:
+				case joint_field::MAX_STEERING_TORQUE:
+				case joint_field::MAX_TORQUE:
+					return Rule::NONNEGATIVE;
+				case joint_field::LENGTH:
+					return Rule::POSITIVE;
+				case joint_field::TARGET_ANGLE:
+					return Rule::ANGLE;
+				case joint_field::CONE_ANGLE:
+					return Rule::CONE;
+				default:
+					return Rule::ANY;
+			}
+	}
+	return Rule::ANY;
+}
+
+bool obeys(Rule r, const FieldInfo &info, const Prop &p) {
+	const int count = component_count(info.kind);
+	for (int k = 0; k < count; ++k) {
+		const double v = p.v[k];
+		switch (r) {
+			case Rule::NONNEGATIVE:
+				if (v < 0.0) {
+					return false;
+				}
+				break;
+			case Rule::POSITIVE:
+				if (!(v > 0.0)) {
+					return false;
+				}
+				break;
+			case Rule::ANGLE:
+				if (v < -3.14159265358979 || v > 3.14159265358979) {
+					return false;
+				}
+				break;
+			case Rule::CONE:
+				if (v < 0.0 || v > 3.14159265358979) {
+					return false;
+				}
+				break;
+			case Rule::ANY:
+				break;
+		}
+	}
+	return true;
+}
+
+struct LimitPair {
+	uint16_t lower, upper;
+	const char *lower_name, *upper_name;
+};
+const LimitPair LIMIT_PAIRS[] = {
+	{ joint_field::LOWER_SPRING_FORCE, joint_field::UPPER_SPRING_FORCE, "lower_spring_force", "upper_spring_force" },
+	{ joint_field::MIN_LENGTH, joint_field::MAX_LENGTH, "min_length", "max_length" },
+	{ joint_field::LOWER_TRANSLATION, joint_field::UPPER_TRANSLATION, "lower_translation", "upper_translation" },
+	{ joint_field::LOWER_ANGLE, joint_field::UPPER_ANGLE, "lower_angle", "upper_angle" },
+	{ joint_field::LOWER_TWIST_ANGLE, joint_field::UPPER_TWIST_ANGLE, "lower_twist_angle", "upper_twist_angle" },
+	{ joint_field::LOWER_SUSPENSION_LIMIT, joint_field::UPPER_SUSPENSION_LIMIT, "lower_suspension_limit", "upper_suspension_limit" },
+	{ joint_field::LOWER_STEERING_LIMIT, joint_field::UPPER_STEERING_LIMIT, "lower_steering_limit", "upper_steering_limit" },
+};
+
+double value_of(const Values &values, const char *name, double fallback) {
+	for (const Value &v : values) {
+		if (std::strcmp(v.name, name) == 0) {
+			return v.v[0];
+		}
+	}
+	return fallback;
+}
+
+// The type's default limits, named like the readback.
+void default_limits(JointType type, Values &out) {
+	out.clear();
+	auto put_pair = [&](const char *lower, float lv, const char *upper, float uv) {
+		Value a;
+		a.name = lower;
+		a.v[0] = lv;
+		out.push_back(a);
+		Value b;
+		b.name = upper;
+		b.v[0] = uv;
+		out.push_back(b);
+	};
+	switch (type) {
+		case JointType::DISTANCE: {
+			const b3DistanceJointDef def = b3DefaultDistanceJointDef();
+			put_pair("lower_spring_force", def.lowerSpringForce, "upper_spring_force", def.upperSpringForce);
+			put_pair("min_length", def.minLength, "max_length", def.maxLength);
+			break;
+		}
+		case JointType::PRISMATIC: {
+			const b3PrismaticJointDef def = b3DefaultPrismaticJointDef();
+			put_pair("lower_translation", def.lowerTranslation, "upper_translation", def.upperTranslation);
+			break;
+		}
+		case JointType::REVOLUTE: {
+			const b3RevoluteJointDef def = b3DefaultRevoluteJointDef();
+			put_pair("lower_angle", def.lowerAngle, "upper_angle", def.upperAngle);
+			break;
+		}
+		case JointType::SPHERICAL: {
+			const b3SphericalJointDef def = b3DefaultSphericalJointDef();
+			put_pair("lower_twist_angle", def.lowerTwistAngle, "upper_twist_angle", def.upperTwistAngle);
+			break;
+		}
+		case JointType::WHEEL: {
+			const b3WheelJointDef def = b3DefaultWheelJointDef();
+			put_pair("lower_suspension_limit", def.lowerSuspensionLimit, "upper_suspension_limit", def.upperSuspensionLimit);
+			put_pair("lower_steering_limit", def.lowerSteeringLimit, "upper_steering_limit", def.upperSteeringLimit);
+			break;
+		}
+		default:
+			break;
+	}
+}
+} // namespace
+
 bool validate_props(FieldSet set, const Props &props) {
 	const auto &fields = table(set);
 	if (props.size() > 4 * fields.size()) {
 		return false;
 	}
 	for (const Prop &p : props) {
-		if (p.id >= fields.size() || !finite_prop(fields[p.id], p)) {
+		if (p.id >= fields.size() || !finite_prop(fields[p.id], p) || !obeys(rule(set, p.id), fields[p.id], p)) {
 			return false;
 		}
 		if (set == FieldSet::BODY && p.id == body_field::TYPE && (p.v[0] < 0 || p.v[0] > 2)) {
@@ -398,23 +589,52 @@ bool validate_props(FieldSet set, const Props &props) {
 		if (set == FieldSet::WORLD && p.id == world_field::RESTITUTION_ITERATIONS && (p.v[0] < 0 || p.v[0] > 64)) {
 			return false;
 		}
-		if (set == FieldSet::BODY && p.id == body_field::MASS && p.v[0] < 0) {
-			return false;
-		}
-		if (set == FieldSet::SHAPE && p.id == shape_field::DENSITY && p.v[0] < 0) {
-			return false;
-		}
 	}
-	if (set == FieldSet::WORLD) {
-		// Box3D has no contact tuning getter, so a partial update would depend on state a
-		// restored peer cannot see: hertz, damping ratio and speed are set together.
-		const View v(props);
-		const int tuning = int(v.has(world_field::CONTACT_HERTZ)) + int(v.has(world_field::CONTACT_DAMPING_RATIO)) + int(v.has(world_field::CONTACT_SPEED));
-		if (tuning != 0 && tuning != 3) {
+	// Generic joint parameters address three axes; their values are free.
+	return true;
+}
+
+bool joint_limits_ordered(JointType type, const b3JointId *existing, const Props &props) {
+	Values current;
+	if (existing) {
+		read_joint(*existing, current);
+	} else {
+		default_limits(type, current);
+	}
+	const View v(props);
+	for (const LimitPair &pair : LIMIT_PAIRS) {
+		if (!v.has(pair.lower) && !v.has(pair.upper)) {
+			continue;
+		}
+		const double lower = v.has(pair.lower) ? v.find(pair.lower)->v[0] : value_of(current, pair.lower_name, -3.0e38);
+		const double upper = v.has(pair.upper) ? v.find(pair.upper)->v[0] : value_of(current, pair.upper_name, 3.0e38);
+		if (lower > upper) {
 			return false;
 		}
 	}
 	return true;
+}
+
+bool props_body_type(const Props &props, int &type) {
+	const View v(props);
+	if (!v.has(body_field::TYPE)) {
+		return false;
+	}
+	type = v.i(body_field::TYPE, 0);
+	return true;
+}
+
+bool props_sensor(const Props &props) {
+	return View(props).b(shape_field::SENSOR, false);
+}
+
+bool props_material(const Props &props) {
+	const View v(props);
+	return v.has(shape_field::FRICTION) || v.has(shape_field::RESTITUTION) || v.has(shape_field::ROLLING_RESISTANCE) || v.has(shape_field::TANGENT_VELOCITY) || v.has(shape_field::USER_MATERIAL);
+}
+
+b3SurfaceMaterial material_from(const Props &props, b3SurfaceMaterial base) {
+	return material(View(props), base);
 }
 
 bool joint_type_from_name(const char *name, JointType &type) {
@@ -471,8 +691,67 @@ const char *shape_type_name(ShapeType type) {
 	return uint32_t(type) < SHAPE_TYPE_COUNT ? SHAPE_NAMES[uint32_t(type)] : "unknown";
 }
 
+bool valid_material(const b3SurfaceMaterial &m) {
+	return std::isfinite(m.friction) && m.friction >= 0.0f && std::isfinite(m.restitution) && m.restitution >= 0.0f &&
+			std::isfinite(m.rollingResistance) && m.rollingResistance >= 0.0f && finite3(m.tangentVelocity);
+}
+
+bool static_only(ShapeType type) {
+	return type == ShapeType::HEIGHT_FIELD || type == ShapeType::COMPOUND;
+}
+
+namespace {
+bool valid_material_table(const Geometry &g, size_t elements) {
+	if (g.extra_materials.size() > 254) {
+		return false;
+	}
+	for (const b3SurfaceMaterial &m : g.extra_materials) {
+		if (!valid_material(m)) {
+			return false;
+		}
+	}
+	if (g.material_indices.empty()) {
+		return true;
+	}
+	if (g.material_indices.size() != elements) {
+		return false;
+	}
+	for (uint8_t index : g.material_indices) {
+		if (index > g.extra_materials.size()) {
+			return false;
+		}
+	}
+	return true;
+}
+
+// Shape material table: the shape's own material, then the extra materials.
+std::vector<b3SurfaceMaterial> material_table(const b3ShapeDef &def, const Geometry &g) {
+	std::vector<b3SurfaceMaterial> table;
+	table.reserve(g.extra_materials.size() + 1);
+	table.push_back(def.baseMaterial);
+	table.insert(table.end(), g.extra_materials.begin(), g.extra_materials.end());
+	return table;
+}
+
+b3MeshData *make_mesh(const Geometry &g, bool bake_placement) {
+	std::vector<b3Vec3> vertices(g.points.size());
+	for (size_t i = 0; i < g.points.size(); ++i) {
+		vertices[i] = bake_placement ? place(g, g.points[i]) : g.points[i];
+	}
+	std::vector<uint8_t> indices(g.material_indices);
+	b3MeshDef mesh_def = {};
+	mesh_def.vertices = vertices.data();
+	mesh_def.stride = sizeof(b3Vec3);
+	mesh_def.indices = const_cast<int32_t *>(g.indices.data());
+	mesh_def.materialIndices = indices.empty() ? nullptr : indices.data();
+	mesh_def.vertexCount = int(vertices.size());
+	mesh_def.triangleCount = int(g.indices.size() / 3);
+	return b3CreateMesh(&mesh_def, nullptr, 0);
+}
+} // namespace
+
 bool valid_geometry(const Geometry &g) {
-	if (!finite3(g.center) || !finite3(g.center1) || !finite3(g.center2) || !finite3(g.half_extents) || !finite3(g.scale) || !std::isfinite(g.radius) || !unit(g.rotation)) {
+	if (!finite3(g.center) || !finite3(g.center1) || !finite3(g.center2) || !finite3(g.half_extents) || !finite3(g.scale) || !std::isfinite(g.radius) || !unit(g.rotation) || !valid_material(g.material)) {
 		return false;
 	}
 	for (const b3Vec3 &point : g.points) {
@@ -498,7 +777,7 @@ bool valid_geometry(const Geometry &g) {
 					return false;
 				}
 			}
-			return true;
+			return valid_material_table(g, g.indices.size() / 3);
 		case ShapeType::HEIGHT_FIELD:
 			if (g.count_x < 2 || g.count_z < 2 || g.count_x > 4096 || g.count_z > 4096 || g.heights.size() != size_t(g.count_x) * size_t(g.count_z) || !(g.scale.x > 0.0f && g.scale.y > 0.0f && g.scale.z > 0.0f)) {
 				return false;
@@ -508,6 +787,16 @@ bool valid_geometry(const Geometry &g) {
 			}
 			for (float height : g.heights) {
 				if (!std::isfinite(height)) {
+					return false;
+				}
+			}
+			return valid_material_table(g, size_t(g.count_x - 1) * size_t(g.count_z - 1));
+		case ShapeType::COMPOUND:
+			if (g.children.empty() || g.children.size() > MAX_COMPOUND_CHILDREN) {
+				return false;
+			}
+			for (const Geometry &child : g.children) {
+				if (child.type == ShapeType::HEIGHT_FIELD || child.type == ShapeType::COMPOUND || !valid_geometry(child)) {
 					return false;
 				}
 			}
@@ -523,11 +812,15 @@ void GeometryStore::clear() {
 	for (b3HeightFieldData *field : height_fields) {
 		b3DestroyHeightField(field);
 	}
+	for (b3CompoundData *compound : compounds) {
+		b3DestroyCompound(compound);
+	}
 	meshes.clear();
 	height_fields.clear();
+	compounds.clear();
 }
 
-b3ShapeId GeometryStore::create_shape(b3BodyId body, const b3ShapeDef &def, const Geometry &g) {
+b3ShapeId GeometryStore::create_shape(b3BodyId body, b3ShapeDef def, const Geometry &g) {
 	switch (g.type) {
 		case ShapeType::SPHERE: {
 			const b3Sphere sphere = { g.center, g.radius };
@@ -553,30 +846,25 @@ b3ShapeId GeometryStore::create_shape(b3BodyId body, const b3ShapeDef &def, cons
 		}
 		case ShapeType::MESH: {
 			// Meshes take no shape transform: bake the offset and rotation into the vertices.
-			std::vector<b3Vec3> vertices(g.points.size());
-			for (size_t i = 0; i < g.points.size(); ++i) {
-				vertices[i] = place(g, g.points[i]);
-			}
-			b3MeshDef mesh_def = {};
-			mesh_def.vertices = vertices.data();
-			mesh_def.stride = sizeof(b3Vec3);
-			mesh_def.indices = const_cast<int32_t *>(g.indices.data());
-			mesh_def.vertexCount = int(vertices.size());
-			mesh_def.triangleCount = int(g.indices.size() / 3);
-			b3MeshData *mesh = b3CreateMesh(&mesh_def, nullptr, 0);
+			b3MeshData *mesh = make_mesh(g, true);
 			if (!mesh) {
 				return b3_nullShapeId;
 			}
 			meshes.push_back(mesh);
+			const std::vector<b3SurfaceMaterial> table = material_table(def, g);
+			def.materials = const_cast<b3SurfaceMaterial *>(table.data());
+			def.materialCount = int(table.size());
 			return b3CreateMeshShape(body, &def, mesh, g.scale);
 		}
 		case ShapeType::HEIGHT_FIELD: {
 			std::vector<float> heights(g.heights);
-			std::vector<uint8_t> materials;
+			std::vector<uint8_t> materials(g.material_indices);
 			if (!g.holes.empty()) {
-				materials.resize(g.holes.size());
+				materials.resize(g.holes.size(), 0);
 				for (size_t i = 0; i < g.holes.size(); ++i) {
-					materials[i] = g.holes[i] ? B3_HEIGHT_FIELD_HOLE : 0;
+					if (g.holes[i]) {
+						materials[i] = B3_HEIGHT_FIELD_HOLE;
+					}
 				}
 			}
 			const auto range = std::minmax_element(heights.begin(), heights.end());
@@ -593,7 +881,96 @@ b3ShapeId GeometryStore::create_shape(b3BodyId body, const b3ShapeDef &def, cons
 				return b3_nullShapeId;
 			}
 			height_fields.push_back(field);
+			const std::vector<b3SurfaceMaterial> table = material_table(def, g);
+			def.materials = const_cast<b3SurfaceMaterial *>(table.data());
+			def.materialCount = int(table.size());
 			return b3CreateHeightFieldShape(body, &def, field);
+		}
+		case ShapeType::COMPOUND: {
+			// Children are cloned into the baked compound; the temporary hulls, boxes and
+			// meshes are released once it is built.
+			std::vector<b3CompoundSphereDef> spheres;
+			std::vector<b3CompoundCapsuleDef> capsules;
+			std::vector<b3CompoundHullDef> hulls;
+			std::vector<b3CompoundMeshDef> mesh_defs;
+			std::vector<b3HullData *> owned_hulls;
+			std::vector<b3BoxHull> boxes;
+			std::vector<b3MeshData *> owned_meshes;
+			std::vector<std::vector<b3SurfaceMaterial>> tables;
+			size_t box_count = 0;
+			for (const Geometry &child : g.children) {
+				box_count += child.type == ShapeType::BOX ? 1 : 0;
+			}
+			boxes.reserve(box_count);
+			tables.reserve(g.children.size());
+			bool built = true;
+			for (const Geometry &child : g.children) {
+				switch (child.type) {
+					case ShapeType::SPHERE:
+						spheres.push_back({ { child.center, child.radius }, child.material });
+						break;
+					case ShapeType::CAPSULE:
+						capsules.push_back({ { place(child, child.center1), place(child, child.center2), child.radius }, child.material });
+						break;
+					case ShapeType::BOX:
+						boxes.push_back(b3MakeBoxHull(child.half_extents.x, child.half_extents.y, child.half_extents.z));
+						hulls.push_back({ &boxes.back().base, { child.center, child.rotation }, child.material });
+						break;
+					case ShapeType::HULL: {
+						std::vector<b3Vec3> scaled(child.points.size());
+						for (size_t i = 0; i < child.points.size(); ++i) {
+							scaled[i] = { child.points[i].x * child.scale.x, child.points[i].y * child.scale.y, child.points[i].z * child.scale.z };
+						}
+						b3HullData *hull = b3CreateHull(scaled.data(), int(scaled.size()), B3_MAX_HULL_VERTICES);
+						if (!hull) {
+							built = false;
+							break;
+						}
+						owned_hulls.push_back(hull);
+						hulls.push_back({ hull, { child.center, child.rotation }, child.material });
+						break;
+					}
+					case ShapeType::MESH: {
+						b3MeshData *mesh = make_mesh(child, false);
+						if (!mesh) {
+							built = false;
+							break;
+						}
+						owned_meshes.push_back(mesh);
+						tables.push_back({ child.material });
+						tables.back().insert(tables.back().end(), child.extra_materials.begin(), child.extra_materials.end());
+						mesh_defs.push_back({ mesh, { child.center, child.rotation }, child.scale, tables.back().data(), int(tables.back().size()) });
+						break;
+					}
+					default:
+						built = false;
+						break;
+				}
+			}
+			b3CompoundData *compound = nullptr;
+			if (built) {
+				b3CompoundDef compound_def = {};
+				compound_def.spheres = spheres.data();
+				compound_def.sphereCount = int(spheres.size());
+				compound_def.capsules = capsules.data();
+				compound_def.capsuleCount = int(capsules.size());
+				compound_def.hulls = hulls.data();
+				compound_def.hullCount = int(hulls.size());
+				compound_def.meshes = mesh_defs.data();
+				compound_def.meshCount = int(mesh_defs.size());
+				compound = b3CreateCompound(&compound_def);
+			}
+			for (b3HullData *hull : owned_hulls) {
+				b3DestroyHull(hull);
+			}
+			for (b3MeshData *mesh : owned_meshes) {
+				b3DestroyMesh(mesh);
+			}
+			if (!compound) {
+				return b3_nullShapeId;
+			}
+			compounds.push_back(compound);
+			return b3CreateBakedCompoundShape(body, &def, compound);
 		}
 	}
 	return b3_nullShapeId;
@@ -837,8 +1214,10 @@ void apply_world(b3WorldId world, const Props &props) {
 	if (v.has(HIT_EVENT_THRESHOLD)) {
 		b3World_SetHitEventThreshold(world, v.f(HIT_EVENT_THRESHOLD, 0));
 	}
-	if (v.has(CONTACT_HERTZ)) {
-		b3World_SetContactTuning(world, v.f(CONTACT_HERTZ, 0), v.f(CONTACT_DAMPING_RATIO, 0), v.f(CONTACT_SPEED, 0));
+	if (v.has(CONTACT_HERTZ) || v.has(CONTACT_DAMPING_RATIO) || v.has(CONTACT_SPEED)) {
+		float hertz = 0, damping = 0, speed = 0;
+		b3World_GetContactTuning(world, &hertz, &damping, &speed);
+		b3World_SetContactTuning(world, v.f(CONTACT_HERTZ, hertz), v.f(CONTACT_DAMPING_RATIO, damping), v.f(CONTACT_SPEED, speed));
 	}
 	if (v.has(MAXIMUM_LINEAR_SPEED)) {
 		b3World_SetMaximumLinearSpeed(world, v.f(MAXIMUM_LINEAR_SPEED, 0));
@@ -949,10 +1328,13 @@ void apply_body_extras(b3BodyId body, const Props &props, float step) {
 	}
 }
 
-void apply_shape(b3ShapeId shape, const Props &props) {
+void apply_shape(b3ShapeId shape, const Props &props, int32_t material_index) {
 	using namespace shape_field;
 	const View v(props);
-	if (v.has(FRICTION) || v.has(RESTITUTION) || v.has(ROLLING_RESISTANCE) || v.has(TANGENT_VELOCITY) || v.has(USER_MATERIAL)) {
+	if (material_index > 0) {
+		// One entry of a mesh or height field's per-triangle material table.
+		b3Shape_SetMeshMaterial(shape, material(v, b3Shape_GetMeshSurfaceMaterial(shape, material_index)), material_index);
+	} else if (v.has(FRICTION) || v.has(RESTITUTION) || v.has(ROLLING_RESISTANCE) || v.has(TANGENT_VELOCITY) || v.has(USER_MATERIAL)) {
 		b3Shape_SetSurfaceMaterial(shape, material(v, b3Shape_GetSurfaceMaterial(shape)));
 	}
 	if (v.has(DENSITY)) {
@@ -1113,6 +1495,12 @@ void read_world(b3WorldId world, Values &out) {
 	put_bool(out, "continuous", b3World_IsContinuousEnabled(world));
 	put_bool(out, "warm_starting", b3World_IsWarmStartingEnabled(world));
 	put(out, "contact_recycle_distance", b3World_GetContactRecycleDistance(world));
+	float hertz = 0, damping = 0, speed = 0;
+	b3World_GetContactTuning(world, &hertz, &damping, &speed);
+	put(out, "contact_hertz", hertz);
+	put(out, "contact_damping_ratio", damping);
+	put(out, "contact_speed", speed);
+	put_bool(out, "speculative", b3World_IsSpeculativeEnabled(world));
 	put_int(out, "awake_body_count", b3World_GetAwakeBodyCount(world));
 	const b3Counters counters = b3World_GetCounters(world);
 	put_int(out, "body_count", counters.bodyCount);
@@ -1155,14 +1543,21 @@ void read_body(b3BodyId body, Values &out) {
 	put_int(out, "joint_count", b3Body_GetJointCount(body));
 }
 
-void read_shape(b3ShapeId shape, Values &out) {
-	out.clear();
-	const b3SurfaceMaterial m = b3Shape_GetSurfaceMaterial(shape);
+void read_material(const b3SurfaceMaterial &m, Values &out) {
 	put(out, "friction", m.friction);
 	put(out, "restitution", m.restitution);
 	put(out, "rolling_resistance", m.rollingResistance);
 	put_vec(out, "tangent_velocity", m.tangentVelocity);
 	put_u64(out, "user_material", m.userMaterialId);
+}
+
+void read_shape(b3ShapeId shape, Values &out) {
+	out.clear();
+	const b3ShapeType type = b3Shape_GetType(shape);
+	// Compounds keep per-child materials; their shape material is the first child's.
+	read_material(b3Shape_GetMeshSurfaceMaterial(shape, 0), out);
+	put_int(out, "material_count", b3Shape_GetMeshMaterialCount(shape));
+	put_int(out, "box3d_type", int(type));
 	put(out, "density", b3Shape_GetDensity(shape));
 	const b3Filter f = b3Shape_GetFilter(shape);
 	put_u64(out, "category", f.categoryBits);
@@ -1196,10 +1591,7 @@ void read_joint(b3JointId joint, Values &out) {
 	put_vec(out, "constraint_force", b3Joint_GetConstraintForce(joint));
 	put_vec(out, "constraint_torque", b3Joint_GetConstraintTorque(joint));
 	put(out, "linear_separation", b3Joint_GetLinearSeparation(joint));
-	if (b3Joint_GetType(joint) != b3_wheelJoint) {
-		// Box3D does not implement angular separation for wheel joints (it asserts).
-		put(out, "angular_separation", b3Joint_GetAngularSeparation(joint));
-	}
+	put(out, "angular_separation", b3Joint_GetAngularSeparation(joint));
 	put_bool(out, "awake", b3Joint_IsAwake(joint));
 	switch (b3Joint_GetType(joint)) {
 		case b3_distanceJoint: {
