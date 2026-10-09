@@ -108,6 +108,10 @@ function main(editor, platform, precision, ...)
             assert(located, "Managed build did not publish " .. filename)
             os.cp(located, path.join(destination, filename))
         end
+        -- GodotPlugins ships without a deps.json, so the host resolves the editor API
+        -- (GodotSharpEditor) and other neighbours from this directory. A stale deps.json
+        -- limits resolution to GodotPlugins and GodotSharp, and editor C# init fails.
+        os.tryrm(path.join(destination, "GodotPlugins.deps.json"))
     end
     build("editor/GodotTools/GodotTools.sln", options["dev-debug"] and "Debug" or "Release", {"/p:GodotPlatform=" .. platform})
     build("editor/Godot.NET.Sdk/Godot.NET.Sdk.sln", "Release")
