@@ -28,9 +28,10 @@
 /* SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.                 */
 /**************************************************************************/
 
+#pragma once
+
 // SPDX-License-Identifier: MIT
 // Adapted from godot-box2d, Copyright (c) 2024-present Andrew Song.
-#pragma once
 
 #include "box2d_shape_2d.h"
 
