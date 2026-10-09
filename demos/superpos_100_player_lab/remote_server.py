@@ -56,6 +56,13 @@ with (out / 'server.log').open('w') as stdout, (out / 'server-error.log').open('
         if process.poll() is None:
             process.kill()
             raise RuntimeError('Remote server watchdog expired')
+        # The final full telemetry is written just before exit: relay it too.
+        try:
+            text = (out / 'server.json').read_text()
+            if text != last:
+                print('SERVER_TELEMETRY ' + json.dumps(json.loads(text), separators=(',', ':')), flush=True)
+        except (OSError, ValueError):
+            pass
         print('SERVER_EXIT ' + str(process.returncode), flush=True)
         if process.returncode:
             # Error text can contain script locations, never the bootstrap.

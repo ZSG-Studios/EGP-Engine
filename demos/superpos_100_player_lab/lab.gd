@@ -92,6 +92,10 @@ var sim_epoch := -1.0
 var section_ms := {"tick":[],"render":[],"animate":[],"animated":[],"engine_process":[],"engine_physics":[]}
 var gameplay: RefCounted
 var keyframe_cache := {}
+var telemetry_cache := {}
+var frame_physics_usec := 0
+var frame_physics_steps := 0
+var last_process_usec := 0
 # Bot processes share one deterministic world, advanced from one bot's own stream,
 # only so their brains can see positions; every bot still runs its own stream.
 var world_feed := -1
@@ -303,6 +307,12 @@ func _publish_canonical(c: Dictionary, bytes: PackedByteArray) -> bool:
 	return check(c.session.publish_packed(packed) == OK,"Atomic canonical interest publication")
 
 func _physics_process(delta: float) -> void:
+	var physics_begin := Time.get_ticks_usec()
+	_physics_step(delta)
+	frame_physics_usec+=Time.get_ticks_usec()-physics_begin
+	frame_physics_steps+=1
+
+func _physics_step(delta: float) -> void:
 	if not failed.is_empty():
 		return
 	now = Time.get_unix_time_from_system() - float(config.start_unix)
@@ -366,9 +376,9 @@ func _physics_process(delta: float) -> void:
 	elif role != "human":
 		_client_step(delta)
 	if frame % 30 == 0:
-		_write_telemetry()
+		_write_telemetry(frame % 1800 == 0)
 	if now >= float(config.duration) + 3:
-		_write_telemetry()
+		_write_telemetry(true)
 		print("LAB_FINISHED role=",role," sessions=",connections.size())
 		get_tree().quit(0)
 
@@ -1363,24 +1373,52 @@ func _reconcile(c: Dictionary, server: Vector3, processed: int, received: int) -
 		if error.length()>0.25:
 			c.corrections+=1
 
-func _write_telemetry() -> void:
+func _write_telemetry(full: bool) -> void:
+	# Percentile sorts and simulation probes are recomputed only on full writes
+	# (every 30 s and at the end); the 0.5 s readiness writes reuse them, so
+	# telemetry never stalls a frame.
+	var telemetry_started := Time.get_ticks_usec()
 	var rows: Array = []
 	for c in connections:
+		if not full:
+			# Readiness only between full writes: the supervisor's live view needs
+			# nothing else, and 101 statistics queries plus a large JSON dump would
+			# cost the server a tick.
+			rows.append({"id":c.id,"ready":c.ready,"terminal":c.session.get_state()=="NetworkFailed","ever_ready":c.ever_ready,"generation":c.generation,"recoveries":c.recoveries})
+			continue
 		var stats: Dictionary = c.session.get_statistics()
-		rows.append({"id":c.id,"ready":c.ready,"terminal":c.session.get_state()=="NetworkFailed","ever_ready":c.ever_ready,"generation":c.generation,"recoveries":c.recoveries,"transport_errors":c.transport_errors,"error_codes":c.get("error_codes",{}),"srtt_ms":float(stats.get("smoothed_rtt_us",0))/1000.0,"retry_ticks":int(stats.get("retry_ticks",0)),"cwnd":int(stats.get("congestion_window",0)),"flight":int(stats.get("bytes_in_flight",0)),"unreliable_pending":c.get("unreliable",[]).size(),"enqueue_failures":c.get("enqueue_failures",{}),"network_ready":bool(stats.get("network_ready",false)),"sent":c.sent,"applied":c.applied,"received":c.received,"ack_ms":c.ack_ms,"ack_p95":_percentile(c.acks,0.95),"ack_p50":_percentile(c.acks,0.5),"state_age_p50_ms":_percentile(c.state_ages,0.5),"state_interval_p50_ms":_percentile(c.state_intervals,0.5),"error_p95":_percentile(c.errors,0.95),"score":c.score,"position":[c.position.x,c.position.y,c.position.z],"distance":c.distance,"max_pending":c.max_pending,"pending_tickets":c.tickets.size(),"ticket_lanes":c.tickets.map(func(t):return int(t.channel)),"oldest_ticket_ms":0 if c.tickets.is_empty() else Time.get_ticks_msec()-int(c.tickets[0].at),"send_period":c.period,"wire_bytes":c.wire_base+int(stats.get("charged_wire_bytes",0)),"rejected":c.rejected,"stale":c.stale,"corrections":c.corrections,"deterministic":det.loaded if role=="human" else deterministic,"det_tick":det.tick,"det_target":det.target,"det_starved":det.starved,"det_advanced":det.advanced,"keyframes":det.keyframes if role=="human" else int(c.kf.keyframes) if c.has("kf") else int(c.get("keyframes_sent",0)),"bot_advanced":int(c.kf.advanced) if c.has("kf") else 0,"bot_loaded":bool(c.kf.loaded) if c.has("kf") else false,"command_bytes":int(c.get("command_bytes",0)),"command_rtt_ms":float(c.get("srtt",0.0))*1000.0,"command_resends":int(lockstep_server.get_stream_status(c.id).get("rewinds",0)) if role=="server" and deterministic else 0,"decoder":(lockstep_client.get_status() if role=="human" and lockstep_client!=null else c.lockstep.get_status() if c.has("lockstep") else {}),"server_ack":int(lockstep_server.get_playout_status(c.id).get("command_acknowledged",0)) if role=="server" and deterministic else 0,"sent_newest":int(lockstep_server.get_stream_status(c.id).get("sent_tick",0)) if role=="server" and deterministic else 0,"server_tick":physics.get_tick() if physics!=null else 0,"det_lag_p95":_percentile(det.lag,0.95),"det_lag_p50":_percentile(det.lag,0.5),"det_buffered_p50":_percentile(det.buffered,0.5),"det_buffered_p95":_percentile(det.buffered,0.95),"det_step_ms_p95":_percentile(det.step_ms,0.95),"playout":lockstep_server.get_playout_status(c.id) if role=="server" and deterministic and c.id==HUMAN else {},"known_entities":c.neighbors.size(),"starvations":c.starvations,"buffer_target":c.buffer_target,"buffer_p50":_percentile(c.buffer_depths,0.5),"processed_tick":c.processed_tick,"received_tick":c.received_tick,"render_delay_ms":c.render_delay*1000,"exhibit_received":c.exhibit_received,"activities":c.activities,"state_age_p95_ms":_percentile(c.state_ages,0.95),"state_interval_p95_ms":_percentile(c.state_intervals,0.95)})
-	var report := {"diagnostics":diagnostics,"role":role,"start_unix":config.start_unix,"now":now,"failed":failed,"pid":OS.get_process_id(),"rows":rows,"physics_p95_ms":_percentile(physics_ms,0.95),"frames":frame,"performance":{"frame_p50_ms":_percentile(frame_times,0.5),"frame_p95_ms":_percentile(frame_times,0.95),"frame_p99_ms":_percentile(frame_times,0.99),"process_p95_ms":_percentile(process_times,0.95),"gpu_p95_ms":_percentile(gpu_times,0.95),"physics_interval_p95_ms":_percentile(step_intervals,0.95),"samples":frame_times.size(),"server_tick_rate":float(frame)/maxf(now+10,1),"network_p95_ms":_percentile(network_times,0.95),"application_p95_ms":_percentile(application_times,0.95),"control_p95_ms":_percentile(control_times,0.95),"replication_p95_ms":_percentile(replication_times,0.95),"publish_p95_ms":_percentile(publish_times,0.95),"application_max_ms":_percentile(application_times,1.0),"tick_p50_ms":_percentile(section_ms.tick,0.5),"tick_p95_ms":_percentile(section_ms.tick,0.95),"render_p50_ms":_percentile(section_ms.render,0.5),"render_p95_ms":_percentile(section_ms.render,0.95),"animate_p50_ms":_percentile(section_ms.animate,0.5),"animate_p95_ms":_percentile(section_ms.animate,0.95),"animated_p50":_percentile(section_ms.animated,0.5),"engine_process_p50_ms":_percentile(section_ms.engine_process,0.5),"engine_process_p95_ms":_percentile(section_ms.engine_process,0.95),"engine_physics_p50_ms":_percentile(section_ms.engine_physics,0.5),"engine_physics_p95_ms":_percentile(section_ms.engine_physics,0.95),"engine_physics_window_max_ms":Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)*1000}}
-	if role=="server":
+		rows.append({"id":c.id,"ready":c.ready,"terminal":c.session.get_state()=="NetworkFailed","ever_ready":c.ever_ready,"generation":c.generation,"recoveries":c.recoveries,"transport_errors":c.transport_errors,"error_codes":c.get("error_codes",{}),"srtt_ms":float(stats.get("smoothed_rtt_us",0))/1000.0,"retry_ticks":int(stats.get("retry_ticks",0)),"cwnd":int(stats.get("congestion_window",0)),"flight":int(stats.get("bytes_in_flight",0)),"unreliable_pending":c.get("unreliable",[]).size(),"enqueue_failures":c.get("enqueue_failures",{}),"network_ready":bool(stats.get("network_ready",false)),"sent":c.sent,"applied":c.applied,"received":c.received,"ack_ms":c.ack_ms,"ack_p95":_pc(c,full,"r1",c.acks,0.95),"ack_p50":_pc(c,full,"r2",c.acks,0.5),"state_age_p50_ms":_pc(c,full,"r3",c.state_ages,0.5),"state_interval_p50_ms":_pc(c,full,"r4",c.state_intervals,0.5),"error_p95":_pc(c,full,"r5",c.errors,0.95),"score":c.score,"position":[c.position.x,c.position.y,c.position.z],"distance":c.distance,"max_pending":c.max_pending,"pending_tickets":c.tickets.size(),"ticket_lanes":c.tickets.map(func(t):return int(t.channel)),"oldest_ticket_ms":0 if c.tickets.is_empty() else Time.get_ticks_msec()-int(c.tickets[0].at),"send_period":c.period,"wire_bytes":c.wire_base+int(stats.get("charged_wire_bytes",0)),"rejected":c.rejected,"stale":c.stale,"corrections":c.corrections,"deterministic":det.loaded if role=="human" else deterministic,"det_tick":det.tick,"det_target":det.target,"det_starved":det.starved,"det_advanced":det.advanced,"keyframes":det.keyframes if role=="human" else int(c.kf.keyframes) if c.has("kf") else int(c.get("keyframes_sent",0)),"bot_advanced":int(c.kf.advanced) if c.has("kf") else 0,"bot_loaded":bool(c.kf.loaded) if c.has("kf") else false,"command_bytes":int(c.get("command_bytes",0)),"command_rtt_ms":float(c.get("srtt",0.0))*1000.0,"command_resends":int(lockstep_server.get_stream_status(c.id).get("rewinds",0)) if role=="server" and deterministic else 0,"decoder":(lockstep_client.get_status() if role=="human" and lockstep_client!=null else c.lockstep.get_status() if c.has("lockstep") else {}),"server_ack":int(lockstep_server.get_playout_status(c.id).get("command_acknowledged",0)) if role=="server" and deterministic else 0,"sent_newest":int(lockstep_server.get_stream_status(c.id).get("sent_tick",0)) if role=="server" and deterministic else 0,"server_tick":physics.get_tick() if physics!=null else 0,"det_lag_p95":_pc(c,full,"r6",det.lag,0.95),"det_lag_p50":_pc(c,full,"r7",det.lag,0.5),"det_buffered_p50":_pc(c,full,"r8",det.buffered,0.5),"det_buffered_p95":_pc(c,full,"r9",det.buffered,0.95),"det_step_ms_p95":_pc(c,full,"r10",det.step_ms,0.95),"playout":lockstep_server.get_playout_status(c.id) if role=="server" and deterministic and c.id==HUMAN else {},"known_entities":c.neighbors.size(),"starvations":c.starvations,"buffer_target":c.buffer_target,"buffer_p50":_pc(c,full,"r11",c.buffer_depths,0.5),"processed_tick":c.processed_tick,"received_tick":c.received_tick,"render_delay_ms":c.render_delay*1000,"exhibit_received":c.exhibit_received,"activities":c.activities,"state_age_p95_ms":_pc(c,full,"r12",c.state_ages,0.95),"state_interval_p95_ms":_pc(c,full,"r13",c.state_intervals,0.95)})
+	var report := {"diagnostics":diagnostics,"role":role,"start_unix":config.start_unix,"now":now,"failed":failed,"pid":OS.get_process_id(),"rows":rows,"physics_p95_ms":_pg(full,"g14",physics_ms,0.95),"frames":frame,"performance":{"frame_p50_ms":_pg(full,"g15",frame_times,0.5),"frame_p95_ms":_pg(full,"g16",frame_times,0.95),"frame_p99_ms":_pg(full,"g17",frame_times,0.99),"process_p95_ms":_pg(full,"g18",process_times,0.95),"gpu_p95_ms":_pg(full,"g19",gpu_times,0.95),"physics_interval_p95_ms":_pg(full,"g20",step_intervals,0.95),"samples":frame_times.size(),"server_tick_rate":float(frame)/maxf(now+10,1),"network_p95_ms":_pg(full,"g21",network_times,0.95),"application_p95_ms":_pg(full,"g22",application_times,0.95),"control_p95_ms":_pg(full,"g23",control_times,0.95),"replication_p95_ms":_pg(full,"g24",replication_times,0.95),"publish_p95_ms":_pg(full,"g25",publish_times,0.95),"application_max_ms":_pg(full,"g26",application_times,1.0),"tick_p50_ms":_pg(full,"g27",section_ms.tick,0.5),"tick_p95_ms":_pg(full,"g28",section_ms.tick,0.95),"render_p50_ms":_pg(full,"g29",section_ms.render,0.5),"render_p95_ms":_pg(full,"g30",section_ms.render,0.95),"animate_p50_ms":_pg(full,"g31",section_ms.animate,0.5),"animate_p95_ms":_pg(full,"g32",section_ms.animate,0.95),"animated_p50":_pg(full,"g33",section_ms.animated,0.5),"engine_process_p50_ms":_pg(full,"g34",section_ms.engine_process,0.5),"engine_process_p95_ms":_pg(full,"g35",section_ms.engine_process,0.95),"engine_physics_p50_ms":_pg(full,"g36",section_ms.engine_physics,0.5),"engine_physics_p95_ms":_pg(full,"g37",section_ms.engine_physics,0.95),"engine_physics_window_max_ms":Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)*1000}}
+	if role=="server" and (full or not telemetry_cache.has("props")):
 		var props: Array = []
 		for id in range(40):
 			var p: Vector3 = physics.get_body_state(PROP_BASE+id).position
 			props.append([p.x,p.y,p.z])
-		report.props = props
-		report.simulation=simulation.telemetry(physics)
+		telemetry_cache.props=props
+		telemetry_cache.simulation=simulation.telemetry(physics)
+	if role=="server":
+		report.props=telemetry_cache.props
+		report.simulation=telemetry_cache.simulation
 	var file := FileAccess.open(config.telemetry+".tmp",FileAccess.WRITE)
 	if file:
 		file.store_string(JSON.stringify(report))
 		file.close()
 		DirAccess.rename_absolute(config.telemetry+".tmp",config.telemetry)
+	var cost: float=float(Time.get_ticks_usec()-telemetry_started)/1000.0
+	if cost>4.0 and diagnostics.size()<400:
+		diagnostics.append([snappedf(now,0.01),"telemetry_ms",cost,full])
+
+func _pc(c: Dictionary, full: bool, key: String, values: Array, percentile: float) -> float:
+	if not c.has("pcache"):
+		c.pcache={}
+	if full or not c.pcache.has(key):
+		c.pcache[key]=_percentile(values,percentile)
+	return float(c.pcache[key])
+
+func _pg(full: bool, key: String, values: Array, percentile: float) -> float:
+	if full or not telemetry_cache.has(key):
+		telemetry_cache[key]=_percentile(values,percentile)
+	return float(telemetry_cache[key])
 
 func _percentile(values: Array, percentile: float) -> float:
 	if values.is_empty():
@@ -1449,6 +1487,8 @@ func _build_view() -> void:
 		var character: Node3D = CHARACTER_VIEW.new()
 		world.add_child(character)
 		check(character.configure(Color("e8f7ff") if id==100 else COLORS[mini(4,floori(float(id)/20.0))],id%2==1),"UAL animated mannequin setup")
+		# Spread animation LOD phases so reduced-rate characters never all update in one frame.
+		character.lod_phase=id+1
 		character.visible=false
 		visuals[id]=character
 	for id in range(40):
@@ -1499,6 +1539,11 @@ func _process(delta: float) -> void:
 			frame_times.pop_front()
 			process_times.pop_front()
 			gpu_times.pop_front()
+	# Slow-frame breakdown: what the previous frame spent its time on.
+	if last_frame_usec>0 and now>5 and frame_usec-last_frame_usec>25000 and diagnostics.size()<300:
+		diagnostics.append([snappedf(now,0.01),"slow_frame",float(frame_usec-last_frame_usec)/1000.0,frame_physics_steps,float(frame_physics_usec)/1000.0,float(CHARACTER_VIEW.animate_usec)/1000.0,CHARACTER_VIEW.animated,float(last_process_usec)/1000.0])
+	frame_physics_usec=0
+	frame_physics_steps=0
 	last_frame_usec=frame_usec
 	var c: Dictionary = connections[0]
 	# Own avatar: physics-tick prediction interpolated to the render frame, plus a correction
@@ -1543,16 +1588,19 @@ func _process(delta: float) -> void:
 	camera.look_at(own)
 	draw_timer+=delta
 	if draw_timer>0.5:
+		# HUD and monitor refresh at 2 Hz: string formatting and JSON parsing stay off
+		# the per-frame path.
 		draw_timer=0
 		var file:=FileAccess.open(config.monitor,FileAccess.READ)
 		if file:
 			var report=JSON.parse_string(file.get_as_text())
 			if report is Dictionary:
 				live_report=report
-	hud.text=("DETERMINISTIC WORLD TICK %d / BUFFER %d / KEYFRAMES %d\n" % [int(det.tick),int(lockstep_client.get_status().get("buffered_commands",0)),int(det.keyframes)] if det.loaded else "")+"%s   /   %.0f ms ACK   /   %.0f ms INTERP   /   %d DELIVERIES\nNEARBY ENTITIES %d   /   SERVER: %s\nBOT ADMISSION %d / 100   /   TEST PHASE: %s\nYOUR PROFILE: %s   /   %s" % ["AUTHENTICATED" if c.ready else "CONNECTING",c.ack_ms,c.render_delay*1000,c.score,c.neighbors.size(),"THIS PC / LOOPBACK" if config.get("local_server",false) else "BUILD PC / WIREGUARD",int(live_report.get("bots_ready",0)),live_report.get("phase","WARMUP"),["FIBRE","BROADBAND","WIFI","MOBILE","POOR"][human_profile],live_report.get("cohort_summary","FIVE INDEPENDENT BOT COHORTS")]
+		hud.text=("DETERMINISTIC WORLD TICK %d / BUFFER %d / KEYFRAMES %d\n" % [int(det.tick),int(lockstep_client.get_status().get("buffered_commands",0)),int(det.keyframes)] if det.loaded else "")+"%s   /   %.0f ms ACK   /   %.0f ms INTERP   /   %d DELIVERIES\nNEARBY ENTITIES %d   /   SERVER: %s\nBOT ADMISSION %d / 100   /   TEST PHASE: %s\nYOUR PROFILE: %s   /   %s" % ["AUTHENTICATED" if c.ready else "CONNECTING",c.ack_ms,c.render_delay*1000,c.score,c.neighbors.size(),"THIS PC / LOOPBACK" if config.get("local_server",false) else "BUILD PC / WIREGUARD",int(live_report.get("bots_ready",0)),live_report.get("phase","WARMUP"),["FIBRE","BROADBAND","WIFI","MOBILE","POOR"][human_profile],live_report.get("cohort_summary","FIVE INDEPENDENT BOT COHORTS")]
 	if now>=12 and not capture_saved:
 		capture_saved=true
 		_capture_view()
+	last_process_usec=Time.get_ticks_usec()-frame_usec
 
 func _render_deterministic(c: Dictionary, own: Vector3, delta: float) -> void:
 	# Every body comes from the locally simulated deterministic world, interpolated

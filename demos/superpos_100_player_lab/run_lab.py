@@ -283,7 +283,7 @@ def main():
                     remote.stdin.flush()
                 phase = 'WARMUP' if age<0 else 'BLACKOUT' if 30<=age<46 else 'RECONNECT' if 46<=age<55 else 'RECOVERY / CLEAN PATH' if age>=55 else 'MIXED INTERNET'
                 cohort_summary=' / '.join(str(sum(r['ready'] for r in rows if i*20<=r['id']<(i+1)*20)) for i in range(5))
-                atomic_json(OUT/'monitor.json',dict(phase=phase,elapsed=age,bots_ready=sum(r['ready'] for r in rows if r['id']<100),server_ready=sum(r['ready'] for r in server_report.get('rows',[])),cohort_summary=cohort_summary,proxy=proxy.rows,profiles=PROFILES))
+                atomic_json(OUT/'monitor.json',dict(phase=phase,elapsed=age,bots_ready=sum(r['ready'] for r in rows if r['id']<100),server_ready=sum(r['ready'] for r in server_report.get('rows',[])),cohort_summary=cohort_summary))  # HUD-sized: the client parses it on its main thread
                 if age-last_output>=10:
                     last_output=age
                     print(f"LAB_PROGRESS t={age:.0f}s clients={sum(r['ready'] for r in rows)}/{count} remote={sum(r['ready'] for r in server_report.get('rows',[]))}/{count} phase={phase}",flush=True)
