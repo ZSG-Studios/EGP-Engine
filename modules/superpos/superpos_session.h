@@ -7,6 +7,9 @@
 #include "superpos_simulation_provider.h"
 #include "superpos_managed_reload.h"
 
+class SuperposSpawner;
+class SuperposReceiverPublicAccess;
+
 class SuperposSession : public RefCounted {
     GDCLASS(SuperposSession, RefCounted);
     struct Impl;
@@ -15,7 +18,8 @@ class SuperposSession : public RefCounted {
     Error last_error = OK;
     friend class SuperposWorld;
     friend struct SuperposRtcBindingAccess;
-    friend struct SuperposNativeReceiverAccess;
+    friend struct SuperposNativeReceiverAccess;
+    friend class SuperposReceiverPublicAccess;
     void *pending_native_retirement = nullptr;
     friend class SuperposSimulationScope;
     friend class SuperposManagedReload;
@@ -46,6 +50,9 @@ class SuperposSession : public RefCounted {
 protected:
     static void _bind_methods();
 public:
+    Error attach_receiver(SuperposSpawner *p_spawner, const Dictionary &p_configuration);
+    Error detach_receiver();
+    Dictionary read_receiver_status() const;
     SuperposSession();
     ~SuperposSession();
     Error configure(const TypedArray<SuperposSchema> &p_schemas, uint32_t p_max_objects = 4096,

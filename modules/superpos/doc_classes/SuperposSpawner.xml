@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposSpawner" inherits="Node" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>Native receiver spawner that projects canonical replicas into local scenes.</brief_description>
+	<description>Attaches the bounded native replica receiver to a configured [SuperposSession] and instantiates scenes admitted by its [SuperposSpawnCatalog]. Canonical native state publishes atomically. Scene projection runs afterwards on the owner thread and is sequential: setters can observe a completed field prefix, and no atomic-scene claim is made. Every construction, setter and tree insertion revalidates native identities, the Session binding generation and a generation-checked projection ticket before continuing.
+		A leave received while construction is pending cancels that construction, and late callbacks cannot resurrect it. Retirement invalidates the projection ticket before a scene node is deleted. When retirement reenters from the root's own constructor, setter or tree callback, deletion of that root is deferred until the callback has returned. Freeing an attached spawner without [method stop] transfers the Session's network to the native retirement queue. No scene destruction or user callback runs from the spawner destructor.
+		All methods are main-thread and owner-thread only. GDScript, C# and C++ call the same native ClassDB implementation.</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_replicas" qualifiers="const">
+			<return type="SuperposReplicaView[]" />
+			<param index="0" name="offset" type="int" default="0" />
+			<param index="1" name="limit" type="int" default="64" />
+			<description>Returns at most [param limit] new weak views of canonical-ready replicas, starting at row [param offset]. [param limit] cannot exceed 64. No scene scan or global World lookup occurs.</description>
+		</method>
+		<method name="project_pending">
+			<return type="Dictionary" />
+			<description>Projects at most [member projection_budget] pending replicas. Returns [code]error[/code], [code]completed[/code] and [code]failed[/code]. Returns [constant ERR_BUSY] while a projection is already running or the spawner is stopping, and [constant ERR_UNCONFIGURED] when not started. After [method start], the spawner also calls this from process notifications.</description>
+		</method>
+		<method name="read_status" qualifiers="const">
+			<return type="Dictionary" />
+			<description>Returns [code]error[/code], [code]canonical_ready[/code], [code]scene_ready[/code], [code]scene_failed[/code], [code]stopping[/code], [code]owned_native_bytes[/code] and [code]scene_projection[/code]. Returns [constant ERR_UNCONFIGURED] when not started.</description>
+		</method>
+		<method name="start">
+			<return type="int" enum="Error" />
+			<param index="0" name="receiver_config" type="Dictionary" />
+			<description>Snapshots the catalog, reserves every native row, proxy, slot and projection cell, and attaches the receiver to [member session]. Accepted integer keys are [code]authority_epoch[/code], [code]connection_epoch[/code], [code]replica_epoch[/code], [code]peer[/code], [code]maximum_active[/code] (at most 1000), [code]maximum_transitions[/code] (at most 64), [code]control_channel[/code], [code]state_channel[/code], [code]bulk_channel[/code] and [code]native_bytes[/code] (at most 64 MiB). Unknown keys, including atomic-scene requests, return [constant ERR_INVALID_PARAMETER]. The spawner must be inside the scene tree.</description>
+		</method>
+		<method name="stop">
+			<return type="int" enum="Error" />
+			<description>Cancels pending constructions, retires every projected node and detaches the receiver with bounded work. Returns [constant OK] when the receiver is fully detached, or when nothing is attached. Returns [constant ERR_BUSY] when called from a Session callback or while the Session is closing. The stop then remains requested: projection stays halted, canonical state keeps tracking the receiver, and the spawner retries the stop from process notifications. Old [SuperposReplicaView] resources become stale.</description>
+		</method>
+	</methods>
+	<members>
+		<member name="catalog" type="SuperposSpawnCatalog" setter="set_catalog" getter="get_catalog">Catalog snapshotted by [method start]. It cannot be changed while started.</member>
+		<member name="projection_budget" type="int" setter="set_projection_budget" getter="get_projection_budget" default="32">Maximum projections per [method project_pending] call, in the range 1 through 64.</member>
+		<member name="session" type="SuperposSession" setter="set_session" getter="get_session">Receiving Session. It cannot be changed while started.</member>
+	</members>
+</class>

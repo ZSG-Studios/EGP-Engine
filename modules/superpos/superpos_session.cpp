@@ -10,6 +10,9 @@
 
 #include "session_access.hpp"
 #include "private/lifecycle_engine/staged/native_receiver_access.hpp"
+#include "superpos_spawner.h"
+#include "private/spawning/receiver_public_access.hpp"
+#include "private/spawning/spawn_runtime.hpp"
 #include "scene/main/scene_tree.h"
 #include "core/object/callable_mp.h"
 
@@ -383,6 +386,8 @@ struct EngineNetwork {
 
     std::optional<superpos::Session> session;
     superpos_egp::CapturedOwner<superpos_egp::lifecycle_engine::NativeReceiver> receiver;
+    ObjectID spawn_runtime;
+    uint64_t spawn_binding = 0;
 
 #ifdef SUPERPOS_HAS_RTC
 
@@ -405,6 +410,7 @@ struct EngineNetwork {
     }
 
     superpos::Status pump(superpos_egp::SessionAccess& access,uint64_t generation,superpos::Tick tick) noexcept {
+        if(receiver && receiver->drained())return {};
         if(receiver){auto result=receiver->pump(*access.operator->(),generation,tick);return result?superpos::Status{}:superpos::fail(result.error());}
         return access->pump(tick);
     }
@@ -1752,6 +1758,30 @@ Dictionary SuperposSession::read_object(uint64_t p_handle) const {
 }
 
 #include "private/session_fields.inc"
+#if defined(SUPERPOS_HAS_DTLS) || defined(SUPERPOS_HAS_RTC)
+#include "private/spawning/session_public.inc"
+#else
+Dictionary SuperposReceiverPublicAccess::read(SuperposSession &, uint64_t, uint64_t, const std::array<uint64_t, 6> &, const PackedInt64Array *) { Dictionary r; r["error"] = ERR_UNAVAILABLE; return r; }
+Error SuperposReceiverPublicAccess::retry(SuperposSession &, uint64_t, uint64_t, const std::array<uint64_t, 6> &) { return ERR_UNAVAILABLE; }
+Error SuperposReceiverPublicAccess::attach(SuperposSession &, SuperposSpawner &, const Dictionary &) { return ERR_UNAVAILABLE; }
+Error SuperposReceiverPublicAccess::detach(SuperposSession &) { return ERR_UNAVAILABLE; }
+void SuperposReceiverPublicAccess::abandon(SuperposSession &) noexcept {}
+#endif
+Error SuperposSession::attach_receiver(SuperposSpawner *spawner, const Dictionary &configuration) { return spawner ? SuperposReceiverPublicAccess::attach(*this, *spawner, configuration) : ERR_INVALID_PARAMETER; }
+Error SuperposSession::detach_receiver() { return SuperposReceiverPublicAccess::detach(*this); }
+Dictionary SuperposSession::read_receiver_status() const {
+    Dictionary result; result["error"] = ERR_UNCONFIGURED;
+    if (Thread::get_caller_id() != owner_thread) { result["error"] = ERR_BUSY; return result; }
+#if defined(SUPERPOS_HAS_DTLS) || defined(SUPERPOS_HAS_RTC)
+    if (impl && impl->network && impl->network->receiver) {
+        Ref<superpos_egp::spawning::SuperposSpawnRuntime> runtime(Object::cast_to<superpos_egp::spawning::SuperposSpawnRuntime>(ObjectDB::get_instance(impl->network->spawn_runtime)));
+        if (runtime.is_valid()) result = runtime->status();
+        result["attached"] = true;
+    }
+#endif
+    return result;
+}
+
 Error SuperposSession::publish_packed(const PackedByteArray &p_operations) {
     if (Thread::get_caller_id() != owner_thread) { return ERR_BUSY; }
 
@@ -1994,6 +2024,9 @@ Dictionary SuperposSession::get_admission_state() const {
 }
 
 void SuperposSession::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("attach_receiver", "spawner", "configuration"), &SuperposSession::attach_receiver);
+    ClassDB::bind_method(D_METHOD("detach_receiver"), &SuperposSession::detach_receiver);
+    ClassDB::bind_method(D_METHOD("read_receiver_status"), &SuperposSession::read_receiver_status);
 
     ClassDB::bind_method(D_METHOD("configure", "schemas", "max_objects", "authority_epoch", "authority_peer", "state_budget"), &SuperposSession::configure, DEFVAL(4096), DEFVAL(1), DEFVAL(0), DEFVAL(268435456));
 

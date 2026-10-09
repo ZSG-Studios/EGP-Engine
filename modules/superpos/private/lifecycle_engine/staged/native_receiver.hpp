@@ -6,6 +6,7 @@
 #include "private/captured_owner.hpp"
 #include "core/object/ref_counted.h"
 
+class SuperposReceiverPublicAccess;
 namespace superpos_egp::lifecycle_engine {
 class SuperposNativeFactory : public RefCounted, public WeakFactory {
     GDCLASS(SuperposNativeFactory,RefCounted);
@@ -23,6 +24,7 @@ struct Registration {
 // The Session's charged owner. Ref pins keep factories alive across deferred
 // cancellation, while WeakFactory keeps engine objects weak and generation-safe.
 class NativeReceiver {
+    friend class ::SuperposReceiverPublicAccess;
 public:
     explicit NativeReceiver(superpos::Allocator&) noexcept;
     superpos::Status initialize(superpos::Session&,superpos::SchemaRegistry&,std::uint64_t,

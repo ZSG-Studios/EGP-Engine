@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposReplicaView" inherits="Resource" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>Immutable weak view of one received canonical replica.</brief_description>
+	<description>Returned by [method SuperposSpawner.get_replicas]. It cannot be constructed directly. The view reads the receiver's canonical image through the shared typed decoder and never indexes the authoritative World. It holds only a weak Session identity, the receiver binding generation, the full handle and the complete replica key. After stop, detach, reattachment, incarnation reuse, ownership encoding reset or migration, an old view stays stale and every call returns an error, even when wire replica keys are reused. All calls are main-thread and owner-thread only.</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="get_binding_generation" qualifiers="const">
+			<return type="int" />
+			<description>Returns the unsigned receiver binding generation this view was created for.</description>
+		</method>
+		<method name="get_handle" qualifiers="const">
+			<return type="int" />
+			<description>Returns the full unsigned object handle of the replica.</description>
+		</method>
+		<method name="read_fields" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="fields" type="PackedInt64Array" />
+			<description>Decodes the listed registered field IDs from the current canonical image. On success the Dictionary contains [code]error[/code], [code]values[/code] keyed by field ID, [code]revision[/code], [code]owner[/code], [code]ownership_revision[/code], [code]canonical_ready[/code], [code]binding_generation[/code] and [code]handle[/code]. Unknown or duplicate IDs return [constant ERR_INVALID_PARAMETER]. A stale view returns another [enum Error] code.</description>
+		</method>
+		<method name="read_status" qualifiers="const">
+			<return type="Dictionary" />
+			<description>Returns [code]error[/code], [code]canonical_ready[/code], [code]revision[/code], [code]binding_generation[/code], [code]handle[/code] and, while the spawner runtime is attached, [code]scene[/code]. The [code]scene[/code] Dictionary reports [code]scene_phase[/code] ([code]"pending"[/code], [code]"ready"[/code], [code]"failed"[/code] or [code]"retiring"[/code]), [code]completed_fields[/code], [code]projection_error[/code] and [code]projected_revision[/code]. Canonical readiness and scene projection are reported separately.</description>
+		</method>
+		<method name="retry_projection" qualifiers="const">
+			<return type="int" enum="Error" />
+			<description>Requeues a failed scene projection for a canonical-ready replica. Returns [constant ERR_BUSY] when the projection is not in the failed phase or a projection is running, and an error for a stale view.</description>
+		</method>
+	</methods>
+</class>

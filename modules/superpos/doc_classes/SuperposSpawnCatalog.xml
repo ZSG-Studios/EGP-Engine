@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposSpawnCatalog" inherits="Resource" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>Bounded allowlist of schema and resource pairs for a spawner.</brief_description>
+	<description>Holds at most 64 [SuperposSpawnEntry] resources. [method SuperposSpawner.start] captures an immutable native snapshot, so later edits to this resource do not change an attached receiver. Validation never instantiates a scene, resolves a node path, inspects a script property list or executes a gameplay getter. Script-extended catalogs and entries are rejected.</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="validate" qualifiers="const">
+			<return type="Dictionary" />
+			<description>Returns a Dictionary containing [code]error[/code], [code]entries[/code] (the admitted entry count, or 0 on error) and [code]projection[/code], which is always [code]"sequential"[/code]. Zero, duplicate or out-of-range identifiers, path escapes and malformed field mappings return an [enum Error] code.</description>
+		</method>
+	</methods>
+	<members>
+		<member name="entries" type="SuperposSpawnEntry[]" setter="set_entries" getter="get_entries" default="[]">Entries in this catalog. Setting and reading copy the array.</member>
+	</members>
+</class>

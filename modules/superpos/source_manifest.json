@@ -18,7 +18,11 @@
     "private/lifecycle/lifecycle_application.cpp",
     "private/lifecycle_engine/receiver_binding.cpp",
     "private/lifecycle_engine/weak_factory.cpp",
-    "private/lifecycle_engine/staged/native_receiver.cpp"
+    "private/lifecycle_engine/staged/native_receiver.cpp",
+    "superpos_spawn_catalog.cpp",
+    "superpos_replica_view.cpp",
+    "superpos_spawner.cpp",
+    "private/spawning/spawn_runtime.cpp"
   ],
   "core_manifest": "core/source_manifest.json",
   "required_engine_modules": [
@@ -36,7 +40,11 @@
     "SuperposSession",
     "SuperposWorld",
     "SuperposReplicator",
-    "SuperposNativeFactory"
+    "SuperposNativeFactory",
+    "SuperposSpawnEntry",
+    "SuperposSpawnCatalog",
+    "SuperposReplicaView",
+    "SuperposSpawner"
   ],
   "tools_only": [
     "superpos_uint64_editor.cpp"
@@ -108,6 +116,25 @@
       "retirement": "whole_Impl_custody",
       "managed_reload": "rejected_while_receiver_attached",
       "fixture_source": "private/lifecycle_engine/staged/engine_fixture.cpp"
+    },
+    "native_spawner": {
+      "version": 1,
+      "status": "experimental_staged_pending_engine_runtime",
+      "projection": "sequential_scene_after_atomic_canonical",
+      "files": {
+        "superpos_spawn_catalog.h": "9907dfc0cfbcf6a202e688d4bfbda12a60a75497412c899d03edb2171883dd25",
+        "superpos_spawn_catalog.cpp": "bb99ae9c6f203a53ac4944c13768afe4c46ec3f7023bf06626e093cf4c61a675",
+        "superpos_replica_view.h": "26ca497a31a97292f650e8cda004bdbb10afbdfb2eb26956f2fe63896691e72b",
+        "superpos_replica_view.cpp": "7e531b8dd1dbf2cc7cb7ff2856be7ceaca1c048eb63ed3e8f2901ad69c9cb039",
+        "superpos_spawner.h": "22c14acb333263b8b4430be16e4c7aab41d91d820a7575b4f1a88e1fa8a31e5c",
+        "superpos_spawner.cpp": "66e614a2f05e307463c855d6cb3da2f688f8a3a59324b662f92d191b946c1fa9",
+        "private/spawning/spawn_runtime.hpp": "a62875b39b701c8fe165470361a76f837d1771f5a000f2342b52d5e55292e8a3",
+        "private/spawning/spawn_runtime.cpp": "e551b0471dbb6c5f87b14d3bcf72621d6ec60b3df97481ab8b29d46c23571188",
+        "private/spawning/receiver_public_access.hpp": "e720c256c4bdbf7a082c7fa73783eeb60dbb40a8d58a2a379731cd0edc9a161f",
+        "private/spawning/session_public.inc": "e7ed84e69a3473441cc3cd1e11800913de7fb84cc17ffd9fd1cf0981c86e9f8f",
+        "private/spawning/projection_queue.hpp": "0259b3265d10d609c821f052a1e5cfc38014d67d5b224ae8324da7f02bacd43d",
+        "private/spawning/public_fixture.inc": "ffc7e6cd0cdc8371370c5ab76038b7dd9e5fcabdce1b7a52a40d0bb35a968bc9"
+      }
     }
   }
 }

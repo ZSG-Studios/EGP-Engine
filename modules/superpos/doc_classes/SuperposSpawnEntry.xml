@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposSpawnEntry" inherits="Resource" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>Local Inspector authoring of one admitted spawn resource.</brief_description>
+	<description>Maps one registered schema to a trusted local [PackedScene] and at most 64 field projections. Network input selects only this numeric resource ID; it never supplies a scene path, script, method or property name. Full-width unsigned identifiers use signed opaque Variant bits in GDScript and unsigned native metadata in generated C# and C++ bindings.</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="fields" type="Dictionary" setter="set_fields" getter="get_fields" default="{}">Maps nonzero field IDs to a Dictionary containing exactly [code]node[/code] (a relative [NodePath] inside the instantiated scene, the empty path for its root, without [code]..[/code] or subnames) and [code]property[/code] (a [StringName] of at most 64 characters). Duplicate IDs or duplicate targets fail admission.</member>
+		<member name="resource_id" type="int" setter="set_resource_id" getter="get_resource_id" default="1">Nonzero unsigned resource identifier admitted by the receiver. It must be unique within its catalog.</member>
+		<member name="scene" type="PackedScene" setter="set_scene" getter="get_scene">Trusted local scene. Admission copies its native scene structure without instantiating it or running scripts. Nested referenced assets remain trusted engine resources.</member>
+		<member name="schema_id" type="int" setter="set_schema_id" getter="get_schema_id" default="1">Nonzero unsigned schema identifier. It must name a schema configured on the receiving [SuperposSession] and be unique within its catalog.</member>
+	</members>
+</class>

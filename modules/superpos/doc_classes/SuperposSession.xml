@@ -16,6 +16,12 @@
 			<return type="int" enum="Error" />
 			<description>Advances the canonical session by one tick on its owning thread. For a world with automatic ticks enabled, manual advancement is rejected.</description>
 		</method>
+		<method name="attach_receiver">
+			<return type="int" enum="Error" />
+			<param index="0" name="spawner" type="SuperposSpawner" />
+			<param index="1" name="configuration" type="Dictionary" />
+			<description>Equivalent to [method SuperposSpawner.start] for a spawner whose [member SuperposSpawner.session] is this Session. Only one receiver can be attached at a time.</description>
+		</method>
 		<method name="close">
 			<return type="void" />
 			<description>Closes the session through [method close_checked]. Use the checked method when the caller needs the rejection reason.</description>
@@ -49,6 +55,10 @@
 			<return type="int" enum="Error" />
 			<param index="0" name="handle" type="int" />
 			<description>Destroys the canonical object identified by the exact handle bits. This does not free an application scene Node.</description>
+		</method>
+		<method name="detach_receiver">
+			<return type="int" enum="Error" />
+			<description>Drains and detaches the attached native receiver, cancelling pending constructions and retiring projected nodes. Returns [constant OK] when nothing is attached, and [constant ERR_BUSY] from a Session callback or while closing. Prefer [method SuperposSpawner.stop], which also clears the spawner runtime.</description>
 		</method>
 		<method name="enqueue_packet">
 			<return type="Dictionary" />
@@ -121,6 +131,10 @@
 			<param index="0" name="binding" type="int" />
 			<param index="1" name="epoch" type="int" />
 			<description>Returns checked prediction-history information for the supplied binding generation and authority epoch. Availability does not establish a physics solver integration.</description>
+		</method>
+		<method name="read_receiver_status" qualifiers="const">
+			<return type="Dictionary" />
+			<description>Returns the attached spawner runtime status, as [method SuperposSpawner.read_status], with [code]attached[/code] set to [code]true[/code]. Without a receiver, returns only [code]error[/code] set to [constant ERR_UNCONFIGURED].</description>
 		</method>
 		<method name="read_simulation_profile" qualifiers="const">
 			<return type="Dictionary" />

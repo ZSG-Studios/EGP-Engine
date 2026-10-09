@@ -148,8 +148,11 @@ struct Run {
     }
 };
 Run* run{};std::size_t parent_baseline{};
-void idle(){if(!run){parent_baseline=module_backing().total();void* memory=module_backing().allocate(sizeof(Run),alignof(Run),superpos::MemoryDomain::Backend);if(!memory){SceneTree::get_singleton()->quit(1);return;}run=std::construct_at(static_cast<Run*>(memory));}
- if(run->step()){std::destroy_at(run);module_backing().deallocate(run);run=nullptr;
+// Idle callbacks run from both physics and process frames. After a physics-frame
+// quit, the same iteration's process frame must not construct a fresh Run.
+bool finished{};
+void idle(){if(finished)return;if(!run){parent_baseline=module_backing().total();void* memory=module_backing().allocate(sizeof(Run),alignof(Run),superpos::MemoryDomain::Backend);if(!memory){SceneTree::get_singleton()->quit(1);return;}run=std::construct_at(static_cast<Run*>(memory));}
+ if(run->step()){finished=true;std::destroy_at(run);module_backing().deallocate(run);run=nullptr;
   if(module_backing().total()!=parent_baseline){std::puts("NATIVE_LIFECYCLE_FAIL parent allocation imbalance");SceneTree::get_singleton()->quit(1);return;}
   std::printf("EGP_NATIVE_LIFECYCLE_OK checks=%u cases=6 cleanup_last_ref=1 last_ref=1 worker_last_ref=1 shutdown=1 reentrant_close=1 parent_restored=1 mock_carrier=1\n",checks);std::fflush(stdout);SceneTree::get_singleton()->quit(0);}}
 
@@ -157,4 +160,8 @@ void idle(){if(!run){parent_baseline=module_backing().total();void* memory=modul
 void superpos_register_lifecycle_fixture(){for(const String& arg:OS::get_singleton()->get_cmdline_user_args())if(arg=="--superpos-lifecycle-fixture"){
     GDREGISTER_CLASS(superpos_egp::lifecycle_engine::fixture::DropSchema);GDREGISTER_CLASS(superpos_egp::lifecycle_engine::fixture::Replica);GDREGISTER_CLASS(superpos_egp::lifecycle_engine::fixture::Factory);
     SceneTree::add_idle_callback(superpos_egp::lifecycle_engine::fixture::idle);return;}}
+#endif
+
+#ifdef SUPERPOS_LIFECYCLE_FIXTURE
+#include "../../spawning/public_fixture.inc"
 #endif
