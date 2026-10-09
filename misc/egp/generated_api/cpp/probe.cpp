@@ -15,6 +15,11 @@ void verify_generated_api() {
     const Error configured = session->configure(schemas, 4, 1, 0, 4096);
     const uint64_t object = session->spawn_object(73, 0, SuperposUInt64::to_bytes(1));
     const Dictionary observed = session->read_object(object);
+    PackedInt64Array ids; ids.push_back(1);
+    const Dictionary typed = session->read_fields(object, ids);
+    Dictionary values; values[int64_t(1)] = int64_t(-1);
+    const Error published = session->publish_fields(object, UINT64_MAX, values);
+    (void)typed; (void)published;
     const Dictionary tick = session->read_tick();
     session->close();
     (void)configured; (void)observed; (void)tick;

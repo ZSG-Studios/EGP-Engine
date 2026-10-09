@@ -86,6 +86,10 @@ public:
     uint64_t spawn_object(uint64_t p_schema, uint64_t p_owner, const PackedByteArray &p_canonical);
     Error destroy_object(uint64_t p_handle);
     Dictionary read_object(uint64_t p_handle) const;
+    // Field IDs carry unsigned bit patterns. Reads use the frozen native schema;
+    // no property getters, resource hooks or gameplay methods execute here.
+    Dictionary read_fields(uint64_t p_handle, const PackedInt64Array &p_fields) const;
+    Error publish_fields(uint64_t p_handle, uint64_t p_expected_revision, const Dictionary &p_values);
     Error publish_packed(const PackedByteArray &p_operations);
     Error transfer_ownership(uint64_t p_handle, uint64_t p_owner, uint64_t p_expected_revision);
     Dictionary get_statistics() const;

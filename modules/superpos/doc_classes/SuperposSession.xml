@@ -160,6 +160,20 @@
 			<param index="2" name="expected_revision" type="int" />
 			<description>Transfers a canonical object to the supplied owner, checking the expected ownership revision. Use exact unsigned handle, owner and revision bits.</description>
 		</method>
+
+		<method name="read_fields" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="handle" type="int" />
+			<param index="1" name="fields" type="PackedInt64Array" />
+			<description>Reads selected field IDs through the frozen native schema. The result contains error and, only on success, values, revision and binding_generation. Values uses field IDs as keys. Unsigned 64-bit values and IDs preserve signed integer bit patterns; object references remain weak handles. Duplicate or unknown fields fail without returning partial values. No property getters or scripts run.</description>
+		</method>
+		<method name="publish_fields">
+			<return type="int" enum="Error" />
+			<param index="0" name="handle" type="int" />
+			<param index="1" name="expected_revision" type="int" />
+			<param index="2" name="values" type="Dictionary" />
+			<description>Publishes typed field values keyed by exact field IDs. Checks the expected canonical object revision and every field before publishing a complete replacement. Boolean, integer, floating-point and packed-byte types are checked against the frozen schema. Unsigned values preserve integer bit patterns. Unmentioned fields retain their canonical values. A successful canonical publication does not imply scene projection or remote delivery.</description>
+		</method>
 	</methods>
 	<signals>
 		<signal name="canonical_published">

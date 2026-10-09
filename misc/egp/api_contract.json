@@ -238,7 +238,9 @@
         "publish_packed",
         "configure_udp",
         "enqueue_packet",
-        "read_packet"
+        "read_packet",
+        "read_fields",
+        "publish_fields"
       ],
       "signals": []
     },

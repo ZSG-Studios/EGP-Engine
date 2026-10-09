@@ -856,6 +856,7 @@ Dictionary SuperposSession::read_object(uint64_t p_handle) const {
     result["canonical"] = bytes;
     return result;
 }
+#include "private/session_fields.inc"
 Error SuperposSession::publish_packed(const PackedByteArray &p_operations) {
     if (Thread::get_caller_id() != owner_thread) { return ERR_BUSY; }
     if (owner_retired) { return ERR_UNCONFIGURED; }
@@ -1001,6 +1002,8 @@ void SuperposSession::_bind_methods() {
     ClassDB::bind_method(D_METHOD("spawn_object", "schema", "owner", "canonical"), &SuperposSession::spawn_object);
     ClassDB::bind_method(D_METHOD("destroy_object", "handle"), &SuperposSession::destroy_object);
     ClassDB::bind_method(D_METHOD("read_object", "handle"), &SuperposSession::read_object);
+    ClassDB::bind_method(D_METHOD("read_fields", "handle", "fields"), &SuperposSession::read_fields);
+    ClassDB::bind_method(D_METHOD("publish_fields", "handle", "expected_revision", "values"), &SuperposSession::publish_fields);
     ClassDB::bind_method(D_METHOD("publish_packed", "operations"), &SuperposSession::publish_packed);
     ClassDB::bind_method(D_METHOD("transfer_ownership", "handle", "owner", "expected_revision"), &SuperposSession::transfer_ownership);
     ClassDB::bind_method(D_METHOD("get_statistics"), &SuperposSession::get_statistics);

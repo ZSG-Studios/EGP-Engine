@@ -11,6 +11,10 @@ public static class ApiProbe
         Error configured = session.Configure(new Array<SuperposSchema> { schema }, 4, 1, 0, 4096);
         ulong handle = session.SpawnObject(73, 0, SuperposUInt64.ToBytes(1));
         Dictionary observed = session.ReadObject(handle);
+        Dictionary typed = session.ReadFields(handle, new long[] { 1 });
+        Dictionary values = new Dictionary { [1L] = -1L };
+        Error published = session.PublishFields(handle, ulong.MaxValue, values);
+        _ = (typed, published);
         Dictionary tick = session.ReadTick();
         session.Close();
         _ = (configured, observed, tick);
