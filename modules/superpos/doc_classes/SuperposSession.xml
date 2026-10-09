@@ -92,6 +92,10 @@
 			<return type="String" />
 			<description>Returns the session lifecycle state. A permanently retired owner cannot be configured again.</description>
 		</method>
+		<method name="is_network_ready" qualifiers="const">
+			<return type="bool" />
+			<description>Returns [code]true[/code] when the attached transport is admitted with no error and the session is not paused for a managed reload: the [code]ready[/code] field of [method get_admission_state] without building its Dictionary, for per-tick checks across many sessions.</description>
+		</method>
 		<method name="get_statistics" qualifiers="const">
 			<return type="Dictionary" />
 			<description>Returns a checked Dictionary of canonical world capacity, live objects, tick, binding generation, memory accounting and publication counts. An attached transport adds its counters and readiness; a native UDP/DTLS transport also reports [code]smoothed_rtt_us[/code], [code]retransmit_timeout_us[/code] and [code]retry_ticks[/code], the reliable retransmission interval in pump ticks derived from that timeout and the measured pump cadence. These counters do not establish application scene replication.</description>

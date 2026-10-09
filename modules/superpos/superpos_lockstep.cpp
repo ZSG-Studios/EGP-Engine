@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: MIT
 #include "superpos_lockstep.h"
+#include "superpos_session.h"
 #include "u64_bits.h"
 #include "core/object/class_db.h"
 #include "core/os/os.h"
@@ -148,6 +149,20 @@ struct SuperposLockstepServer::Impl {
     std::optional<superpos::CommandEncoder> commands;
     superpos::CommandStreamPolicy stream_policy;
     std::array<superpos::CommandStream, superpos::lockstep_slots> streams;
+    // Batch service state per slot: the bound session, its outstanding
+    // unreliable command sends (retired once the carrier took them) and its
+    // starvation hold input.
+    struct Link {
+        Ref<SuperposSession> session;
+        bool enabled = false, held = false;
+        uint32_t interval = 1;
+        std::array<uint64_t, 8> outstanding{};
+        std::array<uint64_t, 8> outstanding_at{};
+        size_t outstanding_count = 0;
+        uint64_t processed = 0, bytes = 0, skipped = 0;
+        std::array<uint8_t, superpos::lockstep_input_bytes> hold{};
+    };
+    std::array<Link, superpos::lockstep_slots> links;
     int64_t slots = 0;
 };
 
@@ -318,6 +333,139 @@ Dictionary SuperposLockstepServer::get_stream_status(int64_t p_slot) const {
     result["sent_tick"] = superpos_egp::signed_bits(status.sent);
     result["batches"] = int64_t(status.batches);
     result["rewinds"] = int64_t(status.rewinds);
+    result["bytes"] = int64_t(impl->links[size_t(p_slot)].bytes);
+    result["skipped"] = int64_t(impl->links[size_t(p_slot)].skipped);
+    result["enabled"] = impl->links[size_t(p_slot)].enabled;
+    return result;
+}
+void SuperposLockstepServer::bind_session(int64_t p_slot, const Ref<SuperposSession> &p_session) {
+    if (Thread::get_caller_id() != owner_thread || p_slot < 0 || p_slot >= int64_t(superpos::lockstep_slots)) { return; }
+    auto &link = impl->links[size_t(p_slot)];
+    link.session = p_session;
+    link.enabled = false;
+    link.outstanding_count = 0;
+}
+void SuperposLockstepServer::set_stream_interval(int64_t p_slot, int64_t p_ticks) {
+    if (Thread::get_caller_id() != owner_thread || p_slot < 0 || p_slot >= int64_t(superpos::lockstep_slots) || p_ticks < 1 || p_ticks > 60) { return; }
+    impl->links[size_t(p_slot)].interval = uint32_t(p_ticks);
+}
+void SuperposLockstepServer::set_stream_enabled(int64_t p_slot, bool p_enabled) {
+    if (Thread::get_caller_id() != owner_thread || p_slot < 0 || p_slot >= int64_t(superpos::lockstep_slots)) { return; }
+    impl->links[size_t(p_slot)].enabled = p_enabled;
+}
+int64_t SuperposLockstepServer::ingest_inputs(int64_t p_channel, int64_t p_max_per_session) {
+    if (Thread::get_caller_id() != owner_thread || !impl->commands || p_channel < 0 || p_channel >= 32 || p_max_per_session < 1) { return 0; }
+    int64_t accepted = 0;
+    PackedByteArray payload;
+    for (int64_t slot = 0; slot < impl->slots; ++slot) {
+        auto &link = impl->links[size_t(slot)];
+        if (link.session.is_null() || !link.session->is_network_ready()) { continue; }
+        for (int64_t n = 0; n < p_max_per_session; ++n) {
+            uint64_t message = 0;
+            if (link.session->read_raw(uint32_t(p_channel), payload, message) != OK) { break; }
+            if (accept_inputs(slot, payload) == OK) { ++accepted; }
+            // Busy: receipts are backed up; the message stays at the lane head.
+            if (link.session->acknowledge_raw(message, uint32_t(p_channel)) != OK) { break; }
+        }
+    }
+    return accepted;
+}
+Array SuperposLockstepServer::step_commands(int64_t p_tick, const PackedByteArray &p_hold_mask, const PackedByteArray &p_merge_mask) {
+    Array result;
+    if (Thread::get_caller_id() != owner_thread || !impl->commands || p_tick <= 0) { return result; }
+    const size_t width = size_t(impl->playout.input_bytes);
+    if (size_t(p_hold_mask.size()) != width || size_t(p_merge_mask.size()) != width) { return result; }
+    if (!impl->commands->begin(superpos::Tick(p_tick))) { return result; }
+    result.resize(impl->slots);
+    std::array<superpos::PlayoutInput, 2> out{};
+    std::array<uint8_t, superpos::lockstep_input_bytes> input{};
+    for (int64_t slot = 0; slot < impl->slots; ++slot) {
+        auto &link = impl->links[size_t(slot)];
+        auto &peer = impl->peers[size_t(slot)];
+        size_t produced = 0;
+        if (peer) {
+            auto consumed = peer->consume(out);
+            produced = consumed ? *consumed : 0;
+        }
+        if (produced) {
+            // Newest consumed input; one-shot bits of every consumed input survive a
+            // catch-up merge. A starved tick later holds only the persistent bits.
+            memcpy(input.data(), out[produced - 1].bytes.data(), width);
+            for (size_t k = 0; k + 1 < produced; ++k) {
+                for (size_t b = 0; b < width; ++b) { input[b] |= uint8_t(std::to_integer<uint8_t>(out[k].bytes[b]) & p_merge_mask[b]); }
+            }
+            link.processed = out[produced - 1].tick;
+            for (size_t b = 0; b < width; ++b) { link.hold[b] = uint8_t(input[b] & p_hold_mask[b]); }
+            link.held = true;
+        } else if (link.held) {
+            memcpy(input.data(), link.hold.data(), width);
+        } else {
+            input.fill(0);
+        }
+        (void)impl->commands->set(uint16_t(slot), std::span<const std::byte>(reinterpret_cast<const std::byte *>(input.data()), width), link.processed);
+        PackedByteArray bytes;
+        bytes.resize(int64_t(width));
+        memcpy(bytes.ptrw(), input.data(), width);
+        result[slot] = bytes;
+    }
+    if (!impl->commands->end()) { result.clear(); }
+    return result;
+}
+Dictionary SuperposLockstepServer::publish_commands(int64_t p_channel, int64_t p_server_tick, int64_t p_max_bytes, int64_t p_max_waiting) {
+    Dictionary result;
+    PackedInt64Array stale;
+    int64_t sent = 0, waiting = 0;
+    if (Thread::get_caller_id() != owner_thread || !impl->commands || p_channel < 0 || p_channel >= 32 || p_max_bytes < 16 || p_max_bytes > wire_ceiling || p_max_waiting < 1) {
+        result["sent"] = sent; result["stale"] = stale; return result;
+    }
+    const uint64_t now = OS::get_singleton()->get_ticks_usec();
+    std::array<std::byte, wire_ceiling> buffer{};
+    for (int64_t slot = 0; slot < impl->slots; ++slot) {
+        auto &link = impl->links[size_t(slot)];
+        if (!link.enabled || link.session.is_null()) { continue; }
+        // Each slot publishes on its own cadence, phased by slot so batches spread
+        // across ticks; every batch carries all ticks since the last one.
+        if (link.interval > 1 && (uint64_t(p_server_tick) + uint64_t(slot)) % link.interval != 0) { continue; }
+        if (!link.session->is_network_ready()) { continue; }
+        // Retire sends the carrier already took; forget any older than 30 s (the
+        // core expired them). Recent untaken sends are backpressure.
+        size_t kept = 0, recent = 0;
+        for (size_t i = 0; i < link.outstanding_count; ++i) {
+            if (link.session->retire_raw(link.outstanding[i], uint32_t(p_channel)) == OK || now - link.outstanding_at[i] > 30000000) { continue; }
+            link.outstanding[kept] = link.outstanding[i];
+            link.outstanding_at[kept] = link.outstanding_at[i];
+            recent += now - link.outstanding_at[i] < 1000000;
+            ++kept;
+        }
+        link.outstanding_count = kept;
+        if (recent >= size_t(p_max_waiting) || kept == link.outstanding.size()) { ++waiting; continue; }
+        const auto &peer = impl->peers[size_t(slot)];
+        const auto status = peer ? peer->status() : superpos::PlayoutStatus{};
+        auto encoded = impl->streams[size_t(slot)].next(*impl->commands, status.command_acknowledged, now, link.session->smoothed_rtt_usec(),
+                std::span(buffer).subspan(8, size_t(p_max_bytes) - 8), uint32_t(slot));
+        if (!encoded) {
+            if (encoded.error() == superpos::Error::StaleEpoch) { stale.push_back(slot); link.enabled = false; }
+            continue;
+        }
+        // Header: the newest input tick received from this client (it retires
+        // its input history up to there) and the server tick.
+        const uint32_t received = uint32_t(status.received), tick = uint32_t(p_server_tick);
+        memcpy(buffer.data(), &received, 4);
+        memcpy(buffer.data() + 4, &tick, 4);
+        uint64_t message = 0;
+        if (link.session->enqueue_raw(reinterpret_cast<const uint8_t *>(buffer.data()), 8 + *encoded, uint32_t(p_channel), message) == OK) {
+            link.outstanding[link.outstanding_count] = message;
+            link.outstanding_at[link.outstanding_count] = now;
+            ++link.outstanding_count;
+            link.bytes += 8 + *encoded;
+            ++sent;
+        } else {
+            ++link.skipped;
+        }
+    }
+    result["sent"] = sent;
+    result["waiting"] = waiting;
+    result["stale"] = stale;
     return result;
 }
 PackedByteArray SuperposLockstepServer::pack_keyframe() const {
@@ -330,6 +478,16 @@ PackedByteArray SuperposLockstepServer::pack_keyframe() const {
 int64_t SuperposLockstepServer::get_command_tick() const {
     if (Thread::get_caller_id() != owner_thread || !impl->commands) { return 0; }
     return superpos_egp::signed_bits(impl->commands->newest());
+}
+Dictionary SuperposLockstepServer::get_command_totals() const {
+    Dictionary result;
+    if (Thread::get_caller_id() != owner_thread || !impl->commands) { return result; }
+    const auto totals = impl->commands->totals();
+    result["ticks"] = int64_t(totals.ticks);
+    result["changes"] = int64_t(totals.changes);
+    result["changed_bytes"] = int64_t(totals.changed_bytes);
+    result["encoded_bytes"] = int64_t(totals.encoded_bytes);
+    return result;
 }
 int64_t SuperposLockstepServer::get_oldest_command_tick() const {
     if (Thread::get_caller_id() != owner_thread || !impl->commands) { return 0; }
@@ -350,6 +508,13 @@ void SuperposLockstepServer::_bind_methods() {
     ClassDB::bind_method(D_METHOD("reset_stream", "slot", "keyframe_tick"), &SuperposLockstepServer::reset_stream);
     ClassDB::bind_method(D_METHOD("pack_stream", "slot", "srtt_usec", "max_bytes"), &SuperposLockstepServer::pack_stream, DEFVAL(880));
     ClassDB::bind_method(D_METHOD("get_stream_status", "slot"), &SuperposLockstepServer::get_stream_status);
+    ClassDB::bind_method(D_METHOD("bind_session", "slot", "session"), &SuperposLockstepServer::bind_session);
+    ClassDB::bind_method(D_METHOD("set_stream_enabled", "slot", "enabled"), &SuperposLockstepServer::set_stream_enabled);
+    ClassDB::bind_method(D_METHOD("set_stream_interval", "slot", "ticks"), &SuperposLockstepServer::set_stream_interval);
+    ClassDB::bind_method(D_METHOD("ingest_inputs", "channel", "max_per_session"), &SuperposLockstepServer::ingest_inputs, DEFVAL(8));
+    ClassDB::bind_method(D_METHOD("step_commands", "tick", "hold_mask", "merge_mask"), &SuperposLockstepServer::step_commands);
+    ClassDB::bind_method(D_METHOD("publish_commands", "channel", "server_tick", "max_bytes", "max_waiting"), &SuperposLockstepServer::publish_commands, DEFVAL(860), DEFVAL(2));
     ClassDB::bind_method(D_METHOD("get_command_tick"), &SuperposLockstepServer::get_command_tick);
     ClassDB::bind_method(D_METHOD("get_oldest_command_tick"), &SuperposLockstepServer::get_oldest_command_tick);
+    ClassDB::bind_method(D_METHOD("get_command_totals"), &SuperposLockstepServer::get_command_totals);
 }

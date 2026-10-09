@@ -17,7 +17,7 @@ inline constexpr std::size_t lockstep_input_bytes = 16;
 inline constexpr std::size_t lockstep_history_ticks = 128;
 inline constexpr std::size_t lockstep_slots = 256;
 inline constexpr std::uint8_t lockstep_wire_version = 1;
-inline constexpr std::uint8_t lockstep_command_wire_version = 2;
+inline constexpr std::uint8_t lockstep_command_wire_version = 3;
 
 struct InputBatchHeader { Tick command_acknowledged{}; Tick first{}; std::size_t count{}, input_bytes{}; };
 
@@ -107,9 +107,10 @@ inline constexpr std::size_t lockstep_max_command_history = std::size_t{1} << 16
 inline constexpr std::uint32_t lockstep_no_recipient = 0xFFFFFFFFu;
 
 // Server: per-tick command tables (one input per slot) with change-only history.
-// Wire v2 sends each changed slot as a slot gap, a changed-byte mask and only the
-// changed bytes, so a slowly varying input (a turning yaw) costs a few bytes, not
-// its full width. A recipient's own processed client ticks can ride along so a
+// Wire v3 bit-packs each changed slot: an Elias-gamma slot gap (one bit for the
+// next slot), a changed-byte mask of input-width bits, and every changed byte as a
+// zigzag delta against its previous value (5 bits when small, 9 otherwise). Each
+// tick is encoded once when sealed and byte-aligned, so batches copy whole ticks. A recipient's own processed client ticks can ride along so a
 // predicting client reconciles without stamping ticks into the broadcast inputs.
 class CommandEncoder {
 public:
@@ -134,23 +135,27 @@ public:
     Tick newest() const noexcept { return newest_; }
     Tick oldest() const noexcept { return ticks_ ? newest_-ticks_+1 : newest_+1; }
     std::size_t retained() const noexcept { return ticks_; }
+    // Lifetime totals over sealed ticks: changed slots, changed input bytes and
+    // encoded change bytes (slot gaps, masks and values), for budget telemetry.
+    struct Totals { std::uint64_t ticks{}, changes{}, changed_bytes{}, encoded_bytes{}; };
+    Totals totals() const noexcept { return totals_; }
 private:
-    struct Change { std::uint16_t slot{}, mask{}; std::array<std::byte, lockstep_input_bytes> bytes{}; };
     struct TickMeta { std::size_t first{}, count{}, bytes{}; };
     CommandEncoder(Allocator& allocator, CommandStreamConfig config) noexcept
-        : config_(config), changes_(allocator, MemoryDomain::History), meta_(allocator, MemoryDomain::History), processed_(allocator, MemoryDomain::History) {}
-    Change* changes() const noexcept { return reinterpret_cast<Change*>(const_cast<std::byte*>(changes_.bytes().data())); }
+        : config_(config), ring_(allocator, MemoryDomain::History), meta_(allocator, MemoryDomain::History), processed_(allocator, MemoryDomain::History) {}
     TickMeta* meta() const noexcept { return reinterpret_cast<TickMeta*>(const_cast<std::byte*>(meta_.bytes().data())); }
     Tick* processed() const noexcept { return reinterpret_cast<Tick*>(const_cast<std::byte*>(processed_.bytes().data())); }
     // Whole ticks from `first` (after `last`, already holding `body` bytes) that fit.
     std::size_t fit_forward(Tick first, Tick last, std::size_t body, std::size_t capacity, std::uint32_t recipient) const noexcept;
     Result<std::size_t> write(Tick first, std::size_t ticks, std::span<std::byte> output, std::uint32_t recipient) const noexcept;
     CommandStreamConfig config_{};
-    Buffer changes_, meta_, processed_;
+    // Encoded ticks, oldest first, in a byte ring (head_, used_).
+    Buffer ring_, meta_, processed_;
     std::array<std::array<std::byte, lockstep_input_bytes>, lockstep_slots> table_{}, staged_{};
     std::array<Tick, lockstep_slots> staged_processed_{};
-    std::size_t change_head_{}, change_count_{}, ticks_{};
+    std::size_t head_{}, used_{}, ticks_{};
     Tick newest_{}, open_{};
+    Totals totals_{};
     bool sealed_any_{}, open_any_{};
 };
 

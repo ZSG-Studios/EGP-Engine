@@ -52,6 +52,10 @@
 			<return type="int" />
 			<description>Returns the newest sealed command tick, or [code]0[/code].</description>
 		</method>
+		<method name="get_command_totals" qualifiers="const">
+			<return type="Dictionary" />
+			<description>Returns lifetime totals over sealed ticks: [code]ticks[/code], [code]changes[/code] (changed slots), [code]changed_bytes[/code] (changed input bytes) and [code]encoded_bytes[/code] (slot gaps, masks and values), for command-stream budget telemetry.</description>
+		</method>
 		<method name="get_oldest_command_tick" qualifiers="const">
 			<return type="int" />
 			<description>Returns the oldest retained command tick. [method pack_commands] can resume any client that acknowledged at least the tick before it.</description>
@@ -67,6 +71,45 @@
 			<param index="1" name="max_bytes" type="int" default="880" />
 			<param index="2" name="recipient" type="int" default="-1" />
 			<description>Encodes every sealed tick after [param after_tick] that fits whole in [param max_bytes]. Each changed slot travels as a slot gap, a changed-byte mask and only the changed bytes. With [param recipient] set to a slot, that slot's processed client ticks (see [method set_command]) ride along so a predicting client reconciles without stamping ticks into its broadcast input. Returns [code]error[/code] and [code]payload[/code]. [constant ERR_DOES_NOT_EXIST] means the requested ticks were evicted; send [method pack_keyframe] together with a world snapshot instead.</description>
+		</method>
+		<method name="bind_session">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="session" type="SuperposSession" />
+			<description>Binds [param slot] to its client's [SuperposSession] for the native batch service ([method ingest_inputs], [method publish_commands]). Rebind after a fresh-epoch reconnect; binding resets the slot's outstanding sends and disables its stream.</description>
+		</method>
+		<method name="ingest_inputs">
+			<return type="int" />
+			<param index="0" name="channel" type="int" />
+			<param index="1" name="max_per_session" type="int" default="8" />
+			<description>Reads up to [param max_per_session] queued input batches from every bound, ready session on [param channel], accepts them into each slot's playout and acknowledges them. A Busy acknowledgement leaves the message for the next tick. Returns the number of accepted batches.</description>
+		</method>
+		<method name="publish_commands">
+			<return type="Dictionary" />
+			<param index="0" name="channel" type="int" />
+			<param index="1" name="server_tick" type="int" />
+			<param index="2" name="max_bytes" type="int" default="860" />
+			<param index="3" name="max_waiting" type="int" default="2" />
+			<description>For every enabled, bound, ready slot: retires sends its carrier already took, skips the slot while [param max_waiting] recent sends still wait for the carrier, then packs its [method pack_stream] batch (using the session's measured RTT) behind an 8-byte header (newest received input tick, [param server_tick]) and enqueues it unreliably on [param channel]. Returns [code]sent[/code], [code]waiting[/code] and [code]stale[/code], the slots whose acknowledgement left history: send each a keyframe, call [method reset_stream] and enable it again.</description>
+		</method>
+		<method name="set_stream_enabled">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="enabled" type="bool" />
+			<description>Enables [param slot]'s command stream in [method publish_commands]; disable it while its join keyframe is in flight.</description>
+		</method>
+		<method name="set_stream_interval">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="ticks" type="int" />
+			<description>Publishes [param slot]'s commands every [param ticks] server ticks (1-60, default 1), phased by slot so batches spread across ticks. Each batch carries every tick since the previous one; match the client's network pump rate.</description>
+		</method>
+		<method name="step_commands">
+			<return type="Array" />
+			<param index="0" name="tick" type="int" />
+			<param index="1" name="hold_mask" type="PackedByteArray" />
+			<param index="2" name="merge_mask" type="PackedByteArray" />
+			<description>One deterministic server tick for every slot: consumes each playout, merges the [param merge_mask] bits of all inputs consumed in a catch-up tick into the newest, holds the newest input masked by [param hold_mask] for starved ticks (zero before the first input), records every slot's command with its processed client tick and seals the tick. Both masks are one byte per input byte. Returns one [PackedByteArray] input per slot for the game step.</description>
 		</method>
 		<method name="pack_command_window" qualifiers="const">
 			<return type="Dictionary" />

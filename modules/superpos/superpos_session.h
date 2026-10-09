@@ -103,6 +103,15 @@ public:
     Error transfer_ownership(uint64_t p_handle, uint64_t p_owner, uint64_t p_expected_revision);
     Dictionary get_statistics() const;
     Dictionary get_admission_state() const;
+    // Cheap readiness: admitted, no transport error, not paused for reload.
+    bool is_network_ready() const;
+    // Lean C++ paths for native batch services (same owner/state checks as the
+    // bound methods, without Dictionary results). Unbound.
+    Error read_raw(uint32_t p_channel, PackedByteArray &r_payload, uint64_t &r_message) const;
+    Error acknowledge_raw(uint64_t p_message, uint32_t p_channel);
+    Error enqueue_raw(const uint8_t *p_data, size_t p_size, uint32_t p_channel, uint64_t &r_message);
+    Error retire_raw(uint64_t p_message, uint32_t p_channel);
+    uint64_t smoothed_rtt_usec() const;
     // Direct C++ access uses identical native implementation. No C++23 core types
     // appear in this header or in generated godot-cpp consumer headers.
 };

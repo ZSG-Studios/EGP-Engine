@@ -35,6 +35,8 @@ public:
     Dictionary get_status() const;
 };
 
+class SuperposSession;
+
 class SuperposLockstepServer : public RefCounted {
     GDCLASS(SuperposLockstepServer, RefCounted);
     struct Impl;
@@ -58,6 +60,15 @@ public:
     void reset_stream(int64_t p_slot, int64_t p_keyframe_tick);
     Dictionary pack_stream(int64_t p_slot, int64_t p_srtt_usec, int64_t p_max_bytes = 880);
     Dictionary get_stream_status(int64_t p_slot) const;
+    // Native batch service: one call per phase of a server tick instead of
+    // per-client script loops.
+    void bind_session(int64_t p_slot, const Ref<SuperposSession> &p_session);
+    void set_stream_enabled(int64_t p_slot, bool p_enabled);
+    void set_stream_interval(int64_t p_slot, int64_t p_ticks);
+    int64_t ingest_inputs(int64_t p_channel, int64_t p_max_per_session = 8);
+    Array step_commands(int64_t p_tick, const PackedByteArray &p_hold_mask, const PackedByteArray &p_merge_mask);
+    Dictionary publish_commands(int64_t p_channel, int64_t p_server_tick, int64_t p_max_bytes = 860, int64_t p_max_waiting = 2);
     int64_t get_command_tick() const;
     int64_t get_oldest_command_tick() const;
+    Dictionary get_command_totals() const;
 };

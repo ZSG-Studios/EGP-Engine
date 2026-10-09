@@ -2017,6 +2017,79 @@ Dictionary SuperposSession::get_statistics() const {
 
 }
 
+bool SuperposSession::is_network_ready() const {
+    if (Thread::get_caller_id() != owner_thread || owner_retired || closing || simulation_in_flight || managed_reload_paused) { return false; }
+#if defined(SUPERPOS_HAS_DTLS) || defined(SUPERPOS_HAS_RTC)
+    if (!impl || !impl->world || !impl->network || impl->network->error != OK) { return false; }
+    auto accessed = impl->network->access();
+    return accessed && bool((*accessed)->capabilities());
+#else
+    return false;
+#endif
+}
+Error SuperposSession::read_raw(uint32_t p_channel, PackedByteArray &r_payload, uint64_t &r_message) const {
+    if (Thread::get_caller_id() != owner_thread) { return ERR_BUSY; }
+    if (owner_retired) { return ERR_UNCONFIGURED; }
+    if (closing || simulation_in_flight) { return ERR_BUSY; }
+#if defined(SUPERPOS_HAS_DTLS) || defined(SUPERPOS_HAS_RTC)
+    if (!impl || !impl->network || p_channel >= 32) { return ERR_UNCONFIGURED; }
+    if (impl->network->error != OK) { return impl->network->error; }
+    if (impl->network->receiver && !impl->network->receiver->raw_allowed(p_channel)) { return ERR_BUSY; }
+    auto accessed = impl->network->access();
+    if (!accessed) { return translate(accessed.error()); }
+    auto received = (*accessed)->receive(uint8_t(p_channel));
+    if (!received) { return translate(received.error()); }
+    if (r_payload.resize(int64_t(received->payload.size())) != OK) { return ERR_OUT_OF_MEMORY; }
+    if (!r_payload.is_empty()) { memcpy(r_payload.ptrw(), received->payload.data(), received->payload.size()); }
+    r_message = received->message;
+    return OK;
+#else
+    return ERR_UNAVAILABLE;
+#endif
+}
+Error SuperposSession::acknowledge_raw(uint64_t p_message, uint32_t p_channel) {
+#if defined(SUPERPOS_HAS_DTLS) || defined(SUPERPOS_HAS_RTC)
+    if (!impl) { return ERR_UNCONFIGURED; }
+    return acknowledge_packet(p_message, impl->binding_generation, p_channel);
+#else
+    return ERR_UNAVAILABLE;
+#endif
+}
+Error SuperposSession::enqueue_raw(const uint8_t *p_data, size_t p_size, uint32_t p_channel, uint64_t &r_message) {
+    if (Thread::get_caller_id() != owner_thread) { return ERR_BUSY; }
+    if (owner_retired) { return ERR_UNCONFIGURED; }
+    if (managed_reload_paused || closing || simulation_in_flight) { return ERR_BUSY; }
+#if defined(SUPERPOS_HAS_DTLS) || defined(SUPERPOS_HAS_RTC)
+    if (!impl || !impl->network || p_channel >= 32) { return ERR_UNCONFIGURED; }
+    if (impl->network->error != OK) { return impl->network->error; }
+    if (impl->network->receiver && !impl->network->receiver->raw_allowed(p_channel)) { return ERR_BUSY; }
+    auto accessed = impl->network->access();
+    if (!accessed) { return translate(accessed.error()); }
+    auto accepted = (*accessed)->send(std::span<const std::byte>(reinterpret_cast<const std::byte *>(p_data), p_size), impl->tick, uint8_t(p_channel));
+    if (!accepted) { return translate(accepted.error()); }
+    r_message = accepted->message;
+    return OK;
+#else
+    return ERR_UNAVAILABLE;
+#endif
+}
+Error SuperposSession::retire_raw(uint64_t p_message, uint32_t p_channel) {
+#if defined(SUPERPOS_HAS_DTLS) || defined(SUPERPOS_HAS_RTC)
+    if (!impl) { return ERR_UNCONFIGURED; }
+    return retire_packet(p_message, impl->binding_generation, p_channel);
+#else
+    return ERR_UNAVAILABLE;
+#endif
+}
+uint64_t SuperposSession::smoothed_rtt_usec() const {
+#ifdef SUPERPOS_HAS_DTLS
+    if (Thread::get_caller_id() != owner_thread || !impl || !impl->network || !impl->network->packet) { return 0; }
+    auto stats = impl->network->packet->statistics();
+    return stats ? stats->smoothed_rtt_us : 0;
+#else
+    return 0;
+#endif
+}
 Dictionary SuperposSession::get_admission_state() const {
 
     Dictionary result;
@@ -2150,6 +2223,7 @@ void SuperposSession::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_statistics"), &SuperposSession::get_statistics);
 
     ClassDB::bind_method(D_METHOD("get_admission_state"), &SuperposSession::get_admission_state);
+    ClassDB::bind_method(D_METHOD("is_network_ready"), &SuperposSession::is_network_ready);
 
     MethodInfo tick("simulation_tick", PropertyInfo(Variant::INT, "tick"));
 

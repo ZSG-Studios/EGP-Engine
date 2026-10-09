@@ -20,6 +20,7 @@ public:
  Result<std::uint64_t> varuint() noexcept;
  Result<std::span<const std::byte>> raw(std::size_t size) noexcept;
  bool empty() const noexcept { return position_==bytes_.size(); }
+ std::span<const std::byte> remaining() const noexcept { return bytes_.subspan(position_); }
 };
 std::array<std::byte,8> sortable_u64(std::uint64_t value) noexcept;
 Result<std::uint64_t> parse_u64(std::string_view text) noexcept;

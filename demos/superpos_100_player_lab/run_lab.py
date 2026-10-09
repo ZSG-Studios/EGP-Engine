@@ -87,7 +87,7 @@ class Proxy:
         stats['packets'] += 1
         age = current-self.start
         p = PROFILES[cohort(peer,self.bots)] if peer<self.bots else PROFILES[self.human_profile]
-        if (30 <= age < 46 and cohort(peer,self.bots)==4) or (peer==self.bots and current<self.human_offline_until):
+        if (30 <= age < 46 and peer<self.bots and cohort(peer,self.bots)==4) or (peer==self.bots and current<self.human_offline_until):
             stats['dropped'] += 1
             stats['blackout_drops'] += 1
             return
@@ -107,7 +107,7 @@ class Proxy:
         if rng.random()<p['reorder']:
             delay *= 0.05
             stats['expedited'] += 1
-        rate = p['rate'] * (0.25 if 20<=age<27 and cohort(peer,self.bots) in (2,3) else 1)
+        rate = p['rate'] * (0.25 if 20<=age<27 and peer<self.bots and cohort(peer,self.bots) in (2,3) else 1)
         if lane['direction']=='up':
             rate *= 0.6
         lane['tail'] = max(current,lane['tail'])+len(payload)/rate
@@ -341,7 +341,7 @@ def main():
                 cohort_rows=members
                 rates=sorted(r.get('command_bytes',0)/max(args.duration,1)/1000 for r in cohort_rows)
                 stream[profile['name']]=dict(command_kBps_p50=round(rates[len(rates)//2],2),command_kBps_max=round(rates[-1],2),
-                    rtt_ms_p50=round(sorted(r.get('command_rtt_ms',0) for r in cohort_rows)[len(cohort_rows)//2],1),
+                    rtt_ms_p50=round(sorted(r.get('srtt_ms',0) for r in cohort_rows)[len(cohort_rows)//2],1),
                     resends=sum(r.get('command_resends',0) for r in cohort_rows),keyframes=sum(r.get('keyframes',0) for r in cohort_rows),
                     behind_s_p50=round(sorted((r.get('server_tick',0)-r.get('server_ack',0))/60 for r in cohort_rows)[len(cohort_rows)//2],2),
                     behind_s_max=round(max((r.get('server_tick',0)-r.get('server_ack',0))/60 for r in cohort_rows),2),
@@ -362,7 +362,7 @@ def main():
             activities={key for row in server_rows for key in row.get('activities',{})}
             if not {'8','16','32','64','256'}.issubset(activities):
                 errors.append('Replicated bot activities not exercised')
-        summary = dict(passed=not errors,errors=errors,scope=('Local' if args.local_server else 'Remote')+' native dedicated Box3D server; local independent native Superpos UDP/DTLS streams through seeded datagram impairment',bots=args.bots,human=not args.no_human,duration=args.duration,server=server_meta,local_engine_sha256=hashlib.sha256(engine.read_bytes()).hexdigest(),clients=rows,server_clients=server_rows,proxy=proxy.rows,profiles=PROFILES,physics_p95_ms=server_report.get('physics_p95_ms'),server_exit=server_exit,simulation=simulation,performance={report['role']:report.get('performance',{}) for report in reports if report['role']=='human'},server_performance=server_report.get('performance',{}),local_server=args.local_server,proxy_gaps=proxy_gaps,diagnostics={report['role']:report.get('diagnostics',[]) for report in reports if report['role']=='human'}|{'server':server_report.get('diagnostics',[])},command_stream=stream)
+        summary = dict(passed=not errors,errors=errors,scope=('Local' if args.local_server else 'Remote')+' native dedicated Box3D server; local independent native Superpos UDP/DTLS streams through seeded datagram impairment',bots=args.bots,human=not args.no_human,duration=args.duration,server=server_meta,local_engine_sha256=hashlib.sha256(engine.read_bytes()).hexdigest(),clients=rows,server_clients=server_rows,proxy=proxy.rows,profiles=PROFILES,physics_p95_ms=server_report.get('physics_p95_ms'),server_exit=server_exit,simulation=simulation,performance={report['role']:report.get('performance',{}) for report in reports if report['role']=='human'},server_performance=server_report.get('performance',{}),local_server=args.local_server,proxy_gaps=proxy_gaps,diagnostics={report['role']:report.get('diagnostics',[]) for report in reports if report['role']=='human'}|{'server':server_report.get('diagnostics',[])},command_stream=stream,command_totals=server_report.get('command_totals',{}))
         atomic_json(OUT/'receipt.json',summary)
         print('LAB_'+('PASS' if not errors else 'FAIL')+' clients='+str(count)+' physics_p95_ms='+str(summary['physics_p95_ms']),flush=True)
         if errors:
@@ -376,6 +376,9 @@ def main():
         for process in processes:
             if process.poll() is None:
                 process.kill()
+        # Killing the local supervisor would orphan its native server child.
+        if args.local_server and server_meta.get('pid'):
+            subprocess.run(['taskkill','/F','/PID',str(server_meta['pid'])],capture_output=True)
         for stream in streams:
             stream.close()
 
