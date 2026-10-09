@@ -14,7 +14,11 @@
     "superpos_managed_reload.cpp",
     "private/module_memory.cpp",
     "private/box2d_replay.cpp",
-    "superpos_replicator.cpp"
+    "superpos_replicator.cpp",
+    "private/lifecycle/lifecycle_application.cpp",
+    "private/lifecycle_engine/receiver_binding.cpp",
+    "private/lifecycle_engine/weak_factory.cpp",
+    "private/lifecycle_engine/staged/native_receiver.cpp"
   ],
   "core_manifest": "core/source_manifest.json",
   "required_engine_modules": [
@@ -31,7 +35,8 @@
     "SuperposSimulationProvider",
     "SuperposSession",
     "SuperposWorld",
-    "SuperposReplicator"
+    "SuperposReplicator",
+    "SuperposNativeFactory"
   ],
   "tools_only": [
     "superpos_uint64_editor.cpp"
@@ -89,6 +94,19 @@
         "native_rtc_binding.hpp"
       ],
       "core_feature": "rtc_embedded@1"
+    },
+    "native_lifecycle": {
+      "version": 1,
+      "status": "experimental_pending_engine_runtime",
+      "sources": [
+        "private/lifecycle/lifecycle_application.cpp",
+        "private/lifecycle_engine/receiver_binding.cpp",
+        "private/lifecycle_engine/weak_factory.cpp",
+        "private/lifecycle_engine/staged/native_receiver.cpp"
+      ],
+      "factories": "native_only_weak_ObjectID",
+      "retirement": "whole_Impl_custody",
+      "managed_reload": "rejected_while_receiver_attached"
     }
   }
 }
