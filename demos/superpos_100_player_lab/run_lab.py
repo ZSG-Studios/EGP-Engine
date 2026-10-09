@@ -310,8 +310,13 @@ def main():
             if not row['ever_ready'] or not row['ready'] or row['received']<10 or (row['id']<args.bots and row['distance']<3):
                 errors.append('Server qualification failed id='+str(row['id']))
         if args.duration>=65 and args.bots==100:
-            if not all(r['generation']>=2 and r['recoveries']>=1 for r in rows if 80<=r['id']<100):
-                errors.append('Blackout cohort did not re-admit on fresh epochs')
+            blackout=[r for r in rows if 80<=r['id']<100]
+            # A session may ride out the 9 s blackout inside its progress timeout or fail
+            # and re-admit on a fresh epoch; either way every blackout client must return.
+            if not all(r['ready'] for r in blackout):
+                errors.append('Blackout cohort did not recover')
+            if not any(r['generation']>=2 and r['recoveries']>=1 for r in blackout):
+                errors.append('Fresh-epoch re-admission was not exercised')
             if not sum(r['blackout_drops'] for r in proxy.rows):
                 errors.append('Blackout was not exercised on actual packets')
         human_row=next((r for r in rows if r['id']==100),None)
@@ -328,6 +333,8 @@ def main():
                 stream[profile['name']]=dict(command_kBps_p50=round(rates[len(rates)//2],2),command_kBps_max=round(rates[-1],2),
                     rtt_ms_p50=round(sorted(r.get('command_rtt_ms',0) for r in cohort)[len(cohort)//2],1),
                     resends=sum(r.get('command_resends',0) for r in cohort),keyframes=sum(r.get('keyframes',0) for r in cohort),
+                    behind_s_p50=round(sorted((r.get('server_tick',0)-r.get('server_ack',0))/60 for r in cohort)[len(cohort)//2],2),
+                    behind_s_max=round(max((r.get('server_tick',0)-r.get('server_ack',0))/60 for r in cohort),2),
                     link_kBps=profile['rate']/1000)
         print('LAB_STREAM '+json.dumps(stream),flush=True)
         if any(r.get('bot_loaded') is not None for r in rows):

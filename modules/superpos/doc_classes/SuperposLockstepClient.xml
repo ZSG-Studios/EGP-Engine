@@ -41,6 +41,11 @@
 			<param index="2" name="buffer_ticks" type="int" default="128" />
 			<description>Sets the fixed input width (1-16 bytes), the number of player slots (1-256) shared with the server, and how many received command ticks may wait ahead of the simulation. A batch that would overflow the buffer is rejected whole and resent later. Reconfiguring discards all retained inputs and commands.</description>
 		</method>
+		<method name="discard_oldest_inputs">
+			<return type="int" />
+			<param index="0" name="count" type="int" />
+			<description>Drops up to [param count] of the oldest unacknowledged inputs and returns how many were dropped. Use it when [method record_input] reports [constant ERR_OUT_OF_MEMORY] because the server stopped acknowledging during an outage: the server's playout skips the dropped ticks as lost and resynchronizes when the stream returns.</description>
+		</method>
 		<method name="get_input" qualifiers="const">
 			<return type="PackedByteArray" />
 			<param index="0" name="slot" type="int" />
@@ -63,7 +68,7 @@
 			<return type="PackedByteArray" />
 			<param index="0" name="max_ticks" type="int" default="60" />
 			<param index="1" name="max_bytes" type="int" default="880" />
-			<description>Packs the oldest unacknowledged inputs that fit in [param max_bytes], up to [param max_ticks]. The default stays inside one unreliable Superpos datagram. Returns an empty array when unconfigured.</description>
+			<description>Packs the newest unacknowledged inputs that fit in [param max_bytes], up to [param max_ticks], so a saturated uplink never resends an ever-growing backlog; older inputs the server never received are skipped by its playout. Size [param max_ticks] to the redundancy you want (for example half a second of ticks). The default stays inside one unreliable Superpos datagram. Returns an empty array when unconfigured.</description>
 		</method>
 		<method name="record_input">
 			<return type="int" enum="Error" />

@@ -25,6 +25,7 @@ public:
     Error configure(int64_t p_input_bytes, int64_t p_slots, int64_t p_buffer_ticks = 128);
     Error record_input(int64_t p_tick, const PackedByteArray &p_input);
     Error acknowledge_inputs(int64_t p_tick);
+    int64_t discard_oldest_inputs(int64_t p_count);
     PackedByteArray pack_inputs(int64_t p_max_ticks = 60, int64_t p_max_bytes = 880) const;
     Error accept_commands(const PackedByteArray &p_payload);
     Error load_keyframe(const PackedByteArray &p_table);
@@ -54,6 +55,9 @@ public:
     Dictionary pack_commands(int64_t p_after_tick, int64_t p_max_bytes = 880, int64_t p_recipient = -1) const;
     Dictionary pack_command_window(int64_t p_acknowledged_tick, int64_t p_sent_tick, int64_t p_max_bytes = 880, int64_t p_recipient = -1, int64_t p_redundant_ticks = 0) const;
     PackedByteArray pack_keyframe() const;
+    void reset_stream(int64_t p_slot, int64_t p_keyframe_tick);
+    Dictionary pack_stream(int64_t p_slot, int64_t p_srtt_usec, int64_t p_max_bytes = 880);
+    Dictionary get_stream_status(int64_t p_slot) const;
     int64_t get_command_tick() const;
     int64_t get_oldest_command_tick() const;
 };

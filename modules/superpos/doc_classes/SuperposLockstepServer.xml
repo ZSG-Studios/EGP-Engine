@@ -37,7 +37,7 @@
 			<param index="0" name="input_bytes" type="int" />
 			<param index="1" name="slots" type="int" />
 			<param index="2" name="playout" type="Dictionary" default="{}" />
-			<description>Sets the fixed input width (1-16 bytes), the slot count (1-256) and optional playout tuning: [code]initial_target[/code] (default 6 ticks), [code]minimum_target[/code] (2), [code]maximum_target[/code] (45, below 128), [code]relax_ticks[/code] (240) and [code]catch_up_margin[/code] (12), and command-stream sizing: [code]command_history_ticks[/code] (128, up to 65536) is the window in which a slow joiner or a stalled client catches up without another keyframe, [code]command_change_capacity[/code] (0 sizes for every slot changing on every retained tick) caps the shared change entries. History is allocated once here. Unknown keys return [constant ERR_INVALID_PARAMETER].</description>
+			<description>Sets the fixed input width (1-16 bytes), the slot count (1-256) and optional playout tuning: [code]initial_target[/code] (default 6 ticks), [code]minimum_target[/code] (2), [code]maximum_target[/code] (45, below 128), [code]relax_ticks[/code] (240) and [code]catch_up_margin[/code] (12), and command-stream sizing: [code]command_history_ticks[/code] (128, up to 65536) is the window in which a slow joiner or a stalled client catches up without another keyframe, [code]command_change_capacity[/code] (0 sizes for every slot changing on every retained tick) caps the shared change entries, and [method pack_stream] policy: [code]stream_redundant_ticks[/code] (1) and [code]stream_catch_up_ticks[/code] (30). History is allocated once here. Unknown keys return [constant ERR_INVALID_PARAMETER].</description>
 		</method>
 		<method name="consume_inputs">
 			<return type="Array" />
@@ -76,6 +76,24 @@
 			<param index="3" name="recipient" type="int" default="-1" />
 			<param index="4" name="redundant_ticks" type="int" default="0" />
 			<description>Fresh-first streaming for unreliable channels. Encodes every tick after [param sent_tick] that fits whole in [param max_bytes], then uses remaining space for up to [param redundant_ticks] already-sent ticks after [param acknowledged_tick], so an isolated lost batch heals without a round trip while fresh ticks never starve. With nothing fresh it resends the newest unacknowledged ticks. Returns [code]error[/code] and [code]payload[/code] like [method pack_commands]; rewind [param sent_tick] to [param acknowledged_tick] when acknowledgements stall for longer than a round trip.</description>
+		</method>
+		<method name="pack_stream">
+			<return type="Dictionary" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="srtt_usec" type="int" />
+			<param index="2" name="max_bytes" type="int" default="880" />
+			<description>Next command batch for [param slot]'s client, from its own native sender state: fresh-first windows carrying its processed ticks, one rewind to its acknowledgement after a stall of 2 x [param srtt_usec] plus its ack cadence, and [code]stream_redundant_ticks[/code] of redundancy only while it is within [code]stream_catch_up_ticks[/code] of the newest tick. Pass the session's [code]smoothed_rtt_us[/code]. Returns [code]error[/code] and [code]payload[/code]; [constant ERR_DOES_NOT_EXIST] means its acknowledgement left history: send a keyframe and call [method reset_stream].</description>
+		</method>
+		<method name="reset_stream">
+			<return type="void" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="keyframe_tick" type="int" />
+			<description>Restarts [param slot]'s sender after a keyframe join at [param keyframe_tick].</description>
+		</method>
+		<method name="get_stream_status" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="slot" type="int" />
+			<description>Returns [code]acknowledged_tick[/code], [code]sent_tick[/code], [code]batches[/code] and [code]rewinds[/code] for [param slot]'s sender.</description>
 		</method>
 		<method name="pack_keyframe" qualifiers="const">
 			<return type="PackedByteArray" />

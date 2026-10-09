@@ -31,12 +31,17 @@ Status InputHistory::acknowledge(Tick received) noexcept {
     while(count_ && oldest_<=received){++oldest_;--count_;}
     return {};
 }
+std::size_t InputHistory::discard_oldest(std::size_t count) noexcept {
+    count=std::min(count,count_);oldest_+=count;count_-=count;return count;
+}
 Result<std::size_t> InputHistory::encode(Tick command_acknowledged,std::size_t max_ticks,std::span<std::byte> output) const noexcept {
-    const auto first=count_?oldest_:newest_+1;
+    // The newest unacknowledged inputs that fit: on a saturated uplink, resending an
+    // ever-growing backlog would only delay the acknowledgements further.
     std::size_t ticks=std::min(count_,max_ticks);
-    const auto fixed=1+varuint_size(command_acknowledged)+varuint_size(first)+varuint_size(input_bytes_);
+    const auto fixed=1+varuint_size(command_acknowledged)+varuint_size(newest_+1)+varuint_size(input_bytes_);
     while(ticks && fixed+varuint_size(ticks)+ticks*input_bytes_>output.size())--ticks;
     if(fixed+varuint_size(ticks)+ticks*input_bytes_>output.size())return fail(Error::Truncated);
+    const auto first=ticks?newest_-ticks+1:newest_+1;
     Writer writer(output);std::array<std::byte,1> version{std::byte{lockstep_wire_version}};
     if(!writer.raw(version)||!writer.varuint(command_acknowledged)||!writer.varuint(first)||!writer.varuint(ticks)||!writer.varuint(input_bytes_))return fail(Error::Truncated);
     for(std::size_t i=0;i<ticks;++i)if(!writer.raw(std::span(inputs_[(first+i)%capacity]).first(input_bytes_)))return fail(Error::Truncated);
@@ -57,6 +62,14 @@ Status InputPlayout::accept(std::span<const std::byte> batch) noexcept {
     auto payload=reader.raw(*count*config_.input_bytes);if(!payload||!reader.empty())return fail(Error::NonCanonical);
     command_acknowledged_=std::max(command_acknowledged_,*acknowledged);
     if(!started_ && *count){next_=*first;received_=*first-1;started_=true;calm_=0;}
+    // A client back from an outage (its history discarded what we never received)
+    // can land beyond the window: resynchronize forward, skipping the lost ticks,
+    // instead of rejecting its stream as late forever.
+    if(started_ && *count && *first+*count-1>=next_+capacity) {
+        const Tick target=*first+*count-capacity;
+        for(Tick tick=next_;tick<target && tick<next_+capacity;++tick)occupied_[tick%capacity]=false;
+        skipped_+=target-next_;next_=target;received_=std::max(received_,next_-1);
+    }
     for(std::size_t i=0;i<*count;++i) {
         const Tick tick=*first+i;
         if(tick<next_){++late_;continue;}
@@ -261,6 +274,32 @@ Result<std::size_t> CommandEncoder::encode_table(std::span<std::byte> output) co
     if(!writer.raw(head)||!writer.varuint(newest_)||!writer.varuint(config_.slots)||!writer.varuint(config_.input_bytes))return fail(Error::Truncated);
     for(std::size_t slot=0;slot<config_.slots;++slot)if(!writer.raw(std::span(table_[slot]).first(config_.input_bytes)))return fail(Error::Truncated);
     return writer.size();
+}
+
+void CommandStream::reset(Tick keyframe,std::uint64_t now) noexcept {
+    acknowledged_=sent_=keyframe;acknowledged_at_=now;started_=true;
+}
+Result<std::size_t> CommandStream::next(const CommandEncoder& encoder,Tick acknowledged,std::uint64_t now,std::uint64_t srtt,
+    std::span<std::byte> output,std::uint32_t recipient) noexcept {
+    if(!started_)reset(acknowledged,now);
+    if(acknowledged>acknowledged_){acknowledged_=acknowledged;acknowledged_at_=now;}
+    // A parked-beyond-the-gap client jumps its acknowledgement past what we
+    // resent, so the stream skips ahead instead of repeating it.
+    sent_=std::max(sent_,acknowledged_);
+    // Nothing outstanding: the stall clock idles (a slow keyframe is not a stall).
+    if(sent_==acknowledged_)acknowledged_at_=now;
+    const std::uint64_t stall=std::max(policy_.minimum_stall_us,2*srtt+policy_.ack_cadence_us);
+    if(sent_>acknowledged_ && now>=acknowledged_at_ && now-acknowledged_at_>stall) {
+        sent_=acknowledged_;acknowledged_at_=now;++rewinds_;
+    }
+    const bool behind=encoder.newest()>acknowledged_+policy_.catch_up_ticks;
+    auto size=encoder.encode_window(acknowledged_,sent_,output,recipient,behind?0:policy_.redundant_ticks);
+    if(!size)return size;
+    Reader reader(output.first(*size));(void)reader.raw(2);
+    auto first=reader.varuint(),ticks=reader.varuint();
+    if(first && ticks && *ticks)sent_=std::max(sent_,*first+*ticks-1);
+    ++batches_;
+    return size;
 }
 
 Result<CommandDecoder> CommandDecoder::create(Allocator& allocator,CommandStreamConfig config) noexcept {

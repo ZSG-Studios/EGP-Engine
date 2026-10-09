@@ -223,6 +223,23 @@ func _open(c: Dictionary) -> void:
 		c.render_y=c.predicted.y
 		c.corrections=0
 		c.reconciled=false
+	if c.generation>1:
+		# A fresh epoch is a new association: restart its protocol state cleanly so
+		# the client joins by a new keyframe instead of waiting on the old stream.
+		c.tickets=[]
+		c.unreliable=[]
+		if role=="server":
+			c.keyframe_tick=0
+			c.kf_next=0
+			c.kf_count=0
+			c.resync=false
+		elif c.has("kf"):
+			c.kf.chunks={}
+			c.kf.id=-1
+			c.kf.loaded=false
+		elif role=="human":
+			det.chunks={}
+			det.chunk_id=-1
 	if not c.has("wire_base"):
 		c.wire_base=0
 	if c.session != null:
@@ -244,7 +261,7 @@ func _open(c: Dictionary) -> void:
 	var args := [server,local_ip,local_port,remote_ip,remote_port,53100+c.id,60000+c.id,key]
 	if deterministic:
 		# Real-time floor: the lockstep stream needs ~15 kB/s; wireless loss must not starve it.
-		args.append({"channel_modes":DETERMINISTIC_MODES,"minimum_rate":int(_tuning("minimum_rate",32768))})
+		args.append({"channel_modes":DETERMINISTIC_MODES,"minimum_rate":int(_tuning("minimum_rate",16384))})
 	check(session.callv("configure_udp",args) == OK,"UDP association provision")
 	c.unreliable=[]
 	c.session = session
@@ -667,9 +684,21 @@ func _retire_unreliable(c: Dictionary) -> void:
 	for ticket in c.get("unreliable",[]):
 		if c.session.retire_packet(ticket.message,ticket.binding_generation,ticket.channel)==OK:
 			c.applied+=1
-		elif Time.get_ticks_msec()-int(ticket.at)<3000:
+		elif Time.get_ticks_msec()-int(ticket.at)<30000:
+			# Keep retrying past the core's own expiry: a slot dropped from tracking
+			# before it was retired would leak the lane for good.
 			kept.append(ticket)
 	c.unreliable=kept
+
+func _unreliable_waiting(c: Dictionary, lane: int) -> int:
+	# Recent messages the carrier has not taken yet (an older one may have been
+	# expired by the core; it no longer counts as backpressure).
+	var count := 0
+	var cutoff: int=Time.get_ticks_msec()-1000
+	for ticket in c.get("unreliable",[]):
+		if int(ticket.channel)==lane and int(ticket.at)>cutoff:
+			count+=1
+	return count
 
 func _send_unreliable(c: Dictionary, bytes: PackedByteArray, lane: int) -> void:
 	var ticket: Dictionary=c.session.enqueue_packet(bytes,lane)
@@ -677,6 +706,11 @@ func _send_unreliable(c: Dictionary, bytes: PackedByteArray, lane: int) -> void:
 		ticket.at=Time.get_ticks_msec()
 		c.unreliable.append(ticket)
 		c.sent+=1
+	else:
+		if not c.has("enqueue_failures"):
+			c.enqueue_failures={}
+		var key: String="%d:%d" % [lane,int(ticket.error)]
+		c.enqueue_failures[key]=int(c.enqueue_failures.get(key,0))+1
 
 func _send_lockstep() -> void:
 	if not deterministic:
@@ -697,36 +731,16 @@ func _send_lockstep_to(c: Dictionary) -> void:
 		if _pending(c,KEYFRAME_LANE)==0:
 			_send_keyframe_chunk(c)
 		return
-	# Fresh-first streaming: every batch carries all new ticks, and leftover space
-	# repeats a few unacknowledged ones so an isolated loss heals without a round trip.
-	var acknowledged: int=maxi(int(status.get("command_acknowledged",0)),int(c.keyframe_tick))
-	if acknowledged>int(c.get("command_ack_seen",0)):
-		c.command_ack_seen=acknowledged
-		c.command_ack_at=now
-		# Round trip from the send time of the newest acknowledged tick.
-		var sent_at: Dictionary=c.get("command_sent_at",{})
-		if sent_at.has(acknowledged):
-			var sample: float=now-float(sent_at[acknowledged])
-			c.command_rtt=sample if float(c.get("command_rtt",0.0))<=0.0 else lerpf(float(c.command_rtt),sample,0.125)
-		for tick in sent_at.keys():
-			if int(tick)<=acknowledged:
-				sent_at.erase(tick)
-	var sent_newest: int=maxi(int(c.get("command_sent_newest",0)),acknowledged)
-	# A stalled acknowledgement (after a round trip: a slow link is not a lossy one)
-	# rewinds the stream to it. The client parks batches beyond the gap, so once the
-	# repair lands its acknowledgement jumps past them and the stream skips ahead.
-	# The carrier's smoothed RTT (not the application ack delay, which grows while
-	# batches wait parked behind a gap) plus the client's ack cadence.
+	# Flow control: while earlier batches still wait for the carrier, build none;
+	# the next batch simply carries more fresh ticks.
+	if _unreliable_waiting(c,COMMAND_LANE)>=2:
+		return
+	# The native per-client sender (fresh-first windows, rewind after 2 x sRTT,
+	# redundancy only while caught up) runs in the Superpos core.
 	if now-float(c.get("srtt_at",-1.0))>0.25:
 		c.srtt_at=now
 		c.srtt=float(c.session.get_statistics().get("smoothed_rtt_us",100000))/1000000.0
-	var stall: float=maxf(0.1,2.0*float(c.get("srtt",0.1))+0.07)
-	if sent_newest>acknowledged and now-float(c.get("command_ack_at",now))>stall:
-		sent_newest=acknowledged
-		c.command_sent_newest=acknowledged
-		c.command_ack_at=now
-		c.command_resends=int(c.get("command_resends",0))+1
-	var batch: Dictionary=lockstep_server.pack_command_window(acknowledged,sent_newest,860,c.id,int(_tuning("command_redundancy",1)))
+	var batch: Dictionary=lockstep_server.pack_stream(c.id,int(float(c.get("srtt",0.1))*1000000.0),860)
 	if batch.error==ERR_DOES_NOT_EXIST:
 		# History no longer covers this client: one keyframe resync at most every 2 s.
 		if now-float(c.get("resync_at",-100.0))>2.0:
@@ -740,17 +754,6 @@ func _send_lockstep_to(c: Dictionary) -> void:
 	payload.encode_u32(0,maxi(int(status.get("received_tick",0)),0))
 	payload.encode_u32(4,physics.get_tick())
 	payload.append_array(batch.payload)
-	var encoded: PackedByteArray=batch.payload
-	if encoded.size()>=4:
-		# Delta batch header: version, kind, first tick, tick count (varuints).
-		var first_and_count: Array=_varuints(encoded,2,2)
-		if first_and_count.size()==2 and int(first_and_count[1])>0:
-			var batch_newest: int=int(first_and_count[0])+int(first_and_count[1])-1
-			if batch_newest>int(c.get("command_sent_newest",0)):
-				if not c.has("command_sent_at"):
-					c.command_sent_at={}
-				c.command_sent_at[batch_newest]=now
-			c.command_sent_newest=maxi(int(c.get("command_sent_newest",0)),batch_newest)
 	c.command_bytes=int(c.get("command_bytes",0))+payload.size()
 	_send_unreliable(c,payload,COMMAND_LANE)
 
@@ -793,9 +796,7 @@ func _send_keyframe(c: Dictionary) -> void:
 	c.kf_next=0
 	_send_keyframe_chunk(c)
 	c.keyframe_tick=physics.get_tick()
-	c.command_sent_newest=c.keyframe_tick
-	c.command_ack_seen=c.keyframe_tick
-	c.command_ack_at=now
+	lockstep_server.reset_stream(c.id,c.keyframe_tick)
 	c.resync=false
 	c.keyframes_sent=int(c.get("keyframes_sent",0))+1
 
@@ -1033,7 +1034,12 @@ func _human_tick(c: Dictionary, direction: Vector3, flags: int) -> void:
 	var recorded := true
 	if deterministic:
 		var input: PackedByteArray=GAMEPLAY.encode_input(Vector3(x8/127.0,0,z8/127.0),flags,c.facing)
-		recorded=lockstep_client.record_input(c.ctick+1,input)==OK
+		var result: int=lockstep_client.record_input(c.ctick+1,input)
+		if result==ERR_OUT_OF_MEMORY:
+			# An outage outlasted the input history: keep playing, the server skips the gap.
+			lockstep_client.discard_oldest_inputs(32)
+			result=lockstep_client.record_input(c.ctick+1,input)
+		recorded=result==OK
 	if recorded:
 		c.ctick+=1
 	var heading := roundi((wrapf(c.facing,-PI,PI)+PI)/TAU*65535.0)
@@ -1178,11 +1184,18 @@ func _bot_input(c: Dictionary, direction: Vector3, flags: int) -> void:
 	if c.stance&(64|128|256):
 		direction=Vector3.ZERO
 	c.direction=direction
-	if c.lockstep.record_input(int(c.ctick)+1,GAMEPLAY.encode_input(direction,flags,c.facing))==OK:
+	var input: PackedByteArray=GAMEPLAY.encode_input(direction,flags,c.facing)
+	var recorded: int=c.lockstep.record_input(int(c.ctick)+1,input)
+	if recorded==ERR_OUT_OF_MEMORY:
+		# No acknowledgement for a whole history (an outage): keep playing and let the
+		# server skip the oldest inputs it never received.
+		c.lockstep.discard_oldest_inputs(32)
+		recorded=c.lockstep.record_input(int(c.ctick)+1,input)
+	if recorded==OK:
 		c.ctick+=1
 	# Bot associations pump every other frame: send on each pump (30 Hz, redundant).
-	if c.ready and c.pumped:
-		var batch: PackedByteArray=c.lockstep.pack_inputs(60,860)
+	if c.ready and c.pumped and _unreliable_waiting(c,INPUT)<2:
+		var batch: PackedByteArray=c.lockstep.pack_inputs(30,860)
 		if batch.size()>0:
 			_send_unreliable(c,batch,INPUT)
 
@@ -1354,7 +1367,7 @@ func _write_telemetry() -> void:
 	var rows: Array = []
 	for c in connections:
 		var stats: Dictionary = c.session.get_statistics()
-		rows.append({"id":c.id,"ready":c.ready,"terminal":c.session.get_state()=="NetworkFailed","ever_ready":c.ever_ready,"generation":c.generation,"recoveries":c.recoveries,"transport_errors":c.transport_errors,"error_codes":c.get("error_codes",{}),"srtt_ms":float(stats.get("smoothed_rtt_us",0))/1000.0,"retry_ticks":int(stats.get("retry_ticks",0)),"cwnd":int(stats.get("congestion_window",0)),"sent":c.sent,"applied":c.applied,"received":c.received,"ack_ms":c.ack_ms,"ack_p95":_percentile(c.acks,0.95),"ack_p50":_percentile(c.acks,0.5),"state_age_p50_ms":_percentile(c.state_ages,0.5),"state_interval_p50_ms":_percentile(c.state_intervals,0.5),"error_p95":_percentile(c.errors,0.95),"score":c.score,"position":[c.position.x,c.position.y,c.position.z],"distance":c.distance,"max_pending":c.max_pending,"pending_tickets":c.tickets.size(),"ticket_lanes":c.tickets.map(func(t):return int(t.channel)),"oldest_ticket_ms":0 if c.tickets.is_empty() else Time.get_ticks_msec()-int(c.tickets[0].at),"send_period":c.period,"wire_bytes":c.wire_base+int(stats.get("charged_wire_bytes",0)),"rejected":c.rejected,"stale":c.stale,"corrections":c.corrections,"deterministic":det.loaded if role=="human" else deterministic,"det_tick":det.tick,"det_target":det.target,"det_starved":det.starved,"det_advanced":det.advanced,"keyframes":det.keyframes if role=="human" else int(c.kf.keyframes) if c.has("kf") else int(c.get("keyframes_sent",0)),"bot_advanced":int(c.kf.advanced) if c.has("kf") else 0,"bot_loaded":bool(c.kf.loaded) if c.has("kf") else false,"command_bytes":int(c.get("command_bytes",0)),"command_rtt_ms":float(c.get("command_rtt",0.0))*1000.0,"command_resends":int(c.get("command_resends",0)),"decoder":(lockstep_client.get_status() if role=="human" and lockstep_client!=null else c.lockstep.get_status() if c.has("lockstep") else {}),"server_ack":int(lockstep_server.get_playout_status(c.id).get("command_acknowledged",0)) if role=="server" and deterministic else 0,"sent_newest":int(c.get("command_sent_newest",0)),"server_tick":physics.get_tick() if physics!=null else 0,"det_lag_p95":_percentile(det.lag,0.95),"det_lag_p50":_percentile(det.lag,0.5),"det_buffered_p50":_percentile(det.buffered,0.5),"det_buffered_p95":_percentile(det.buffered,0.95),"det_step_ms_p95":_percentile(det.step_ms,0.95),"playout":lockstep_server.get_playout_status(c.id) if role=="server" and deterministic and c.id==HUMAN else {},"known_entities":c.neighbors.size(),"starvations":c.starvations,"buffer_target":c.buffer_target,"buffer_p50":_percentile(c.buffer_depths,0.5),"processed_tick":c.processed_tick,"received_tick":c.received_tick,"render_delay_ms":c.render_delay*1000,"exhibit_received":c.exhibit_received,"activities":c.activities,"state_age_p95_ms":_percentile(c.state_ages,0.95),"state_interval_p95_ms":_percentile(c.state_intervals,0.95)})
+		rows.append({"id":c.id,"ready":c.ready,"terminal":c.session.get_state()=="NetworkFailed","ever_ready":c.ever_ready,"generation":c.generation,"recoveries":c.recoveries,"transport_errors":c.transport_errors,"error_codes":c.get("error_codes",{}),"srtt_ms":float(stats.get("smoothed_rtt_us",0))/1000.0,"retry_ticks":int(stats.get("retry_ticks",0)),"cwnd":int(stats.get("congestion_window",0)),"flight":int(stats.get("bytes_in_flight",0)),"unreliable_pending":c.get("unreliable",[]).size(),"enqueue_failures":c.get("enqueue_failures",{}),"network_ready":bool(stats.get("network_ready",false)),"sent":c.sent,"applied":c.applied,"received":c.received,"ack_ms":c.ack_ms,"ack_p95":_percentile(c.acks,0.95),"ack_p50":_percentile(c.acks,0.5),"state_age_p50_ms":_percentile(c.state_ages,0.5),"state_interval_p50_ms":_percentile(c.state_intervals,0.5),"error_p95":_percentile(c.errors,0.95),"score":c.score,"position":[c.position.x,c.position.y,c.position.z],"distance":c.distance,"max_pending":c.max_pending,"pending_tickets":c.tickets.size(),"ticket_lanes":c.tickets.map(func(t):return int(t.channel)),"oldest_ticket_ms":0 if c.tickets.is_empty() else Time.get_ticks_msec()-int(c.tickets[0].at),"send_period":c.period,"wire_bytes":c.wire_base+int(stats.get("charged_wire_bytes",0)),"rejected":c.rejected,"stale":c.stale,"corrections":c.corrections,"deterministic":det.loaded if role=="human" else deterministic,"det_tick":det.tick,"det_target":det.target,"det_starved":det.starved,"det_advanced":det.advanced,"keyframes":det.keyframes if role=="human" else int(c.kf.keyframes) if c.has("kf") else int(c.get("keyframes_sent",0)),"bot_advanced":int(c.kf.advanced) if c.has("kf") else 0,"bot_loaded":bool(c.kf.loaded) if c.has("kf") else false,"command_bytes":int(c.get("command_bytes",0)),"command_rtt_ms":float(c.get("srtt",0.0))*1000.0,"command_resends":int(lockstep_server.get_stream_status(c.id).get("rewinds",0)) if role=="server" and deterministic else 0,"decoder":(lockstep_client.get_status() if role=="human" and lockstep_client!=null else c.lockstep.get_status() if c.has("lockstep") else {}),"server_ack":int(lockstep_server.get_playout_status(c.id).get("command_acknowledged",0)) if role=="server" and deterministic else 0,"sent_newest":int(lockstep_server.get_stream_status(c.id).get("sent_tick",0)) if role=="server" and deterministic else 0,"server_tick":physics.get_tick() if physics!=null else 0,"det_lag_p95":_percentile(det.lag,0.95),"det_lag_p50":_percentile(det.lag,0.5),"det_buffered_p50":_percentile(det.buffered,0.5),"det_buffered_p95":_percentile(det.buffered,0.95),"det_step_ms_p95":_percentile(det.step_ms,0.95),"playout":lockstep_server.get_playout_status(c.id) if role=="server" and deterministic and c.id==HUMAN else {},"known_entities":c.neighbors.size(),"starvations":c.starvations,"buffer_target":c.buffer_target,"buffer_p50":_percentile(c.buffer_depths,0.5),"processed_tick":c.processed_tick,"received_tick":c.received_tick,"render_delay_ms":c.render_delay*1000,"exhibit_received":c.exhibit_received,"activities":c.activities,"state_age_p95_ms":_percentile(c.state_ages,0.95),"state_interval_p95_ms":_percentile(c.state_intervals,0.95)})
 	var report := {"diagnostics":diagnostics,"role":role,"start_unix":config.start_unix,"now":now,"failed":failed,"pid":OS.get_process_id(),"rows":rows,"physics_p95_ms":_percentile(physics_ms,0.95),"frames":frame,"performance":{"frame_p50_ms":_percentile(frame_times,0.5),"frame_p95_ms":_percentile(frame_times,0.95),"frame_p99_ms":_percentile(frame_times,0.99),"process_p95_ms":_percentile(process_times,0.95),"gpu_p95_ms":_percentile(gpu_times,0.95),"physics_interval_p95_ms":_percentile(step_intervals,0.95),"samples":frame_times.size(),"server_tick_rate":float(frame)/maxf(now+10,1),"network_p95_ms":_percentile(network_times,0.95),"application_p95_ms":_percentile(application_times,0.95),"control_p95_ms":_percentile(control_times,0.95),"replication_p95_ms":_percentile(replication_times,0.95),"publish_p95_ms":_percentile(publish_times,0.95),"application_max_ms":_percentile(application_times,1.0),"tick_p50_ms":_percentile(section_ms.tick,0.5),"tick_p95_ms":_percentile(section_ms.tick,0.95),"render_p50_ms":_percentile(section_ms.render,0.5),"render_p95_ms":_percentile(section_ms.render,0.95),"animate_p50_ms":_percentile(section_ms.animate,0.5),"animate_p95_ms":_percentile(section_ms.animate,0.95),"animated_p50":_percentile(section_ms.animated,0.5),"engine_process_p50_ms":_percentile(section_ms.engine_process,0.5),"engine_process_p95_ms":_percentile(section_ms.engine_process,0.95),"engine_physics_p50_ms":_percentile(section_ms.engine_physics,0.5),"engine_physics_p95_ms":_percentile(section_ms.engine_physics,0.95),"engine_physics_window_max_ms":Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)*1000}}
 	if role=="server":
 		var props: Array = []

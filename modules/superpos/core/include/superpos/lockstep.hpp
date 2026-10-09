@@ -30,8 +30,13 @@ public:
     Status record(Tick tick, std::span<const std::byte> input) noexcept;
     // Server reported every input up to and including tick as received.
     Status acknowledge(Tick received) noexcept;
-    // Oldest unacknowledged inputs first; command_acknowledged reports the newest
-    // relayed command tick this client applied (drives server delta range).
+    // Explicitly drops the oldest unacknowledged inputs, for an owner whose
+    // history filled during an outage and must keep recording; the server's
+    // playout skips them as lost. Returns how many were dropped.
+    std::size_t discard_oldest(std::size_t count) noexcept;
+    // The newest unacknowledged inputs, up to max_ticks and what fits (older ones
+    // the server never received are skipped by its playout); command_acknowledged
+    // reports the newest relayed command tick this client holds in order.
     Result<std::size_t> encode(Tick command_acknowledged, std::size_t max_ticks, std::span<std::byte> output) const noexcept;
     std::size_t pending() const noexcept { return count_; }
     Tick newest() const noexcept { return newest_; }
@@ -95,9 +100,9 @@ struct CommandStreamConfig {
     std::size_t change_capacity{};
     // Decoder only: out-of-order batches parked beyond a gap (selective repeat), so
     // one lost datagram costs one repair, not a resend of everything after it.
-    std::size_t pending_batches{16}, pending_batch_bytes{1200};
+    std::size_t pending_batches{64}, pending_batch_bytes{1200};
 };
-inline constexpr std::size_t lockstep_max_pending_batches = 16;
+inline constexpr std::size_t lockstep_max_pending_batches = 64;
 inline constexpr std::size_t lockstep_max_command_history = std::size_t{1} << 16;
 inline constexpr std::uint32_t lockstep_no_recipient = 0xFFFFFFFFu;
 
@@ -147,6 +152,35 @@ private:
     std::size_t change_head_{}, change_count_{}, ticks_{};
     Tick newest_{}, open_{};
     bool sealed_any_{}, open_any_{};
+};
+
+// Per-recipient sender over an unreliable channel: fresh-first windows, one
+// rewind to the acknowledgement after a stall of 2 x sRTT plus the client's ack
+// cadence, and redundancy only while the recipient is caught up (a client that
+// is behind needs goodput, not copies). The caller supplies the recipient's
+// newest in-order acknowledgement and the carrier's smoothed RTT.
+struct CommandStreamPolicy {
+    std::size_t redundant_ticks{1};
+    // Behind by more than this many ticks: no redundancy.
+    Tick catch_up_ticks{30};
+    std::uint64_t minimum_stall_us{100000}, ack_cadence_us{70000};
+};
+struct CommandStreamStatus { Tick acknowledged{}, sent{}; std::uint64_t batches{}, rewinds{}; };
+class CommandStream {
+public:
+    explicit CommandStream(CommandStreamPolicy policy = {}) noexcept : policy_(policy) {}
+    // Keyframe join (or rejoin) at tick: the stream resumes after it.
+    void reset(Tick keyframe, std::uint64_t now_us) noexcept;
+    // Next batch for this recipient. StaleEpoch means its acknowledgement left
+    // the encoder's history: send a keyframe and reset.
+    Result<std::size_t> next(const CommandEncoder&, Tick acknowledged, std::uint64_t now_us, std::uint64_t srtt_us,
+        std::span<std::byte> output, std::uint32_t recipient = lockstep_no_recipient) noexcept;
+    CommandStreamStatus status() const noexcept { return {acknowledged_, sent_, batches_, rewinds_}; }
+private:
+    CommandStreamPolicy policy_{};
+    Tick acknowledged_{}, sent_{};
+    std::uint64_t acknowledged_at_{}, batches_{}, rewinds_{};
+    bool started_{};
 };
 
 // Client: applies relayed ticks strictly in order onto a full command table.
