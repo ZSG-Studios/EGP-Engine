@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposLockstepServer" inherits="RefCounted" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>Server half of deterministic input streaming: per-peer jitter buffers in, delta-compressed command stream out.</brief_description>
+	<description>Accepts each client's redundant input batches into a per-slot adaptive playout buffer and releases one input per server tick, two while catching up, none while buffering. Starvation raises a slot's target depth; a calm buffer slowly lowers it again. A tick lost beyond the client's redundancy is skipped and counted, never invented. The server records every slot's consumed input with [method begin_tick], [method set_command] and [method end_tick]. [method pack_commands] then encodes only the inputs that changed, for every tick after the one a client last acknowledged, so all clients can advance the same deterministic world.
+		[codeblock]
+		var lockstep := SuperposLockstepServer.new()
+		lockstep.configure(4, 101, {"initial_target": 6})
+		# On a received input payload from player slot s:
+		lockstep.accept_inputs(s, payload)
+		# Every server tick:
+		lockstep.begin_tick(tick)
+		for s in 101:
+		    for item in lockstep.consume_inputs(s):
+		        lockstep.set_command(s, item.input)
+		lockstep.end_tick()
+		var batch := lockstep.pack_commands(lockstep.get_playout_status(s).command_acknowledged)
+		if batch.error == OK:
+		    session.enqueue_packet(batch.payload, COMMAND_CHANNEL)
+		[/codeblock]
+		Methods must be called on the owning thread.</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="accept_inputs">
+			<return type="int" enum="Error" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="payload" type="PackedByteArray" />
+			<description>Decodes a batch packed by [method SuperposLockstepClient.pack_inputs] into the playout buffer of [param slot]. Duplicate and already-consumed ticks are counted and ignored. Malformed or wrong-width batches return an error and change nothing.</description>
+		</method>
+		<method name="begin_tick">
+			<return type="int" enum="Error" />
+			<param index="0" name="tick" type="int" />
+			<description>Opens the command table for [param tick]. Ticks must be contiguous. Slots not set during the tick keep their previous input.</description>
+		</method>
+		<method name="configure">
+			<return type="int" enum="Error" />
+			<param index="0" name="input_bytes" type="int" />
+			<param index="1" name="slots" type="int" />
+			<param index="2" name="playout" type="Dictionary" default="{}" />
+			<description>Sets the fixed input width (1-16 bytes), the slot count (1-256) and optional playout tuning: [code]initial_target[/code] (default 6 ticks), [code]minimum_target[/code] (2), [code]maximum_target[/code] (45, below 128), [code]relax_ticks[/code] (240) and [code]catch_up_margin[/code] (12). Unknown keys return [constant ERR_INVALID_PARAMETER].</description>
+		</method>
+		<method name="consume_inputs">
+			<return type="Array" />
+			<param index="0" name="slot" type="int" />
+			<description>Advances the playout buffer of [param slot] by one server tick and returns zero, one or two Dictionaries containing [code]tick[/code] and [code]input[/code].</description>
+		</method>
+		<method name="end_tick">
+			<return type="int" enum="Error" />
+			<description>Seals the open command tick into the bounded change history (128 ticks). The oldest ticks are evicted when history is full.</description>
+		</method>
+		<method name="get_command_tick" qualifiers="const">
+			<return type="int" />
+			<description>Returns the newest sealed command tick, or [code]0[/code].</description>
+		</method>
+		<method name="get_playout_status" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="slot" type="int" />
+			<description>Returns [code]active[/code], [code]received_tick[/code], [code]consumed_tick[/code], [code]command_acknowledged[/code], [code]buffered[/code], [code]target[/code], [code]starvations[/code], [code]duplicates[/code], [code]late[/code], [code]skipped[/code], [code]playing[/code] and [code]pace_advice[/code] in [-1, 1]. A positive value asks that client to simulate slightly faster, a negative value slightly slower. Send [code]received_tick[/code] back to the client for [method SuperposLockstepClient.acknowledge_inputs].</description>
+		</method>
+		<method name="pack_commands" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="after_tick" type="int" />
+			<param index="1" name="max_bytes" type="int" default="880" />
+			<description>Encodes every sealed tick after [param after_tick] that fits whole in [param max_bytes]. Returns [code]error[/code] and [code]payload[/code]. [constant ERR_DOES_NOT_EXIST] means the requested ticks were evicted; send [method pack_keyframe] together with a world snapshot instead.</description>
+		</method>
+		<method name="pack_keyframe" qualifiers="const">
+			<return type="PackedByteArray" />
+			<description>Encodes the complete command table at [method get_command_tick] for [method SuperposLockstepClient.load_keyframe].</description>
+		</method>
+		<method name="set_command">
+			<return type="int" enum="Error" />
+			<param index="0" name="slot" type="int" />
+			<param index="1" name="input" type="PackedByteArray" />
+			<description>Sets the consumed input of [param slot] for the open tick.</description>
+		</method>
+	</methods>
+</class>

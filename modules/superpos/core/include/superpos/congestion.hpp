@@ -18,6 +18,10 @@ struct CongestionConfig {
     std::uint64_t maximum_window{4 * 1024 * 1024};
     std::uint64_t initial_rtt_us{333000};
     std::uint64_t maximum_ack_delay_us{25000};
+    // Token-bucket pacing burst, in full datagrams. One preserves strict
+    // inter-datagram pacing; larger values let a single owner pump emit up to
+    // this many paced datagrams while the long-run rate stays window/RTT.
+    std::uint8_t burst_datagrams{1};
 };
 struct PacketAck {
     std::uint64_t largest{};
@@ -55,6 +59,8 @@ public:
     [[nodiscard]] std::uint64_t congestion_window() const noexcept { return window_; }
     [[nodiscard]] std::uint64_t smoothed_rtt_us() const noexcept { return smoothed_rtt_; }
     [[nodiscard]] std::uint64_t next_send_us() const noexcept { return next_send_; }
+    // True when the pacing bucket admits another datagram at now_us.
+    [[nodiscard]] bool pacing_allows(std::uint64_t now_us) const noexcept;
     [[nodiscard]] std::size_t outstanding_packets() const noexcept;
 
 private:
@@ -62,6 +68,7 @@ private:
     Result<CongestionReceipt> loss(std::uint64_t now_us) noexcept;
     Result<std::uint64_t> admit(std::uint32_t, std::uint64_t, bool probe) noexcept;
     void pace(std::uint32_t, std::uint64_t) noexcept;
+    std::uint64_t burst_us() const noexcept;
     CongestionConfig config_{};
     std::span<PacketRecord> records_{};
     std::uint64_t next_number_{1}, last_sent_{}, last_time_{}, next_send_{};

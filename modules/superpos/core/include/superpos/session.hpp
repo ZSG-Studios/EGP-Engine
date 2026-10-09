@@ -42,6 +42,7 @@ struct SessionConfig {
 // A terminal delivery/transport error currently terminates this whole Session.
 class Session {
  struct Impl;Impl* impl_{};Allocator* allocator_{};
+ Status pump_frames(Tick) noexcept;
 public:
  static constexpr std::uint64_t hello_wire_version=3;
  Session() noexcept=default;~Session();

@@ -23,7 +23,8 @@
     "src/lease.cpp",
     "src/replica_wire.cpp",
     "src/replica_session.cpp",
-    "src/replica_authority.cpp"
+    "src/replica_authority.cpp",
+    "src/lockstep.cpp"
   ],
   "features": {
     "dtls": {
@@ -48,6 +49,10 @@
         "services/src/bounded_vfs.cpp",
         "services/src/journal_executor.cpp",
         "services/src/journal_envelope.cpp",
+        "services/src/checkpoint_service_view.cpp",
+        "services/src/host_restore.cpp",
+        "services/src/canonical_state.cpp",
+        "services/src/canonical_restore.cpp",
         "services/src/coordinator_bootstrap.cpp",
         "services/src/storage_worker.cpp",
         "services/src/authority_coordinator.cpp",

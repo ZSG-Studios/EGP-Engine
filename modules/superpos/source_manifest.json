@@ -22,7 +22,8 @@
     "superpos_spawn_catalog.cpp",
     "superpos_replica_view.cpp",
     "superpos_spawner.cpp",
-    "private/spawning/spawn_runtime.cpp"
+    "private/spawning/spawn_runtime.cpp",
+    "superpos_lockstep.cpp"
   ],
   "core_manifest": "core/source_manifest.json",
   "required_engine_modules": [
@@ -44,7 +45,9 @@
     "SuperposSpawnEntry",
     "SuperposSpawnCatalog",
     "SuperposReplicaView",
-    "SuperposSpawner"
+    "SuperposSpawner",
+    "SuperposLockstepClient",
+    "SuperposLockstepServer"
   ],
   "tools_only": [
     "superpos_uint64_editor.cpp"

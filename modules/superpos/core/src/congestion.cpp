@@ -23,7 +23,8 @@ Result<PacketCongestion> PacketCongestion::create(CongestionConfig config,
         config.maximum_window < 10ULL * config.datagram_bytes ||
         config.maximum_window > 64ULL * 1024 * 1024 || records.empty() ||
         records.size() > 65536 || !config.initial_rtt_us ||
-        config.initial_rtt_us > 60000000 || config.maximum_ack_delay_us > 1000000)
+        config.initial_rtt_us > 60000000 || config.maximum_ack_delay_us > 1000000 ||
+        !config.burst_datagrams || config.burst_datagrams > 16)
         return fail(Error::InvalidArgument);
     return PacketCongestion(config, records);
 }
@@ -35,7 +36,7 @@ Status PacketCongestion::can_send(std::uint32_t bytes, std::uint64_t now) const 
     if (!bytes || bytes > config_.datagram_bytes || now < last_time_)
         return fail(Error::InvalidArgument);
     if (exhausted_) return fail(Error::CounterExhausted);
-    if (now < next_send_ || bytes > window_ - std::min(flight_, window_))
+    if (!pacing_allows(now) || bytes > window_ - std::min(flight_, window_))
         return fail(Error::Busy);
     // Keep one record for a fresh PTO probe, except in the deliberately minimal
     // one-record profile (which cannot promise a full-window probe).
@@ -49,14 +50,24 @@ Result<std::uint64_t> PacketCongestion::sent(std::uint32_t bytes, std::uint64_t 
 Result<std::uint64_t> PacketCongestion::next_packet_number() const noexcept {
     return exhausted_?Result<std::uint64_t>(fail(Error::CounterExhausted)):Result<std::uint64_t>(next_number_);
 }
+std::uint64_t PacketCongestion::burst_us() const noexcept {
+    if(config_.burst_datagrams<=1)return 0;
+    const auto interval=(static_cast<std::uint64_t>(config_.datagram_bytes)*smoothed_rtt_+window_-1)/window_;
+    return interval*(config_.burst_datagrams-1U);
+}
+bool PacketCongestion::pacing_allows(std::uint64_t now) const noexcept {
+    return now>=next_send_ || next_send_-now<=burst_us();
+}
 void PacketCongestion::pace(std::uint32_t bytes,std::uint64_t now) noexcept {
     const auto interval=std::max<std::uint64_t>(1,
         (static_cast<std::uint64_t>(bytes)*smoothed_rtt_+window_-1)/window_);
-    next_send_=saturating_add(now,interval);last_time_=now;
+    // Bucket debt accumulates from the later of now and the previous deadline;
+    // with a one-datagram burst this is exactly now+interval as before.
+    next_send_=saturating_add(std::max(next_send_,now),interval);last_time_=now;
 }
 Status PacketCongestion::sent_untracked(std::uint32_t bytes,std::uint64_t now) noexcept {
     if(!bytes||bytes>config_.datagram_bytes||now<last_time_)return fail(Error::InvalidArgument);
-    if(now<next_send_)return fail(Error::Busy);
+    if(!pacing_allows(now))return fail(Error::Busy);
     pace(bytes,now);return {};
 }
 Result<std::uint64_t> PacketCongestion::sent_probe(std::uint32_t bytes,std::uint64_t now) noexcept {
@@ -66,7 +77,7 @@ Result<std::uint64_t> PacketCongestion::admit(std::uint32_t bytes,std::uint64_t 
     if(probe) {
         if(!bytes||bytes>config_.datagram_bytes||now<last_time_)return fail(Error::InvalidArgument);
         if(exhausted_)return fail(Error::CounterExhausted);
-        if(!probe_credit_||now<next_send_)return fail(Error::Busy);
+        if(!probe_credit_||!pacing_allows(now))return fail(Error::Busy);
         if(outstanding_packets()==records_.size())return fail(Error::CapacityExceeded);
     } else if (auto result = can_send(bytes, now); !result) return fail(result.error());
     const auto number = next_number_;

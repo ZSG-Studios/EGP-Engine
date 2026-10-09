@@ -86,7 +86,7 @@ public:
     // retained in a Resource property or exposed by a getter.
     Error configure_udp(bool p_server, const String &p_local_address, uint32_t p_local_port,
         const String &p_remote_address, uint32_t p_remote_port, uint64_t p_session_id,
-        uint64_t p_peer_identity, const PackedByteArray &p_admission_key);
+        uint64_t p_peer_identity, const PackedByteArray &p_admission_key, const Dictionary &p_transport = Dictionary());
     Dictionary enqueue_packet(const PackedByteArray &p_payload, uint32_t p_channel = 0);
     Dictionary read_packet(uint32_t p_channel = 0) const;
     Error acknowledge_packet(uint64_t p_message, uint64_t p_binding_generation, uint32_t p_channel = 0);

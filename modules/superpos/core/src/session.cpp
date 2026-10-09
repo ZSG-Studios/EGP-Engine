@@ -177,6 +177,16 @@ Result<AdmittedCapabilities> Session::capabilities() const noexcept {
     if(!ready())return fail(Error::NotReady); return impl_->admitted;
 }
 Status Session::pump(Tick now) noexcept {
+    // Every frame written during this pump leaves together: a coalescing
+    // transport bundles receipts, probes and data with a piggybacked ACK.
+    auto result=pump_frames(now);
+    if(impl_ && impl_->owned() && !impl_->failed) {
+        auto flushed=impl_->transport->flush();
+        if(!flushed && flushed.error()!=Error::Busy) { impl_->failed=true; return flushed; }
+    }
+    return result;
+}
+Status Session::pump_frames(Tick now) noexcept {
     if(!impl_)return fail(Error::NotReady); if(!impl_->owned())return fail(Error::PermissionDenied); auto& s=*impl_;
     if(s.failed)return fail(Error::ChannelFailed);
     if(s.have_tick && now<s.last_tick)return fail(Error::InvalidArgument);
@@ -191,7 +201,7 @@ Status Session::pump(Tick now) noexcept {
     auto progressed=s.transport->advance_frames(); if(!progressed && progressed.error()!=Error::Busy) { s.failed=true; return fail(progressed.error()); }
     if(!s.transport->ready())return fail(Error::Busy);
     std::array<std::byte,960> frame{};
-    for(unsigned work=0;work<16;++work) {
+    for(unsigned work=0;work<64;++work) {
         auto n=s.transport->receive_frame(frame); if(!n) { if(n.error()==Error::Busy)break; s.failed=true; return fail(n.error()); }
         if(!n->bytes || n->bytes>frame.size() || (s.split_carriers?(n->lane!=CarrierLane::Control&&n->lane!=CarrierLane::State):n->lane!=CarrierLane::Single)) { s.failed=true; return fail(Error::ProtocolViolation); }
         auto bytes=std::span<const std::byte>(frame.data(),n->bytes); auto kind=std::to_integer<unsigned>(bytes[0]); auto payload=bytes.subspan(1); Status received;
@@ -263,7 +273,8 @@ Status Session::pump(Tick now) noexcept {
     // Rotate across channels for each frame, including across pump boundaries.
     // A continuously active bulk channel cannot consume another channel's turn.
     unsigned frames=0,scanned=0;
-    while(frames<4 && scanned<s.config.logical_channels) {
+    // Coalescing carriers accept many frames per pump; others stop on Busy.
+    while(frames<32 && scanned<s.config.logical_channels) {
         auto channel=s.next_channel; s.next_channel=static_cast<std::uint8_t>((channel+1)%s.config.logical_channels); ++scanned;
         auto& sender=*s.senders[channel]; auto attempt=sender.next(now);
         if(!attempt) { if(attempt.error()==Error::NotReady || attempt.error()==Error::Busy)continue; s.failed=true; return fail(attempt.error()); }

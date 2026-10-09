@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposLockstepClient" inherits="RefCounted" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>Client half of deterministic input streaming: redundant tick inputs out, relayed command stream in.</brief_description>
+	<description>Records exactly one fixed-width input per simulation tick and packs every input the server has not yet reported received, so inputs survive loss on an unreliable [SuperposSession] channel. In the other direction it applies the server's delta-compressed command stream (one input per player slot per tick) strictly in order, letting the client advance the same deterministic world as the server, for example an [EGPBox3DWorld]. Each packed input batch also reports the newest command tick applied here, which tells the server where to start the next command batch.
+		[codeblock]
+		var lockstep := SuperposLockstepClient.new()
+		lockstep.configure(4, 101)                 # 4-byte inputs, 101 player slots
+		lockstep.load_keyframe(join_table)         # or start from tick 1 with an all-zero table
+		# Every simulation tick:
+		lockstep.record_input(tick, my_input)
+		session.enqueue_packet(lockstep.pack_inputs(), INPUT_CHANNEL)
+		# On each received command payload:
+		lockstep.accept_commands(payload)
+		while lockstep.advance_command() != 0:
+		    for slot in 101:
+		        apply_input(slot, lockstep.get_input(slot))
+		    world.step_tick(world.get_tick() + 1)
+		[/codeblock]
+		Methods must be called on the owning thread.</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="acknowledge_inputs">
+			<return type="int" enum="Error" />
+			<param index="0" name="tick" type="int" />
+			<description>Discards retained inputs up to and including [param tick], which the server reported received. A tick newer than any recorded input returns [constant ERR_INVALID_DATA].</description>
+		</method>
+		<method name="accept_commands">
+			<return type="int" enum="Error" />
+			<param index="0" name="payload" type="PackedByteArray" />
+			<description>Buffers a relayed command batch. Ticks already received are ignored. A batch that starts after a gap returns [constant ERR_UNAVAILABLE]; the client must load a keyframe. Malformed payloads return [constant ERR_INVALID_DATA] and change nothing.</description>
+		</method>
+		<method name="advance_command">
+			<return type="int" />
+			<description>Applies the next buffered command tick to the per-slot input table and returns that tick, or [code]0[/code] when no tick is buffered.</description>
+		</method>
+		<method name="configure">
+			<return type="int" enum="Error" />
+			<param index="0" name="input_bytes" type="int" />
+			<param index="1" name="slots" type="int" />
+			<description>Sets the fixed input width (1-16 bytes) and the number of player slots (1-256) shared with the server. Reconfiguring discards all retained inputs and commands.</description>
+		</method>
+		<method name="get_input" qualifiers="const">
+			<return type="PackedByteArray" />
+			<param index="0" name="slot" type="int" />
+			<description>Returns the input of [param slot] at the most recently applied command tick. A slot that was never set holds zero bytes.</description>
+		</method>
+		<method name="get_status" qualifiers="const">
+			<return type="Dictionary" />
+			<description>Returns [code]configured[/code], [code]recorded_tick[/code], [code]unacknowledged_inputs[/code], [code]applied_command_tick[/code], [code]newest_command_tick[/code] and [code]buffered_commands[/code].</description>
+		</method>
+		<method name="load_keyframe">
+			<return type="int" enum="Error" />
+			<param index="0" name="table" type="PackedByteArray" />
+			<description>Loads a complete command table produced by [method SuperposLockstepServer.pack_keyframe]. Later command batches continue from its tick. Use this when joining a running simulation together with a world snapshot of the same tick.</description>
+		</method>
+		<method name="pack_inputs" qualifiers="const">
+			<return type="PackedByteArray" />
+			<param index="0" name="max_ticks" type="int" default="60" />
+			<param index="1" name="max_bytes" type="int" default="880" />
+			<description>Packs the oldest unacknowledged inputs that fit in [param max_bytes], up to [param max_ticks]. The default stays inside one unreliable Superpos datagram. Returns an empty array when unconfigured.</description>
+		</method>
+		<method name="record_input">
+			<return type="int" enum="Error" />
+			<param index="0" name="tick" type="int" />
+			<param index="1" name="input" type="PackedByteArray" />
+			<description>Records the input for [param tick]. Ticks must be contiguous and positive and the input must have the configured width. When 128 inputs are unacknowledged the call returns [constant ERR_OUT_OF_MEMORY]; inputs are never dropped silently.</description>
+		</method>
+	</methods>
+</class>

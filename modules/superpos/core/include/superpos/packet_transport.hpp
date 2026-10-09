@@ -10,10 +10,15 @@ struct PacketTransportConfig {
     CongestionConfig congestion{};
     std::uint32_t routing_overhead_bytes{};
     std::uint8_t receive_frames{8};
+    // Opt-in coalescing: send() appends frames to a bundle datagram (with a
+    // piggybacked ACK) and flush() transmits it at the end of the owner pump.
+    // Off preserves the one-frame-per-datagram contract exactly.
+    bool bundle_frames{false};
 };
 struct PacketTransportStats {
     std::uint64_t data_sent{}, probes_sent{}, acknowledgements_sent{};
     std::uint64_t charged_wire_bytes{}, received_data{}, dropped_data{};
+    std::uint64_t bundles_sent{}, bundled_frames{}, piggybacked_acknowledgements{};
     std::uint64_t bytes_in_flight{}, congestion_window{}, smoothed_rtt_us{};
     std::size_t queued_receive_frames{};
     bool owns_pending_send{};
@@ -22,7 +27,7 @@ struct PacketTransportStats {
 // Native authenticated DTLS packet pacing/receipts. WebRTC/SCTP has its own
 // congestion controller and must never be wrapped in this adapter. The supplied
 // provider/clock outlive the adapter and are accessed exclusively by its owner.
-// One pending application write and eight receive frames are fixed bounded
+// One pending application write and up to 64 receive frames are fixed bounded
 // storage; Busy from send means the exact payload has been copied and owned.
 // A second send before successful advance is a capacity error, not acceptance.
 // Transport packet receipt does not imply logical Received/Applied/Committed.
@@ -50,6 +55,7 @@ public:
     bool ready() const noexcept override;
     Status advance() noexcept override;
     Status send(std::span<const std::byte>) noexcept override;
+    Status flush() noexcept override;
     Result<std::size_t> receive(std::span<std::byte>) noexcept override;
     Result<PacketTransportStats> statistics() const noexcept;
 };

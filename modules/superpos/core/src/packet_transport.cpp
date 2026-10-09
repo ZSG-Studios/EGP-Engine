@@ -12,8 +12,11 @@
 
 namespace superpos {
 namespace {
-constexpr std::byte data_tag{0x10}, ack_tag{0x11}, probe_tag{0x12};
-constexpr std::size_t raw_ceiling = 960, ack_bytes = 33;
+constexpr std::byte data_tag{0x10}, ack_tag{0x11}, probe_tag{0x12}, bundle_tag{0x13};
+constexpr std::byte frame_entry{0x01}, ack_entry{0x02};
+// Bundle entries: frame = kind, u16 length, bytes; ACK = kind, largest, bits, delay.
+constexpr std::size_t raw_ceiling = 960, ack_bytes = 33, frame_entry_bytes = 3, ack_entry_bytes = 25;
+constexpr std::size_t receive_ceiling = 64, sealed_bundles = 4;
 struct ActiveCall {
     bool& active;
     explicit ActiveCall(bool& value) noexcept : active(value) { active=true; }
@@ -38,7 +41,15 @@ struct PacketTransport::Impl {
     std::array<std::byte,raw_ceiling> pending{};
     std::size_t pending_size{};
     struct Frame { std::array<std::byte,raw_ceiling-header_bytes> bytes{}; std::size_t size{}; };
-    std::array<Frame,8> received{};
+    std::array<Frame,receive_ceiling> received{};
+    // Coalescing state (bundle_frames only): one open bundle, a bounded queue of
+    // sealed bundles awaiting pacing, and one owned overflow write behind Busy.
+    struct Bundle { std::array<std::byte,raw_ceiling> bytes{}; std::size_t size{},frames{}; };
+    Bundle building{};
+    std::array<Bundle,sealed_bundles> sealed{};
+    std::size_t sealed_head{},sealed_count{};
+    std::array<std::byte,raw_ceiling> overflow{};
+    std::size_t overflow_size{};
     std::size_t head{},count{};
     std::uint64_t largest{},bits{},largest_received_at{},ack_due{},last_time{};
     bool have_time{},ack_dirty{},carrier_blocked{},probe_due{},failed{},active_call{};
@@ -89,9 +100,95 @@ struct PacketTransport::Impl {
         }
         ack_dirty=true;
     }
+    std::size_t bundle_limit() const noexcept { return maximum()+header_bytes; }
+    bool bundles(std::size_t size) const noexcept {
+        return config.bundle_frames && header_bytes+frame_entry_bytes+size+ack_entry_bytes<=bundle_limit();
+    }
+    bool append(std::span<const std::byte> bytes) noexcept {
+        if(!building.size)building.size=header_bytes;
+        if(building.size+frame_entry_bytes+bytes.size()+ack_entry_bytes>bundle_limit())return false;
+        auto* out=building.bytes.data()+building.size;
+        out[0]=frame_entry;out[1]=std::byte(bytes.size()>>8);out[2]=std::byte(bytes.size()&0xff);
+        std::memcpy(out+frame_entry_bytes,bytes.data(),bytes.size());
+        building.size+=frame_entry_bytes+bytes.size();++building.frames;return true;
+    }
+    void seal() noexcept {
+        if(!building.frames || sealed_count==sealed.size())return;
+        sealed[(sealed_head+sealed_count)%sealed.size()]=building;++sealed_count;building=Bundle{};
+    }
+    bool queued() const noexcept { return building.frames||sealed_count||overflow_size; }
+    Status flush_bundles(std::uint64_t now_us) noexcept {
+        seal();
+        while(sealed_count && !carrier_blocked) {
+            auto& bundle=sealed[sealed_head];std::size_t size=bundle.size;bool with_ack=false;
+            if(ack_dirty) {
+                // Piggyback the current selective receipt; no separate ACK datagram.
+                bundle.bytes[size]=ack_entry;Writer writer(std::span(bundle.bytes).subspan(size+1,ack_entry_bytes-1));
+                if(!writer.u64(largest)||!writer.u64(bits)||!writer.u64(std::min(now_us-largest_received_at,config.congestion.maximum_ack_delay_us)))return fail(Error::ProtocolViolation);
+                size+=ack_entry_bytes;with_ack=true;
+            }
+            auto allowed=flow->can_send(charge(size),now_us);
+            if(!allowed)return allowed.error()==Error::CapacityExceeded?Status(fail(Error::Busy)):Status(allowed);
+            auto id=flow->next_packet_number();if(!id)return fail(id.error());
+            if(auto encoded=header(bundle.bytes,bundle_tag,*id);!encoded)return encoded;
+            if(auto capacity=can_record_send(charge(size),stats.data_sent);!capacity)return capacity;
+            auto accepted=provider->send(std::span<const std::byte>(bundle.bytes).first(size));
+            if(!accepted && accepted.error()!=Error::Busy)return accepted;
+            auto recorded=flow->sent(charge(size),now_us);
+            if(!recorded || *recorded!=*id)return fail(Error::ProtocolViolation);
+            stats.charged_wire_bytes+=charge(size);++stats.data_sent;++stats.bundles_sent;stats.bundled_frames+=bundle.frames;
+            if(with_ack){ack_dirty=false;++stats.piggybacked_acknowledgements;}
+            bundle=Bundle{};sealed_head=(sealed_head+1)%sealed.size();--sealed_count;carrier_blocked=!accepted;
+        }
+        if(overflow_size && sealed_count<sealed.size()) {
+            seal();(void)append(std::span<const std::byte>(overflow).first(overflow_size));overflow_size=0;
+        }
+        return queued()&&(sealed_count||carrier_blocked)?Status(fail(Error::Busy)):Status{};
+    }
+    Status input_bundle(std::span<const std::byte> frame,std::uint64_t id,std::uint64_t now_us) noexcept {
+        // Validate the whole datagram before any delivery: all entries or none.
+        std::array<std::span<const std::byte>,receive_ceiling> parts{};std::size_t part_count=0;
+        std::optional<PacketAck> carried;std::size_t position=header_bytes;
+        while(position<frame.size()) {
+            if(frame[position]==frame_entry) {
+                if(frame.size()-position<frame_entry_bytes)return fail(Error::NonCanonical);
+                const auto size=(std::to_integer<std::size_t>(frame[position+1])<<8)|std::to_integer<std::size_t>(frame[position+2]);
+                if(!size||size>maximum()||frame.size()-position-frame_entry_bytes<size||part_count==parts.size())return fail(Error::NonCanonical);
+                parts[part_count++]=frame.subspan(position+frame_entry_bytes,size);position+=frame_entry_bytes+size;
+            } else if(frame[position]==ack_entry) {
+                if(carried||frame.size()-position<ack_entry_bytes)return fail(Error::NonCanonical);
+                Reader reader(frame.subspan(position+1,ack_entry_bytes-1));auto ack_largest=reader.u64(),ack_bits=reader.u64(),delay=reader.u64();
+                if(!ack_largest||!ack_bits||!delay)return fail(Error::NonCanonical);
+                carried=PacketAck{*ack_largest,*ack_bits,*delay};position+=ack_entry_bytes;
+            } else return fail(Error::NonCanonical);
+        }
+        if(!part_count)return fail(Error::NonCanonical);
+        if(seen(id)) {
+            if(auto counted=increment(stats.dropped_data);!counted)return counted;
+            mark(id,now_us);return {};
+        }
+        if(carried) {
+            auto progress=flow->acknowledge(*carried,now_us);
+            if(!progress)return fail(progress.error());
+            if(progress->acknowledged_packets)probe_due=false;
+        }
+        if(count+part_count>config.receive_frames) {
+            // Not marked: the sender's loss detection observes a genuine drop.
+            for(std::size_t i=0;i<part_count;++i)if(auto counted=increment(stats.dropped_data);!counted)return counted;
+            return {};
+        }
+        mark(id,now_us);
+        for(std::size_t i=0;i<part_count;++i) {
+            if(auto counted=increment(stats.received_data);!counted)return counted;
+            auto& destination=received[(head+count)%received.size()];
+            std::memcpy(destination.bytes.data(),parts[i].data(),parts[i].size());
+            destination.size=parts[i].size();++count;
+        }
+        return {};
+    }
     Status flush_ack(std::uint64_t now_us) noexcept {
         if(!ack_dirty || now_us<ack_due)return {};
-        if(carrier_blocked || now_us<flow->next_send_us())return fail(Error::Busy);
+        if(carrier_blocked || !flow->pacing_allows(now_us))return fail(Error::Busy);
         std::array<std::byte,ack_bytes> bytes{};
         if(auto status=header(bytes,ack_tag,largest);!status)return status;
         Writer writer(std::span(bytes).subspan(header_bytes));
@@ -125,7 +222,7 @@ struct PacketTransport::Impl {
     }
     Status flush_probe(std::uint64_t now_us) noexcept {
         if(!probe_due)return {};
-        if(carrier_blocked || now_us<flow->next_send_us())return fail(Error::Busy);
+        if(carrier_blocked || !flow->pacing_allows(now_us))return fail(Error::Busy);
         if(flow->outstanding_packets()==records.size())return fail(Error::Busy);
         auto id=flow->next_packet_number();if(!id)return fail(id.error());
         std::array<std::byte,header_bytes> bytes{};
@@ -145,6 +242,7 @@ struct PacketTransport::Impl {
         if(!epoch||!id||!*id)return fail(Error::ProtocolViolation);
         if(*epoch!=config.association_epoch)return fail(Error::StaleEpoch);
         const auto payload=frame.subspan(header_bytes);
+        if(frame[0]==bundle_tag)return input_bundle(frame,*id,now_us);
         if(frame[0]==ack_tag) {
             auto ack_bits=reader.u64(),delay=reader.u64();
             if(!ack_bits||!delay||!reader.empty())return fail(Error::NonCanonical);
@@ -162,7 +260,7 @@ struct PacketTransport::Impl {
             mark(*id,now_us);return {};
         }
         if(frame[0]==probe_tag) { mark(*id,now_us);return {}; }
-        if(count==config.receive_frames) {
+        if(count>=config.receive_frames) {
             if(auto counted=increment(stats.dropped_data);!counted)return counted;
             mark(*id,now_us);return {};
         }
@@ -201,7 +299,7 @@ Result<PacketTransport> PacketTransport::create(Allocator& allocator,Clock& cloc
     const auto caps=provider.capabilities();
     if(!caps.authenticated||!caps.encrypted||!caps.datagram||caps.browser||caps.split_carriers||caps.encrypted_overhead_bytes!=37||caps.maximum_frame>raw_ceiling)return fail(Error::Unsupported);
     const auto overhead=static_cast<std::uint64_t>(caps.encrypted_overhead_bytes)+config.routing_overhead_bytes;
-    if(!config.association_epoch||!config.receive_frames||config.receive_frames>8||
+    if(!config.association_epoch||!config.receive_frames||config.receive_frames>receive_ceiling||
         caps.maximum_frame<ack_bytes||overhead+ack_bytes>config.congestion.datagram_bytes||config.congestion.maximum_ack_delay_us>25000)return fail(Error::InvalidArgument);
     auto* memory=allocator.allocate(sizeof(Impl),alignof(Impl),MemoryDomain::Backend);if(!memory)return fail(Error::OutOfMemory);
     PacketTransport result;result.allocator_=&allocator;result.impl_=new(memory)Impl(clock,provider,config,caps);
@@ -249,6 +347,9 @@ Status PacketTransport::advance() noexcept {
         if(due)self.probe_due=true;
         else if(due.error()!=Error::Busy) { self.failed=true;return due; }
     }
+    if(self.config.bundle_frames) {
+        auto bundled=self.flush_bundles(*now);if(!bundled && bundled.error()!=Error::Busy) { self.failed=true;return bundled; }
+    }
     auto ack=self.flush_ack(*now);if(!ack) { if(ack.error()!=Error::Busy)self.failed=true;return ack; }
     auto probe=self.flush_probe(*now);if(!probe) { if(probe.error()!=Error::Busy)self.failed=true;return probe; }
     auto data=self.flush_data(*now);if(!data && data.error()!=Error::Busy)self.failed=true;return data;
@@ -259,10 +360,29 @@ Status PacketTransport::send(std::span<const std::byte> bytes) noexcept {
     if(overlaps(bytes.data(),bytes.size(),this,sizeof(*this))||overlaps(bytes.data(),bytes.size(),impl_,sizeof(Impl)))return fail(Error::InvalidArgument);
     ActiveCall guard(self.active_call);
     if(self.failed||!self.provider->ready())return fail(Error::NotReady);
+    if(!bytes.empty() && self.bundles(bytes.size())) {
+        // Coalesced write: copied into the open bundle; flush() transmits it.
+        if(self.overflow_size)return fail(Error::CapacityExceeded);
+        if(self.append(bytes))return {};
+        if(self.sealed_count==self.sealed.size()) {
+            std::memcpy(self.overflow.data(),bytes.data(),bytes.size());self.overflow_size=bytes.size();return fail(Error::Busy);
+        }
+        self.seal();(void)self.append(bytes);return {};
+    }
     if(bytes.empty()||bytes.size()>self.maximum()||self.pending_size||self.carrier_blocked)return fail(Error::CapacityExceeded);
     auto now=self.now();if(!now) { self.failed=true;return fail(now.error()); }
     std::memcpy(self.pending.data()+header_bytes,bytes.data(),bytes.size());self.pending_size=bytes.size()+header_bytes;
     auto sent=self.flush_data(*now);if(!sent && sent.error()!=Error::Busy)self.failed=true;return sent;
+}
+Status PacketTransport::flush() noexcept {
+    if(!impl_)return fail(Error::NotReady);auto& self=*impl_;
+    if(!self.owned()||self.active_call)return fail(Error::PermissionDenied);if(self.failed)return fail(Error::ChannelFailed);
+    if(!self.config.bundle_frames)return {};
+    ActiveCall guard(self.active_call);
+    auto now=self.now();if(!now) { self.failed=true;return fail(now.error()); }
+    auto bundled=self.flush_bundles(*now);if(!bundled && bundled.error()!=Error::Busy) { self.failed=true;return bundled; }
+    auto data=self.flush_data(*now);if(!data && data.error()!=Error::Busy) { self.failed=true;return data; }
+    return bundled?data:bundled;
 }
 Result<std::size_t> PacketTransport::receive(std::span<std::byte> output) noexcept {
     if(!impl_)return fail(Error::NotReady);auto& self=*impl_;
@@ -280,6 +400,6 @@ Result<PacketTransportStats> PacketTransport::statistics() const noexcept {
     if(!self.owned()||self.active_call)return fail(Error::PermissionDenied);
     auto stats=self.stats;stats.bytes_in_flight=self.flow->bytes_in_flight();stats.congestion_window=self.flow->congestion_window();
     stats.smoothed_rtt_us=self.flow->smoothed_rtt_us();stats.queued_receive_frames=self.count;
-    stats.owns_pending_send=self.pending_size!=0||self.carrier_blocked;return stats;
+    stats.owns_pending_send=self.pending_size!=0||self.carrier_blocked||self.queued();return stats;
 }
 }

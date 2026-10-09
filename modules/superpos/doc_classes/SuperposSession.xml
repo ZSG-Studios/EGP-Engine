@@ -49,7 +49,14 @@
 			<param index="5" name="session_id" type="int" />
 			<param index="6" name="peer_identity" type="int" />
 			<param index="7" name="admission_key" type="PackedByteArray" />
-			<description>Attaches one pre-provisioned native UDP server or client association with local/remote endpoints, session ID, peer identity and admission key. Check [method get_admission_state] for authenticated readiness. Old Yojimbo tokens are incompatible; never log the admission key.</description>
+			<param index="8" name="transport" type="Dictionary" default="{}" />
+			<description>Attaches one pre-provisioned native UDP server or client association with local/remote endpoints, session ID, peer identity and admission key. Check [method get_admission_state] for authenticated readiness. Old Yojimbo tokens are incompatible; never log the admission key.
+				The optional [param transport] profile accepts [code]bundle_frames[/code] (default [code]true[/code]: messages, delivery receipts, probes and a piggybacked acknowledgement share each datagram), [code]burst_datagrams[/code] (1-16, default 4 paced datagrams per pump), [code]receive_frames[/code] (1-64, default 64) and [code]channel_modes[/code], an [Array] of up to 32 delivery modes indexed by channel: [code]0[/code] reliable ordered (default), [code]1[/code] reliable unordered, [code]2[/code] unreliable latest (newer messages supersede older ones on the channel) and [code]3[/code] unreliable. Both peers must declare identical channel modes; admission rejects a mismatch. Unknown keys return [constant ERR_INVALID_PARAMETER].
+				[codeblock]
+				# Reliable controls on channel 0, latest-state snapshots on channel 1.
+				session.configure_udp(false, "127.0.0.1", 49000, "127.0.0.1", 48000, session_id, peer, key,
+						{"channel_modes": [0, 2], "burst_datagrams": 4})
+				[/codeblock]</description>
 		</method>
 		<method name="destroy_object">
 			<return type="int" enum="Error" />

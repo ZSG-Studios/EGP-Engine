@@ -11,7 +11,8 @@ def configure(env):
 
 def get_doc_classes():
     return ["SuperposUInt64", "SuperposField", "SuperposSchema", "SuperposSession", "SuperposWorld",
-            "SuperposSpawnEntry", "SuperposSpawnCatalog", "SuperposReplicaView", "SuperposSpawner"]
+            "SuperposSpawnEntry", "SuperposSpawnCatalog", "SuperposReplicaView", "SuperposSpawner",
+            "SuperposLockstepClient", "SuperposLockstepServer"]
 
 def get_doc_path():
     return "doc_classes"

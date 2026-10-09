@@ -15,6 +15,7 @@ void superpos_register_public_spawner_fixture();
 #include "superpos_world.h"
 #include "superpos_replicator.h"
 #include "superpos_spawner.h"
+#include "superpos_lockstep.h"
 #include "private/spawning/spawn_runtime.hpp"
 #include "superpos_managed_reload.h"
 #include "core/object/class_db.h"
@@ -48,6 +49,8 @@ void initialize_superpos_module(ModuleInitializationLevel p_level) {
     GDREGISTER_CLASS(SuperposWorld);
     GDREGISTER_CLASS(SuperposReplicator);
     GDREGISTER_CLASS(SuperposSpawner);
+    GDREGISTER_CLASS(SuperposLockstepClient);
+    GDREGISTER_CLASS(SuperposLockstepServer);
 #ifdef SUPERPOS_LIFECYCLE_FIXTURE
     superpos_register_lifecycle_fixture();
     superpos_register_public_spawner_fixture();

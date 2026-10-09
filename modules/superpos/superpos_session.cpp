@@ -1180,7 +1180,7 @@ Error SuperposSession::configure_udp(bool p_server, const String &p_local_addres
 
         const String &p_remote_address, uint32_t p_remote_port, uint64_t p_session_id,
 
-        uint64_t p_peer_identity, const PackedByteArray &p_admission_key) {
+        uint64_t p_peer_identity, const PackedByteArray &p_admission_key, const Dictionary &p_transport) {
 
     if (Thread::get_caller_id() != owner_thread) { return ERR_BUSY; }
 
@@ -1209,6 +1209,32 @@ Error SuperposSession::configure_udp(bool p_server, const String &p_local_addres
     for (int i = 0; i < p_admission_key.size(); ++i) { nonzero_key |= p_admission_key[i] != 0; }
 
     if (!nonzero_key) { return last_error = ERR_UNAUTHORIZED; }
+
+    // Optional transport profile. Unknown keys are rejected so typos never silently
+    // fall back. Channel modes are HELLO-negotiated: both peers must declare them.
+    for (const Variant &key : p_transport.keys()) {
+
+        const String name = key;
+
+        if (name != "bundle_frames" && name != "burst_datagrams" && name != "receive_frames" && name != "channel_modes") { return last_error = ERR_INVALID_PARAMETER; }
+
+    }
+
+    const bool bundle_frames = p_transport.get("bundle_frames", true);
+
+    const int64_t burst_datagrams = p_transport.get("burst_datagrams", 4);
+
+    const int64_t receive_frames = p_transport.get("receive_frames", 64);
+
+    const Array channel_modes = p_transport.get("channel_modes", Array());
+
+    if (burst_datagrams < 1 || burst_datagrams > 16 || receive_frames < 1 || receive_frames > 64 || channel_modes.size() > 32) { return last_error = ERR_INVALID_PARAMETER; }
+
+    for (int i = 0; i < channel_modes.size(); ++i) {
+
+        if (channel_modes[i].get_type() != Variant::INT || int64_t(channel_modes[i]) < 0 || int64_t(channel_modes[i]) > int64_t(superpos::DeliveryMode::Unreliable)) { return last_error = ERR_INVALID_PARAMETER; }
+
+    }
 
     for (const auto &address : {p_local_address, p_remote_address}) {
 
@@ -1278,7 +1304,19 @@ Error SuperposSession::configure_udp(bool p_server, const String &p_local_addres
 
     const auto epoch = *checked_epoch;
 
-    auto packet = superpos::PacketTransport::create(impl->allocator, candidate->clock, *candidate->dtls, {epoch});
+    // Coalesced packets carry many frames, receipts and a piggybacked ACK per
+    // datagram, with a small pacing burst per owner pump.
+    superpos::PacketTransportConfig packet_config;
+
+    packet_config.association_epoch = epoch;
+
+    packet_config.bundle_frames = bundle_frames;
+
+    packet_config.receive_frames = uint8_t(receive_frames);
+
+    packet_config.congestion.burst_datagrams = uint8_t(burst_datagrams);
+
+    auto packet = superpos::PacketTransport::create(impl->allocator, candidate->clock, *candidate->dtls, packet_config);
 
     if (!packet) { return last_error = translate(packet.error()); }
 
@@ -1295,6 +1333,8 @@ Error SuperposSession::configure_udp(bool p_server, const String &p_local_addres
     config.remote_peer = p_server ? p_peer_identity : 0;
 
     config.limits.fragment_payload_bytes = 894; // DTLS frame minus packet and delivery envelopes.
+
+    for (int i = 0; i < channel_modes.size(); ++i) { config.channel_modes[i] = superpos::DeliveryMode(int64_t(channel_modes[i])); }
 
     config.capabilities.schemas = impl->world->fingerprint();
 
@@ -2056,7 +2096,7 @@ void SuperposSession::_bind_methods() {
 
     ClassDB::bind_method(D_METHOD("read_simulation_profile"), &SuperposSession::read_simulation_profile);
 
-    ClassDB::bind_method(D_METHOD("configure_udp", "server", "local_address", "local_port", "remote_address", "remote_port", "session_id", "peer_identity", "admission_key"), &SuperposSession::configure_udp);
+    ClassDB::bind_method(D_METHOD("configure_udp", "server", "local_address", "local_port", "remote_address", "remote_port", "session_id", "peer_identity", "admission_key", "transport"), &SuperposSession::configure_udp, DEFVAL(Dictionary()));
 
     ClassDB::bind_method(D_METHOD("enqueue_packet", "payload", "channel"), &SuperposSession::enqueue_packet, DEFVAL(0));
 

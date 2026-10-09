@@ -41,6 +41,10 @@ public:
  // advance rather than substituting another message.
  virtual Status send(std::span<const std::byte>) noexcept=0;
  virtual Result<std::size_t> receive(std::span<std::byte>) noexcept=0;
+ // End of an owner pump: a coalescing provider transmits frames accepted by
+ // send/send_frame during this pump. Busy means paced work remains queued and
+ // owned; it is retried by the next advance or flush. Default: nothing queued.
+ virtual Status flush() noexcept { return {}; }
  // Busy owns the exact payload AND lane until advance completes. The default
  // preserves existing single-carrier providers. Advertising split_carriers
  // without implementing all three frame methods fails explicitly.
