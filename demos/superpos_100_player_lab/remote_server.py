@@ -1,11 +1,13 @@
 """Private stdin bootstrap; public telemetry only over SSH. No credential files."""
-import base64, json, subprocess, sys, time, hashlib, threading, os
+import base64, json, subprocess, sys, time, hashlib, threading, os, ctypes
 from pathlib import Path
 
 root = Path(__file__).resolve().parents[2]
 out = root / '.build/diagnostics/superpos-100'
 out.mkdir(parents=True, exist_ok=True)
 config = json.loads(sys.stdin.readline())
+if config.get('local_server'):
+    ctypes.windll.kernel32.SetProcessAffinityMask(ctypes.c_void_p(ctypes.windll.kernel32.GetCurrentProcess()),15)
 config['role'] = 'server'
 config['telemetry'] = str(out / 'server.json')
 config['control'] = str(out / 'epochs.json')
@@ -28,8 +30,11 @@ def read_control():
 threading.Thread(target=read_control,daemon=True).start()
 engine = root / 'bin/godot.windows.editor.dev.x86_64.mono.exe'
 with (out / 'server.log').open('w') as stdout, (out / 'server-error.log').open('w') as stderr:
-    process = subprocess.Popen([str(engine), '--headless', '--path', str(Path(__file__).parent), '--max-fps', '60'],
+    process = subprocess.Popen([str(engine), '--headless', '--path', str(Path(__file__).parent), '--max-fps', '120'],
                                stdin=subprocess.PIPE, stdout=stdout, stderr=stderr, text=True)
+    if config.get('local_server'):
+        ctypes.windll.kernel32.SetProcessAffinityMask(ctypes.c_void_p(int(process._handle)),15)
+        ctypes.windll.kernel32.SetPriorityClass(ctypes.c_void_p(int(process._handle)),ctypes.c_uint32(0x8000))
     encoded=base64.b64encode(json.dumps(config).encode()).decode()
     process.stdin.write('\n'.join(encoded[i:i+512] for i in range(0,len(encoded),512))+'\nEND\n')
     process.stdin.flush()

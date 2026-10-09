@@ -1,0 +1,26 @@
+{
+  "creator": "Quaternius",
+  "license": "CC0 1.0 Universal",
+  "root_motion": "disabled; in-place source GLBs",
+  "rig_bones": 65,
+  "assets": [
+    {
+      "file": "UAL1_Pro.glb",
+      "source_pack": "Universal Animation Library Pro",
+      "animation_count": 120,
+      "sha256": "d1cb4537efa4c06a953ca951e5935062f88c2580ac68e45045592d587bddb43d"
+    },
+    {
+      "file": "UAL2_Standard.glb",
+      "source_pack": "Universal Animation Library 2 Standard",
+      "animation_count": 43,
+      "sha256": "8cee20ab1bc55130092447e810e26df22dd2803eccc54f52137a7d54d7ab88a8"
+    },
+    {
+      "file": "Mannequin_F.glb",
+      "source_pack": "UAL2 female mannequin",
+      "animation_count": 0,
+      "sha256": "2ee6cc3fe888d9b144afa8cc4b2ab7bfc5d13a0d5b7548df777f61f64ad65fa6"
+    }
+  ]
+}

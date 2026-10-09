@@ -1,4 +1,6 @@
-param([int]$Duration=300)
+param([int]$Duration=1800,[switch]$RemoteServer)
 $ErrorActionPreference='Stop'
-& python (Join-Path $PSScriptRoot 'run_lab.py') --duration $Duration
-if($LASTEXITCODE -ne 0){throw 'Lab failed. See EGP-Engine/.build/diagnostics/superpos-100.'}
+$taskArgs=@((Join-Path $PSScriptRoot 'run_lab.py'),'--duration',$Duration)
+if (-not $RemoteServer) { $taskArgs+='--local-server' }
+& python @taskArgs
+exit $LASTEXITCODE
