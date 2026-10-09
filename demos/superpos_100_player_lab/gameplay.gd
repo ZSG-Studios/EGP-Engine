@@ -13,7 +13,10 @@ const INPUT_BYTES := 6
 # Persistent control bits (sprint and stances) versus one-shot actions.
 const PERSISTENT := 4|8|16|32|64|128|256
 const ONE_SHOT := 1|2|1024|2048
-const HUMAN := 100
+# The human takes the slot after the bots; the spawn grid scales with the bot count.
+static var HUMAN := 100
+static var grid_side := 10
+static var grid_spacing := 5.1
 const GOALS := [Vector3(-24,0,-24),Vector3(-13,0,-11),Vector3(24,0,-24),Vector3(13,0,-11),Vector3(24,0,24),Vector3(13,0,11),Vector3(-24,0,24),Vector3(-13,0,11)]
 const STANCE_ORDER := [256,128,64,16,8,32]
 const CHAIR := Vector3(0,0,-27)
@@ -28,10 +31,17 @@ var player_ids := PackedInt64Array()
 var movable_ids := PackedInt64Array()
 
 
+static func configure_players(total: int) -> void:
+	HUMAN = total - 1
+	grid_side = maxi(10, ceili(sqrt(float(maxi(total - 1, 1)))))
+	grid_spacing = minf(5.1, 46.0 / float(grid_side - 1))
+
+
 static func spawn(id: int) -> Vector3:
 	if id == HUMAN:
 		return Vector3(0, 1.2, -26)
-	return Vector3((id % 10 - 4.5) * 5.1, 1.2, (floori(float(id) / 10) - 4.5) * 5.1)
+	var half := float(grid_side - 1) * 0.5
+	return Vector3((id % grid_side - half) * grid_spacing, 1.2, (floori(float(id) / grid_side) - half) * grid_spacing)
 
 
 static func goal(index: int) -> Vector3:

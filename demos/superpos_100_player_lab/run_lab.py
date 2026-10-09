@@ -67,6 +67,7 @@ class Proxy:
         self.ordinal = 0
         self.start, self.duration = start, duration
         self.human_profile, self.human_offline_until = 0, 0.0
+        self.bots = count - 1
         self.rows = []
         for peer in range(count):
             stats = dict(id=peer, packets=0, forwarded=0, dropped=0, duplicated=0, expedited=0, blackout_drops=0, overflow=0, bytes=0, max_queue_bytes=0)
@@ -85,12 +86,12 @@ class Proxy:
         peer, stats, rng = lane['peer'], lane['stats'], lane['rng']
         stats['packets'] += 1
         age = current-self.start
-        p = PROFILES[min(4, peer//20)] if peer<100 else PROFILES[self.human_profile]
-        if (30 <= age < 46 and 80 <= peer < 100) or (peer==100 and current<self.human_offline_until):
+        p = PROFILES[cohort(peer,self.bots)] if peer<self.bots else PROFILES[self.human_profile]
+        if (30 <= age < 46 and cohort(peer,self.bots)==4) or (peer==self.bots and current<self.human_offline_until):
             stats['dropped'] += 1
             stats['blackout_drops'] += 1
             return
-        recovery = age >= 55 and peer<100 and (self.duration<=300 or age<90)
+        recovery = age >= 55 and peer<self.bots and (self.duration<=300 or age<90)
         if recovery:
             p = dict(up=5,down=5,jitter=0,loss=0,duplicate=0,reorder=0,rate=1000000,burst=0)
         # Two-state correlated loss, asymmetric AR(1) jitter and bounded serialization.
@@ -106,7 +107,7 @@ class Proxy:
         if rng.random()<p['reorder']:
             delay *= 0.05
             stats['expedited'] += 1
-        rate = p['rate'] * (0.25 if 20<=age<27 and 40<=peer<80 else 1)
+        rate = p['rate'] * (0.25 if 20<=age<27 and cohort(peer,self.bots) in (2,3) else 1)
         if lane['direction']=='up':
             rate *= 0.6
         lane['tail'] = max(current,lane['tail'])+len(payload)/rate
@@ -152,17 +153,24 @@ class Proxy:
             key.fileobj.close()
         self.selector.close()
 
+def cohort(peer, bots):
+    """Network-profile cohort (0-4) of a bot: equal fifths of the bot ids."""
+    return min(4, peer*5//max(bots,1))
+
+
 def main():
     global SERVER_IP, CLIENT_IP
     parser = argparse.ArgumentParser()
     parser.add_argument('--duration', type=int, default=180)
     parser.add_argument('--bots', type=int, default=100)
+    parser.add_argument('--bots-per-process', type=int, default=0, help='Bot clients per native process (default: about four processes, at least 25 each)')
     parser.add_argument('--no-human', action='store_true')
     parser.add_argument('--local-server', action='store_true', help='Run the native dedicated server on this PC over loopback')
     parser.add_argument('--tuning', default='{}', help='JSON transport overrides, e.g. {"human_lanes":2}')
     args = parser.parse_args()
-    if not 1<=args.bots<=100 or args.duration<15:
-        parser.error('Use 1..100 bots and at least 15 seconds')
+    # 255 bots + the human = 256 clients, the planned per-server limit.
+    if not 1<=args.bots<=255 or args.duration<15:
+        parser.error('Use 1..255 bots and at least 15 seconds')
     OUT.mkdir(parents=True,exist_ok=True)
     affinity(priority=ABOVE_NORMAL)
     if args.local_server:
@@ -171,9 +179,8 @@ def main():
         sync_remote_project()
     engine = ROOT / 'bin/godot.windows.editor.dev.x86_64.mono.exe'
     count = args.bots+(not args.no_human)
-    # The production lab reserves id 100 for the human; short probes omit the human.
-    if args.bots!=100 and not args.no_human:
-        parser.error('Reduced probes require --no-human')
+    # The human takes the slot after the bots.
+    human_id = args.bots
     start = time.time()+10
     peers = [dict(id=i,key=base64.b64encode(secrets.token_bytes(32)).decode()) for i in range(count)]
     epochs={str(i):1 for i in range(count)}
@@ -181,8 +188,9 @@ def main():
     control_path=OUT/'epochs.json'
     atomic_json(control_path,epochs)
     atomic_json(OUT/'human-network.json',dict(profile=0,offline_until=0))
-    common = dict(total=count,server_ip=SERVER_IP,client_ip=CLIENT_IP,port_base=BASE,start_unix=start,duration=args.duration,control=str(control_path),local_server=args.local_server,tuning=json.loads(args.tuning),server_location="LOCAL PC" if args.local_server else "REMOTE BUILD PC")
+    common = dict(total=count,bots=args.bots,human_id=human_id,server_ip=SERVER_IP,client_ip=CLIENT_IP,port_base=BASE,start_unix=start,duration=args.duration,control=str(control_path),local_server=args.local_server,tuning=json.loads(args.tuning),server_location="LOCAL PC" if args.local_server else "REMOTE BUILD PC")
     proxy = Proxy(count,start,args.duration)
+    proxy.bots = args.bots
     processes, streams = [], []
     server_report, server_meta, server_exit = {}, {}, []
     remote_command = r'C:\EGPTools\python\python.exe "C:\EGP Workspace\EGP-Engine\demos\superpos_100_player_lab\remote_server.py"'
@@ -214,8 +222,9 @@ def main():
     worker_paths = []
     env = os.environ.copy()
     env['DISABLE_VK_LAYER_reshade_1']='1'
-    for worker, offset in enumerate(range(0,args.bots,25)):
-        role, selection = 'bots', peers[offset:min(offset+25,args.bots)]
+    per_process = args.bots_per_process or max(25,-(-args.bots//4))
+    for worker, offset in enumerate(range(0,args.bots,per_process)):
+        role, selection = 'bots', peers[offset:min(offset+per_process,args.bots)]
         path = OUT/f'clients-{worker}.json'
         worker_paths.append(path)
         launch = dict(common,role=role,peers=selection,telemetry=str(path))
@@ -230,7 +239,7 @@ def main():
         worker_paths.append(path)
         stdout, stderr = (OUT/'human.log').open('w'), (OUT/'human-error.log').open('w')
         streams.extend([stdout,stderr])
-        launch = dict(common,role='human',peers=[peers[100]],telemetry=str(path),monitor=str(OUT/'monitor.json'))
+        launch = dict(common,role='human',peers=[peers[human_id]],telemetry=str(path),monitor=str(OUT/'monitor.json'))
         process = subprocess.Popen([str(engine),'--path',str(HERE),'--max-fps','60'],stdin=subprocess.PIPE,stdout=stdout,stderr=stderr,text=True,env=env)
         affinity(process,ABOVE_NORMAL)
         processes.append(process)
@@ -270,7 +279,7 @@ def main():
                     sides=[mapping[peer] for mapping in (client_map,server_map) if peer in mapping]
                     # Coordinated fresh-epoch retry only for a terminal native error.
                     # During a known outage, wait for the path to return first.
-                    if len(sides)!=2 or (30<=age<46 and 80<=peer<100) or (peer==100 and time.time()<proxy.human_offline_until):
+                    if len(sides)!=2 or (30<=age<46 and peer<args.bots and cohort(peer,args.bots)==4) or (peer==human_id and time.time()<proxy.human_offline_until):
                         continue
                     if any(r['terminal'] for r in sides) and all(r['generation']==epochs[str(peer)] for r in sides) and age-retried_at[peer]>=10:
                         epochs[str(peer)]+=1
@@ -282,8 +291,8 @@ def main():
                     remote.stdin.write(json.dumps(epochs)+'\n')
                     remote.stdin.flush()
                 phase = 'WARMUP' if age<0 else 'BLACKOUT' if 30<=age<46 else 'RECONNECT' if 46<=age<55 else 'RECOVERY / CLEAN PATH' if age>=55 else 'MIXED INTERNET'
-                cohort_summary=' / '.join(str(sum(r['ready'] for r in rows if i*20<=r['id']<(i+1)*20)) for i in range(5))
-                atomic_json(OUT/'monitor.json',dict(phase=phase,elapsed=age,bots_ready=sum(r['ready'] for r in rows if r['id']<100),server_ready=sum(r['ready'] for r in server_report.get('rows',[])),cohort_summary=cohort_summary))  # HUD-sized: the client parses it on its main thread
+                cohort_summary=' / '.join(str(sum(r['ready'] for r in rows if r['id']<args.bots and cohort(r['id'],args.bots)==i)) for i in range(5))
+                atomic_json(OUT/'monitor.json',dict(phase=phase,elapsed=age,bots_ready=sum(r['ready'] for r in rows if r['id']<args.bots),server_ready=sum(r['ready'] for r in server_report.get('rows',[])),cohort_summary=cohort_summary))  # HUD-sized: the client parses it on its main thread
                 if age-last_output>=10:
                     last_output=age
                     print(f"LAB_PROGRESS t={age:.0f}s clients={sum(r['ready'] for r in rows)}/{count} remote={sum(r['ready'] for r in server_report.get('rows',[]))}/{count} phase={phase}",flush=True)
@@ -304,13 +313,13 @@ def main():
             errors.append('Missing per-client telemetry')
         for row in rows:
             deterministic_row=row.get('bot_loaded') or row.get('deterministic')
-            if not row['ever_ready'] or not row['ready'] or row['received']<10 or row['applied']<10 or row['max_pending']>2 or (not deterministic_row and row.get('exhibit_received',0)<2) or (row['id']<100 and row.get('keyframes',1)<1):
+            if not row['ever_ready'] or not row['ready'] or row['received']<10 or row['applied']<10 or row['max_pending']>2 or (not deterministic_row and row.get('exhibit_received',0)<2) or (row['id']<args.bots and row.get('keyframes',1)<1):
                 errors.append('Client qualification failed id='+str(row['id']))
         for row in server_rows:
             if not row['ever_ready'] or not row['ready'] or row['received']<10 or (row['id']<args.bots and row['distance']<3):
                 errors.append('Server qualification failed id='+str(row['id']))
-        if args.duration>=65 and args.bots==100:
-            blackout=[r for r in rows if 80<=r['id']<100]
+        if args.duration>=65 and args.bots>=20:
+            blackout=[r for r in rows if r['id']<args.bots and cohort(r['id'],args.bots)==4]
             # A session may ride out the 9 s blackout inside its progress timeout or fail
             # and re-admit on a fresh epoch; either way every blackout client must return.
             if not all(r['ready'] for r in blackout):
@@ -319,26 +328,27 @@ def main():
                 errors.append('Fresh-epoch re-admission was not exercised')
             if not sum(r['blackout_drops'] for r in proxy.rows):
                 errors.append('Blackout was not exercised on actual packets')
-        human_row=next((r for r in rows if r['id']==100),None)
-        if human_row and human_row.get('deterministic') is not None and any(r.get('deterministic') for r in server_rows if r['id']==100):
+        human_row=next((r for r in rows if r['id']==human_id),None)
+        if human_row and human_row.get('deterministic') is not None and any(r.get('deterministic') for r in server_rows if r['id']==human_id):
             # Deterministic mode: the playable client joined by keyframe and simulated the world locally.
             if not human_row.get('deterministic') or human_row.get('keyframes',0)<1 or human_row.get('det_advanced',0)<120:
                 errors.append('Deterministic client did not join and simulate the relayed world')
         # Deterministic command stream per network profile, measured at the server.
         stream={}
         for index,profile in enumerate(PROFILES):
-            cohort=[r for r in server_rows if index*20<=r['id']<(index+1)*20]
-            if cohort:
-                rates=sorted(r.get('command_bytes',0)/max(args.duration,1)/1000 for r in cohort)
+            members=[r for r in server_rows if r['id']<args.bots and cohort(r['id'],args.bots)==index]
+            if members:
+                cohort_rows=members
+                rates=sorted(r.get('command_bytes',0)/max(args.duration,1)/1000 for r in cohort_rows)
                 stream[profile['name']]=dict(command_kBps_p50=round(rates[len(rates)//2],2),command_kBps_max=round(rates[-1],2),
-                    rtt_ms_p50=round(sorted(r.get('command_rtt_ms',0) for r in cohort)[len(cohort)//2],1),
-                    resends=sum(r.get('command_resends',0) for r in cohort),keyframes=sum(r.get('keyframes',0) for r in cohort),
-                    behind_s_p50=round(sorted((r.get('server_tick',0)-r.get('server_ack',0))/60 for r in cohort)[len(cohort)//2],2),
-                    behind_s_max=round(max((r.get('server_tick',0)-r.get('server_ack',0))/60 for r in cohort),2),
+                    rtt_ms_p50=round(sorted(r.get('command_rtt_ms',0) for r in cohort_rows)[len(cohort_rows)//2],1),
+                    resends=sum(r.get('command_resends',0) for r in cohort_rows),keyframes=sum(r.get('keyframes',0) for r in cohort_rows),
+                    behind_s_p50=round(sorted((r.get('server_tick',0)-r.get('server_ack',0))/60 for r in cohort_rows)[len(cohort_rows)//2],2),
+                    behind_s_max=round(max((r.get('server_tick',0)-r.get('server_ack',0))/60 for r in cohort_rows),2),
                     link_kBps=profile['rate']/1000)
         print('LAB_STREAM '+json.dumps(stream),flush=True)
         if any(r.get('bot_loaded') is not None for r in rows):
-            storms=[r['id'] for r in rows if r['id']<100 and r.get('keyframes',0)>3]
+            storms=[r['id'] for r in rows if r['id']<args.bots and r.get('keyframes',0)>3]
             if storms:
                 errors.append('Keyframe storm: bots rejoined more than 3 times: '+str(storms[:10]))
         simulation=server_report.get('simulation',{})

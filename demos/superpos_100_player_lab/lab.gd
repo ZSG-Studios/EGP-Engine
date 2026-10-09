@@ -7,7 +7,8 @@ const EXHIBIT := 2
 # Independent reliable lanes let several fresh frames be in flight instead of one per round trip.
 const INPUT_LANES := [0,6,7]
 const STATE_LANES := [1,3,4,5]
-const HUMAN := 100
+# The human's slot (after the bots); set from the launch configuration.
+var HUMAN := 100
 # Superpos sends at most one paced datagram per session pump, and every message, receipt,
 # probe and ACK is its own datagram. Rates and lanes were swept on the local 101-stream lab:
 # two state lanes plus one input lane at 15 Hz is the fastest stall-free human setting;
@@ -127,6 +128,8 @@ func _ready() -> void:
 		return
 	config = parsed
 	role = config.role
+	HUMAN = int(config.get("human_id", int(config.total) - 1))
+	GAMEPLAY.configure_players(int(config.total))
 	deterministic = bool(config.get("deterministic", true)) and ClassDB.class_exists("SuperposLockstepServer")
 	if deterministic and role == "human":
 		lockstep_client = ClassDB.instantiate("SuperposLockstepClient")
@@ -157,9 +160,7 @@ func _ready() -> void:
 	print("LAB_STARTED role=", role, " independent_sessions=", connections.size())
 
 func _spawn(id: int) -> Vector3:
-	if id == 100:
-		return Vector3(0, 1.2, -26)
-	return Vector3((id % 10 - 4.5) * 5.1, 1.2, (floori(float(id) / 10) - 4.5) * 5.1)
+	return GAMEPLAY.spawn(id)
 
 func _goal(index: int) -> Vector3:
 	return [Vector3(-24,0,-24),Vector3(-13,0,-11),Vector3(24,0,-24),Vector3(13,0,-11),Vector3(24,0,24),Vector3(13,0,11),Vector3(-24,0,24),Vector3(-13,0,11)][index % 8]
@@ -1467,7 +1468,7 @@ func _build_view() -> void:
 	title=Label.new()
 	title.position=Vector2(40,32)
 	title.add_theme_font_size_override("font_size",25)
-	title.text="EGP / 100 BOTS + YOU / "+str(config.get("server_location","REMOTE BUILD PC"))
+	title.text="EGP / %d BOTS + YOU / " % int(config.get("bots",100))+str(config.get("server_location","REMOTE BUILD PC"))
 	canvas.add_child(title)
 	hud=Label.new()
 	hud.position=Vector2(40,75)
@@ -1486,7 +1487,7 @@ func _build_view() -> void:
 	for id in range(config.total):
 		var character: Node3D = CHARACTER_VIEW.new()
 		world.add_child(character)
-		check(character.configure(Color("e8f7ff") if id==100 else COLORS[mini(4,floori(float(id)/20.0))],id%2==1),"UAL animated mannequin setup")
+		check(character.configure(Color("e8f7ff") if id==HUMAN else COLORS[mini(4,id*5/maxi(int(config.get("bots",100)),1))],id%2==1),"UAL animated mannequin setup")
 		# Spread animation LOD phases so reduced-rate characters never all update in one frame.
 		character.lod_phase=id+1
 		character.visible=false
