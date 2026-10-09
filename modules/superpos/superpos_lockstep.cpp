@@ -476,6 +476,44 @@ Dictionary SuperposLockstepServer::publish_commands(int64_t p_channel, int64_t p
     result["stale"] = stale;
     return result;
 }
+Dictionary SuperposLockstepServer::get_streams_summary() const {
+    // Every slot in one call, for live debugging views and telemetry.
+    Dictionary result;
+    if (Thread::get_caller_id() != owner_thread || !impl->commands) { return result; }
+    PackedInt64Array acknowledged, sent, bytes, rewinds, skipped, received, buffered, starvations, target;
+    PackedByteArray enabled;
+    const int64_t n = impl->slots;
+    acknowledged.resize(n); sent.resize(n); bytes.resize(n); rewinds.resize(n); skipped.resize(n);
+    received.resize(n); buffered.resize(n); starvations.resize(n); target.resize(n); enabled.resize(n);
+    for (int64_t slot = 0; slot < n; ++slot) {
+        const auto stream = impl->streams[size_t(slot)].status();
+        const auto &link = impl->links[size_t(slot)];
+        const auto &peer = impl->peers[size_t(slot)];
+        const auto playout = peer ? peer->status() : superpos::PlayoutStatus{};
+        acknowledged.set(slot, superpos_egp::signed_bits(stream.acknowledged));
+        sent.set(slot, superpos_egp::signed_bits(stream.sent));
+        bytes.set(slot, int64_t(link.bytes));
+        rewinds.set(slot, int64_t(stream.rewinds));
+        skipped.set(slot, int64_t(link.skipped));
+        received.set(slot, superpos_egp::signed_bits(playout.received));
+        buffered.set(slot, int64_t(playout.buffered));
+        starvations.set(slot, int64_t(playout.starvations));
+        target.set(slot, int64_t(playout.target));
+        enabled.set(slot, link.enabled ? 1 : 0);
+    }
+    result["tick"] = superpos_egp::signed_bits(impl->commands->newest());
+    result["acknowledged"] = acknowledged;
+    result["sent"] = sent;
+    result["bytes"] = bytes;
+    result["rewinds"] = rewinds;
+    result["skipped"] = skipped;
+    result["input_received"] = received;
+    result["input_buffered"] = buffered;
+    result["input_starvations"] = starvations;
+    result["input_target"] = target;
+    result["enabled"] = enabled;
+    return result;
+}
 PackedByteArray SuperposLockstepServer::pack_keyframe() const {
     if (Thread::get_caller_id() != owner_thread || !impl->commands) { return PackedByteArray(); }
     // A full table (every slot at the widest input) plus its header.
@@ -516,6 +554,7 @@ void SuperposLockstepServer::_bind_methods() {
     ClassDB::bind_method(D_METHOD("reset_stream", "slot", "keyframe_tick"), &SuperposLockstepServer::reset_stream);
     ClassDB::bind_method(D_METHOD("pack_stream", "slot", "srtt_usec", "max_bytes"), &SuperposLockstepServer::pack_stream, DEFVAL(880));
     ClassDB::bind_method(D_METHOD("get_stream_status", "slot"), &SuperposLockstepServer::get_stream_status);
+    ClassDB::bind_method(D_METHOD("get_streams_summary"), &SuperposLockstepServer::get_streams_summary);
     ClassDB::bind_method(D_METHOD("bind_session", "slot", "session"), &SuperposLockstepServer::bind_session);
     ClassDB::bind_method(D_METHOD("set_stream_enabled", "slot", "enabled"), &SuperposLockstepServer::set_stream_enabled);
     ClassDB::bind_method(D_METHOD("set_stream_interval", "slot", "ticks"), &SuperposLockstepServer::set_stream_interval);

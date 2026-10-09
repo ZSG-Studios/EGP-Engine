@@ -61,6 +61,7 @@ public:
     void reset_stream(int64_t p_slot, int64_t p_keyframe_tick);
     Dictionary pack_stream(int64_t p_slot, int64_t p_srtt_usec, int64_t p_max_bytes = 880);
     Dictionary get_stream_status(int64_t p_slot) const;
+    Dictionary get_streams_summary() const;
     // Native batch service: one call per phase of a server tick instead of
     // per-client script loops.
     void bind_session(int64_t p_slot, const Ref<SuperposSession> &p_session);

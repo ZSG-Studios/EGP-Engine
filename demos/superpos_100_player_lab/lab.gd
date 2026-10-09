@@ -59,6 +59,12 @@ var camera: Camera3D
 var visuals: Dictionary = {}
 var visual_targets: Dictionary = {}
 var hud: Label
+var controls_label: Label
+# F3: full network/simulation details; F1: full controls.
+var debug_detail := false
+var show_controls := false
+# Backing panel, resized to the debug text after each refresh.
+var hud_panel: ColorRect
 var title: Label
 var yaw := 0.0
 var zoom := 20.0
@@ -94,6 +100,8 @@ var section_ms := {"tick":[],"render":[],"animate":[],"animated":[],"engine_proc
 var gameplay: RefCounted
 var keyframe_cache := {}
 var telemetry_cache := {}
+var live_last_time := 0.0
+var live_last_frame := 0
 var input_recording := PackedByteArray()
 var input_recorded := false
 # Starved ticks hold stance and facing but never invent movement or actions; a
@@ -1366,6 +1374,7 @@ func _read_commands(c: Dictionary) -> void:
 		_acked(acked,"Command receipt")
 		var bytes: PackedByteArray=packet.payload
 		if bytes.size()>=8:
+			det.rx_bytes=int(det.get("rx_bytes",0))+bytes.size()
 			lockstep_client.acknowledge_inputs(bytes.decode_u32(0))
 			c.received+=1
 			c.last_state=now
@@ -1508,6 +1517,7 @@ func _write_telemetry(full: bool) -> void:
 			c.command_bytes=int(stream.get("bytes",0))
 		rows.append({"id":c.id,"ready":c.ready,"terminal":c.session.get_state()=="NetworkFailed","ever_ready":c.ever_ready,"generation":c.generation,"recoveries":c.recoveries,"transport_errors":c.transport_errors,"error_codes":c.get("error_codes",{}),"srtt_ms":float(stats.get("smoothed_rtt_us",0))/1000.0,"retry_ticks":int(stats.get("retry_ticks",0)),"cwnd":int(stats.get("congestion_window",0)),"flight":int(stats.get("bytes_in_flight",0)),"unreliable_pending":c.get("unreliable",[]).size(),"enqueue_failures":c.get("enqueue_failures",{}),"network_ready":bool(stats.get("network_ready",false)),"sent":c.sent,"applied":c.applied,"received":c.received,"ack_ms":c.ack_ms,"ack_p95":_pc(c,full,"r1",c.acks,0.95),"ack_p50":_pc(c,full,"r2",c.acks,0.5),"state_age_p50_ms":_pc(c,full,"r3",c.state_ages,0.5),"state_interval_p50_ms":_pc(c,full,"r4",c.state_intervals,0.5),"error_p95":_pc(c,full,"r5",c.errors,0.95),"score":c.score,"position":[c.position.x,c.position.y,c.position.z],"distance":c.distance,"max_pending":c.max_pending,"pending_tickets":c.tickets.size(),"ticket_lanes":c.tickets.map(func(t):return int(t.channel)),"oldest_ticket_ms":0 if c.tickets.is_empty() else Time.get_ticks_msec()-int(c.tickets[0].at),"send_period":c.period,"wire_bytes":c.wire_base+int(stats.get("charged_wire_bytes",0)),"rejected":c.rejected,"stale":c.stale,"corrections":c.corrections,"deterministic":det.loaded if role=="human" else deterministic,"det_tick":det.tick,"det_target":det.target,"det_starved":det.starved,"det_advanced":det.advanced,"keyframes":det.keyframes if role=="human" else int(c.kf.keyframes) if c.has("kf") else int(c.get("keyframes_sent",0)),"bot_advanced":int(c.kf.advanced) if c.has("kf") else 0,"bot_loaded":bool(c.kf.loaded) if c.has("kf") else false,"command_bytes":int(c.get("command_bytes",0)),"command_rtt_ms":float(c.get("srtt",0.0))*1000.0,"command_resends":int(lockstep_server.get_stream_status(c.id).get("rewinds",0)) if role=="server" and deterministic else 0,"decoder":(lockstep_client.get_status() if role=="human" and lockstep_client!=null else c.lockstep.get_status() if c.has("lockstep") else {}),"server_ack":int(lockstep_server.get_playout_status(c.id).get("command_acknowledged",0)) if role=="server" and deterministic else 0,"sent_newest":int(lockstep_server.get_stream_status(c.id).get("sent_tick",0)) if role=="server" and deterministic else 0,"server_tick":physics.get_tick() if physics!=null else 0,"det_lag_p95":_pc(c,full,"r6",det.lag,0.95),"det_lag_p50":_pc(c,full,"r7",det.lag,0.5),"det_buffered_p50":_pc(c,full,"r8",det.buffered,0.5),"det_buffered_p95":_pc(c,full,"r9",det.buffered,0.95),"det_step_ms_p95":_pc(c,full,"r10",det.step_ms,0.95),"playout":lockstep_server.get_playout_status(c.id) if role=="server" and deterministic and c.id==HUMAN else {},"known_entities":c.neighbors.size(),"starvations":c.starvations,"buffer_target":c.buffer_target,"buffer_p50":_pc(c,full,"r11",c.buffer_depths,0.5),"processed_tick":c.processed_tick,"received_tick":c.received_tick,"render_delay_ms":c.render_delay*1000,"exhibit_received":c.exhibit_received,"activities":c.activities,"state_age_p95_ms":_pc(c,full,"r12",c.state_ages,0.95),"state_interval_p95_ms":_pc(c,full,"r13",c.state_intervals,0.95)})
 	var report := {"diagnostics":diagnostics,"role":role,"start_unix":config.start_unix,"now":now,"failed":failed,"pid":OS.get_process_id(),"rows":rows,"physics_p95_ms":_pg(full,"g14",physics_ms,0.95),"frames":frame,"performance":{"frame_p50_ms":_pg(full,"g15",frame_times,0.5),"frame_p95_ms":_pg(full,"g16",frame_times,0.95),"frame_p99_ms":_pg(full,"g17",frame_times,0.99),"process_p95_ms":_pg(full,"g18",process_times,0.95),"gpu_p95_ms":_pg(full,"g19",gpu_times,0.95),"physics_interval_p95_ms":_pg(full,"g20",step_intervals,0.95),"samples":frame_times.size(),"server_tick_rate":float(frame)/maxf(now+10,1),"network_p95_ms":_pg(full,"g21",network_times,0.95),"application_p95_ms":_pg(full,"g22",application_times,0.95),"control_p95_ms":_pg(full,"g23",control_times,0.95),"replication_p95_ms":_pg(full,"g24",replication_times,0.95),"publish_p95_ms":_pg(full,"g25",publish_times,0.95),"application_max_ms":_pg(full,"g26",application_times,1.0),"tick_p50_ms":_pg(full,"g27",section_ms.tick,0.5),"tick_p95_ms":_pg(full,"g28",section_ms.tick,0.95),"render_p50_ms":_pg(full,"g29",section_ms.render,0.5),"render_p95_ms":_pg(full,"g30",section_ms.render,0.95),"animate_p50_ms":_pg(full,"g31",section_ms.animate,0.5),"animate_p95_ms":_pg(full,"g32",section_ms.animate,0.95),"animated_p50":_pg(full,"g33",section_ms.animated,0.5),"engine_process_p50_ms":_pg(full,"g34",section_ms.engine_process,0.5),"engine_process_p95_ms":_pg(full,"g35",section_ms.engine_process,0.95),"engine_physics_p50_ms":_pg(full,"g36",section_ms.engine_physics,0.5),"engine_physics_p95_ms":_pg(full,"g37",section_ms.engine_physics,0.95),"engine_physics_window_max_ms":Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)*1000}}
+	report.live=_live_block()
 	if role=="server" and deterministic:
 		report.command_totals=lockstep_server.get_command_totals()
 	if role=="server" and (full or not telemetry_cache.has("props")):
@@ -1528,6 +1538,77 @@ func _write_telemetry(full: bool) -> void:
 	var cost: float=float(Time.get_ticks_usec()-telemetry_started)/1000.0
 	if cost>4.0 and diagnostics.size()<400:
 		diagnostics.append([snappedf(now,0.01),"telemetry_ms",cost,full])
+
+func _recent(values: Array, count: int) -> Array:
+	# [mean, max] of the newest samples without sorting.
+	var n: int=mini(count,values.size())
+	if n==0:
+		return [0.0,0.0]
+	var total := 0.0
+	var peak := 0.0
+	for i in range(values.size()-n,values.size()):
+		total+=float(values[i])
+		peak=maxf(peak,float(values[i]))
+	return [snappedf(total/n,0.01),snappedf(peak,0.01)]
+
+func _live_block() -> Dictionary:
+	# Live state of the new systems for the supervisor, the HUD and receipts.
+	var elapsed: float=maxf(now-live_last_time,0.001)
+	var live := {"now":snappedf(now,0.01),"tick_rate":snappedf(float(frame-live_last_frame)/elapsed,0.1)}
+	live_last_time=now
+	live_last_frame=frame
+	if role=="server":
+		live.interval_ms=_recent(step_intervals,120)
+		live.application_ms=_recent(application_times,120)
+		live.network_ms=_recent(network_times,120)
+		live.physics_ms=_recent(physics_ms,120)
+		live.replication_ms=_recent(replication_times,120)
+		live.control_ms=_recent(control_times,120)
+		if deterministic:
+			live.streams=lockstep_server.get_streams_summary()
+			live.command_totals=lockstep_server.get_command_totals()
+			live.joining=joining.size()
+	elif role=="human":
+		live.frame_ms=_recent(frame_times,120)
+		live.animate_ms=_recent(section_ms.animate,120)
+		live.render_ms=_recent(section_ms.render,120)
+		if not connections.is_empty():
+			live.det=_det_live(connections[0])
+	else:
+		var loaded := 0
+		var keyframes := 0
+		var newest := 0
+		for c in connections:
+			if c.has("kf"):
+				loaded+=int(c.kf.loaded)
+				keyframes+=int(c.kf.keyframes)
+				newest=maxi(newest,int(c.lockstep.get_status().get("newest_command_tick",0)) if c.ready else 0)
+		live.bots=connections.size()
+		live.loaded=loaded
+		live.keyframes=keyframes
+		live.newest_command_tick=newest
+		live.world_tick=physics.get_tick() if physics!=null else 0
+		live.interval_ms=_recent(step_intervals,120)
+	return live
+
+func _det_live(c: Dictionary) -> Dictionary:
+	# The playable client's lockstep, prediction and transport state.
+	var stats: Dictionary=c.session.get_statistics() if c.session!=null else {}
+	var status: Dictionary=lockstep_client.get_status() if lockstep_client!=null else {}
+	var elapsed: float=maxf(now-float(det.get("rx_at",now-1.0)),0.001)
+	var rx_rate: float=float(int(det.get("rx_bytes",0))-int(det.get("rx_mark",0)))/elapsed/1000.0
+	det.rx_mark=int(det.get("rx_bytes",0))
+	det.rx_at=now
+	var lag: int=int(det.lag.back()) if not det.lag.is_empty() else 0
+	return {"loaded":det.loaded,"tick":int(det.tick),"lag_ticks":lag,"lag_ms":snappedf(lag*1000.0/60.0,0.1),
+		"buffered":int(status.get("buffered_commands",0)),"parked":int(status.get("deferred_commands",0)),
+		"target":det.target,"starved":det.starved,"keyframes":det.keyframes,
+		"inputs_pending":int(status.get("unacknowledged_inputs",0)),"corrections":c.corrections,
+		"error_cm":snappedf(float(c.errors.back())*100.0,0.1) if not c.errors.is_empty() else 0.0,
+		"step_ms":_recent(det.step_ms,60),"srtt_ms":snappedf(float(stats.get("smoothed_rtt_us",0))/1000.0,0.1),
+		"rto_ms":snappedf(float(stats.get("retransmit_timeout_us",0))/1000.0,0.1),"retry_ticks":int(stats.get("retry_ticks",0)),
+		"cwnd_kb":snappedf(float(stats.get("congestion_window",0))/1024.0,0.1),"in_flight_kb":snappedf(float(stats.get("bytes_in_flight",0))/1024.0,0.1),
+		"commands_kBps":snappedf(rx_rate,0.01),"ready":c.ready,"generation":c.generation}
 
 func _pc(c: Dictionary, full: bool, key: String, values: Array, percentile: float) -> float:
 	if not c.has("pcache"):
@@ -1580,30 +1661,31 @@ func _build_view() -> void:
 	world.add_child(camera)
 	var canvas := CanvasLayer.new()
 	add_child(canvas)
-	var panel := ColorRect.new()
+	hud_panel = ColorRect.new()
+	var panel: ColorRect = hud_panel
 	panel.color=Color(0.025,0.035,0.06,0.92)
 	panel.position=Vector2(20,20)
 	panel.size=Vector2(710,185)
 	canvas.add_child(panel)
 	title=Label.new()
-	title.position=Vector2(40,32)
-	title.add_theme_font_size_override("font_size",25)
-	title.text="EGP / %d BOTS + YOU / " % int(config.get("bots",100))+str(config.get("server_location","REMOTE BUILD PC"))
+	title.position=Vector2(40,30)
+	title.add_theme_font_size_override("font_size",21)
+	title.text="SUPERPOS LOCKSTEP  /  %d PLAYERS  /  60 Hz" % int(config.total)
 	canvas.add_child(title)
 	hud=Label.new()
-	hud.position=Vector2(40,75)
-	hud.add_theme_font_size_override("font_size",17)
+	hud.position=Vector2(40,66)
+	hud.add_theme_font_size_override("font_size",16)
 	canvas.add_child(hud)
-	var controls := Label.new()
-	controls.position=Vector2(25,850)
-	controls.add_theme_font_size_override("font_size",19)
-	controls.text="WASD / SHIFT RUN / CTRL CROUCH / C CRAWL / E PUSH+INTERACT / SPACE JUMP / F IMPULSE / V BODY"
-	canvas.add_child(controls)
-	var network_controls := Label.new()
-	network_controls.position=Vector2(25,815)
-	network_controls.add_theme_font_size_override("font_size",17)
-	network_controls.text="G GROUND SIT / T CHAIR SIT / K DEATH / R RESPAWN  |  NETWORK: 1 FIBRE / 2 BROADBAND / 3 WIFI / 4 MOBILE / 5 POOR   |   O: 6-SECOND OUTAGE"
-	canvas.add_child(network_controls)
+	# Controls stay out of the way: one hint line, the full list on F1.
+	controls_label=Label.new()
+	controls_label.add_theme_font_size_override("font_size",15)
+	controls_label.anchor_top=1.0
+	controls_label.anchor_bottom=1.0
+	controls_label.position=Vector2(25,get_viewport().get_visible_rect().size.y-34)
+	controls_label.add_theme_color_override("font_shadow_color",Color(0,0,0,0.8))
+	canvas.add_child(controls_label)
+	debug_detail=bool(_tuning("hud_detail",0))
+	_update_controls()
 	for id in range(config.total):
 		var character: Node3D = CHARACTER_VIEW.new()
 		world.add_child(character)
@@ -1718,11 +1800,45 @@ func _process(delta: float) -> void:
 			var report=JSON.parse_string(file.get_as_text())
 			if report is Dictionary:
 				live_report=report
-		hud.text=("DETERMINISTIC WORLD TICK %d / BUFFER %d / KEYFRAMES %d\n" % [int(det.tick),int(lockstep_client.get_status().get("buffered_commands",0)),int(det.keyframes)] if det.loaded else "")+"%s   /   %.0f ms ACK   /   %.0f ms INTERP   /   %d DELIVERIES\nNEARBY ENTITIES %d   /   SERVER: %s\nBOT ADMISSION %d / 100   /   TEST PHASE: %s\nYOUR PROFILE: %s   /   %s" % ["AUTHENTICATED" if c.ready else "CONNECTING",c.ack_ms,c.render_delay*1000,c.score,c.neighbors.size(),"THIS PC / LOOPBACK" if config.get("local_server",false) else "BUILD PC / WIREGUARD",int(live_report.get("bots_ready",0)),live_report.get("phase","WARMUP"),["FIBRE","BROADBAND","WIFI","MOBILE","POOR"][human_profile],live_report.get("cohort_summary","FIVE INDEPENDENT BOT COHORTS")]
+		hud.text=_hud_text(c)
+		hud_panel.size=Vector2(maxf(title.get_combined_minimum_size().x,hud.get_combined_minimum_size().x)+40.0,hud.position.y-hud_panel.position.y+hud.get_combined_minimum_size().y+16.0)
 	if now>=12 and not capture_saved:
 		capture_saved=true
 		_capture_view()
 	last_process_usec=Time.get_ticks_usec()-frame_usec
+
+func _update_controls() -> void:
+	if controls_label==null:
+		return
+	controls_label.text=("WASD move  SHIFT run  SPACE jump  F impulse  E push  CTRL crouch  C crawl  G/T sit  K/R death/respawn  V body  |  1-5 your network  O outage  |  F3 details  F1 hide" if show_controls
+		else "F1 controls   F3 network details")
+	controls_label.position.y=get_viewport().get_visible_rect().size.y-34
+
+func _hud_text(c: Dictionary) -> String:
+	var d: Dictionary=_det_live(c)
+	var server: Dictionary=live_report.get("server",{})
+	var frame_ms: Array=_recent(frame_times,120)
+	var profile: String=["FIBRE","BROADBAND","WIFI","MOBILE","POOR"][human_profile]
+	var lines: Array[String] = []
+	var state: String="CONNECTED" if c.ready and det.loaded else "JOINING" if c.ready else "CONNECTING"
+	lines.append("%s   ping %.0f ms   lag %.0f ms   %.1f kB/s" % [state,d.srtt_ms,d.lag_ms,d.commands_kBps])
+	lines.append("%.0f FPS (%.1f ms)   sim %.1f ms   server %.0f Hz / %.1f ms" % [1000.0/maxf(frame_ms[0],0.001),frame_ms[0],d.step_ms[0],float(server.get("tick_rate",0)),float(server.get("app_ms",0))])
+	lines.append("bots ready %d / %d   prediction %s" % [int(live_report.get("bots_ready",0)),int(config.get("bots",0)),"OK" if d.corrections==0 else "%d corrections" % d.corrections])
+	lines.append("test %s   your network %s" % [str(live_report.get("phase","WARMUP")).to_lower(),profile.to_lower()])
+	if not debug_detail:
+		return "
+".join(lines)
+	lines.append("")
+	lines.append("LOCKSTEP  tick %d   buffer %d (target %d)   parked %d   keyframes %d   starved %d" % [d.tick,d.buffered,d.target,d.parked,d.keyframes,d.starved])
+	lines.append("PREDICTION  error %.1f cm   unacked inputs %d   sim max %.1f ms" % [d.error_cm,d.inputs_pending,d.step_ms[1]])
+	lines.append("TRANSPORT  rto %.0f ms (%d ticks)   window %.1f KB   in flight %.1f KB" % [d.rto_ms,d.retry_ticks,d.cwnd_kb,d.in_flight_kb])
+	lines.append("FRAME  max %.1f ms   animate %.1f ms   render %.1f ms" % [frame_ms[1],_recent(section_ms.animate,60)[0],_recent(section_ms.render,60)[0]])
+	if not server.is_empty():
+		lines.append("SERVER  app max %.1f ms   net %.1f   physics %.1f   publish %.1f   %d B/tick" % [float(server.get("app_max_ms",0)),float(server.get("network_ms",0)),float(server.get("physics_ms",0)),float(server.get("replication_ms",0)),int(server.get("bytes_per_tick",0))])
+	for k in live_report.get("cohorts",[]):
+		lines.append("  %-9s %3d/%-3d ready   lag %4.0f / %5.0f ms   %4.1f kB/s" % [k.get("name","?"),int(k.get("ready",0)),int(k.get("count",0)),float(k.get("lag_ms_p50",0)),float(k.get("lag_ms_max",0)),float(k.get("kBps",0))])
+	return "
+".join(lines)
 
 func _render_deterministic(c: Dictionary, own: Vector3, delta: float) -> void:
 	# Every body comes from the locally simulated deterministic world, interpolated
@@ -1790,6 +1906,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		if event.physical_keycode==KEY_O:
 			human_offline_until=Time.get_unix_time_from_system()+6.0
 			_write_human_network()
+		if event.physical_keycode==KEY_F3:
+			debug_detail=not debug_detail
+			draw_timer=1.0
+		if event.physical_keycode==KEY_F1:
+			show_controls=not show_controls
+			_update_controls()
 	if event is InputEventMouseMotion and event.button_mask & MOUSE_BUTTON_MASK_RIGHT:
 		yaw-=event.relative.x*0.006
 	if event is InputEventMouseButton and event.pressed:

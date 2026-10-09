@@ -153,6 +153,34 @@ class Proxy:
             key.fileobj.close()
         self.selector.close()
 
+def live_view(server_report, rows, bots, previous):
+    """Server timing and per-cohort lockstep state from the native streams summary."""
+    live = server_report.get('live', {})
+    streams = live.get('streams', {})
+    totals = live.get('command_totals', {})
+    tick = streams.get('tick', 0)
+    acknowledged, sent_bytes, enabled = streams.get('acknowledged', []), streams.get('bytes', []), streams.get('enabled', [])
+    now = live.get('now', 0.0)
+    dt = max(now - previous.get('now', now - 1.0), 0.001)
+    old = previous.get('bytes', [])
+    ready = {r['id']: r['ready'] for r in rows}
+    cohorts = []
+    for index, profile in enumerate(PROFILES):
+        ids = [peer for peer in range(bots) if cohort(peer, bots) == index]
+        lags = sorted((tick - acknowledged[peer]) * 1000.0 / 60.0 for peer in ids
+                      if peer < len(acknowledged) and peer < len(enabled) and enabled[peer])
+        rate = sum(sent_bytes[peer] - (old[peer] if peer < len(old) else 0) for peer in ids if peer < len(sent_bytes))
+        cohorts.append(dict(name=profile['name'].split()[0].upper(), count=len(ids), ready=sum(1 for peer in ids if ready.get(peer)),
+                            lag_ms_p50=round(lags[len(lags) // 2], 1) if lags else 0.0, lag_ms_max=round(lags[-1], 1) if lags else 0.0,
+                            kBps=round(rate / max(len(ids), 1) / dt / 1000.0, 2) if old else 0.0))
+    ticks = max(totals.get('ticks', 0), 1)
+    server = dict(tick_rate=live.get('tick_rate', 0), app_ms=live.get('application_ms', [0, 0])[0], app_max_ms=live.get('application_ms', [0, 0])[1],
+                  network_ms=live.get('network_ms', [0, 0])[0], physics_ms=live.get('physics_ms', [0, 0])[0],
+                  replication_ms=live.get('replication_ms', [0, 0])[0], interval_max_ms=live.get('interval_ms', [0, 0])[1],
+                  bytes_per_tick=round(totals.get('encoded_bytes', 0) / ticks, 1), joining=live.get('joining', 0), tick=tick)
+    return server, cohorts, dict(now=now, bytes=list(sent_bytes))
+
+
 def cohort(peer, bots):
     """Network-profile cohort (0-4) of a bot: equal fifths of the bot ids."""
     return min(4, peer*5//max(bots,1))
@@ -249,6 +277,7 @@ def main():
         bootstrap(process,launch)
         print('HUMAN_WINDOW_STARTED pid='+str(process.pid),flush=True)
     last_output, last_monitor = -100, -100
+    live_previous = {}
     proxy_gaps, last_pump = [], time.time()
     try:
         while time.time()<start+args.duration+12:
@@ -295,10 +324,13 @@ def main():
                     remote.stdin.flush()
                 phase = 'WARMUP' if age<0 else 'BLACKOUT' if 30<=age<46 else 'RECONNECT' if 46<=age<55 else 'RECOVERY / CLEAN PATH' if age>=55 else 'MIXED INTERNET'
                 cohort_summary=' / '.join(str(sum(r['ready'] for r in rows if r['id']<args.bots and cohort(r['id'],args.bots)==i)) for i in range(5))
-                atomic_json(OUT/'monitor.json',dict(phase=phase,elapsed=age,bots_ready=sum(r['ready'] for r in rows if r['id']<args.bots),server_ready=sum(r['ready'] for r in server_report.get('rows',[])),cohort_summary=cohort_summary))  # HUD-sized: the client parses it on its main thread
+                server_view, cohort_view, live_previous = live_view(server_report, rows, args.bots, live_previous)
+                atomic_json(OUT/'monitor.json',dict(phase=phase,elapsed=age,bots_ready=sum(r['ready'] for r in rows if r['id']<args.bots),server_ready=sum(r['ready'] for r in server_report.get('rows',[])),cohort_summary=cohort_summary,server=server_view,cohorts=cohort_view))  # HUD-sized: the client parses it on its main thread
                 if age-last_output>=10:
                     last_output=age
-                    print(f"LAB_PROGRESS t={age:.0f}s clients={sum(r['ready'] for r in rows)}/{count} remote={sum(r['ready'] for r in server_report.get('rows',[]))}/{count} phase={phase}",flush=True)
+                    human_live = next((report.get('live', {}).get('det', {}) for report in reports if report.get('role') == 'human'), {})
+                    lag_text = ' '.join(f"{k['name']}={k['ready']}/{k['count']},{k['lag_ms_p50']:.0f}/{k['lag_ms_max']:.0f}ms,{k['kBps']:.1f}kB/s" for k in cohort_view)
+                    print(f"LAB_PROGRESS t={age:.0f}s phase={phase} clients={sum(r['ready'] for r in rows)}/{count} server={server_view['tick_rate']}Hz app={server_view['app_ms']}/{server_view['app_max_ms']}ms {server_view['bytes_per_tick']}B/tick | {lag_text} | human lag={human_live.get('lag_ticks','-')}t buffer={human_live.get('buffered','-')} rtt={human_live.get('srtt_ms','-')}ms",flush=True)
                 for process in processes[1:]:
                     if process.poll() not in (None,0):
                         raise RuntimeError('A native client failed; inspect fixed diagnostics logs')
@@ -372,7 +404,7 @@ def main():
             activities={key for row in server_rows for key in row.get('activities',{})}
             if not {'8','16','32','64','256'}.issubset(activities):
                 errors.append('Replicated bot activities not exercised')
-        summary = dict(passed=not errors,errors=errors,scope=('Local' if args.local_server else 'Remote')+' native dedicated Box3D server; local independent native Superpos UDP/DTLS streams through seeded datagram impairment',bots=args.bots,human=not args.no_human,duration=args.duration,server=server_meta,local_engine_sha256=hashlib.sha256(engine.read_bytes()).hexdigest(),clients=rows,server_clients=server_rows,proxy=proxy.rows,profiles=PROFILES,physics_p95_ms=server_report.get('physics_p95_ms'),server_exit=server_exit,simulation=simulation,performance={report['role']:report.get('performance',{}) for report in reports if report['role']=='human'},server_performance=server_report.get('performance',{}),local_server=args.local_server,proxy_gaps=proxy_gaps,diagnostics={report['role']:report.get('diagnostics',[]) for report in reports if report['role']=='human'}|{'server':server_report.get('diagnostics',[])},command_stream=stream,command_totals=server_report.get('command_totals',{}))
+        summary = dict(passed=not errors,errors=errors,scope=('Local' if args.local_server else 'Remote')+' native dedicated Box3D server; local independent native Superpos UDP/DTLS streams through seeded datagram impairment',bots=args.bots,human=not args.no_human,duration=args.duration,server=server_meta,local_engine_sha256=hashlib.sha256(engine.read_bytes()).hexdigest(),clients=rows,server_clients=server_rows,proxy=proxy.rows,profiles=PROFILES,physics_p95_ms=server_report.get('physics_p95_ms'),server_exit=server_exit,simulation=simulation,performance={report['role']:report.get('performance',{}) for report in reports if report['role']=='human'},server_performance=server_report.get('performance',{}),local_server=args.local_server,proxy_gaps=proxy_gaps,diagnostics={report['role']:report.get('diagnostics',[]) for report in reports if report['role']=='human'}|{'server':server_report.get('diagnostics',[])},command_stream=stream,command_totals=server_report.get('command_totals',{}),live={report['role']:report.get('live',{}) for report in reports if report['role']=='human'}|{'server':{k:v for k,v in server_report.get('live',{}).items() if k!='streams'}})
         atomic_json(OUT/'receipt.json',summary)
         print('LAB_'+('PASS' if not errors else 'FAIL')+' clients='+str(count)+' physics_p95_ms='+str(summary['physics_p95_ms']),flush=True)
         if errors:

@@ -1,7 +1,7 @@
 config_version=5
 
 [application]
-config/name="EGP / 100 BOT NETWORK LAB"
+config/name="EGP / SUPERPOS LOCKSTEP LAB"
 run/main_scene="res://main.tscn"
 
 [display]
