@@ -16,6 +16,8 @@ var failed_peer_accepted_probes := 0
 var resize_requested := false
 var resize_armed := false
 var resize_rejected := false
+# Set before quit(): the world is freed and must not be touched again.
+var finished := false
 
 func check(condition: bool, message: String) -> void:
 	checks += 1
@@ -72,6 +74,10 @@ func _initialize() -> void:
 	root.add_child(world)
 
 func _process(_delta: float) -> bool:
+	# Exported dispatch loops attach this script and defer _initialize, so a frame
+	# can arrive before the session exists; quit() also lands after the frame.
+	if finished or session == null:
+		return false
 	var elapsed := Time.get_ticks_msec() - started
 	if completed:
 		if scenario == "peer_closed" and not server:
@@ -83,6 +89,7 @@ func _process(_delta: float) -> bool:
 					" accepted_probes=", failed_peer_accepted_probes, " failure_elapsed_ms=", elapsed)
 				world.close()
 				world.queue_free()
+				finished = true
 				quit(0)
 			# The Session has eight bounded message reservations. One probe per
 			# four seconds stays below that capacity for the entire unchanged
@@ -97,6 +104,7 @@ func _process(_delta: float) -> bool:
 		if Time.get_ticks_msec() - completed > (1500 if server else 1000):
 			world.close()
 			world.queue_free()
+			finished = true
 			quit(0)
 		return false
 	if scenario in ["schema_mismatch", "key_mismatch"] and session.get_state() == "NetworkFailed":
@@ -104,6 +112,7 @@ func _process(_delta: float) -> bool:
 		print("SUPERPOS_EGP_UDP_REJECTED scenario=", scenario, " role=", "server" if server else "client", " checks=", checks)
 		world.close()
 		world.queue_free()
+		finished = true
 		quit(0)
 		return false
 	check(elapsed < 22000, "bounded native network deadline")

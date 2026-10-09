@@ -171,6 +171,8 @@ gmon.out
 
 # Qt Creator
 *.config
+# Repository NuGet sources for managed builds
+!/NuGet.Config
 *.creator
 *.creator.*
 *.files
