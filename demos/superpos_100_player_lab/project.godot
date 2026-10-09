@@ -19,3 +19,4 @@ environment/defaults/default_clear_color=Color(0.035,0.055,0.09,1)
 
 [physics]
 common/physics_ticks_per_second=60
+common/max_physics_steps_per_frame=3

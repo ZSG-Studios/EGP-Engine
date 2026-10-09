@@ -103,6 +103,9 @@ var MERGE_MASK := PackedByteArray([0,0,0x03,0x0C,0,0])
 var joining: Array = []
 var pump_profile := [0,0,0]
 var frame_physics_usec := 0
+# Start of the current rendered frame (deterministic catch-up budget).
+var det_frame_started := 0
+var det_frame_fresh := true
 var frame_physics_steps := 0
 var last_process_usec := 0
 # Bot processes share one deterministic world, advanced from one bot's own stream,
@@ -322,6 +325,10 @@ func _publish_canonical(c: Dictionary, bytes: PackedByteArray) -> bool:
 
 func _physics_process(delta: float) -> void:
 	var physics_begin := Time.get_ticks_usec()
+	if det_frame_fresh:
+		# First physics step of this engine frame: the catch-up budget starts here.
+		det_frame_fresh=false
+		det_frame_started=physics_begin
 	_physics_step(delta)
 	frame_physics_usec+=Time.get_ticks_usec()-physics_begin
 	frame_physics_steps+=1
@@ -1263,9 +1270,7 @@ func _bot_world_step() -> void:
 		var tick: int=lockstep.advance_command()
 		if tick==0:
 			break
-		var inputs := []
-		for slot in range(config.total):
-			inputs.append(lockstep.get_input(slot))
+		var inputs: Array=lockstep.get_inputs()
 		gameplay.step(tick,inputs)
 		feed.kf.advanced+=1
 	if steps>0:
@@ -1385,6 +1390,10 @@ func _advance_deterministic(c: Dictionary) -> void:
 	var buffered: int=int(lockstep_client.get_status().get("buffered_commands",0))
 	if frame%120==0 and diagnostics.size()<300:
 		diagnostics.append([snappedf(now,0.01),"det_state",buffered,det.target,int(det.tick),det.lag.back() if not det.lag.is_empty() else -1])
+	if frame%600==0 and GAMEPLAY.profile[3]>0 and diagnostics.size()<300:
+		var n: float=float(GAMEPLAY.profile[3])
+		diagnostics.append([snappedf(now,0.01),"step_split_us",GAMEPLAY.profile[0]/n,GAMEPLAY.profile[1]/n,GAMEPLAY.profile[2]/n])
+		GAMEPLAY.profile=[0,0,0,0]
 	det.buffered.append(buffered)
 	if det.buffered.size()>600:
 		det.buffered.pop_front()
@@ -1406,13 +1415,13 @@ func _advance_deterministic(c: Dictionary) -> void:
 				det.calm=0
 	if steps==0:
 		det.prev=det.curr
-	for _step in range(steps):
+	for step_index in range(steps):
+		if step_index>0 and Time.get_ticks_usec()-det_frame_started>int(_tuning("catch_up_budget_usec",10000)):
+			break
 		var tick: int=lockstep_client.advance_command()
 		if tick==0:
 			break
-		var inputs := []
-		for slot in range(config.total):
-			inputs.append(lockstep_client.get_input(slot))
+		var inputs: Array=lockstep_client.get_inputs()
 		det.prev=det.curr
 		var step_started := Time.get_ticks_usec()
 		gameplay.step(tick,inputs)
@@ -1645,6 +1654,7 @@ func _process(delta: float) -> void:
 		diagnostics.append([snappedf(now,0.01),"slow_frame",float(frame_usec-last_frame_usec)/1000.0,frame_physics_steps,float(frame_physics_usec)/1000.0,float(CHARACTER_VIEW.animate_usec)/1000.0,CHARACTER_VIEW.animated,float(last_process_usec)/1000.0])
 	frame_physics_usec=0
 	frame_physics_steps=0
+	det_frame_fresh=true
 	last_frame_usec=frame_usec
 	var c: Dictionary = connections[0]
 	# Own avatar: physics-tick prediction interpolated to the render frame, plus a correction

@@ -186,7 +186,11 @@ func grounded(position: Vector3, velocity: Vector3, props: Dictionary) -> bool:
 
 
 # One authoritative tick. inputs[slot] is the 8-byte command input of that player.
+static var profile := [0, 0, 0, 0]
+
+
 func step(tick: int, inputs: Array) -> void:
+	var step_started := Time.get_ticks_usec()
 	var props := {}
 	# One native read for every player; one batched write for every upright mover.
 	var states: PackedFloat32Array = world.get_body_states(player_ids)
@@ -281,8 +285,15 @@ func step(tick: int, inputs: Array) -> void:
 					world.queue_impulse(prop,id+102,away.normalized()*1.0+Vector3.UP*0.8)
 			a.cooldown = tick+120
 	world.queue_body_states(moved_ids,0,moved)
+	var simulation_started := Time.get_ticks_usec()
 	simulation.step(world, actors, float(tick)/TICK_RATE)
+	var native_started := Time.get_ticks_usec()
 	world.step_tick(tick)
+	# Profile split: scripted gameplay, exhibit forces, native Box3D solve.
+	profile[0] += simulation_started - step_started
+	profile[1] += native_started - simulation_started
+	profile[2] += Time.get_ticks_usec() - native_started
+	profile[3] += 1
 
 
 # Replicated animation flags for presentation, derived from the deterministic state.

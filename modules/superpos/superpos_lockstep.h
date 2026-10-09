@@ -31,6 +31,7 @@ public:
     Error load_keyframe(const PackedByteArray &p_table);
     int64_t advance_command();
     PackedByteArray get_input(int64_t p_slot) const;
+    Array get_inputs() const;
     int64_t get_processed_tick() const;
     Dictionary get_status() const;
 };

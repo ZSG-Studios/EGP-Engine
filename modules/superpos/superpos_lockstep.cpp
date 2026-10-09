@@ -105,6 +105,13 @@ int64_t SuperposLockstepClient::advance_command() {
     auto tick = impl->commands->advance();
     return tick ? superpos_egp::signed_bits(*tick) : 0;
 }
+Array SuperposLockstepClient::get_inputs() const {
+    Array result;
+    if (Thread::get_caller_id() != owner_thread || !impl->commands) { return result; }
+    result.resize(impl->slots);
+    for (int64_t slot = 0; slot < impl->slots; ++slot) { result[slot] = packed(impl->commands->input(uint16_t(slot))); }
+    return result;
+}
 int64_t SuperposLockstepClient::get_processed_tick() const {
     if (Thread::get_caller_id() != owner_thread || !impl->commands) { return 0; }
     return superpos_egp::signed_bits(impl->commands->processed());
@@ -137,6 +144,7 @@ void SuperposLockstepClient::_bind_methods() {
     ClassDB::bind_method(D_METHOD("load_keyframe", "table"), &SuperposLockstepClient::load_keyframe);
     ClassDB::bind_method(D_METHOD("advance_command"), &SuperposLockstepClient::advance_command);
     ClassDB::bind_method(D_METHOD("get_input", "slot"), &SuperposLockstepClient::get_input);
+    ClassDB::bind_method(D_METHOD("get_inputs"), &SuperposLockstepClient::get_inputs);
     ClassDB::bind_method(D_METHOD("get_processed_tick"), &SuperposLockstepClient::get_processed_tick);
     ClassDB::bind_method(D_METHOD("get_status"), &SuperposLockstepClient::get_status);
 }

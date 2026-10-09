@@ -51,6 +51,10 @@
 			<param index="0" name="slot" type="int" />
 			<description>Returns the input of [param slot] at the most recently applied command tick. A slot that was never set holds zero bytes.</description>
 		</method>
+		<method name="get_inputs" qualifiers="const">
+			<return type="Array" />
+			<description>Returns every slot's input at the most recently applied command tick, one [PackedByteArray] per slot, in a single call (the deterministic step's input array).</description>
+		</method>
 		<method name="get_processed_tick" qualifiers="const">
 			<return type="int" />
 			<description>Returns this client's own input tick that the server consumed at the most recently applied command tick, when the server packs commands with this client as recipient; otherwise [code]0[/code]. Reconcile prediction against it.</description>

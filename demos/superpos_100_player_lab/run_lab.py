@@ -208,7 +208,10 @@ def main():
                     if abs(received.get('start_unix',0)-start)>0.001:
                         continue
                     server_report.update(received)
-                    atomic_json(OUT/'server.json',dict(server_report))
+                    # Locally the server writes this file itself; copying an older relayed
+                    # snapshot over it could replace its final full write.
+                    if not args.local_server:
+                        atomic_json(OUT/'server.json',dict(server_report))
                 except (ValueError,OSError):
                     pass
             elif line.startswith('SERVER_HOST '):
