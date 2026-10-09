@@ -20,9 +20,13 @@ ownership, lifecycle and presentation together. Test local canonical behavior,
 authenticated separate-process communication, reconnect/recovery, exports and
 application gameplay independently.
 
-The previous module is excluded from the build graph, its build target and
-public build option are removed, and its ClassDB API is retired. Physical
-legacy sources remain on disk because automatic approval rejected directory
-deletion; they are not compiled by the supported engine.
+The previous module, build recipe, language helpers, Yojimbo vendor sources,
+legacy demos and dedicated validation scripts have been removed. Its build
+option and ClassDB API are retired. Historical integration receipts remain
+evidence for their recorded revisions only.
+
+Use the [current network lab guide](egp_network_lab.md) for Superpos fixtures
+and application demos. The examples project canonical state explicitly and
+do not restore the former RPC, spawner or networking physics contracts.
 
 See [the native networking guide](egp_superpos.md) for supported APIs and limits.

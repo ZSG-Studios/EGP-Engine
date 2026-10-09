@@ -9,6 +9,13 @@ verification scripts.
 
 ## Windows editor and templates
 
+In the maintained EGP workspace, a temporary policy requires the entire build
+workflow to execute on the remote build PC, including generators, preprocessing,
+compilation, linking, managed assemblies and packaging. Run these commands there
+and reuse its canonical output. Xmake distributed compilation alone does not
+satisfy this policy because client stages can still execute locally. Source
+editing and checks that do not build remain permitted locally.
+
 Install Visual Studio's C++ desktop workload and Windows SDK, and
 the .NET SDK when building Mono. From the repository root:
 

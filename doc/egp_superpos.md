@@ -6,7 +6,7 @@ ClassDB implementation to GDScript, generated C# and generated godot-cpp.
 Public engine and extension headers remain C++17-compatible.
 
 The default desktop build selects Superpos and its authenticated UDP/DTLS
-foundation. The previous Yojimbo `egp_net` module is excluded. Superpos is a
+foundation. The previous Yojimbo `egp_net` module has been removed. Superpos is a
 different implementation and API from the retired **Superposition** nodes.
 Changing names in an existing project does not migrate its protocol or scenes.
 
@@ -19,6 +19,7 @@ Changing names in an existing project does not migrate its protocol or scenes.
 | `SuperposSchema` | Explicit schema ID, revision and fields; native baking produces a bounded author manifest and fingerprint. |
 | `SuperposSession` | Owner-thread canonical world, object ownership, packed publication, checked counters, packet delivery and native prediction entry points. |
 | `SuperposWorld` | Scene owner of a session, authored schemas and optional physics-phase tick ownership. |
+| `SuperposReplicator` | Explicit dirty capture and sequential property projection with owner lifetime and generation checks. |
 | `SuperposSimulationProvider` | Abstract native simulation interface; registration requires a compiled provider, not gameplay script callbacks. |
 
 Author resources are declarations. Baking does not instantiate gameplay or run
@@ -69,8 +70,9 @@ its owned session when destroyed; retained wrappers cannot revive that owner.
 
 `publish_packed()` applies bounded canonical operations atomically. Canonical
 publication does not make arbitrary Godot property setters transactional.
-Scene projection and automatic allowlisted scene spawning from the old stack
-have not been implemented by this adapter.
+`SuperposReplicator` supports explicit dirty capture and sequential projection;
+generation and lifetime checks apply after callbacks. Automatic allowlisted
+scene spawning from the old stack is not a supported equivalent.
 
 ## Transport
 
@@ -85,9 +87,10 @@ binding-generation values. Provision credentials through the application's
 trusted backend. Never log a key or admission credential, serialize it into a
 scene Resource, or reuse the former transport's token format.
 
-The native adapter has bounded loopback authentication and packet fixtures;
-this does not establish multiplayer gameplay, automatic scene replication,
-WAN behavior, production account services or platform parity. Optional RTC
+The native adapter has bounded loopback authentication and packet fixtures.
+The [network lab guide](egp_network_lab.md) separately describes the physics
+showcase and a recorded 101-stream remote courier workload. These checks do
+not establish production account services, general capacity or platform parity. Optional RTC
 and service implementations in the separate core require their own selected
 build feature, deployment and engine qualification.
 
@@ -104,8 +107,9 @@ used with Superpos. Box2D/Box3D local snapshots remain independent physics APIs.
 
 Desktop native xmake builds select `module_superpos_enabled=yes`. The old
 network module option and archive target have been removed. The module's `superpos_dtls` option defaults to
-true and borrows EGP's existing MbedTLS/PSA runtime. C#/.NET builds remain local.
-Do not enable both network modules. Mobile/web adapter capability and full
+true and borrows EGP's existing MbedTLS/PSA runtime. In the maintained workspace,
+all build stages, including .NET, execute on the remote build PC as required by
+the workspace's temporary build policy. Mobile/web adapter capability and full
 platform qualification remain pending.
 
 The separate Superpos-EGP `docs/consumer-migration.json` and `compatibility.json`
@@ -113,7 +117,7 @@ record isolated API, unsigned metadata, lifecycle, UDP and C++17/managed
 evidence. Those historical editor receipts do not qualify the current full
 engine, export templates, physics or rendered Inspector. The engine's fixed
 `.build/diagnostics/superpos-cutover.json` records current cutover verification.
-Legacy sources remain on disk after directory deletion was rejected, but their
-build target is removed and they do not belong to the active engine API.
+Legacy sources and their build target are removed and do not belong to the
+active engine API. Historical receipts must retain their original scope.
 
 See [migration](egp_superpos_migration.md) before porting an existing game.

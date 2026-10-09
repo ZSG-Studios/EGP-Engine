@@ -227,7 +227,6 @@ xcuserdata/
 
 # Actual VS project files we don't use
 *.sln
-!modules/egp_net/samples/trilingual/NetInterop.sln
 *.vcxproj*
 
 # User-specific files
@@ -389,6 +388,3 @@ $RECYCLE.BIN/
 *.lnk
 *.generated.props
 .build/
-modules/egp_net/samples/gdscript/.godot/
-misc/egp/network_lab/.godot/
-misc/egp/network_lab/addons/

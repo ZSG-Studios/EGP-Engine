@@ -294,7 +294,7 @@ bool ProjectConverter3To4::check_legacy_networking(const Vector<String> &p_files
 			const bool embedded_script = (path.get_extension() == "tscn" || path.get_extension() == "tres") && trimmed.begins_with("script/source");
 			const String code_line = embedded_script ? line.c_unescape() : line;
 			if (p_regex.legacy_networking.search(code_line).is_valid()) {
-				print_error(vformat("EGP networking migration required at %s:%d. Legacy RPC/peer APIs cannot be converted automatically. Port this code to EGPNet messages, entity ownership and replication (modules/egp_net/README.md), then rerun conversion. No project files have been modified.", path, line_number));
+				print_error(vformat("EGP networking migration required at %s:%d. Legacy RPC/peer APIs cannot be converted automatically. Port this code to Superpos (doc/egp_superpos.md), then rerun conversion. No project files have been modified.", path, line_number));
 				supported = false;
 			}
 			if (p_regex.legacy_physics_backend.search(code_line).is_valid()) {

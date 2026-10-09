@@ -22,7 +22,6 @@ clangd:
   - "!build/xmake/tools/**"
   # GDExtension sources use the exact generated SDK and their dedicated compile probes.
   - "!misc/egp/generated_api/cpp/**"
-  - "!modules/egp_net/samples/trilingual/extension/**"
   - "!**/*-so_wrap.{h,c}"
   - "!drivers/{apple*,core*,d3d12,metal,wasapi,windows,winmidi,xaudio2}/**"
   - "!editor/shader/shader_baker/shader_baker_export_plugin_platform_{d3d12,metal}.{h,cpp}"

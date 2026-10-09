@@ -1,0 +1,16 @@
+config_version=5
+
+[application]
+config/name="EGP / 100 BOT NETWORK LAB"
+run/main_scene="res://main.tscn"
+
+[display]
+window/size/viewport_width=1440
+window/size/viewport_height=900
+
+[rendering]
+renderer/rendering_method="forward_plus"
+environment/defaults/default_clear_color=Color(0.035,0.055,0.09,1)
+
+[physics]
+common/physics_ticks_per_second=60

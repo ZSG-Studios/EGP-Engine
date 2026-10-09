@@ -2,8 +2,8 @@
 # Exact diagnostics remain checked; unrelated removals, signatures and hashes fail.
 # Older reference versions inherit this file through the existing version chain.
 #
-# Native Yojimbo replaces Godot RPC, multiplayer peers and ENet/WebRTC transports.
-# Use EGPNetSession and the shared GDScript/C#/C++ facades when migrating games.
+# Native Superpos replaces Godot RPC, multiplayer peers and ENet/WebRTC transports.
+# See doc/egp_superpos_migration.md when migrating games.
 # Box2D/Box3D replace legacy solver bias, margin, priority, separation-ray and
 # joint tuning APIs. Joint enum values follow the supported Box solver contract.
 # The 3D motion extension removes the obsolete separation-ray argument; rebuild

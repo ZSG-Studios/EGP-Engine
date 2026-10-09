@@ -49,8 +49,6 @@ because these chats exist.
 | Physics/network | Explicit fixed clock, fingerprint validation, authoritative state, commands, prediction/correction/replay and recovery | Trusted local Box3D checkpoint restore/replay and stable body mapping across same-process server recovery pass in editor and packaged Debug/Release; three-language helper compatibility passes; automatic client physics rollback and full game contract remain open |
 | Networking | Encrypted admission, account/peer/entity identities, authority, ownership, interest, lifecycle, reconnect and backpressure | Native/language fixtures, matching-budget 64-entity fairness, bounded receive bursts and eight encrypted WAN clients with changing 4096-byte states pass; baseline, interest, revocation and reconnect are covered; larger worlds, peak load and soak remain |
 | Advanced networking | Field deltas, bounded bandwidth/queues, input acknowledgments, lag compensation, scale/soak, malicious input rejection | Implementation/qualification gaps remain |
-| Network lab | Dedicated server, listen host, N clients, visible windows, latency/jitter/loss, directional simulation, reconnect, logs/watchdog/cleanup | Native host and packaged Mono Debug host/Release dedicated server pass simultaneous visible clients, WAN simulation and reconnect; broader matrix remains |
-| Network lab expansion | Editor controls; mixed GDScript/C#/C++ clients; packaged games; IPv6; server restart; interest/ownership checks; load/soak and adverse-condition matrix | Packaged Debug graceful and Release abrupt dedicated-server replacement pass with three persistent visible clients under WAN impairment; eight-second headless outage passes; single and repeated selected-client recovery and same-process server clock rejection/checkpoint/fresh admission/ownership recovery pass in editor and packaged Debug host/Release dedicated WAN runs; retired-token and retired-entity input rejection are covered; broader controls/scale/soak remain |
 | C++ GDExtension | Scaffold, compiler errors/navigation, Debug/Release, exact SDK, reload, ABI/restart path, exported load | Matching SDK/editor controls, mixed-language exports, dynamic signature changes and rejected hierarchy/class repair pass on Windows; six cached instance/static call paths and nine return kinds now pass on Windows Debug SDK; arbitrary ABI changes and other platforms remain |
 | C++ hot reload | Changed behavior in editor and running game, live instances/state/signals, failed build retains working code, repeat reload/unload cleanup | Two live Debug rebuilds preserve existing IDs, property state, callables and signals; failed compile retains published code; Missing/invalid DLL recovery and rejected base/extension-parent/ancestor/class-removal repair preserve extension and editable parent state; cached binding failure/default-return and compatible repair checks now pass; arbitrary ABI changes and soak remain |
 | C# hot reload | Build/watch notifications, live running-game change, scene/state/event preservation, failed build recovery, repeated reload/ALC cleanup | Combined native/managed reload and corrupted-DLL/blocked-unload repair preserve instances, properties and events; public low-level C# session handoff, high-level NetNode reload and public C# Box3D adapter/world/body-map transfer preserve connected/stopped sessions and exact signal counts; high-level tree exit/reentry, fresh session traffic, retired callback isolation, reentrant close/stop replacement and freed codec replacement pass; default/feature overrides and no-change command pass; broader script-type/state/long-session matrix remains |
@@ -60,31 +58,6 @@ because these chats exist.
 AAA describes the intended quality target. Compilation, API exposure checks and
 small smoke fixtures do not prove complete features, scale, performance or readiness.
 Production authentication/token delivery remains a game/backend contract.
-
-## Network lab
-
-The launcher copies its project and current shared helpers into a unique evidence
-directory. The server binds loopback and issues encrypted per-client tokens via a
-temporary trusted local handoff; token bytes and private keys are never retained in
-logs, receipts or the project. Headless operation is the default. `--visible` shows
-clients and the host window; a dedicated server remains headless. All processes are
-bounded and receive individual logs and a combined receipt with source/binary hashes.
-
-```powershell
-python misc/scripts/launch_egp_network_lab.py --engine bin/godot.windows.editor.dev.x86_64.console.exe --clients 3
-python misc/scripts/launch_egp_network_lab.py --engine bin/godot.windows.editor.dev.x86_64.console.exe --mode host --clients 3 --visible --preset wan --duration 20 --reconnect-at 8
-python misc/scripts/launch_egp_network_lab.py --engine bin/godot.windows.editor.dev.x86_64.console.exe --clients 4 --latency 150 --jitter 30 --loss 5 --simulate-on clients
-```
-
-Use `--help` for port, duration, profiles and directional simulation. `host` supplies
-a server-owned test entity and can show a host window; this is not a completed local
-player gameplay implementation. Latency is outgoing one-way per endpoint, so enabling
-it on both endpoints increases the round trip accordingly. Simulation is stochastic;
-a passing short run does not establish reliability under every packet-loss sequence.
-The fixture checks authenticated identities, replies, ongoing authoritative tick
-replication and, when selected, distinct connection generations after reconnect.
-The [network lab guide](egp_network_lab.md) documents packaged runs, graceful/abrupt
-server replacement, outage bounds, fresh admission and explicit checkpoint scope.
 
 ## Initial evidence, 2026-10-06
 

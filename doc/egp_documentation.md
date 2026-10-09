@@ -35,7 +35,11 @@ so the manifest identifies a fetchable source revision.
 
 ## Build and verify the documentation
 
-From the documentation checkout:
+The maintained workspace currently requires every build, including Sphinx
+and Jekyll, to execute entirely on the remote build PC. Source synchronization
+and checks that do not build may run locally. Run the following commands from
+the documentation checkout on the build host, reusing its environment and
+canonical `_build/html` output:
 
 ```powershell
 python -m venv .venv

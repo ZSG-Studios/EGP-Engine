@@ -51,25 +51,6 @@ Comment: Native adapter and regression fixtures adapted from godot-box3d
 Copyright: 2026, Mark Arneman
 License: Expat
 
-Files: thirdparty/yojimbo/include/*
- thirdparty/yojimbo/source/*
- thirdparty/yojimbo/netcode/*
- thirdparty/yojimbo/reliable/*
- thirdparty/yojimbo/serialize/*
-Comment: Yojimbo, netcode, reliable and serialize
-Copyright: 2016-2026, Mas Bandwidth LLC
-License: BSD-3-clause
-
-Files: thirdparty/yojimbo/tlsf/*
-Comment: Two Level Segregated Fit memory allocator
-Copyright: 2006-2016, Matthew Conte
-License: BSD-3-clause
-
-Files: thirdparty/yojimbo/sodium/*
-Comment: Minimal libsodium subset
-Copyright: 2013-2026, Frank Denis
-License: ISC
-
 Files: core/math/convex_hull.cpp
  core/math/convex_hull.h
 Comment: Bullet Continuous Collision Detection and Physics Library

@@ -1203,7 +1203,7 @@ void GDScriptParser::parse_class_body(bool p_is_multiline) {
 				} else if (previous.get_identifier() == "onready") {
 					push_error(R"(The "onready" keyword was removed in Godot 4. Use the "@onready" annotation instead.)");
 				} else if (previous.get_identifier() == "remote" || previous.get_identifier() == "remotesync" || previous.get_identifier() == "sync" || previous.get_identifier() == "slave" || previous.get_identifier() == "puppet" || previous.get_identifier() == "puppetsync" || previous.get_identifier() == "master" || previous.get_identifier() == "mastersync") {
-					push_error("Legacy script RPC is unavailable in EGP. Migrate to EGPNet messages, entity ownership and replication; see modules/egp_net/README.md.");
+					push_error("Legacy script RPC is unavailable in EGP. Migrate to Superpos; see doc/egp_superpos.md.");
 				} else {
 					push_error(vformat(R"(Unexpected %s in class body.)", previous.get_debug_name()));
 				}

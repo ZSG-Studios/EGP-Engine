@@ -4,7 +4,6 @@
 import argparse
 import hashlib
 import json
-import math
 import os
 import re
 import shutil
@@ -12,9 +11,6 @@ import subprocess
 import time
 from pathlib import Path
 from xml.sax.saxutils import escape
-
-from egp_hot_reload_box3d_evidence import box3d_failure
-from egp_hot_reload_node_evidence import node_failure, node_lifecycle_failure, node_reentry_failure
 
 ROOT = Path(__file__).resolve().parents[2]
 PROBE = """using Godot;
@@ -26,29 +22,11 @@ public partial class ReloadProbe : Node, ISerializationListener {
     [Export] public int ReadyCount { get; set; }
     [Export] public int BeforeCount { get; set; }
     [Export] public int AfterCount { get; set; }
-    [Export] public Godot.Collections.Dictionary NetworkState { get; set; } = new();
-    [Export] public int NetworkHits { get; set; }
     [Signal] public delegate void PulseEventHandler(int value);
     public override void _Ready() { ReadyCount++; }
     public int Version() => VERSION;
     public bool Collectible() => AssemblyLoadContext.GetLoadContext(GetType().Assembly)!.IsCollectible;
     public void Fire() => EmitSignal(SignalName.Pulse, 1);
-    public Error PollNetwork(bool authority) {
-        var server = NetworkState["server"].AsGodotObject();
-        var client = NetworkState["client"].AsGodotObject();
-        var result = authority ? (Error)server.Call("poll").AsInt32() : Error.Ok;
-        var clientResult = (Error)client.Call("poll").AsInt32();
-        return result != Error.Ok ? result : clientResult;
-    }
-    public void ReceiveNetwork(long peer, byte[] payload) { NetworkHits++; }
-    public Godot.Collections.Dictionary GetPhysicsState() {
-        if (!NetworkState.ContainsKey("world")) return new();
-        var world = NetworkState["world"].AsGodotObject();
-        var state = world.Call("get_body_state", 10000).AsGodotDictionary();
-        state["tick"] = world.Call("get_tick");
-        state["hash"] = world.Call("get_state_hash");
-        return state;
-    }
     public void HoldRoot(string path) {
         var thread = new System.Threading.Thread(() => {
             System.IO.File.WriteAllText(path + ".started", "started");
@@ -69,346 +47,10 @@ public partial class ReloadReceiver : Node {
     private void Receive(int value) { Hits += value; }
 }
 """
-FACADE_MEMBERS = """
-    [Export] public Godot.Collections.Dictionary ReloadCapsules { get; set; } = new();
-    [Export] public int FacadeServerHits { get; set; }
-    [Export] public int FacadeClientHits { get; set; }
-    [Export] public int FacadeHandoffs { get; set; }
-    [Export] public int FacadeRestores { get; set; }
-    [Export] public int FacadeChecks { get; set; }
-    private EGP.Networking.NetSession? facadeServer, facadeClient;
-    private void RequireFacade(bool condition) {
-        if (!condition) throw new System.InvalidOperationException("Managed facade self-test failed");
-        FacadeChecks++;
-    }
-    private void RejectCapsule(Godot.Collections.Dictionary capsule) {
-        try { EGP.Networking.NetSession.ResumeAfterReload(capsule); }
-        catch (System.ArgumentException) { FacadeChecks++; return; }
-        throw new System.InvalidOperationException("Invalid reload capsule accepted");
-    }
-    private void CheckFacadeInputs() {
-        RejectCapsule(null!);
-        RejectCapsule(new());
-        using var scratch = new EGP.Networking.NetSession();
-        RequireFacade(scratch.Configure() == Error.Ok);
-        var reference = scratch.Native;
-        int oldHits = 0, newHits = 0;
-        scratch.ApplicationReceived += (peer, payload) => oldHits++;
-        reference.EmitSignal("application_received", 0L, System.Array.Empty<byte>());
-        RequireFacade(oldHits == 1);
-        var capsule = scratch.DetachForReload();
-        var duplicate = capsule.Duplicate();
-        RequireFacade(reference.GetSignalConnectionList("application_received").Count == 0);
-        reference.EmitSignal("application_received", 0L, System.Array.Empty<byte>());
-        RequireFacade(oldHits == 1);
-        try { _ = scratch.Native; throw new System.InvalidOperationException("Detached wrapper remained usable"); }
-        catch (System.ObjectDisposedException) { FacadeChecks++; }
-        try { scratch.DetachForReload(); throw new System.InvalidOperationException("Second detach accepted"); }
-        catch (System.ObjectDisposedException) { FacadeChecks++; }
-        foreach (var key in new[] { "version", "session", "token" }) {
-            var missing = capsule.Duplicate(); missing.Remove(key); RejectCapsule(missing);
-            var wrong = capsule.Duplicate(); wrong[key] = key == "session" ? (Variant)1 : (Variant)false;
-            RejectCapsule(wrong);
-        }
-        var future = capsule.Duplicate(); future["version"] = 4294967297L; RejectCapsule(future);
-        var forged = capsule.Duplicate(); forged["token"] = "invalid"; RejectCapsule(forged);
-        using var foreign = new RefCounted();
-        var wrongClass = capsule.Duplicate(); wrongClass["session"] = foreign; RejectCapsule(wrongClass);
-        RequireFacade(capsule.Count == 3);
-        using var restored = EGP.Networking.NetSession.ResumeAfterReload(capsule);
-        restored.ApplicationReceived += (peer, payload) => newHits++;
-        RequireFacade(reference.GetSignalConnectionList("application_received").Count == 1);
-        scratch.Dispose();
-        RequireFacade(capsule.Count == 0 && GodotObject.IsInstanceValid(reference) && restored.Native == reference);
-        RejectCapsule(capsule);
-        RejectCapsule(duplicate);
-        reference.EmitSignal("application_received", 0L, System.Array.Empty<byte>());
-        RequireFacade(oldHits == 1 && newHits == 1 && restored.Poll() == Error.Ok);
-    }
-    private void SubscribeFacades() {
-        facadeServer!.ApplicationReceived += (peer, payload) => FacadeServerHits++;
-        facadeClient!.ApplicationReceived += (peer, payload) => FacadeClientHits++;
-    }
-    public Godot.Collections.Dictionary CreateNetworkSessions() {
-        CheckFacadeInputs();
-        facadeServer = new(); facadeClient = new(); SubscribeFacades();
-        return new() { ["server"] = facadeServer.Native, ["client"] = facadeClient.Native };
-    }
-    public Godot.Collections.Dictionary GetFacadeState() => new() {
-        ["checks"] = FacadeChecks, ["server_hits"] = FacadeServerHits, ["client_hits"] = FacadeClientHits,
-        ["handoffs"] = FacadeHandoffs, ["restores"] = FacadeRestores,
-        ["server_id"] = facadeServer == null ? "" : unchecked((long)facadeServer.Native.GetInstanceId()).ToString(),
-        ["client_id"] = facadeClient == null ? "" : unchecked((long)facadeClient.Native.GetInstanceId()).ToString(),
-        ["capsules_empty"] = ReloadCapsules.Count == 0
-    };
-    public void CloseFacades() { facadeClient?.Dispose(); facadeServer?.Dispose(); facadeClient = null; facadeServer = null; }
-"""
-
-
-def facade_failure(proofs, live):
-    """Check real public-facade callbacks and consumed ownership after assembly reload."""
-    if len(proofs) != (6 if live else 4):
-        return "Missing managed facade checkpoints"
-    for proof in proofs:
-        if not proof.get("passed"):
-            return "Managed facade runtime checkpoint failed"
-        state = proof.get("facade", {})
-        sequence = proof.get("sequence", proof.get("epoch")) if live else proof.get("epoch")
-        client_hits = sequence if live else 0
-        if (
-            state.get("checks") != 23
-            or state.get("server_id") != proof.get("server_id")
-            or state.get("client_id") != proof.get("client_id")
-            or state.get("server_hits") != sequence
-            or state.get("client_hits") != client_hits
-            or not state.get("capsules_empty")
-            or state.get("handoffs") != state.get("restores")
-        ):
-            return "Managed facade ownership, self-test or callbacks failed"
-        expected_server = {
-            "state_changed": 1,
-            "peer_connected": 1,
-            "peer_disconnected": 1,
-            "application_received": 4,
-            "packet_received": 1,
-            "simulation_tick": 2 if proof.get("physics") else 1,
-            "diagnostic": 2,
-        }
-        expected_client = dict(
-            expected_server, state_changed=2, application_received=2, simulation_tick=1, diagnostic=1
-        )
-        if state.get("server_connections") != expected_server or state.get("client_connections") != expected_client:
-            return "Reload left orphaned or missing managed signal connections"
-    if live:
-        initial, managed_failure, native_failure, cs, cpp, combined = proofs
-        if any(p["facade"]["restores"] != initial["facade"]["restores"] for p in (managed_failure, native_failure)):
-            return "Failed compile transferred facade ownership"
-        if (
-            cs["facade"]["restores"] <= initial["facade"]["restores"]
-            or cpp["facade"]["restores"] != cs["facade"]["restores"]
-        ):
-            return "C# handoff missing or C++ reload changed managed ownership"
-        if combined["facade"]["restores"] <= cpp["facade"]["restores"]:
-            return "Combined reload did not restore managed facade"
-    elif proofs[2]["facade"]["restores"] <= proofs[1]["facade"]["restores"]:
-        return "Stopped reload did not restore managed facade"
-    return None
 
 
 def digest(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
-
-
-def network_recovery_failure(proofs):
-    """Reject incomplete combined-reload evidence, including implicit recovery."""
-    if len(proofs) != 4 or [p.get("action") for p in proofs] != [
-        "network-start",
-        "network-fault",
-        "network-stopped",
-        "network-recover",
-    ]:
-        return "Missing ordered network reload checkpoints"
-    initial, fault, stopped, recovered = proofs
-    for proof in proofs:
-        if not proof.get("passed") or not proof.get("references_ok"):
-            return "Native session references or runtime checks failed"
-        if any(proof.get(k) != initial.get(k) for k in ("pid", "server_id", "client_id")):
-            return "Game or native sessions were replaced during reload"
-    if initial.get("server_id") == initial.get("client_id") or int(initial.get("pid", 0)) <= 0:
-        return "Invalid native session/process identities"
-    if fault.get("poll_error") != 1 or fault.get("gap_ms", 0) < 550 or fault.get("client_polls", 0) < 20:
-        return "Authority fault or continuing client poll evidence missing"
-    for proof in (fault, stopped):
-        if any(
-            proof.get(k) != v
-            for k, v in {
-                "server_state": "Stopped",
-                "client_state": "Stopped",
-                "server_tick": 0,
-                "peers": 0,
-                "entities": 0,
-                "epoch": 1,
-                "cpp_hits": 1,
-                "cs_hits": 1,
-            }.items()
-        ):
-            return "Fault caches were retained or reload implicitly restarted networking"
-        if proof.get("diagnostics") != ["Fixed simulation exceeded its catch-up budget; resynchronization required."]:
-            return "Fixed-clock diagnostic missing or duplicated"
-    for proof, epoch in ((initial, 1), (recovered, 2)):
-        if (
-            any(
-                proof.get(k) != v
-                for k, v in {
-                    "server_state": "Listening",
-                    "client_state": "Connected",
-                    "peers": 1,
-                    "entities": 1,
-                    "epoch": epoch,
-                    "cpp_hits": epoch,
-                    "cs_hits": epoch,
-                }.items()
-            )
-            or proof.get("server_tick", 0) < 8
-        ):
-            return "Fresh admission, replication or callback checks missing"
-        expected = [{"peer": initial["peer"], "payload": "0100ff2a"}]
-        if epoch == 2:
-            expected.append({"peer": recovered["peer"], "payload": "0200ff2a"})
-        if proof.get("packets") != expected:
-            return "Application data lost, duplicated or assigned to a retired peer"
-    if recovered.get("peer", 0) <= initial.get("peer", 0) or recovered.get("entity", 0) <= initial.get("entity", 0):
-        return "Recovery reused retired handles"
-    if recovered.get("old_peer") != initial["peer"] or recovered.get("old_entity") != initial["entity"]:
-        return "Recovery lost original handle provenance"
-    if recovered.get("retired_peer_error") != 33 or recovered.get("retired_entity_error") != 33:
-        return "Retired handles remain usable"
-    expected_states = [
-        "Connecting",
-        "Synchronizing",
-        "Connected",
-        "Stopped",
-        "Disconnected",
-        "Stopped",
-        "Connecting",
-        "Synchronizing",
-        "Connected",
-    ]
-    if recovered.get("states") != expected_states:
-        return "Unexpected native client recovery lifecycle"
-    return None
-
-
-def network_live_failure(proofs, simulation):
-    """Require one uninterrupted admission across compiler failures and reloads."""
-    if len(proofs) != 6 or [p.get("action") for p in proofs] != ["network-live-start"] + ["network-live-check"] * 5:
-        return "Missing live reload checkpoints"
-    initial = proofs[0]
-    if int(initial.get("pid", 0)) <= 0 or not 0 < initial.get("port", 0) <= 65535:
-        return "Invalid process or listener identity"
-    if initial.get("server_id") == initial.get("client_id") or any(
-        int(initial.get(k, 0)) == 0 for k in ("server_id", "client_id", "peer", "entity")
-    ):
-        return "Invalid session, peer or entity identity"
-    for index, proof in enumerate(proofs):
-        sequence = index + 1
-        if not proof.get("passed") or not proof.get("references_ok"):
-            return "Live runtime or serialized references failed"
-        if any(proof.get(k) != initial.get(k) for k in ("pid", "server_id", "client_id", "port", "peer", "entity")):
-            return "Active reload replaced a process, session, admission or entity"
-        if proof.get("simulation") != simulation:
-            return "Network impairment configuration missing or changed"
-        expected = {
-            "server_state": "Listening",
-            "client_state": "Connected",
-            "epoch": 1,
-            "peers": 1,
-            "entities": 1,
-            "sequence": sequence,
-            "cpp_hits": sequence,
-            "cs_hits": sequence,
-            "diagnostics": [],
-            "states": ["Connecting", "Synchronizing", "Connected"],
-            "baseline_hex": bytes([sequence, 0, 255, 42]).hex(),
-        }
-        if any(proof.get(k) != value for k, value in expected.items()):
-            return "Active reload interrupted lifecycle, callbacks or replication"
-        packets = [{"peer": initial["peer"], "payload": bytes([n, 0, 255, 42]).hex()} for n in range(1, sequence + 1)]
-        replies = [{"peer": 0, "payload": bytes([128 + n, 0, 255, 42]).hex()} for n in range(1, sequence + 1)]
-        if proof.get("packets") != packets or proof.get("client_packets") != replies:
-            return "Bidirectional application data lost, duplicated or corrupt"
-        if any(proof.get(k, 0) <= 0 for k in ("server_tick", "revision", "total_client_polls")):
-            return "Live simulation, entity revision or language polling evidence missing"
-        if index and any(proof[k] <= proofs[index - 1][k] for k in ("server_tick", "revision", "total_client_polls")):
-            return "Live simulation, replication or language pumps did not advance"
-    return None
-
-
-def network_physics_failure(proofs, live):
-    """Validate authoritative world references, replication and explicit rollback."""
-    if len(proofs) != (6 if live else 4):
-        return "Missing physics reload checkpoints"
-    initial = proofs[0].get("physics", {})
-    if not initial.get("world_id") or int(initial["world_id"]) == 0:
-        return "Missing authoritative world identity"
-    for proof in proofs:
-        physics = proof.get("physics", {})
-        if any(
-            physics.get(k) != value
-            for k, value in {
-                "enabled": True,
-                "world_id": initial["world_id"],
-                "body_id": 10000,
-                "body_count": 1,
-                "cpp_state_ok": True,
-                "cs_state_ok": True,
-                "fingerprint": initial.get("fingerprint"),
-            }.items()
-        ):
-            return "Physics identity, body mapping or language state changed"
-        if ":hz60:" not in physics.get("fingerprint", "") or not re.fullmatch(r"[0-9a-f]{16}", physics.get("hash", "")):
-            return "Physics profile/hash evidence missing"
-        if physics.get("tick", 0) <= 0 or physics["tick"] != physics.get("clock_offset", -1) + proof.get(
-            "server_tick", -1
-        ):
-            return "Physics lost authoritative fixed-clock offset"
-        if any(
-            not isinstance(physics.get(k), (float, int)) or not math.isfinite(physics[k])
-            for k in ("position_y", "velocity_y", "client_position_y")
-        ):
-            return "Nonfinite physics state"
-        if physics["velocity_y"] >= 0:
-            return "Gravity-driven body stopped advancing"
-        if proof.get("client_state") == "Connected":
-            if (
-                physics.get("client_body_id") != 10000
-                or not physics.get("clock_offset", 0) < physics.get("client_tick", 0) <= physics["tick"]
-            ):
-                return "Replicated body or physics tick missing/stale"
-            if physics["client_position_y"] < physics["position_y"]:
-                return "Client physics baseline is ahead of authority"
-    if live:
-        for previous, current in zip(proofs, proofs[1:]):
-            before, after = previous["physics"], current["physics"]
-            if (
-                after["clock_offset"] != 0
-                or after["tick"] <= before["tick"]
-                or after["client_tick"] <= before["client_tick"]
-                or after["position_y"] >= before["position_y"]
-            ):
-                return "Live physics reset or stopped through language reload"
-    else:
-        fault, stopped, recovered = proofs[1:]
-        saved = fault["physics"]
-        for proof in (fault, stopped):
-            physics = proof["physics"]
-            if (
-                physics.get("client_tick") != 0
-                or physics.get("checkpoint_tick") != physics["tick"]
-                or physics.get("checkpoint_hash") != physics["hash"]
-            ):
-                return "Stopped physics checkpoint or cleared client baseline missing"
-            if any(
-                physics.get(k) != saved.get(k)
-                for k in ("tick", "hash", "position_y", "checkpoint_tick", "checkpoint_hash")
-            ):
-                return "Stopped reload changed preserved checkpoint state"
-        if recovered.get("corrupt_snapshot_error") != 16 or not recovered.get("corrupt_restore_unchanged"):
-            return "Corrupt checkpoint was accepted or modified live state"
-        if (
-            recovered.get("restored_tick") != saved["tick"]
-            or recovered.get("restored_hash") != saved["hash"]
-            or recovered.get("restored_y") != saved["position_y"]
-        ):
-            return "Trusted checkpoint restore lost exact solver state"
-        after = recovered["physics"]
-        if (
-            after["clock_offset"] != saved["tick"]
-            or after["client_tick"] <= saved["tick"]
-            or after["position_y"] >= saved["position_y"]
-        ):
-            return "Recovered baseline did not resume stable body from checkpoint"
-    return None
 
 
 def main():
@@ -417,55 +59,7 @@ def main():
     parser.add_argument("--packages", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--expect-disabled", action="store_true", help="Record the pre-fix opt-in rejection")
-    parser.add_argument(
-        "--network-csharp-node",
-        action="store_true",
-        help="Exercise high-level NetNode codec, typed events, ownership and tree lifecycle across reload",
-    )
-    parser.add_argument(
-        "--network-csharp-box3d",
-        action="store_true",
-        help="Transfer public NetBox3D adapter/world/body ownership during high-level node reload",
-    )
-    parser.add_argument(
-        "--network-csharp-facade",
-        action="store_true",
-        help="Transfer public NetSession ownership and reconnect managed events across assembly reload",
-    )
-    parser.add_argument(
-        "--network-physics",
-        action="store_true",
-        help="Retain an authoritative Box3D world during network reload; restore a trusted checkpoint in fault recovery",
-    )
     parser.add_argument("--disable-runtime", action="store_true", help="Verify the default non-collectible player")
-    parser.add_argument(
-        "--network-live-reload",
-        action="store_true",
-        help="Keep one authenticated client connected across failed builds and live C#/C++ reloads",
-    )
-    parser.add_argument(
-        "--network-latency-ms",
-        type=float,
-        default=30,
-        help="Live fixture outbound latency in each direction (default: 30 ms)",
-    )
-    parser.add_argument(
-        "--network-jitter-ms",
-        type=float,
-        default=5,
-        help="Live fixture outbound jitter in each direction (default: 5 ms)",
-    )
-    parser.add_argument(
-        "--network-loss-percent",
-        type=float,
-        default=5,
-        help="Live fixture configured packet loss in each direction (default: 5 percent)",
-    )
-    parser.add_argument(
-        "--network-recovery",
-        action="store_true",
-        help="Retain native sessions through C++/C# reload after an authority clock fault",
-    )
     parser.add_argument(
         "--feature-override", action="store_true", help="Enable runtime reload through the editor feature override"
     )
@@ -486,90 +80,11 @@ def main():
         help="Exercise changed method signatures and rejected base-class repair",
     )
     args = parser.parse_args()
-    if any((args.network_recovery, args.network_live_reload, args.network_physics, args.network_csharp_facade, args.network_csharp_node, args.network_csharp_box3d)):
-        parser.error("Retired EGPNet reload fixtures are unavailable; migrate to native Superpos and qualify its reload lifecycle separately.")
     if args.disable_runtime and args.feature_override:
         parser.error("--disable-runtime and --feature-override are mutually exclusive")
     if args.native_abi_recovery and (args.disable_runtime or args.expect_disabled):
         parser.error("--native-abi-recovery requires runtime reload")
-    if args.network_recovery and (args.disable_runtime or args.expect_disabled):
-        parser.error("--network-recovery requires runtime reload")
-    if args.network_live_reload and (args.disable_runtime or args.expect_disabled):
-        parser.error("--network-live-reload requires runtime reload")
-    if args.network_live_reload and args.network_recovery:
-        parser.error("--network-live-reload and --network-recovery require separate isolated fixtures")
-    values = (args.network_latency_ms, args.network_jitter_ms, args.network_loss_percent)
-    if not all(math.isfinite(value) and 0 <= value <= maximum for value, maximum in zip(values, (5000, 5000, 100))):
-        parser.error("network simulation requires finite latency/jitter in [0, 5000] ms and loss in [0, 100] percent")
-    if not args.network_live_reload and values != (30, 5, 5):
-        parser.error("network simulation options require --network-live-reload")
-    network_enabled = args.network_recovery or args.network_live_reload
-    if args.network_physics and not network_enabled:
-        parser.error("--network-physics requires --network-live-reload or --network-recovery")
-    if args.network_csharp_facade and not network_enabled:
-        parser.error("--network-csharp-facade requires --network-live-reload or --network-recovery")
-    if args.network_csharp_node and not network_enabled:
-        parser.error("--network-csharp-node requires --network-live-reload or --network-recovery")
-    if args.network_csharp_node and (args.network_csharp_facade or args.network_physics):
-        parser.error("--network-csharp-node requires a separate fixture from low-level facade/physics reload")
-    if args.network_csharp_box3d and not args.network_csharp_node:
-        parser.error("--network-csharp-box3d requires --network-csharp-node")
     probe_source = PROBE
-    if args.network_csharp_node:
-        members = (ROOT / "misc/scripts/egp_hot_reload_node.cs.txt").read_text(encoding="utf-8")
-        probe_source = probe_source.replace("    [Signal]", members + "    [Signal]")
-        probe_source = probe_source.replace(
-            '        var server = NetworkState["server"].AsGodotObject();',
-            "        if (ServerNode != null && ClientNode != null) { "
-            "var first = authority ? ServerNode.Poll() : Error.Ok; var second = ClientNode.Poll(); "
-            "return first != Error.Ok ? first : second; }\n"
-            '        var server = NetworkState["server"].AsGodotObject();',
-        ).replace(
-            "AfterCount++;",
-            "AfterCount++; if (ServerNode != null && ClientNode != null) { SubscribeNodes(); NodeRestores++; }",
-        )
-    if args.network_csharp_box3d:
-        members = (ROOT / "misc/scripts/egp_hot_reload_box3d.cs.txt").read_text(encoding="utf-8")
-        probe_source = probe_source.replace("    [Signal]", members + "    [Signal]")
-        probe_source = probe_source.replace(
-            "        CheckNodeLifecycle();", "        PrepareBox(config); CheckNodeLifecycle();"
-        )
-        probe_source = probe_source.replace(
-            '        return new() { ["server"] = ServerNode.NativeSession!',
-            '        AttachBox(); return new() { ["server"] = ServerNode.NativeSession!',
-            1,
-        )
-        probe_source = probe_source.replace("BeforeCount++;", "BeforeCount++; TransferBox();")
-        probe_source = probe_source.replace("AfterCount++;", "AfterCount++; RestoreBox();")
-        probe_source = probe_source.replace(
-            'public Error HostNode(int port) => ServerNode!.Host(port, "127.0.0.1");',
-            'public Error HostNode(int port) { StartBoxClock(); return ServerNode!.Host(port, "127.0.0.1"); }',
-        )
-        probe_source = probe_source.replace(
-            'public long SpawnNode(long peer, int sequence) => ServerNode!.Spawn(17, new() { ["sequence"] = sequence, ["blob"] = new byte[] { 0, 255, 42 } }, peer);',
-            'public long SpawnNode(long peer, int sequence) { var entity = ServerNode!.Spawn(17, new() { ["sequence"] = sequence, ["blob"] = new byte[] { 0, 255, 42 } }, peer); TrackBox(entity); return entity; }',
-        )
-    if args.network_csharp_facade:
-        probe_source = probe_source.replace("    [Signal]", FACADE_MEMBERS + "    [Signal]")
-        probe_source = probe_source.replace(
-            '        var server = NetworkState["server"].AsGodotObject();',
-            "        if (facadeServer != null && facadeClient != null) { "
-            "var first = authority ? facadeServer.Poll() : Error.Ok; var second = facadeClient.Poll(); "
-            "return first != Error.Ok ? first : second; }\n"
-            '        var server = NetworkState["server"].AsGodotObject();',
-        )
-        probe_source = probe_source.replace(
-            "BeforeCount++;",
-            "BeforeCount++; if (facadeServer != null && facadeClient != null) { "
-            'ReloadCapsules = new() { ["server"] = facadeServer.DetachForReload(), ["client"] = facadeClient.DetachForReload() }; '
-            "facadeServer = null; facadeClient = null; FacadeHandoffs++; }",
-        ).replace(
-            "AfterCount++;",
-            "AfterCount++; if (ReloadCapsules.Count != 0) { "
-            'facadeServer = EGP.Networking.NetSession.ResumeAfterReload(ReloadCapsules["server"].AsGodotDictionary()); '
-            'facadeClient = EGP.Networking.NetSession.ResumeAfterReload(ReloadCapsules["client"].AsGodotDictionary()); '
-            "ReloadCapsules.Clear(); SubscribeFacades(); FacadeRestores++; }",
-        )
     output = args.output.resolve() / str(time.time_ns())
     project = output / "project"
     addon = project / "addons/reload_fixture"
@@ -584,31 +99,11 @@ def main():
         for name in (
             "egp_hot_reload_game.gd",
             "egp_hot_reload_editor.gd",
-            "egp_hot_reload_network.gd",
             "validate_egp_hot_reload.py",
         )
     ]
     receipt["source_commit"] = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT, text=True).strip()
     receipt["fixture_sha256"] = {str(p.relative_to(ROOT)): digest(p) for p in fixture_paths}
-    if args.network_csharp_node:
-        paths = [
-            ROOT / "misc/scripts" / name
-            for name in ("egp_hot_reload_node.gd", "egp_hot_reload_node.cs.txt", "egp_hot_reload_node_evidence.py")
-        ]
-        paths += list((ROOT / "modules/egp_net/csharp").glob("*.cs")) + list(
-            (ROOT / "modules/egp_net/gdscript").glob("*.gd")
-        )
-        receipt["fixture_sha256"].update({str(p.relative_to(ROOT)): digest(p) for p in paths})
-    if args.network_csharp_box3d:
-        paths = [
-            ROOT / "misc/scripts" / name
-            for name in ("egp_hot_reload_box3d.cs.txt", "egp_hot_reload_box3d.gd", "egp_hot_reload_box3d_evidence.py")
-        ]
-        receipt["fixture_sha256"].update({str(p.relative_to(ROOT)): digest(p) for p in paths})
-    if args.network_csharp_facade:
-        for name in ("NetApi.cs", "NetSessionSignals.cs"):
-            helper = ROOT / "modules/egp_net/csharp" / name
-            receipt["fixture_sha256"][str(helper.relative_to(ROOT))] = digest(helper)
     runtime_files = [engine.parent / "GodotSharp/Api/Debug" / name for name in ("GodotSharp.dll", "GodotPlugins.dll")]
     receipt["managed_runtime_sha256"] = {str(path): digest(path) for path in runtime_files}
     receipt["scope"] = (
@@ -752,38 +247,6 @@ def main():
         )
         shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_game.gd", project / "main.gd")
         shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_editor.gd", addon / "plugin.gd")
-        if network_enabled:
-            shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_network.gd", project / "network.gd")
-        if args.network_csharp_node:
-            shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_network.gd", project / "network_base.gd")
-            shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_node.gd", project / "network.gd")
-            for folder, pattern in (("csharp", "*.cs"), ("gdscript", "*.gd")):
-                destination = project / "addons/egp_net" / folder if folder == "csharp" else project / "addons/egp_net"
-                destination.mkdir(parents=True, exist_ok=True)
-                for path in (ROOT / "modules/egp_net" / folder).glob(pattern):
-                    shutil.copyfile(path, destination / path.name)
-        if args.network_csharp_box3d:
-            node = (ROOT / "misc/scripts/egp_hot_reload_node.gd").read_text(encoding="utf-8")
-            node = node.replace(
-                'var retained := {"server": server, "client": client}',
-                'var retained := {"server": server, "client": client, "world": managed.GetBoxState().world}',
-            )
-            node = node.replace(
-                'check(managed.UpdateNode(entity, baseline_sequence) == OK, "typed entity update failed")',
-                'check(managed.UpdateNode(entity, baseline_sequence) == OK, "typed entity update failed")\n'
-                '\t\tcheck(server_bridge.get_entity(entity).state.sequence == baseline_sequence, "Immediate typed update did not reach authority codec")',
-            )
-            (project / "network_node.gd").write_text(node, encoding="utf-8")
-            shutil.copyfile(ROOT / "misc/scripts/egp_hot_reload_box3d.gd", project / "network.gd")
-        if args.network_physics:
-            (project / "physics_enabled").write_text("enabled", encoding="utf-8")
-        if args.network_csharp_facade:
-            for name in ("NetApi.cs", "NetSessionSignals.cs"):
-                shutil.copyfile(ROOT / "modules/egp_net/csharp" / name, project / name)
-        simulation = {"simulated_latency_ms": values[0], "simulated_jitter_ms": values[1], "simulated_loss": values[2]}
-        if args.network_live_reload:
-            (project / "network_options.json").write_text(json.dumps(simulation), encoding="utf-8")
-            receipt["network_simulation"] = simulation
         (addon / "plugin.cfg").write_text(
             '[plugin]\nname="ReloadFixture"\ndescription="Isolated reload fixture"\nauthor="EGP"\nversion="1"\nscript="plugin.gd"\n',
             encoding="utf-8",
@@ -817,46 +280,6 @@ def main():
         )
         require("Hello from reload!" in source, "Unexpected scaffold template")
         source = source.replace("Hello from reload!", "VERSION")
-        if network_enabled:
-            source = (
-                "#include <godot_cpp/classes/egp_net_session.hpp>\n#include <godot_cpp/classes/egp_box3d_world.hpp>\n"
-                + source
-            )
-            source = source.replace(
-                'ClassDB::bind_method(D_METHOD("get_message"), &EGP_reload_Node::get_message);',
-                'ClassDB::bind_method(D_METHOD("get_message"), &EGP_reload_Node::get_message);\n'
-                '\t\tClassDB::bind_method(D_METHOD("set_network_state", "value"), &EGP_reload_Node::set_network_state);\n'
-                '\t\tClassDB::bind_method(D_METHOD("get_network_state"), &EGP_reload_Node::get_network_state);\n'
-                '\t\tADD_PROPERTY(PropertyInfo(Variant::DICTIONARY, "network_state"), "set_network_state", "get_network_state");\n'
-                '\t\tClassDB::bind_method(D_METHOD("set_network_hits", "value"), &EGP_reload_Node::set_network_hits);\n'
-                '\t\tClassDB::bind_method(D_METHOD("get_network_hits"), &EGP_reload_Node::get_network_hits);\n'
-                '\t\tADD_PROPERTY(PropertyInfo(Variant::INT, "network_hits"), "set_network_hits", "get_network_hits");\n'
-                '\t\tClassDB::bind_method(D_METHOD("poll_network", "authority"), &EGP_reload_Node::poll_network);\n'
-                '\t\tClassDB::bind_method(D_METHOD("get_physics_state"), &EGP_reload_Node::get_physics_state);\n'
-                '\t\tClassDB::bind_method(D_METHOD("receive_network", "peer", "payload"), &EGP_reload_Node::receive_network);',
-            ).replace(
-                "public:\n",
-                "public:\n"
-                "\tDictionary network_state;\n\tint network_hits = 0;\n"
-                "\tvoid set_network_state(const Dictionary &value) { network_state = value; }\n"
-                "\tDictionary get_network_state() const { return network_state; }\n"
-                "\tvoid set_network_hits(int value) { network_hits = value; }\n"
-                "\tint get_network_hits() const { return network_hits; }\n"
-                "\tDictionary get_physics_state() const {\n"
-                '\t\tif (!network_state.has("world")) return Dictionary();\n'
-                '\t\tRef<EGPBox3DWorld> world = network_state["world"];\n'
-                "\t\tif (world.is_null()) return Dictionary();\n"
-                "\t\tDictionary state = world->get_body_state(10000);\n"
-                '\t\tstate["tick"] = world->get_tick(); state["hash"] = world->get_state_hash();\n'
-                "\t\treturn state;\n\t}\n"
-                "\tvoid receive_network(int64_t peer, const PackedByteArray &payload) { network_hits++; }\n"
-                "\tError poll_network(bool authority) {\n"
-                '\t\tRef<EGPNetSession> server = network_state["server"];\n'
-                '\t\tRef<EGPNetSession> client = network_state["client"];\n'
-                "\t\tError result = authority ? server->poll() : OK;\n"
-                "\t\tError client_result = client->poll();\n"
-                "\t\treturn result != OK ? result : client_result;\n\t}\n",
-            )
         if args.native_abi_recovery:
             source = (
                 source
@@ -1193,138 +616,6 @@ def main():
                     "scope": "Dynamic methods and Callable lookup; cached raw MethodBind pointers and arbitrary ABI changes remain open",
                 }
             receipt["reloads"] = 3 + int(args.assembly_recovery) + int(args.unload_recovery) + int(args.native_recovery)
-            if args.network_recovery:
-                proofs = [sample("network-start"), sample("network-fault")]
-                require(all(p["passed"] for p in proofs), "Network fault setup failed")
-                # Rebuild both live language objects while the authority remains stopped.
-                # Only a later explicit fresh-token admission may restart it.
-                (project / "ReloadProbe.cs").write_text(probe_source.replace("VERSION", "6"), encoding="utf-8")
-                run("managed-network-recovery", ["dotnet", "build", "--nologo", "-v", "minimal"])
-                source_path.write_text(source.replace("VERSION", "4"), encoding="utf-8")
-                require(command("build", 900)["build_result"] == 0, "Network fault reload build failed")
-                time.sleep(2)
-                state = sample()
-                verify(state, 4, previous, cs_version=6)
-                require(
-                    state["after_count"] > previous["after_count"], "Network fault reload skipped managed lifecycle"
-                )
-                proofs.extend([sample("network-stopped"), sample("network-recover")])
-                failure = (
-                    node_failure(proofs, False, {}) if args.network_csharp_node else network_recovery_failure(proofs)
-                )
-                require(failure is None, failure or "Network reload proof failed")
-                if args.network_csharp_box3d:
-                    failure = box3d_failure(proofs, live=args.network_live_reload)
-                    require(failure is None, failure or "Public physics adapter reload proof failed")
-                if args.network_physics:
-                    failure = network_physics_failure(proofs, live=False)
-                    require(failure is None, failure or "Physics checkpoint reload proof failed")
-                if args.network_csharp_facade:
-                    failure = facade_failure(proofs, live=False)
-                    require(failure is None, failure or "Managed facade recovery proof failed")
-                receipt["network_recovery"] = {
-                    "passed": True,
-                    "proofs": proofs,
-                    "cpp_version": 4,
-                    "cs_version": 6,
-                    "physics": args.network_physics,
-                    "csharp_facade": args.network_csharp_facade,
-                    "csharp_node": args.network_csharp_node,
-                    "csharp_box3d": args.network_csharp_box3d,
-                    "scope": "Windows Debug editor/game, one authenticated local client; native session references in serialized dictionaries and dynamic signal callbacks. Explicit admission after a stopped-authority fault; no physics checkpoint, concurrent reload or exported-runtime claim.",
-                }
-            if args.network_live_reload:
-                proofs = [sample("network-live-start")]
-                require(proofs[0]["passed"], "Live network setup failed")
-                cs_version = 5 if args.unload_recovery else 4
-                before_descriptor = digest(descriptor)
-                (project / "ReloadProbe.cs").write_text(probe_source.replace("VERSION", "invalid!"), encoding="utf-8")
-                run("managed-live-invalid", ["dotnet", "build", "--nologo", "-v", "minimal"], expected_success=False)
-                state = sample()
-                verify(state, 3, previous, cs_version=cs_version)
-                previous = state
-                proofs.append(sample("network-live-check"))
-                source_path.write_text(
-                    source.replace("VERSION", "3") + "\n#error EGP deliberate live network diagnostic\n",
-                    encoding="utf-8",
-                )
-                require(command("build", 900)["build_result"] != 0, "Invalid live C++ unexpectedly compiled")
-                require(digest(descriptor) == before_descriptor, "Failed live build published a descriptor")
-                state = sample()
-                verify(state, 3, previous, cs_version=cs_version)
-                previous = state
-                proofs.append(sample("network-live-check"))
-                for phase, cpp_version, managed_version in (("csharp", 3, 6), ("cpp", 4, 6), ("combined", 5, 7)):
-                    before_after_count = previous["after_count"]
-                    if phase != "cpp":
-                        (project / "ReloadProbe.cs").write_text(
-                            probe_source.replace("VERSION", str(managed_version)), encoding="utf-8"
-                        )
-                        run("managed-live-" + phase, ["dotnet", "build", "--nologo", "-v", "minimal"])
-                    if phase == "csharp":
-                        command("reload")
-                    else:
-                        source_path.write_text(source.replace("VERSION", str(cpp_version)), encoding="utf-8")
-                        require(command("build", 900)["build_result"] == 0, "Live native reload build failed")
-                    time.sleep(2)
-                    state = sample()
-                    verify(state, cpp_version, previous, cs_version=managed_version)
-                    require(
-                        state["after_count"] == before_after_count
-                        if phase == "cpp"
-                        else state["after_count"] > before_after_count,
-                        "Unexpected managed reload lifecycle during " + phase,
-                    )
-                    previous = state
-                    proofs.append(sample("network-live-check"))
-                failure = (
-                    node_failure(proofs, True, simulation)
-                    if args.network_csharp_node
-                    else network_live_failure(proofs, simulation)
-                )
-                require(failure is None, failure or "Live network reload proof failed")
-                if args.network_csharp_facade:
-                    failure = facade_failure(proofs, live=True)
-                    require(failure is None, failure or "Managed facade live reload proof failed")
-                if args.network_csharp_box3d:
-                    failure = box3d_failure(proofs, live=args.network_live_reload)
-                    require(failure is None, failure or "Public physics adapter reload proof failed")
-                if args.network_physics:
-                    failure = network_physics_failure(proofs, live=True)
-                    require(failure is None, failure or "Live physics reload proof failed")
-                receipt["network_live_reload"] = {
-                    "passed": True,
-                    "physics": args.network_physics,
-                    "csharp_facade": args.network_csharp_facade,
-                    "csharp_node": args.network_csharp_node,
-                    "csharp_box3d": args.network_csharp_box3d,
-                    "proofs": proofs,
-                    "phases": [
-                        "initial",
-                        "managed-compile-failure",
-                        "native-compile-failure",
-                        "csharp-reload",
-                        "cpp-reload",
-                        "combined-reload",
-                    ],
-                    "scope": "Windows Debug editor and separate game; one authenticated authority/client pair shares game process. Both outbound simulators configured; no reconnect, checkpoints/handles/native identities retained. Configured loss does not quantify actual dropped packets or real WAN performance.",
-                }
-            if args.network_csharp_node:
-                lifecycle = [sample("network-node-exit"), sample("network-node-reenter")]
-                failure = node_lifecycle_failure(lifecycle)
-                require(failure is None, failure or "High-level node tree lifecycle failed")
-                receipt["node_lifecycle"] = {"passed": True, "proofs": lifecycle}
-                reentry = []
-                receipt["node_reentry"] = {"passed": False, "proofs": reentry}
-                for cycle in range(3):
-                    if cycle:
-                        sample("network-node-exit")
-                        sample("network-node-reenter")
-                    reentry.append(sample("network-node-reopen"))
-                    require(reentry[-1]["passed"], reentry[-1].get("error", "Node reentry runtime checks failed"))
-                failure = node_reentry_failure(reentry, proofs[-1])
-                require(failure is None, failure or "High-level node reentry failed")
-                receipt["node_reentry"]["passed"] = True
         command("close")
         require(process.wait(timeout=60) == 0, "Editor/game teardown failed")
         game_log = (output / "game.log").read_text(encoding="utf-8")
@@ -1374,14 +665,9 @@ def main():
                     "ReloadFixture.dll",
                     "extension.cpp",
                     "ReloadProbe.cs",
-                    "NetApi.cs",
-                    "NetSessionSignals.cs",
-                    "NetNode.cs",
                     "reload.gdextension",
-                    "physics_checkpoint.bin",
                 )
                 or (p.suffix == ".cs" and "addons" in p.relative_to(project).parts)
-                or (p.suffix == ".gd" and args.network_csharp_box3d)
                 or (p.suffix == ".dll" and "extensions" in p.relative_to(project).parts)
             )
         }

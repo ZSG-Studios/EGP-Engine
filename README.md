@@ -70,8 +70,12 @@ This replaces the previous Yojimbo transport and its Superposition layer.
 `EGPNetSession`, old language helpers, property components, RPC and spawner
 nodes require application migration. Automatic scene replication, solver
 prediction/recovery, old arena results and production/WAN behavior are not
-qualified by the replacement. The previous module has no active build target or supported public API.
-Physical source removal was rejected by automatic approval.
+qualified by the replacement. The previous module, its helpers, vendor dependency
+and legacy demos have been removed from this source tree.
+
+Current application examples are the [physics showcase](demos/physics_superpos_showcase/README.md)
+and [remote courier arena](demos/superpos_100_player_lab/README.md). Each documents
+its tested workload, explicit scene projection and remaining qualification limits.
 
 See [Superpos networking](doc/egp_superpos.md) and
 [networking migration](doc/egp_superpos_migration.md) for actual APIs and limits.
