@@ -41,12 +41,13 @@ try {
         $optionJson = ConvertTo-Json -InputObject @($options) -Compress
         $resultRoot = Join-Path $projectRoot '.build/xmake-invocation'
         New-Item -ItemType Directory -Force -Path $resultRoot | Out-Null
-        $resultPath = Join-Path $resultRoot ([Guid]::NewGuid().ToString() + '.json')
-        & $tool lua (Join-Path $PSScriptRoot 'build_egp.lua') $Platform $buildTarget $Jobs (Join-Path $projectRoot '.build/xmake-cache') $optionJson 'build' $resultPath
+        $invocationId = [Guid]::NewGuid().ToString()
+        $resultPath = Join-Path $resultRoot ($buildTarget + '.json')
+        & $tool lua (Join-Path $PSScriptRoot 'build_egp.lua') $Platform $buildTarget $Jobs (Join-Path $projectRoot '.build/xmake-cache') $optionJson 'build' $resultPath $invocationId
         if ($LASTEXITCODE -ne 0) { throw "EGP $buildTarget xmake build failed (exit $LASTEXITCODE)." }
         if (-not (Test-Path -LiteralPath $resultPath -PathType Leaf)) { throw 'Native build result receipt is missing.' }
         $result = Get-Content -LiteralPath $resultPath -Raw | ConvertFrom-Json
-        if ($result.platform -ne $Platform -or $result.target -ne $buildTarget -or -not (Test-Path -LiteralPath $result.editor -PathType Leaf)) { throw 'Native build result disagrees with the requested target or output.' }
+        if ($result.invocation_id -ne $invocationId -or $result.platform -ne $Platform -or $result.target -ne $buildTarget -or -not (Test-Path -LiteralPath $result.editor -PathType Leaf)) { throw 'Native build result disagrees with the current invocation, requested target or output.' }
         if ($buildTarget -eq 'editor' -and -not $SkipManaged -and $result.mono -eq $true) {
             & (Join-Path $PSScriptRoot 'build_egp_managed.ps1') -Editor $result.editor -Platform $result.platform -Precision $result.precision -NoDeprecated:($result.deprecated -eq $false)
         }

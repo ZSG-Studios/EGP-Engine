@@ -11,12 +11,12 @@
   "preservation_sha256": "03087b35269ac9ff3d01e77ebb119fe435d8c8c15335e89c0839e6d39cef2e02",
   "files": {
     "config.py": "88acdf2008dc94544088ab8ebc44e274bf34a1d849baa595fdfecc4b94094eb8",
-    "doc_classes/SuperposField.xml": "446515e9ae75aadb12f48ab455f0bf8f8b1c99039ef1a3d26190d1a4fbe48234",
-    "doc_classes/SuperposSchema.xml": "cca32d7a8b213dcf25f8fe7c278329340e3cc023a5e4ed2e547b0f5f3ab468d7",
-    "doc_classes/SuperposSession.xml": "106985b5df1eaad0442ba45158987a3cfb327abf470656aaf38d9098eeaf7d50",
+    "doc_classes/SuperposField.xml": "58353a174ba9df67013b3c93928003b7481d2315f51693d76bc1e4dc33f45d7d",
+    "doc_classes/SuperposSchema.xml": "b721ab7d4cdcfb52d0b5d515bdb0aefd9c20097fd48fc41bea80dd3a758ca7fc",
+    "doc_classes/SuperposSession.xml": "055a4ce6b48534551f53d62ec0f1ae186cb4d0b4051d4c33d86750dc4f7236f7",
     "doc_classes/SuperposSimulationProvider.xml": "9041152a6ce95b896b98bb5a488dcd9502674305a2496f65705eb06eeabfbbd4",
-    "doc_classes/SuperposUInt64.xml": "a184e4ab5f891a5bc150f16fad8a7aa50cbe97c045d58cf7fb9e04e052f8c068",
-    "doc_classes/SuperposWorld.xml": "1e8a6b6b06ec347602feb30a751eb0042383e7591f9226039a54f15cba393262",
+    "doc_classes/SuperposUInt64.xml": "df34e805dacc7e00a505332d6ebfb9567821ef9b7d8fe451bbff9e353258cce2",
+    "doc_classes/SuperposWorld.xml": "2b9f056de92393448ae3f12d2a7cfc96cb32f716287e9c1f072448e203c1482d",
     "private/allocation_probe.h": "2b97e9d7ff004693588ac65157cb24e735f17599ff918084efb5ea2e00a51799",
     "private/captured_owner.hpp": "5a83a96a02b848b5b6a6c7e115bd3b7b22677a95cc21f49109cdfee0823e5586",
     "private/charged_array.hpp": "2ff6095a4b615da333b34d7dd6edcebe8620f292ecbb6aa80bbc2dcf7217b0b4",
@@ -2201,5 +2201,16 @@
   "docs_qualification": {
     "path": "C:\\Users\\Rose-X\\Documents\\EGP Workspace\\Third Party Dev\\Superpos-EGP\\.build\\rtc-engine-runtime\\current-fold\\docs-publication-preservation.json",
     "sha256": "a386f4047abb1d8451d61af994b331748aa8b91f91bc358cb6ced9ba5905c454"
+  },
+  "documentation_source_alignment": {
+    "engine_source_head": "a5a2daed30776125bea69777508f87667d1fa881",
+    "scope": "Coordinator-committed XML description text only; element/attribute signatures unchanged. Source-only check, no build.",
+    "files": {
+      "doc_classes/SuperposField.xml": "58353a174ba9df67013b3c93928003b7481d2315f51693d76bc1e4dc33f45d7d",
+      "doc_classes/SuperposSchema.xml": "b721ab7d4cdcfb52d0b5d515bdb0aefd9c20097fd48fc41bea80dd3a758ca7fc",
+      "doc_classes/SuperposSession.xml": "055a4ce6b48534551f53d62ec0f1ae186cb4d0b4051d4c33d86750dc4f7236f7",
+      "doc_classes/SuperposUInt64.xml": "df34e805dacc7e00a505332d6ebfb9567821ef9b7d8fe451bbff9e353258cce2",
+      "doc_classes/SuperposWorld.xml": "2b9f056de92393448ae3f12d2a7cfc96cb32f716287e9c1f072448e203c1482d"
+    }
   }
 }

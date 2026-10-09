@@ -1,4 +1,4 @@
--- Configure and build actual native xmake targets with isolated variant caches.
+-- Configure and build actual native xmake targets with reusable configuration caches.
 -- Usage: xmake lua misc/scripts/build_egp.lua PLATFORM TARGET JOBS CACHE_DIR "KEY=VALUE ..." [dry-run]
 function build_result(root, graph)
     local options = assert(graph.options, "Native graph options missing")
@@ -14,7 +14,7 @@ function build_result(root, graph)
         arch = options.arch, precision = options.precision, deprecated = options.deprecated, mono = mono}
 end
 
-function main(platform, target, jobs, cache, flags, dryrun, resultpath)
+function main(platform, target, jobs, cache, flags, dryrun, resultpath, invocation_id)
     import('core.base.json')
     import('core.base.bytes')
     local root = path.absolute(path.join(os.scriptdir(), '../..'))
@@ -36,9 +36,10 @@ function main(platform, target, jobs, cache, flags, dryrun, resultpath)
     for key in pairs(options) do table.insert(keys,key) end
     table.sort(keys)
     for _, key in ipairs(keys) do table.insert(ordered, key .. '=' .. tostring(options[key])) end
-    local digest = hash.sha256(bytes(table.concat(ordered,'\n'))):sub(1,12)
-    local variant = path.join(path.absolute(cache or path.join(root,'.build/xmake-cache')), platform .. '-' .. options.arch .. '-' .. target .. '-' .. digest)
-    local configure = {'f','-y','-P',root,'-o',variant,'-p',normalized.plat,'-a',normalized.arch,'--toolchain=' .. normalized.toolchain,'-m',(policy.enabled(options.dev_build) or target=='template_debug') and 'debug' or 'release','--godot_platform=' .. platform,'--egp_arch=' .. options.arch,'--egp_target=' .. target}
+    local digest = hash.sha256(bytes(table.concat(ordered,'\n')))
+    local mode = (policy.enabled(options.dev_build) or target=='template_debug') and 'debug' or 'release'
+    local variant = path.join(path.absolute(cache or path.join(root,'.build/xmake-cache')), platform .. '-' .. options.arch .. '-' .. target, mode)
+    local configure = {'f','-y','-P',root,'-o',variant,'-p',normalized.plat,'-a',normalized.arch,'--toolchain=' .. normalized.toolchain,'-m',mode,'--godot_platform=' .. platform,'--egp_arch=' .. options.arch,'--egp_target=' .. target}
     table.join2(configure, import('build.xmake.platforms.host', {rootdir=root}).configure_arguments(normalized, options))
     for _, key in ipairs(keys) do
         if key ~= 'platform' and key ~= 'target' and key ~= 'arch' and key ~= 'mingw' then table.insert(configure,'--' .. key .. '=' .. options[key]) end
@@ -60,12 +61,13 @@ function main(platform, target, jobs, cache, flags, dryrun, resultpath)
         end
     end
     if dryrun ~= 'dry-run' then
-        json.savefile(path.join(variant,'invocation.json'),{platform=platform,target=target,options=options,commands=commands})
+        json.savefile(path.join(variant,'invocation.json'),{platform=platform,target=target,options=options,options_sha256=digest,commands=commands})
         if resultpath then
             local graph = json.loadfile(path.join(variant, 'engine-graph.json'))
             local result = build_result(root, graph)
             assert(result.platform == platform and result.target == target, 'Native graph/result request mismatch')
             assert(os.isfile(result.editor), 'Successful native build did not publish its graph-declared program')
+            result.invocation_id, result.options_sha256, result.builddir = invocation_id, digest, variant
             json.savefile(path.absolute(resultpath), result)
         end
     end
