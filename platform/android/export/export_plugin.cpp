@@ -2944,9 +2944,10 @@ bool EditorExportPlatformAndroid::has_valid_project_configuration(const Ref<Edit
 	}
 
 	String current_renderer = get_project_setting(p_preset, "rendering/renderer/rendering_method.mobile");
-	if (current_renderer == "forward_plus") {
-		// Warning only, so don't override `valid`.
-		err += vformat(TTR("The \"%s\" renderer is designed for Desktop devices, and is not suitable for Android devices."), current_renderer);
+	if (current_renderer != "forward_plus") {
+		// EGP ships only Forward+; the Mobile and Compatibility renderers were removed.
+		valid = false;
+		err += vformat(TTR("The \"%s\" renderer is not available in EGP. Set \"rendering/renderer/rendering_method.mobile\" to \"forward_plus\"."), current_renderer);
 		err += "\n";
 	}
 
