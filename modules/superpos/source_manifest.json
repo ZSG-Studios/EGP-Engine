@@ -119,8 +119,9 @@
     },
     "native_spawner": {
       "version": 1,
-      "status": "experimental_staged_pending_engine_runtime",
+      "status": "experimental_windows_x64_engine_runtime_and_bindings_qualified",
       "projection": "sequential_scene_after_atomic_canonical",
+      "spawn_readiness_timeout_ms": 15000,
       "files": {
         "superpos_spawn_catalog.h": "9907dfc0cfbcf6a202e688d4bfbda12a60a75497412c899d03edb2171883dd25",
         "superpos_spawn_catalog.cpp": "bb99ae9c6f203a53ac4944c13768afe4c46ec3f7023bf06626e093cf4c61a675",
