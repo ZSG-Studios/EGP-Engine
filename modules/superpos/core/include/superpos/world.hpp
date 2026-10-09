@@ -76,6 +76,8 @@ class World {
     Status destroy_impl(ObjectHandle,Epoch,CanonicalAuthorityBarrier*) noexcept;
     Result<std::uint64_t> publish_impl(std::span<const Publication>,Tick,Epoch,CanonicalAuthorityBarrier*) noexcept;
     Result<std::uint64_t> transfer_impl(ObjectHandle,PeerId,std::uint64_t,Tick,Epoch,CanonicalAuthorityBarrier*) noexcept;
+    Result<std::size_t> restore_impl(std::span<const std::byte>,Epoch,CanonicalAuthorityBarrier*) noexcept;
+    void reset_pristine() noexcept;
 public:
     World() = default;
     World(const World&) = delete;
@@ -103,6 +105,28 @@ public:
     // ordinary views and other APIs reject reentry while a mutation is active.
     Result<WorldIdentity> identity() const noexcept;
     Result<bool> storage_overlaps(std::span<const std::byte>) const noexcept;
+    // Versioned canonical World snapshot (big-endian u64 fields): header with
+    // magic/version, slot count, live count, authority epoch, publication
+    // counter and free count; every slot's generation and Free/Live/Retired
+    // state, with schema, owner, ownership revision, revision, tick and exact
+    // canonical bytes for live slots; then the exact free-list order. It
+    // reproduces handles, revisions, retirement and future spawn order. It is
+    // unauthenticated; integrity comes from the containing sealed envelope.
+    static constexpr std::uint64_t snapshot_magic = 0x5350574f524c4401ULL;
+    Result<std::size_t> capture_bytes() const noexcept;
+    // Writes exactly capture_bytes() into a non-overlapping output, or nothing.
+    Result<std::size_t> capture(std::span<std::byte> output) const noexcept;
+    // Rebuilds a snapshot into this pristine World (never mutated since
+    // create) whose authority epoch equals successor_epoch, which must exceed
+    // the snapshot's epoch, with the same slot count and every snapshot schema.
+    // Complete validation precedes the first write; free-list collisions found
+    // while linking roll the World back to its pristine state (state arena
+    // zeroed). Exact handles, generations, ownership, revisions, ticks and the
+    // publication counter are restored; nothing is incremented. Returns the
+    // live count. Owner-thread only; bounded, allocation-free, no callbacks
+    // except the optional authority barrier after validation.
+    Result<std::size_t> restore(std::span<const std::byte> snapshot, Epoch successor_epoch) noexcept;
+    Result<std::size_t> restore(std::span<const std::byte>,Epoch,CanonicalAuthorityBarrier&) noexcept;
 };
 
 }

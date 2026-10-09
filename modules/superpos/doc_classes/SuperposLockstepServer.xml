@@ -54,7 +54,7 @@
 		</method>
 		<method name="get_streams_summary" qualifiers="const">
 			<return type="Dictionary" />
-			<description>Returns every slot's live state in one call, as parallel packed arrays indexed by slot: [code]acknowledged[/code] and [code]sent[/code] command ticks, published [code]bytes[/code], [code]rewinds[/code], [code]skipped[/code] enqueues, and its input playout ([code]input_received[/code] tick, [code]input_buffered[/code] depth, [code]input_starvations[/code], [code]input_target[/code]), plus [code]enabled[/code] (stream serving) and the newest command [code]tick[/code]. Intended for live debugging views and telemetry across hundreds of clients.</description>
+			<description>Returns every slot's live state in one call, as parallel packed arrays indexed by slot: [code]acknowledged[/code] and [code]sent[/code] command ticks, published [code]bytes[/code], [code]rewinds[/code] (stall timer), [code]repairs[/code] (gaps repaired as soon as the client reported holding ticks past its acknowledgement), [code]redundancy[/code] (redundant ticks granted per batch: 0 once its stream has stayed clean), [code]skipped[/code] enqueues, and its input playout ([code]input_received[/code] tick, [code]input_buffered[/code] depth, [code]input_starvations[/code], [code]input_target[/code]), plus [code]enabled[/code] (stream serving) and the newest command [code]tick[/code]. Intended for live debugging views and telemetry across hundreds of clients.</description>
 		</method>
 		<method name="get_command_totals" qualifiers="const">
 			<return type="Dictionary" />
@@ -129,7 +129,7 @@
 			<param index="0" name="slot" type="int" />
 			<param index="1" name="srtt_usec" type="int" />
 			<param index="2" name="max_bytes" type="int" default="880" />
-			<description>Next command batch for [param slot]'s client, from its own native sender state: fresh-first windows carrying its processed ticks, one rewind to its acknowledgement after a stall of 2 x [param srtt_usec] plus its ack cadence, and [code]stream_redundant_ticks[/code] of redundancy only while it is within [code]stream_catch_up_ticks[/code] of the newest tick. Pass the session's [code]smoothed_rtt_us[/code]. Returns [code]error[/code] and [code]payload[/code]; [constant ERR_DOES_NOT_EXIST] means its acknowledgement left history: send a keyframe and call [method reset_stream].</description>
+			<description>Next command batch for [param slot]'s client, from its own native sender state: fresh-first windows carrying its processed ticks, an immediate repair from its acknowledgement when it reports holding ticks beyond it (a lost batch), one rewind after a stall of 2 x [param srtt_usec] plus its ack cadence, and [code]stream_redundant_ticks[/code] of redundancy only while it is within [code]stream_catch_up_ticks[/code] of the newest tick and its stream has seen loss recently (a long clean stream drops redundancy to halve bandwidth). Pass the session's [code]smoothed_rtt_us[/code]. Returns [code]error[/code] and [code]payload[/code]; [constant ERR_DOES_NOT_EXIST] means its acknowledgement left history: send a keyframe and call [method reset_stream].</description>
 		</method>
 		<method name="reset_stream">
 			<return type="void" />

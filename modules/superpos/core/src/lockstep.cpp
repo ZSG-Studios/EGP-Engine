@@ -34,16 +34,18 @@ Status InputHistory::acknowledge(Tick received) noexcept {
 std::size_t InputHistory::discard_oldest(std::size_t count) noexcept {
     count=std::min(count,count_);oldest_+=count;count_-=count;return count;
 }
-Result<std::size_t> InputHistory::encode(Tick command_acknowledged,std::size_t max_ticks,std::span<std::byte> output) const noexcept {
+Result<std::size_t> InputHistory::encode(Tick command_acknowledged,std::size_t max_ticks,std::span<std::byte> output,Tick command_held) const noexcept {
     // The newest unacknowledged inputs that fit: on a saturated uplink, resending an
     // ever-growing backlog would only delay the acknowledgements further.
     std::size_t ticks=std::min(count_,max_ticks);
-    const auto fixed=1+varuint_size(command_acknowledged)+varuint_size(newest_+1)+varuint_size(input_bytes_);
+    // The held tick travels as its distance past the acknowledgement (0: no gap).
+    const Tick gap=command_held>command_acknowledged?command_held-command_acknowledged:0;
+    const auto fixed=1+varuint_size(command_acknowledged)+varuint_size(gap)+varuint_size(newest_+1)+varuint_size(input_bytes_);
     while(ticks && fixed+varuint_size(ticks)+ticks*input_bytes_>output.size())--ticks;
     if(fixed+varuint_size(ticks)+ticks*input_bytes_>output.size())return fail(Error::Truncated);
     const auto first=ticks?newest_-ticks+1:newest_+1;
     Writer writer(output);std::array<std::byte,1> version{std::byte{lockstep_wire_version}};
-    if(!writer.raw(version)||!writer.varuint(command_acknowledged)||!writer.varuint(first)||!writer.varuint(ticks)||!writer.varuint(input_bytes_))return fail(Error::Truncated);
+    if(!writer.raw(version)||!writer.varuint(command_acknowledged)||!writer.varuint(gap)||!writer.varuint(first)||!writer.varuint(ticks)||!writer.varuint(input_bytes_))return fail(Error::Truncated);
     for(std::size_t i=0;i<ticks;++i)if(!writer.raw(std::span(inputs_[(first+i)%capacity]).first(input_bytes_)))return fail(Error::Truncated);
     return writer.size();
 }
@@ -55,12 +57,20 @@ Result<InputPlayout> InputPlayout::create(PlayoutConfig config) noexcept {
 }
 Status InputPlayout::accept(std::span<const std::byte> batch) noexcept {
     Reader reader(batch);
-    auto version=reader.raw(1);if(!version || (*version)[0]!=std::byte{lockstep_wire_version})return fail(Error::Unsupported);
-    auto acknowledged=reader.varuint(),first=reader.varuint(),count=reader.varuint(),width=reader.varuint();
-    if(!acknowledged||!first||!count||!width)return fail(Error::NonCanonical);
+    auto version=reader.raw(1);
+    if(!version || ((*version)[0]!=std::byte{lockstep_wire_version} && (*version)[0]!=std::byte{1}))return fail(Error::Unsupported);
+    const bool with_gap=(*version)[0]==std::byte{lockstep_wire_version};
+    auto acknowledged=reader.varuint();
+    Result<std::uint64_t> gap=std::uint64_t{0};
+    if(with_gap)gap=reader.varuint();
+    auto first=reader.varuint(),count=reader.varuint(),width=reader.varuint();
+    if(!acknowledged||!gap||!first||!count||!width)return fail(Error::NonCanonical);
+    if(*gap>lockstep_max_command_history)return fail(Error::ProtocolViolation);
     if(*width!=config_.input_bytes || *count>capacity || !*first)return fail(Error::ProtocolViolation);
     auto payload=reader.raw(*count*config_.input_bytes);if(!payload||!reader.empty())return fail(Error::NonCanonical);
     command_acknowledged_=std::max(command_acknowledged_,*acknowledged);
+    // The latest report wins (a rejoined client's held tick may go back down).
+    command_held_=*acknowledged+*gap;
     if(!started_ && *count){next_=*first;received_=*first-1;started_=true;calm_=0;}
     // A client back from an outage (its history discarded what we never received)
     // can land beyond the window: resynchronize forward, skipping the lost ticks,
@@ -109,7 +119,7 @@ Result<std::size_t> InputPlayout::consume(std::span<PlayoutInput,2> output) noex
 }
 PlayoutStatus InputPlayout::status() const noexcept {
     const std::size_t depth=started_&&received_>=next_?static_cast<std::size_t>(received_-next_+1):0;
-    return {received_,started_&&next_?next_-1:0,command_acknowledged_,depth,target_,starvations_,duplicates_,late_,skipped_,playing_};
+    return {received_,started_&&next_?next_-1:0,command_acknowledged_,depth,target_,starvations_,duplicates_,late_,skipped_,playing_,command_held_};
 }
 double InputPlayout::pace_advice() const noexcept {
     const auto state=status();
@@ -342,7 +352,7 @@ void CommandStream::reset(Tick keyframe,std::uint64_t now) noexcept {
     acknowledged_=sent_=keyframe;acknowledged_at_=now;started_=true;
 }
 Result<std::size_t> CommandStream::next(const CommandEncoder& encoder,Tick acknowledged,std::uint64_t now,std::uint64_t srtt,
-    std::span<std::byte> output,std::uint32_t recipient) noexcept {
+    std::span<std::byte> output,std::uint32_t recipient,Tick held) noexcept {
     if(!started_)reset(acknowledged,now);
     if(acknowledged>acknowledged_){acknowledged_=acknowledged;acknowledged_at_=now;}
     // A parked-beyond-the-gap client jumps its acknowledgement past what we
@@ -352,15 +362,21 @@ Result<std::size_t> CommandStream::next(const CommandEncoder& encoder,Tick ackno
     if(sent_==acknowledged_)acknowledged_at_=now;
     const std::uint64_t stall=std::max(policy_.minimum_stall_us,2*srtt+policy_.ack_cadence_us);
     if(sent_>acknowledged_ && now>=acknowledged_at_ && now-acknowledged_at_>stall) {
-        sent_=acknowledged_;acknowledged_at_=now;++rewinds_;
+        sent_=acknowledged_;acknowledged_at_=now;++rewinds_;clean_=0;
+    }
+    // The recipient holds ticks past its acknowledgement: the batch carrying the next
+    // one was lost. Resend from there now, once per RTT for the same gap.
+    const std::uint64_t guard=std::max(policy_.minimum_repair_us,srtt+srtt/4);
+    if(held>acknowledged_ && sent_>acknowledged_ && (repaired_!=acknowledged_ || now<repaired_at_ || now-repaired_at_>=guard)) {
+        sent_=acknowledged_;repaired_=acknowledged_;repaired_at_=now;acknowledged_at_=now;++repairs_;clean_=0;
     }
     const bool behind=encoder.newest()>acknowledged_+policy_.catch_up_ticks;
-    auto size=encoder.encode_window(acknowledged_,sent_,output,recipient,behind?0:policy_.redundant_ticks);
+    auto size=encoder.encode_window(acknowledged_,sent_,output,recipient,behind?0:redundancy());
     if(!size)return size;
     Reader reader(output.first(*size));(void)reader.raw(2);
     auto first=reader.varuint(),ticks=reader.varuint();
     if(first && ticks && *ticks)sent_=std::max(sent_,*first+*ticks-1);
-    ++batches_;
+    ++batches_;++clean_;
     return size;
 }
 
@@ -390,6 +406,11 @@ Status CommandDecoder::accept(std::span<const std::byte> bytes) noexcept {
     // A validated batch beyond a gap waits for its repair instead of being lost.
     if(accepted.error()==Error::Unsupported && park(bytes))return {};
     return accepted;
+}
+Tick CommandDecoder::held() const noexcept {
+    Tick newest=newest_;
+    for(const auto& batch:parked_)if(batch.occupied)newest=std::max(newest,batch.last);
+    return newest;
 }
 std::size_t CommandDecoder::deferred() const noexcept {
     std::size_t count=0;for(const auto& batch:parked_)count+=batch.occupied;return count;

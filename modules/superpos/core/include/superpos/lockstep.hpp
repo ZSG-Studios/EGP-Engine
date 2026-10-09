@@ -16,10 +16,12 @@ namespace superpos {
 inline constexpr std::size_t lockstep_input_bytes = 16;
 inline constexpr std::size_t lockstep_history_ticks = 128;
 inline constexpr std::size_t lockstep_slots = 256;
-inline constexpr std::uint8_t lockstep_wire_version = 1;
+// Input wire v2 adds the newest command tick the client holds (parked beyond a gap
+// included) after its in-order acknowledgement; v1 batches are still accepted.
+inline constexpr std::uint8_t lockstep_wire_version = 2;
 inline constexpr std::uint8_t lockstep_command_wire_version = 3;
 
-struct InputBatchHeader { Tick command_acknowledged{}; Tick first{}; std::size_t count{}, input_bytes{}; };
+struct InputBatchHeader { Tick command_acknowledged{}; Tick first{}; std::size_t count{}, input_bytes{}; Tick command_held{}; };
 
 // Client side: tick-stamped inputs retained until acknowledged by the server.
 class InputHistory {
@@ -36,8 +38,10 @@ public:
     std::size_t discard_oldest(std::size_t count) noexcept;
     // The newest unacknowledged inputs, up to max_ticks and what fits (older ones
     // the server never received are skipped by its playout); command_acknowledged
-    // reports the newest relayed command tick this client holds in order.
-    Result<std::size_t> encode(Tick command_acknowledged, std::size_t max_ticks, std::span<std::byte> output) const noexcept;
+    // reports the newest relayed command tick this client holds in order and
+    // command_held the newest it holds at all (beyond a gap, parked): a held tick past
+    // the acknowledgement tells the server a batch was lost, before any stall timer.
+    Result<std::size_t> encode(Tick command_acknowledged, std::size_t max_ticks, std::span<std::byte> output, Tick command_held = 0) const noexcept;
     std::size_t pending() const noexcept { return count_; }
     Tick newest() const noexcept { return newest_; }
 private:
@@ -61,6 +65,9 @@ struct PlayoutStatus {
     std::size_t buffered{}, target{};
     std::uint64_t starvations{}, duplicates{}, late{}, skipped{};
     bool playing{};
+    // Newest command tick the client reported holding (latest batch); above
+    // command_acknowledged it marks a gap the sender should repair now.
+    Tick command_held{};
 };
 struct PlayoutInput { Tick tick{}; std::span<const std::byte> bytes{}; };
 
@@ -81,7 +88,7 @@ private:
     std::array<std::array<std::byte, lockstep_input_bytes>, lockstep_history_ticks> inputs_{};
     std::array<bool, lockstep_history_ticks> occupied_{};
     std::array<std::array<std::byte, lockstep_input_bytes>, 2> consumed_{};
-    Tick next_{}, received_{}, command_acknowledged_{}, calm_{};
+    Tick next_{}, received_{}, command_acknowledged_{}, command_held_{}, calm_{};
     std::size_t target_{};
     std::uint64_t starvations_{}, duplicates_{}, late_{}, skipped_{};
     bool started_{}, playing_{};
@@ -164,13 +171,28 @@ private:
 // cadence, and redundancy only while the recipient is caught up (a client that
 // is behind needs goodput, not copies). The caller supplies the recipient's
 // newest in-order acknowledgement and the carrier's smoothed RTT.
+//
+// Gap repair: when the recipient reports holding a tick beyond its acknowledgement
+// (a batch parked past a lost one), the stream resends from the acknowledgement at
+// once, at most once per smoothed RTT for the same gap, so a loss costs about one
+// round trip instead of the stall timer. With adaptive redundancy a recipient whose
+// stream has gone `clean_batches` batches without a repair or stall gets no
+// redundant tick (half the bandwidth on clean links); any loss restores it.
 struct CommandStreamPolicy {
     std::size_t redundant_ticks{1};
     // Behind by more than this many ticks: no redundancy.
     Tick catch_up_ticks{30};
     std::uint64_t minimum_stall_us{100000}, ack_cadence_us{70000};
+    bool adaptive_redundancy{true};
+    std::uint64_t clean_batches{1200};
+    std::uint64_t minimum_repair_us{20000};
 };
-struct CommandStreamStatus { Tick acknowledged{}, sent{}; std::uint64_t batches{}, rewinds{}; };
+struct CommandStreamStatus {
+    Tick acknowledged{}, sent{};
+    std::uint64_t batches{}, rewinds{}, repairs{};
+    // Redundant ticks currently granted per batch.
+    std::size_t redundancy{};
+};
 class CommandStream {
 public:
     explicit CommandStream(CommandStreamPolicy policy = {}) noexcept : policy_(policy) {}
@@ -178,13 +200,17 @@ public:
     void reset(Tick keyframe, std::uint64_t now_us) noexcept;
     // Next batch for this recipient. StaleEpoch means its acknowledgement left
     // the encoder's history: send a keyframe and reset.
+    // `held` is the newest command tick the recipient reported holding (0: unknown).
     Result<std::size_t> next(const CommandEncoder&, Tick acknowledged, std::uint64_t now_us, std::uint64_t srtt_us,
-        std::span<std::byte> output, std::uint32_t recipient = lockstep_no_recipient) noexcept;
-    CommandStreamStatus status() const noexcept { return {acknowledged_, sent_, batches_, rewinds_}; }
+        std::span<std::byte> output, std::uint32_t recipient = lockstep_no_recipient, Tick held = 0) noexcept;
+    CommandStreamStatus status() const noexcept { return {acknowledged_, sent_, batches_, rewinds_, repairs_, redundancy()}; }
 private:
+    std::size_t redundancy() const noexcept {
+        return policy_.adaptive_redundancy && clean_ >= policy_.clean_batches ? 0 : policy_.redundant_ticks;
+    }
     CommandStreamPolicy policy_{};
-    Tick acknowledged_{}, sent_{};
-    std::uint64_t acknowledged_at_{}, batches_{}, rewinds_{};
+    Tick acknowledged_{}, sent_{}, repaired_{};
+    std::uint64_t acknowledged_at_{}, batches_{}, rewinds_{}, repairs_{}, repaired_at_{}, clean_{};
     bool started_{};
 };
 
@@ -207,6 +233,8 @@ public:
     Tick processed() const noexcept { return processed_tick_; }
     Tick applied() const noexcept { return applied_; }
     Tick newest() const noexcept { return newest_; }
+    // Newest tick held at all: newest() or the end of a batch parked beyond a gap.
+    Tick held() const noexcept;
     std::size_t buffered() const noexcept { return ticks_; }
 private:
     struct Change { std::uint16_t slot{}; std::array<std::byte, lockstep_input_bytes> bytes{}; };

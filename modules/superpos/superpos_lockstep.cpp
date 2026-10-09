@@ -85,7 +85,9 @@ PackedByteArray SuperposLockstepClient::pack_inputs(int64_t p_max_ticks, int64_t
     std::array<std::byte, wire_ceiling> buffer{};
     // Acknowledge the newest command tick received in order (not merely applied), so the
     // server never resends ticks already buffered here.
-    auto encoded = impl->history->encode(impl->commands->newest(), size_t(p_max_ticks), std::span(buffer).first(size_t(p_max_bytes)));
+    // The held tick (parked batches beyond a gap included) lets the server repair a
+    // lost command batch at once instead of after its stall timer.
+    auto encoded = impl->history->encode(impl->commands->newest(), size_t(p_max_ticks), std::span(buffer).first(size_t(p_max_bytes)), impl->commands->held());
     return encoded ? packed(std::span<const std::byte>(buffer).first(*encoded)) : PackedByteArray();
 }
 Error SuperposLockstepClient::accept_commands(const PackedByteArray &p_payload) {
@@ -324,10 +326,10 @@ Dictionary SuperposLockstepServer::pack_stream(int64_t p_slot, int64_t p_srtt_us
     if (p_slot < 0 || p_slot >= impl->slots || p_srtt_usec < 0 || p_max_bytes < 8 || p_max_bytes > wire_ceiling) { result["error"] = ERR_INVALID_PARAMETER; return result; }
     // The recipient's newest in-order command tick rides on its input batches.
     const auto &peer = impl->peers[size_t(p_slot)];
-    const superpos::Tick acknowledged = peer ? peer->status().command_acknowledged : 0;
+    const auto playout = peer ? peer->status() : superpos::PlayoutStatus{};
     std::array<std::byte, wire_ceiling> buffer{};
-    auto encoded = impl->streams[size_t(p_slot)].next(*impl->commands, acknowledged, OS::get_singleton()->get_ticks_usec(), uint64_t(p_srtt_usec),
-            std::span(buffer).first(size_t(p_max_bytes)), uint32_t(p_slot));
+    auto encoded = impl->streams[size_t(p_slot)].next(*impl->commands, playout.command_acknowledged, OS::get_singleton()->get_ticks_usec(), uint64_t(p_srtt_usec),
+            std::span(buffer).first(size_t(p_max_bytes)), uint32_t(p_slot), playout.command_held);
     if (!encoded) { result["error"] = lockstep_error(encoded.error()); return result; }
     result["error"] = OK;
     result["payload"] = packed(std::span<const std::byte>(buffer).first(*encoded));
@@ -341,6 +343,8 @@ Dictionary SuperposLockstepServer::get_stream_status(int64_t p_slot) const {
     result["sent_tick"] = superpos_egp::signed_bits(status.sent);
     result["batches"] = int64_t(status.batches);
     result["rewinds"] = int64_t(status.rewinds);
+    result["repairs"] = int64_t(status.repairs);
+    result["redundancy"] = int64_t(status.redundancy);
     result["bytes"] = int64_t(impl->links[size_t(p_slot)].bytes);
     result["skipped"] = int64_t(impl->links[size_t(p_slot)].skipped);
     result["enabled"] = impl->links[size_t(p_slot)].enabled;
@@ -450,7 +454,7 @@ Dictionary SuperposLockstepServer::publish_commands(int64_t p_channel, int64_t p
         const auto &peer = impl->peers[size_t(slot)];
         const auto status = peer ? peer->status() : superpos::PlayoutStatus{};
         auto encoded = impl->streams[size_t(slot)].next(*impl->commands, status.command_acknowledged, now, link.session->smoothed_rtt_usec(),
-                std::span(buffer).subspan(8, size_t(p_max_bytes) - 8), uint32_t(slot));
+                std::span(buffer).subspan(8, size_t(p_max_bytes) - 8), uint32_t(slot), status.command_held);
         if (!encoded) {
             if (encoded.error() == superpos::Error::StaleEpoch) { stale.push_back(slot); link.enabled = false; }
             continue;
@@ -480,10 +484,10 @@ Dictionary SuperposLockstepServer::get_streams_summary() const {
     // Every slot in one call, for live debugging views and telemetry.
     Dictionary result;
     if (Thread::get_caller_id() != owner_thread || !impl->commands) { return result; }
-    PackedInt64Array acknowledged, sent, bytes, rewinds, skipped, received, buffered, starvations, target;
-    PackedByteArray enabled;
+    PackedInt64Array acknowledged, sent, bytes, rewinds, repairs, skipped, received, buffered, starvations, target;
+    PackedByteArray enabled, redundancy;
     const int64_t n = impl->slots;
-    acknowledged.resize(n); sent.resize(n); bytes.resize(n); rewinds.resize(n); skipped.resize(n);
+    acknowledged.resize(n); sent.resize(n); bytes.resize(n); rewinds.resize(n); repairs.resize(n); redundancy.resize(n); skipped.resize(n);
     received.resize(n); buffered.resize(n); starvations.resize(n); target.resize(n); enabled.resize(n);
     for (int64_t slot = 0; slot < n; ++slot) {
         const auto stream = impl->streams[size_t(slot)].status();
@@ -494,6 +498,8 @@ Dictionary SuperposLockstepServer::get_streams_summary() const {
         sent.set(slot, superpos_egp::signed_bits(stream.sent));
         bytes.set(slot, int64_t(link.bytes));
         rewinds.set(slot, int64_t(stream.rewinds));
+        repairs.set(slot, int64_t(stream.repairs));
+        redundancy.set(slot, uint8_t(stream.redundancy));
         skipped.set(slot, int64_t(link.skipped));
         received.set(slot, superpos_egp::signed_bits(playout.received));
         buffered.set(slot, int64_t(playout.buffered));
@@ -506,6 +512,8 @@ Dictionary SuperposLockstepServer::get_streams_summary() const {
     result["sent"] = sent;
     result["bytes"] = bytes;
     result["rewinds"] = rewinds;
+    result["repairs"] = repairs;
+    result["redundancy"] = redundancy;
     result["skipped"] = skipped;
     result["input_received"] = received;
     result["input_buffered"] = buffered;
