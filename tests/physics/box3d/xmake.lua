@@ -15,7 +15,7 @@ for _, check in ipairs({"determinism", "joints"}) do
             set_runtimes(is_mode("debug") and "MTd" or "MT")
         end
         if check == "determinism" then
-            add_files("../../../modules/box3d/deterministic_world.cpp")
+            add_files("../../../modules/box3d/deterministic_world.cpp", "../../../modules/box3d/egp_box3d_api.cpp")
             add_includedirs("../../../modules/box3d")
             add_defines('EGP_BOX3D_GOLDEN_PATH="' .. path.join(os.scriptdir(), "golden_hashes.txt"):gsub("\\", "/") .. '"')
         end

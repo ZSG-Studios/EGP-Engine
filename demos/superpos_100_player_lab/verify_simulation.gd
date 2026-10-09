@@ -24,6 +24,8 @@ func _run() -> void:
 		sim.step(world,[],float(tick)/60)
 		if world.step_tick(world.get_tick()+1)!=OK:
 			failures.append("world step / collider replacement")
+		# Joint travel and cloth deformation are sampled per tick, as the lab does.
+		sim.observe()
 	var report: Dictionary=sim.telemetry(world)
 	var h: Array=report.float_heights
 	if not (h[0]>1.8 and h[3]>1.8 and h[2]<0.65 and h[5]<0.65 and h[1]>1.3 and h[1]<1.8):
