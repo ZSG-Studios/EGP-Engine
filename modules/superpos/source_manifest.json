@@ -1,0 +1,72 @@
+{
+  "version": 1,
+  "module": "superpos",
+  "integration": "native_EGP_engine_module",
+  "public_language": "c++17",
+  "implementation_language": "c++23",
+  "sources": [
+    "register_types.cpp",
+    "superpos_uint64.cpp",
+    "superpos_schema.cpp",
+    "superpos_session.cpp",
+    "superpos_world.cpp",
+    "superpos_uint64_editor.cpp",
+    "superpos_managed_reload.cpp",
+    "private/module_memory.cpp"
+  ],
+  "core_manifest": "core/source_manifest.json",
+  "required_engine_modules": [
+    "mbedtls"
+  ],
+  "optional_features": {
+    "dtls": "borrow_existing_EGP_MbedTLS_PSA_runtime",
+    "rtc_embedded": "core/source_manifest.json:features.rtc_embedded@1"
+  },
+  "classes": [
+    "SuperposUInt64",
+    "SuperposField",
+    "SuperposSchema",
+    "SuperposSimulationProvider",
+    "SuperposSession",
+    "SuperposWorld"
+  ],
+  "tools_only": [
+    "superpos_uint64_editor.cpp"
+  ],
+  "memory_service": {
+    "version": 1,
+    "always_selected": true,
+    "sources": [
+      "private/module_memory.cpp"
+    ],
+    "parent": "default_server_budget",
+    "declared_plan_ceiling_mib": 1280,
+    "ledger_scope": "RootStorage and captured module/world/history/RTC/provider fixed backing; foreign allocations and other globals excluded",
+    "files": {
+      "private/allocation_probe.h": "2b97e9d7ff004693588ac65157cb24e735f17599ff918084efb5ea2e00a51799",
+      "private/captured_owner.hpp": "5a83a96a02b848b5b6a6c7e115bd3b7b22677a95cc21f49109cdfee0823e5586",
+      "private/charged_array.hpp": "2ff6095a4b615da333b34d7dd6edcebe8620f292ecbb6aa80bbc2dcf7217b0b4",
+      "private/engine_prediction.hpp": "5af9b69f3176cbde92e6e8c9bff181efe3c6faf59637e7ac1089fd5cc612b54a",
+      "private/module_memory.cpp": "2be75a6ff2a1882aa28608d26c1283c8470facc533a25987cf4842096e8a082d",
+      "private/module_memory.hpp": "5e6f145be9db23e6bf6a7d6d45c159d4c7f6054b6d73c9be4f481605d2928d8a",
+      "private/session_prediction.inc": "589570448b0eee8f6f0426fcbe85fe26ed9f7293854b0581e7befe3f790bfa3b"
+    }
+  },
+  "features": {
+    "rtc_embedded": {
+      "sources": [
+        "rtc_private/rtc_owner.cpp",
+        "rtc_private/rtc_process.cpp",
+        "rtc_private/rtc_crypto.cpp"
+      ],
+      "headers": [
+        "rtc_owner.hpp",
+        "rtc_process.hpp",
+        "rtc_crypto.hpp",
+        "session_access.hpp",
+        "native_rtc_binding.hpp"
+      ],
+      "core_feature": "rtc_embedded@1"
+    }
+  }
+}

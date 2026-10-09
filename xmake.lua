@@ -9,6 +9,8 @@ set_policy("build.ccache", true)
 includes("build/xmake/options.lua")
 includes("build/xmake/platforms/visionos.lua")
 includes("build/xmake/swift_rules.lua")
+-- Default-off module-scoped embedded RTC targets.
+if os.isfile("modules/superpos/xmake.lua") then includes("modules/superpos/xmake.lua") end
 includes("build/xmake/targets.lua")
 
 for _, name in ipairs({"editor", "template_debug", "template_release"}) do

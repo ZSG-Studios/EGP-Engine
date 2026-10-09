@@ -1,11 +1,15 @@
 -- Native Lua source selection and generator metadata.
 function main(graph)
     local R = graph.compat
-    local core_sources, crypto_define, env, env_modules, json, key, manifest, source, superpos_env
+    local _escape_define, core_sources, env, env_modules, json, key, manifest, source, superpos_env
     json = R.json
     env = graph:use("env")
     env_modules = graph:use("env_modules")
+    _escape_define = function(env, config)
+        return "\"" .. config .. "\""
+    end
     superpos_env = env_modules:clone()
+    superpos_env:bind_method(_escape_define, "EscapeDefine")
     for _, __item1 in ipairs(R.iter({"CCFLAGS", "CXXFLAGS"})) do
         key = __item1
         R.setindex(superpos_env, key, (function() local __item2 = {}; for _, __item3 in ipairs(R.iter(R.index(superpos_env, key))) do; local flag = __item3; if R.truthy(not R.truthy(R.startswith(R.str(flag), {"/std:c++", "-std=c++", "-std=gnu++", "/fp:", "-ffast-math", "-Ofast", "-ffp-contract=", "-funsafe-math-optimizations"}))) then; table.insert(__item2, flag); end; end; return __item2 end)())
@@ -24,17 +28,21 @@ function main(graph)
     if R.truthy(R.index(env, "superpos_dtls")) then
         superpos_env:prepend({["CPPPATH"] = {"#thirdparty/mbedtls/godot", "#thirdparty/mbedtls/include", "#thirdparty/mbedtls/tf-psa-crypto/include", "#thirdparty/mbedtls/tf-psa-crypto/drivers/builtin/include"}})
     end
-    crypto_define = function(name)
-        return (function() if R.truthy((function() local v = R.index(env, "ninja"); if not R.truthy(v) then return v end; return env.msvc end)()) then return R.add(R.add("<", name), ">") else return R.add(R.add("\\\"", name), "\\\"") end end)()
-    end
     if R.truthy(R.index(env, "superpos_dtls")) then
-        superpos_env:add({["CPPDEFINES"] = {{"MBEDTLS_CONFIG_FILE", crypto_define("godot_mbedtls_config.h")}, {"TF_PSA_CRYPTO_CONFIG_FILE", crypto_define("godot_psa_config.h")}, "SUPERPOS_HAS_DTLS"}})
+        superpos_env:add({["CPPDEFINES"] = {{"MBEDTLS_CONFIG_FILE", superpos_env:EscapeDefine("godot_mbedtls_config.h")}, {"TF_PSA_CRYPTO_CONFIG_FILE", superpos_env:EscapeDefine("godot_psa_config.h")}, "SUPERPOS_HAS_DTLS"}})
     end
     if R.truthy((function() local v = ((R.index(env, "platform") == "windows")); if not R.truthy(v) then return v end; return R.index(env, "superpos_dtls") end)()) then
         env:add_unique({["LINKFLAGS"] = (function() if R.truthy(env.msvc) then return {"ws2_32.lib", "bcrypt.lib"} else return {"-lws2_32", "-lbcrypt"} end end)()})
     end
-    superpos_env:sources(env.modules_sources, "*.cpp")
-    manifest = json.loads(superpos_env:file("core/source_manifest.json"):get_text_contents())
+    -- Select the adapter's complete manifest, including private memory backing.
+    -- A root glob silently omitted private/module_memory.cpp and failed linking.
+    local adapter_manifest = json.loads(superpos_env:file("source_manifest.json"):read())
+    for _, adapter_source in ipairs(adapter_manifest.sources) do
+        assert(not adapter_source:find("..", 1, true) and adapter_source:endswith(".cpp"),
+            "Invalid Superpos adapter source manifest entry")
+        superpos_env:sources(env.modules_sources, adapter_source)
+    end
+    manifest = json.loads(superpos_env:file("core/source_manifest.json"):read())
     if R.truthy((function() local v = ((R.get(manifest, "version") ~= 1)); if R.truthy(v) then return v end; return ((R.get(manifest, "language") ~= "c++23")) end)()) then
         raise("Unsupported staged Superpos source manifest")
     end

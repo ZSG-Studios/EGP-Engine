@@ -1,0 +1,40 @@
+#!/usr/bin/env python
+from misc.utility.scons_hints import *
+import json
+Import("env")
+Import("env_modules")
+
+superpos_env = env_modules.Clone()
+# Keep C++23 isolated to this module's implementations; public headers remain C++17.
+for key in ("CCFLAGS", "CXXFLAGS"):
+    superpos_env[key] = [flag for flag in superpos_env[key] if not str(flag).startswith(("/std:c++", "-std=c++", "-std=gnu++", "/fp:", "-ffast-math", "-Ofast", "-ffp-contract=", "-funsafe-math-optimizations"))]
+if env.msvc:
+    superpos_env.Append(CXXFLAGS=["/std:c++latest"])
+    superpos_env.Append(CCFLAGS=["/fp:strict"])
+else:
+    superpos_env.Append(CXXFLAGS=["-std=c++23"])
+    superpos_env.Append(CCFLAGS=["-fno-fast-math", "-ffp-contract=off"])
+superpos_env.Prepend(CPPPATH=["#modules/superpos/core/include"])
+if env["superpos_dtls"] and not env.get("builtin_mbedtls", False):
+    raise RuntimeError("Superpos-EGP initially qualifies EGP's builtin MbedTLS profile only")
+if env["superpos_dtls"]:
+    superpos_env.Prepend(CPPPATH=["#thirdparty/mbedtls/godot", "#thirdparty/mbedtls/include",
+    "#thirdparty/mbedtls/tf-psa-crypto/include", "#thirdparty/mbedtls/tf-psa-crypto/drivers/builtin/include"])
+def crypto_define(name):
+    return "<" + name + ">" if env["ninja"] and env.msvc else '\\"' + name + '\\"'
+if env["superpos_dtls"]:
+    superpos_env.Append(CPPDEFINES=[("MBEDTLS_CONFIG_FILE", crypto_define("godot_mbedtls_config.h")),
+        ("TF_PSA_CRYPTO_CONFIG_FILE", crypto_define("godot_psa_config.h")), "SUPERPOS_HAS_DTLS"])
+if env["platform"] == "windows" and env["superpos_dtls"]:
+    env.AppendUnique(LINKFLAGS=["ws2_32.lib", "bcrypt.lib"] if env.msvc else ["-lws2_32", "-lbcrypt"])
+superpos_env.add_source_files(env.modules_sources, "*.cpp")
+manifest = json.loads(superpos_env.File("core/source_manifest.json").get_text_contents())
+if manifest.get("version") != 1 or manifest.get("language") != "c++23":
+    raise RuntimeError("Unsupported staged Superpos source manifest")
+core_sources = list(manifest["core"])
+if env["superpos_dtls"]:
+    core_sources.extend(manifest["features"]["dtls"]["sources"])
+for source in core_sources:
+    if not source.startswith("src/") or ".." in source or not source.endswith(".cpp"):
+        raise RuntimeError("Invalid Superpos source manifest entry")
+    superpos_env.add_source_files(env.modules_sources, "core/" + source)

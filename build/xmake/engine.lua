@@ -47,6 +47,9 @@ local function describe()
     platform.validate_editor_host(descriptor.options)
     import("generate", {rootdir = os.scriptdir()}).run(descriptor, generated)
     graph = descriptor:serialize()
+    if os.isfile(path.join(root,"modules/superpos/rtc_embedded.lua")) then
+        import("modules.superpos.rtc_embedded",{rootdir=root}).capture(graph,root)
+    end
     if options.target == "editor" then
         for _, library in ipairs(graph.libraries) do
             if library.name == "editor" then
@@ -140,6 +143,9 @@ function load_library(target)
     for _, library in ipairs(graph.libraries) do
         if "egp_archive_" .. library.name == target:name() then
             configure(target, library.policy)
+            if library.name=="module_superpos" and config.get("superpos_rtc_embedded") then
+                import("modules.superpos.rtc_embedded",{rootdir=os.projectdir()}).configure(target,library,graph.options,os.projectdir())
+            end
             sources(target, library.sources)
             target:set("targetdir", path.join(config.builddir(), "lib"))
             if library.external then
@@ -160,6 +166,9 @@ function load_program(target, wrapper)
     if not program then target:set("kind", "phony"); return end
     target:set("kind", program.kind)
     configure(target, program.policy)
+    if config.get("superpos_rtc_embedded") then
+        import("modules.superpos.rtc_embedded",{rootdir=os.projectdir()}).link(target,graph,program)
+    end
     sources(target, program.sources)
     import("link_dependencies", {rootdir = os.scriptdir()}).configure(target, graph, program, os.projectdir())
     target:set("filename", program.filename)
@@ -221,6 +230,9 @@ function load_bootstrap(target)
     if graph.options.target ~= "editor" then target:set("kind", "phony"); return end
     local program = graph.programs[1]
     configure(target, program.policy, true)
+    if config.get("superpos_rtc_embedded") then
+        import("modules.superpos.rtc_embedded",{rootdir=os.projectdir()}).link(target,graph,program)
+    end
     import("linking", {rootdir = os.scriptdir()}).archive_group(target, program.policy, graph.options)
     sources(target, program.sources, true)
     sources(target, {sdk_source}, true)

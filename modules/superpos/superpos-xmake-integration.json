@@ -1,0 +1,41 @@
+{
+  "version": 1,
+  "integration": "native_EGP_engine_module",
+  "build_backend": "xmake_only",
+  "original_deployment": "superpos-deployment.json",
+  "additional_files": {
+    "source_manifest.json": "608b6d922f0ce770416893f9f365f08ee3b38a8811f3ed4ac61406b7da8b955e",
+    "xmake.lua": "617de73fba485223e1d1a811ae1f9ada172c5bb67f3a1a8bda4cca4c642343b3",
+    "superpos_uint64_editor.h": "95ea2a6a11f0d725b64b276b1b6bd03a052e76418ccb326ee3743349112778df",
+    "superpos_uint64_editor.cpp": "3b618137e6d2c944700a40883bc494c6330f51454feb08a81245ef353e23fb64"
+  },
+  "shared_engine_graph": "other_EGP_task_owned",
+  "shared_config_SCsub_changes": "preserved_not_overwritten",
+  "qualification_graph": "Superpos-EGP/qualification/editor/initial-editor.lua",
+  "old_stack_delete_allowed": false,
+  "owned_source_updates": {
+    "register_types.cpp": "c41b673294614012e3acb3c247c43beb089b0ecb9787dc17d6d5e5b3514a7892",
+    "superpos_session.h": "d2bfe7b3a108823ba9de7298137c8a335714ca641c0aee5a81fc3757b322ad9d",
+    "superpos_session.cpp": "549195aec177bf6b81c4250230534b606ac67e42c7a1cfbb5b60615d505e14d2",
+    "superpos_uint64.cpp": "9de4ee9e767647b45da682da373420c6021166e81f1959a74402e74f0499d20a",
+    "superpos_schema.cpp": "a12dd8eb07652c771bc66e9a0963d1652a72dab646ba96bd94e590a60bab4d53",
+    "doc_classes/SuperposField.xml": "b3be02b04c9e91981c5cc2e1a06a23561b9f968c53518691b4b39cce33fbad8b",
+    "doc_classes/SuperposSchema.xml": "5fee6469b739b0da8282d93efb6c2e6cf4a0d62a019e890076fb277c7580e743",
+    "doc_classes/SuperposSession.xml": "d9702e9fdc24de16b076e335137493ab4fd4a618916e9f9c685ea598d62e1c74",
+    "doc_classes/SuperposUInt64.xml": "81f91c8650d846c1f20eb2b647aa34d9c7ba44dede744a4f12ee268f84ec2b63",
+    "doc_classes/SuperposWorld.xml": "11a7c86e47dffb613413ff95b5c3fa4f54deb098e3fbb38b98819145e180e70f",
+    "superpos_world.cpp": "a1fd47c7b43a5ad7779817b7201bd9f98afc55314aa6ac7cb12394aa6f086883",
+    "superpos_world.h": "978b1c2a294c7271deff0df9be0462a35b0b1f5f0ee89ebc5b95bbdce887bd50"
+  },
+  "owner_thread_rejection": "no_shared_state_writes",
+  "reconfigure_handles": "checked_monotonic_generation_floor",
+  "inspector": "native_decimal_text_exact_int64_bits_no_float_entry",
+  "core_refresh": "superpos-core-refresh.json",
+  "admission": "canonical_state_only_SHA256_registered_catalog;recovery_None;native_DTLS_qualification_pending",
+  "engine_root": "C:/Users/Rose-X/Documents/EGP Workspace/EGP-Engine",
+  "clock": "fallible_native_continuous_sample_before_owner_phase_IO;authority_continuity_not_declared",
+  "physics_phase": "native_World_owner;manual_double_step_rejected",
+  "network_failure": "factory_errors_revoke_admission_readiness_and_packet_operations",
+  "tick_publication": "after_fallible_clock_sample_and_successful_network_phase",
+  "owner_profile": "EGP_main_thread_factory_only;generalized_core_unchanged"
+}

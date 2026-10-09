@@ -1,0 +1,189 @@
+{
+  "version": 1,
+  "language": "c++23",
+  "core": [
+    "src/version.cpp",
+    "src/allocator.cpp",
+    "src/codec.cpp",
+    "src/schema.cpp",
+    "src/world.cpp",
+    "src/world_authority.cpp",
+    "src/replication.cpp",
+    "src/delivery.cpp",
+    "src/recovery.cpp",
+    "src/session.cpp",
+    "src/gameplay.cpp",
+    "src/congestion.cpp",
+    "src/registry.cpp",
+    "src/relevance.cpp",
+    "src/packet_transport.cpp",
+    "src/scheduler.cpp",
+    "src/receiver.cpp",
+    "src/platform_clock.cpp",
+    "src/lease.cpp",
+    "src/replica_wire.cpp",
+    "src/replica_session.cpp",
+    "src/replica_authority.cpp"
+  ],
+  "features": {
+    "dtls": {
+      "sources": [
+        "src/dtls.cpp",
+        "src/udp.cpp",
+        "src/crypto_digest.cpp",
+        "src/crypto_nonce.cpp",
+        "src/relay_wire.cpp",
+        "src/relay.cpp",
+        "src/relay_client.cpp",
+        "src/relay_dtls.cpp",
+        "src/relay_psa.cpp"
+      ],
+      "requires": [
+        "mbedtls-4.1.1"
+      ]
+    },
+    "services": {
+      "sources": [
+        "services/src/sqlite_journal.cpp",
+        "services/src/bounded_vfs.cpp",
+        "services/src/journal_executor.cpp",
+        "services/src/journal_envelope.cpp",
+        "services/src/coordinator_bootstrap.cpp",
+        "services/src/storage_worker.cpp",
+        "services/src/authority_coordinator.cpp",
+        "services/src/coordinator_timing.cpp",
+        "services/src/coordinator_supervisor.cpp",
+        "services/src/tcp.cpp",
+        "services/src/control_ordered.cpp",
+        "services/src/control_wire.cpp"
+      ],
+      "requires": [
+        "sqlite-3.53.4"
+      ]
+    },
+    "control": {
+      "sources": [
+        "services/src/tls_allocation.cpp",
+        "services/src/tls_provider.cpp",
+        "services/src/tls_crypto_access.cpp",
+        "services/src/tls/static_store.c",
+        "services/src/websocket.cpp",
+        "services/src/http_upgrade.cpp",
+        "services/src/wss.cpp",
+        "services/src/admission_wire.cpp",
+        "services/src/admission_mac.cpp",
+        "services/src/credential_registry.cpp",
+        "services/src/credential_records.cpp",
+        "services/src/credential_store.cpp",
+        "services/src/windows_sealed.cpp",
+        "services/src/windows_cipher_files.cpp",
+        "services/src/cipher_credentials.cpp",
+        "services/src/control_startup.cpp",
+        "services/src/control_route.cpp",
+        "services/src/signal_wire.cpp",
+        "services/src/signal_router.cpp",
+        "services/src/signal_session.cpp",
+        "services/src/signal_authorization.cpp"
+      ],
+      "requires": [
+        "mbedtls-4.1.1-control-allocation-profile"
+      ],
+      "experimental": true,
+      "platforms": [
+        "windows"
+      ]
+    },
+    "rtc_embedded": {
+      "version": 1,
+      "experimental": true,
+      "platforms": [
+        "windows"
+      ],
+      "architectures": [
+        "x64"
+      ],
+      "modes": [
+        "debug"
+      ],
+      "compiler": {
+        "family": "clang-cl",
+        "version": "22.1.3"
+      },
+      "crt": "MT",
+      "requires_threads": true,
+      "requires_engine_psa": true,
+      "engine_owns": [
+        "core",
+        "allocator",
+        "PSA"
+      ],
+      "module_sources": [
+        "services/src/rtc/pairing.cpp",
+        "services/src/rtc/paired_transport.cpp",
+        "services/src/admission_wire.cpp"
+      ],
+      "exception_sources": [
+        "services/src/rtc/adapter.cpp"
+      ],
+      "header_files": [
+        "services/include/superpos/service/rtc/pairing.hpp",
+        "services/include/superpos/service/rtc/adapter.hpp",
+        "services/include/superpos/service/rtc/paired_transport.hpp",
+        "services/include/superpos/service/rtc/ice_config.hpp",
+        "services/include/superpos/service/admission_types.hpp",
+        "services/include/superpos/service/admission_wire.hpp",
+        "services/src/executor_identity.hpp"
+      ],
+      "include_dirs": [
+        "services/include",
+        "services/src/control/include",
+        "services/src"
+      ],
+      "metadata_files": [
+        "backends/webrtc/xmake.lua",
+        "backends/webrtc/manifest.json",
+        "backends/webrtc/provider-port/xmake.lua",
+        "backends/webrtc/provider-port/providers.json",
+        "toolchain/dependencies.lock.json"
+      ],
+      "backend": {
+        "manifest": "backends/webrtc/manifest.json",
+        "sha256": "715a24d5d951cccd68198a68e47aaca71effcd7055af39b7dec5300901171596",
+        "source_count": 64,
+        "deployment_root": "backends/webrtc/materialized",
+        "exclude_core_allocator": true
+      },
+      "providers": {
+        "manifest": "backends/webrtc/provider-port/providers.json",
+        "sha256": "47c06bb47a7a8dafc01aa247e39104dc4057fb41cfc8ca88a4a0e2583df5f127",
+        "root": "backends/webrtc/provider-port",
+        "products": [
+          "rtc_provider_openssl_ssl",
+          "rtc_provider_openssl_crypto",
+          "rtc_provider_openssl_common",
+          "rtc_provider_libjuice",
+          "rtc_provider_usrsctp"
+        ],
+        "source_count": 1152
+      },
+      "forbidden_sources": [
+        "src/allocator.cpp",
+        "services/src/rtc/pairing_psa.cpp",
+        "services/src/admission_mac.cpp",
+        "services/src/tls_allocation.cpp",
+        "services/src/tls_provider.cpp",
+        "services/src/tls_crypto_access.cpp",
+        "services/src/tls/static_store.c"
+      ],
+      "forbidden_targets": [
+        "superpos_rtc_service",
+        "superpos_rtc_service_mbedtls",
+        "superpos_rtc_backend"
+      ],
+      "activation": "trusted_native_provisioning_only_no_wire_authority",
+      "qualification": "experimental; qualification receipts describe exact build and runtime scope"
+    }
+  },
+  "protocol_version": 1,
+  "session_hello_version": 3
+}

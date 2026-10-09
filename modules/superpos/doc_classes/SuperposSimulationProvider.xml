@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class name="SuperposSimulationProvider" inherits="RefCounted" is_experimental="true" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd">
+	<brief_description>Abstract native simulation provider for bounded Superpos prediction.</brief_description>
+	<description>A compiled native provider must be registered with matching session identity, epoch and explicit history bounds. Gameplay script callbacks do not qualify a provider. Unregistered sessions report unavailable simulation capabilities. Prediction does not establish solver recovery or cross-platform determinism.</description>
+	<tutorials></tutorials>
+</class>

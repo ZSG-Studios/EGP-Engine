@@ -6,7 +6,7 @@ end
 function get_opts(platform)
     local BoolVariable
     BoolVariable = R.BoolVariable
-    return {BoolVariable("superpos_dtls", "Compile Superpos DTLS backend against EGP's crypto profile", false)}
+    return {BoolVariable("superpos_dtls", "Compile Superpos DTLS backend against EGP's crypto profile", true)}
 end
 function configure(env)
     env:module_add_dependencies("superpos", {"mbedtls"})
@@ -18,5 +18,5 @@ function get_doc_path()
     return "doc_classes"
 end
 function is_enabled()
-    return false
+    return true
 end

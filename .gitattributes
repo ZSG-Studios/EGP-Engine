@@ -21,3 +21,9 @@ misc/msvs/* eol=crlf
 *.png binary
 *.ttf binary
 *.tza binary
+
+# Preserve Superpos deployment and dependency hash inputs.
+modules/superpos/** -text whitespace=cr-at-eol
+# Byte-pinned vendor materialization keeps upstream whitespace unchanged.
+modules/superpos/core/backends/webrtc/materialized/** -text -whitespace linguist-vendored
+modules/superpos/core/backends/webrtc/provider-port/vendor/** -text -whitespace linguist-vendored
