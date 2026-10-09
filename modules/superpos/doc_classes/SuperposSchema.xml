@@ -6,21 +6,16 @@
 	<methods>
 		<method name="bake" qualifiers="const">
 			<return type="Dictionary" />
-			<description>
-			</description>
+			<description>Validates and sorts the authored field descriptors, then returns a Dictionary containing [code]error[/code]. On success it also contains [code]manifest[/code], [code]fingerprint[/code], [code]schema_id[/code], [code]revision[/code] and [code]state_bytes[/code]. Duplicate IDs and invalid codec bounds are rejected. Baking does not configure a session.</description>
 		</method>
 		<method name="get_fingerprint" qualifiers="const">
 			<return type="String" />
-			<description>
-			</description>
+			<description>Returns the hexadecimal SHA-256 fingerprint of the baked schema manifest, or an empty String when baking fails. Use [method bake] to inspect the error.</description>
 		</method>
 	</methods>
 	<members>
-		<member name="fields" type="SuperposField[]" setter="set_fields" getter="get_fields" default="[]">
-		</member>
-		<member name="revision" type="int" setter="set_revision" getter="get_revision" default="1">
-		</member>
-		<member name="schema_id" type="int" setter="set_schema_id" getter="get_schema_id" default="1">
-		</member>
+		<member name="fields" type="SuperposField[]" setter="set_fields" getter="get_fields" default="[]">Authored canonical field descriptors. Baking rejects null entries, invalid descriptors and duplicate field IDs.</member>
+		<member name="revision" type="int" setter="set_revision" getter="get_revision" default="1">Nonzero unsigned revision of the authored schema manifest. Changing it changes the baked manifest fingerprint.</member>
+		<member name="schema_id" type="int" setter="set_schema_id" getter="get_schema_id" default="1">Nonzero unsigned schema identifier. All participants must provision a compatible manifest.</member>
 	</members>
 </class>

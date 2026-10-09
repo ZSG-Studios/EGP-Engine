@@ -33,11 +33,12 @@ class ExposureAuditTests(unittest.TestCase):
             "PhysicsServer2D",
             "PhysicsServer3D",
             "EGPBox3DWorld",
-            "EGPNetSession",
-            "EGPNetSnapshotInterpolator",
-            "Superposition",
-            "SuperpositionConfig",
-            "SuperpositionProperty",
+            "SuperposSession",
+            "SuperposWorld",
+            "SuperposField",
+            "SuperposSchema",
+            "SuperposUInt64",
+            "SuperposSimulationProvider",
         ):
             self.api["classes"].append({"name": name, "methods": [{"name": "configure", "is_virtual": False}]})
             self.reflection["classes"][name] = {"properties": [], "signals": []}
@@ -97,10 +98,10 @@ class ExposureAuditTests(unittest.TestCase):
         self.assertTrue(any("Property type check failed" in failure for failure in receipt["failures"]))
 
     def test_partial_snapshot_is_rejected(self):
-        del self.reflection["classes"]["EGPNetSession"]
+        del self.reflection["classes"]["SuperposSession"]
         code, receipt = self.run_audit()
         self.assertNotEqual(code, 0)
-        self.assertIn("ClassDB snapshot omits audited class: EGPNetSession", receipt["failures"])
+        self.assertIn("ClassDB snapshot omits audited class: SuperposSession", receipt["failures"])
 
     def test_stale_api_and_engine_identity_are_rejected(self):
         self.reflection["extension_api_sha256"] = "wrong"

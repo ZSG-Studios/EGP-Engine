@@ -296,4 +296,5 @@ debug/export_console_wrapper=0
 
 
 if __name__ == "__main__":
+    raise SystemExit("Retired EGPNet scene-helper fixture; migrate to native Superpos and use validate_superpos.py.")
     raise SystemExit(main())

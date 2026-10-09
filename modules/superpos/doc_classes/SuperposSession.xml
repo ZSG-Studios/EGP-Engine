@@ -9,23 +9,19 @@
 			<param index="0" name="message" type="int" />
 			<param index="1" name="binding_generation" type="int" />
 			<param index="2" name="channel" type="int" default="0" />
-			<description>
-			</description>
+			<description>Acknowledges a received message on the selected channel with its checked binding generation. This does not apply application state automatically.</description>
 		</method>
 		<method name="advance_tick">
 			<return type="int" enum="Error" />
-			<description>
-			</description>
+			<description>Advances the canonical session by one tick on its owning thread. For a world with automatic ticks enabled, manual advancement is rejected.</description>
 		</method>
 		<method name="close">
 			<return type="void" />
-			<description>
-			</description>
+			<description>Closes the session through [method close_checked]. Use the checked method when the caller needs the rejection reason.</description>
 		</method>
 		<method name="close_checked">
 			<return type="int" enum="Error" />
-			<description>
-			</description>
+			<description>Closes the owned canonical world and transport, subject to owner and lifecycle checks. Retained wrappers cannot revive an owner that has been permanently retired.</description>
 		</method>
 		<method name="configure">
 			<return type="int" enum="Error" />
@@ -34,8 +30,7 @@
 			<param index="2" name="authority_epoch" type="int" default="1" />
 			<param index="3" name="authority_peer" type="int" default="0" />
 			<param index="4" name="state_budget" type="int" default="268435456" />
-			<description>
-			</description>
+			<description>Creates a bounded canonical world from the supplied schemas, object capacity, authority and state budget. This configures local state; use [method configure_udp] to attach a network association. Calls must run on the owning thread.</description>
 		</method>
 		<method name="configure_udp">
 			<return type="int" enum="Error" />
@@ -47,49 +42,41 @@
 			<param index="5" name="session_id" type="int" />
 			<param index="6" name="peer_identity" type="int" />
 			<param index="7" name="admission_key" type="PackedByteArray" />
-			<description>
-			</description>
+			<description>Attaches one pre-provisioned native UDP server or client association with local/remote endpoints, session ID, peer identity and admission key. Check [method get_admission_state] for authenticated readiness. Old Yojimbo tokens are incompatible; never log the admission key.</description>
 		</method>
 		<method name="destroy_object">
 			<return type="int" enum="Error" />
 			<param index="0" name="handle" type="int" />
-			<description>
-			</description>
+			<description>Destroys the canonical object identified by the exact handle bits. This does not free an application scene Node.</description>
 		</method>
 		<method name="enqueue_packet">
 			<return type="Dictionary" />
 			<param index="0" name="payload" type="PackedByteArray" />
 			<param index="1" name="channel" type="int" default="0" />
-			<description>
-			</description>
+			<description>Queues canonical payload bytes on the selected channel. On success the checked Dictionary contains message, connection epoch, binding generation, channel and an Accepted outcome. Acceptance is not an acknowledgement by the receiver.</description>
 		</method>
 		<method name="get_admission_state" qualifiers="const">
 			<return type="Dictionary" />
-			<description>
-			</description>
+			<description>Returns a checked Dictionary describing transport attachment and authenticated readiness. [code]ready[/code] is false for an unattached or unavailable association; local configuration alone does not authenticate a peer.</description>
 		</method>
 		<method name="get_last_error" qualifiers="const">
 			<return type="int" enum="Error" />
-			<description>
-			</description>
+			<description>Returns the last recorded session error. Check each operation return value or its Dictionary [code]error[/code] for that operation outcome.</description>
 		</method>
 		<method name="get_packet_outcome" qualifiers="const">
 			<return type="Dictionary" />
 			<param index="0" name="message" type="int" />
 			<param index="1" name="binding_generation" type="int" />
 			<param index="2" name="channel" type="int" default="0" />
-			<description>
-			</description>
+			<description>Returns a checked Dictionary describing the tracked message outcome on the selected channel. Stale binding generations and invalid message identities are rejected.</description>
 		</method>
 		<method name="get_state" qualifiers="const">
 			<return type="String" />
-			<description>
-			</description>
+			<description>Returns the session lifecycle state. A permanently retired owner cannot be configured again.</description>
 		</method>
 		<method name="get_statistics" qualifiers="const">
 			<return type="Dictionary" />
-			<description>
-			</description>
+			<description>Returns a checked Dictionary of canonical world capacity, live objects, tick, binding generation, memory accounting and publication counts. An attached transport adds its counters and readiness. These counters do not establish application scene replication.</description>
 		</method>
 		<method name="predict_checked">
 			<return type="int" enum="Error" />
@@ -97,60 +84,50 @@
 			<param index="1" name="epoch" type="int" />
 			<param index="2" name="tick" type="int" />
 			<param index="3" name="input" type="PackedByteArray" />
-			<description>
-			</description>
+			<description>Runs a checked prediction step for a registered compiled simulation provider using binding generation, authority epoch, tick and input bytes. Script callbacks do not register or qualify native replay capabilities.</description>
 		</method>
 		<method name="publish_packed">
 			<return type="int" enum="Error" />
 			<param index="0" name="operations" type="PackedByteArray" />
-			<description>
-			</description>
+			<description>Validates and applies a bounded packed canonical operation batch atomically. This does not make Godot property setters transactional or implement automatic scene projection.</description>
 		</method>
 		<method name="read_authority_epoch" qualifiers="const">
 			<return type="Dictionary" />
-			<description>
-			</description>
+			<description>Returns [code]error[/code] and, only on a successful live authority query, [code]value[/code] containing the unsigned authority epoch bits.</description>
 		</method>
 		<method name="read_binding_generation" qualifiers="const">
 			<return type="Dictionary" />
-			<description>
-			</description>
+			<description>Returns [code]error[/code] and, only on successful owner validation, [code]value[/code] containing the unsigned binding generation bits. Use this value with checked packet and prediction calls.</description>
 		</method>
 		<method name="read_object" qualifiers="const">
 			<return type="Dictionary" />
 			<param index="0" name="handle" type="int" />
-			<description>
-			</description>
+			<description>Returns a checked Dictionary containing the canonical object handle, schema ID, owner, ownership revision, revision, tick and canonical bytes on success. Stale or invalid handles are rejected.</description>
 		</method>
 		<method name="read_packet" qualifiers="const">
 			<return type="Dictionary" />
 			<param index="0" name="channel" type="int" default="0" />
-			<description>
-			</description>
+			<description>Reads the next available packet on the selected channel into a checked Dictionary. Success includes payload, message and association metadata. Acknowledge the returned message using its binding generation after application processing.</description>
 		</method>
 		<method name="read_prediction">
 			<return type="Dictionary" />
 			<param index="0" name="binding" type="int" />
 			<param index="1" name="epoch" type="int" />
-			<description>
-			</description>
+			<description>Returns checked prediction bytes and tick for the supplied binding generation and authority epoch. A registered native simulation provider is required.</description>
 		</method>
 		<method name="read_prediction_info">
 			<return type="Dictionary" />
 			<param index="0" name="binding" type="int" />
 			<param index="1" name="epoch" type="int" />
-			<description>
-			</description>
+			<description>Returns checked prediction-history information for the supplied binding generation and authority epoch. Availability does not establish a physics solver integration.</description>
 		</method>
 		<method name="read_simulation_profile" qualifiers="const">
 			<return type="Dictionary" />
-			<description>
-			</description>
+			<description>Returns the native simulation capability profile. Unregistered sessions do not expose qualified prediction or replay capabilities.</description>
 		</method>
 		<method name="read_tick" qualifiers="const">
 			<return type="Dictionary" />
-			<description>
-			</description>
+			<description>Returns [code]error[/code] and, only on successful owner/world validation, [code]value[/code] containing the exact unsigned tick bits. Check the error before reading the value.</description>
 		</method>
 		<method name="reconcile_checked">
 			<return type="Dictionary" />
@@ -159,32 +136,28 @@
 			<param index="2" name="tick" type="int" />
 			<param index="3" name="revision" type="int" />
 			<param index="4" name="canonical" type="PackedByteArray" />
-			<description>
-			</description>
+			<description>Reconciles a registered native prediction history against the supplied canonical bytes, tick and revision. Returns a checked Dictionary; inspect its error before using reconciliation output.</description>
 		</method>
 		<method name="retire_packet">
 			<return type="int" enum="Error" />
 			<param index="0" name="message" type="int" />
 			<param index="1" name="binding_generation" type="int" />
 			<param index="2" name="channel" type="int" default="0" />
-			<description>
-			</description>
+			<description>Retires the tracked message using the supplied binding generation and channel. Use the checked outcome to decide when the application no longer needs the message.</description>
 		</method>
 		<method name="spawn_object">
 			<return type="int" />
 			<param index="0" name="schema" type="int" />
 			<param index="1" name="owner" type="int" />
 			<param index="2" name="canonical" type="PackedByteArray" />
-			<description>
-			</description>
+			<description>Creates a bounded canonical object using the selected schema, owner and canonical bytes. Returns its unsigned handle bits, or zero on failure. This does not instantiate a scene Node.</description>
 		</method>
 		<method name="transfer_ownership">
 			<return type="int" enum="Error" />
 			<param index="0" name="handle" type="int" />
 			<param index="1" name="owner" type="int" />
 			<param index="2" name="expected_revision" type="int" />
-			<description>
-			</description>
+			<description>Transfers a canonical object to the supplied owner, checking the expected ownership revision. Use exact unsigned handle, owner and revision bits.</description>
 		</method>
 	</methods>
 	<signals>

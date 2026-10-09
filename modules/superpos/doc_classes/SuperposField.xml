@@ -4,21 +4,13 @@
 	<description>Compiled into the EGP engine through its native Superpos module. Full-width unsigned values use signed opaque Variant bits in GDScript and unsigned native metadata in generated C# and C++ bindings.</description>
 	<tutorials />
 	<members>
-		<member name="audience" type="int" setter="set_audience" getter="get_audience" default="0">
-		</member>
-		<member name="codec_id" type="int" setter="set_codec_id" getter="get_codec_id" default="3">
-		</member>
-		<member name="field_id" type="int" setter="set_field_id" getter="get_field_id" default="1">
-		</member>
-		<member name="field_name" type="StringName" setter="set_field_name" getter="get_field_name" default="&amp;&quot;value&quot;">
-		</member>
-		<member name="max_bytes" type="int" setter="set_max_bytes" getter="get_max_bytes" default="8">
-		</member>
-		<member name="maximum" type="float" setter="set_maximum" getter="get_maximum" default="0.0">
-		</member>
-		<member name="minimum" type="float" setter="set_minimum" getter="get_minimum" default="0.0">
-		</member>
-		<member name="quantization_levels" type="int" setter="set_quantization_levels" getter="get_quantization_levels" default="0">
-		</member>
+		<member name="audience" type="int" setter="set_audience" getter="get_audience" default="0">Core FieldAudience value in the range 0 through 2. This is schema metadata, not an application authentication policy.</member>
+		<member name="codec_id" type="int" setter="set_codec_id" getter="get_codec_id" default="3">Canonical codec identifier in the range 1 through 10. Its bounds and byte layout must match the corresponding Superpos core FieldKind.</member>
+		<member name="field_id" type="int" setter="set_field_id" getter="get_field_id" default="1">Nonzero field identifier, unique within the schema. Preserve its full unsigned bits. Fields are sorted by this ID when baking.</member>
+		<member name="field_name" type="StringName" setter="set_field_name" getter="get_field_name" default="&amp;&quot;value&quot;">ASCII field name containing letters, digits or underscores, with a maximum length of 64 characters.</member>
+		<member name="max_bytes" type="int" setter="set_max_bytes" getter="get_max_bytes" default="8">Canonical byte width for this field. The codec and total schema state size impose additional bounds checked when baking.</member>
+		<member name="maximum" type="float" setter="set_maximum" getter="get_maximum" default="0.0">Maximum numeric bound used by codecs that require a bounded range.</member>
+		<member name="minimum" type="float" setter="set_minimum" getter="get_minimum" default="0.0">Minimum numeric bound used by codecs that require a bounded range.</member>
+		<member name="quantization_levels" type="int" setter="set_quantization_levels" getter="get_quantization_levels" default="0">Number of quantization levels for codecs that require quantization. The schema validates its compatibility with the selected codec.</member>
 	</members>
 </class>

@@ -133,7 +133,7 @@ def main():
                 env=dict(
                     os.environ,
                     XMAKE_CONFIGDIR=str(output / "xmake-config"),
-                    XMAKE_GLOBALDIR=str(output / "xmake-global"),
+                    XMAKE_GLOBALDIR=os.environ.get("XMAKE_GLOBALDIR", str(output / "xmake-global")),
                 ),
                 stdout=log,
                 stderr=subprocess.STDOUT,
@@ -207,6 +207,8 @@ def main():
                     str(PROBES / "cpp"),
                     "--builddir=" + str(output / "native"),
                     "--mode=debug",
+                    *(["--toolchain=msvc"] if os.name == "nt" else []),
+                    *(["--vs=" + os.environ["XMAKE_VS"]] if os.name == "nt" and os.environ.get("XMAKE_VS") else []),
                     "--egp_cpp_sdk=" + str(sdk),
                 ],
             )

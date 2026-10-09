@@ -486,6 +486,8 @@ def main():
         help="Exercise changed method signatures and rejected base-class repair",
     )
     args = parser.parse_args()
+    if any((args.network_recovery, args.network_live_reload, args.network_physics, args.network_csharp_facade, args.network_csharp_node, args.network_csharp_box3d)):
+        parser.error("Retired EGPNet reload fixtures are unavailable; migrate to native Superpos and qualify its reload lifecycle separately.")
     if args.disable_runtime and args.feature_override:
         parser.error("--disable-runtime and --feature-override are mutually exclusive")
     if args.native_abi_recovery and (args.disable_runtime or args.expect_disabled):

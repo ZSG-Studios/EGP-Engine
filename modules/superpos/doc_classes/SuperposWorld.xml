@@ -6,50 +6,38 @@
 	<methods>
 		<method name="advance_tick">
 			<return type="int" enum="Error" />
-			<description>
-			</description>
+			<description>Advances the canonical session by one tick on its owning thread. For a world with automatic ticks enabled, manual advancement is rejected.</description>
 		</method>
 		<method name="close">
 			<return type="void" />
-			<description>
-			</description>
+			<description>Closes the session through [method close_checked]. Use the checked method when the caller needs the rejection reason.</description>
 		</method>
 		<method name="close_checked">
 			<return type="int" enum="Error" />
-			<description>
-			</description>
+			<description>Closes the owned canonical world and transport, subject to owner and lifecycle checks. Retained wrappers cannot revive an owner that has been permanently retired.</description>
 		</method>
 		<method name="configure">
 			<return type="int" enum="Error" />
-			<description>
-			</description>
+			<description>Creates and owns a native session using the authored schema, capacity and authority properties. An existing attached session must be closed first. This does not configure UDP admission.</description>
 		</method>
 		<method name="get_session" qualifiers="const">
 			<return type="SuperposSession" />
-			<description>
-			</description>
+			<description>Returns the attached session, or null when owner validation fails or no session is attached. Use [method read_session] to inspect the checked error.</description>
 		</method>
 		<method name="read_configuration" qualifiers="const">
 			<return type="Dictionary" />
-			<description>
-			</description>
+			<description>Returns a checked Dictionary of authored schemas, maximum objects, authority epoch, authority peer and automatic tick settings. Authored authority properties are not proof of live authenticated authority.</description>
 		</method>
 		<method name="read_session" qualifiers="const">
 			<return type="Dictionary" />
-			<description>
-			</description>
+			<description>Returns a Dictionary containing error and, only on success, value with the attached session. Access and lifetime follow the main-thread world owner.</description>
 		</method>
 	</methods>
 	<members>
-		<member name="authority_epoch" type="int" setter="set_authority_epoch" getter="get_authority_epoch" default="1">
-		</member>
-		<member name="authority_peer" type="int" setter="set_authority_peer" getter="get_authority_peer" default="0">
-		</member>
-		<member name="automatic_ticks" type="bool" setter="set_automatic_ticks" getter="get_automatic_ticks" default="false">
-		</member>
-		<member name="max_objects" type="int" setter="set_max_objects" getter="get_max_objects" default="4096">
-		</member>
-		<member name="schemas" type="SuperposSchema[]" setter="set_schemas" getter="get_schemas" default="[]">
-		</member>
+		<member name="authority_epoch" type="int" setter="set_authority_epoch" getter="get_authority_epoch" default="1">Authored unsigned authority epoch for the next configuration. Use the session checked authority read for live state.</member>
+		<member name="authority_peer" type="int" setter="set_authority_peer" getter="get_authority_peer" default="0">Authored unsigned authority peer identity for the next configuration. This property does not contain credentials or establish network admission.</member>
+		<member name="automatic_ticks" type="bool" setter="set_automatic_ticks" getter="get_automatic_ticks" default="false">When enabled, the owned session advances through this Node physics processing and rejects manual tick advancement. This does not register a physics simulation provider.</member>
+		<member name="max_objects" type="int" setter="set_max_objects" getter="get_max_objects" default="4096">Maximum canonical object capacity used when configuring the next owned session.</member>
+		<member name="schemas" type="SuperposSchema[]" setter="set_schemas" getter="get_schemas" default="[]">Schemas used when configuring the next owned session. Editing authored configuration does not silently reconfigure a live session.</member>
 	</members>
 </class>

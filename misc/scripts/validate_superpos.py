@@ -35,14 +35,23 @@ def pair(family):
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--engine", type=Path, required=True)
+    parser.add_argument("--pack", type=Path, help="Test an exported probe pack with an export template; editor API dump is verified separately")
     parser.add_argument("--output", type=Path, default=ROOT / ".build/diagnostics/superpos")
     args = parser.parse_args()
     engine, output = args.engine.resolve(), args.output.resolve()
     output.mkdir(parents=True, exist_ok=True)
+    pack = args.pack.resolve() if args.pack else None
+    project_args = ["--main-pack", str(pack)] if pack else ["--path", str(LAB)]
+    def script_args(name):
+        return ["--script", "res://" + name] if pack else ["--script", str(LAB / name)]
     flags = {"creationflags": subprocess.CREATE_NO_WINDOW} if os.name == "nt" else {}
     receipt = {"engine": str(engine), "engine_sha256": sha(engine), "passed": False,
                "scope": "current_full_native_engine_API_canonical_state_owner_lifecycle_loopback_UDP_only",
                "fixtures": {p.name: sha(p) for p in LAB.glob("*.gd")}, "checks": []}
+
+    if pack:
+        receipt["pack_sha256"] = sha(pack)
+        receipt["scope"] = "exported_pack_template_canonical_state_owner_lifecycle_loopback_UDP_only;editor_API_verified_separately"
 
     def execute(name, arguments, marker=None):
         log = output / (name + ".log")
@@ -57,17 +66,18 @@ def main():
             raise RuntimeError(f"Failed {name}; see {log}")
 
     try:
-        execute("api", ["--headless", "--dump-extension-api"])
-        api = json.loads((output / "extension_api.json").read_text())
-        names = {row["name"] for row in api["classes"]}
-        required = {"SuperposSession", "SuperposWorld", "SuperposSchema", "SuperposField", "SuperposUInt64"}
-        retired = {n for n in names if n.startswith(("EGPNet", "Superposition"))}
-        if not required <= names or retired:
-            raise RuntimeError(f"Incorrect network API: missing {sorted(required - names)}, retired {sorted(retired)}")
-        receipt["api_sha256"] = sha(output / "extension_api.json")
-        receipt["retired_classes"] = sorted(retired)
-        execute("canonical", ["--headless", "--max-fps", "60", "--path", str(LAB),
-                              "--script", str(LAB / "runtime.gd"), "--",
+        if not pack:
+            execute("api", ["--headless", "--dump-extension-api"])
+            api = json.loads((output / "extension_api.json").read_text())
+            names = {row["name"] for row in api["classes"]}
+            required = {"SuperposSession", "SuperposWorld", "SuperposSchema", "SuperposField", "SuperposUInt64", "SuperposSimulationProvider"}
+            retired = {n for n in names if n.startswith(("EGPNet", "Superposition"))}
+            if not required <= names or retired:
+                raise RuntimeError(f"Incorrect network API: missing {sorted(required - names)}, retired {sorted(retired)}")
+            receipt["api_sha256"] = sha(output / "extension_api.json")
+            receipt["retired_classes"] = sorted(retired)
+        execute("canonical", ["--headless", "--max-fps", "60", *project_args,
+                              *script_args("runtime.gd"), "--",
                               "--superpos-permanent-retirement"], "SUPERPOS_EGP_RUNTIME_OK")
         for family, scenario in (("ipv4", "accepted"), ("ipv6", "accepted"),
                                  ("ipv4", "peer_closed"), ("ipv4", "schema_mismatch"), ("ipv4", "key_mismatch")):
@@ -78,7 +88,7 @@ def main():
                     stream = (output / (name + "-" + role + ".log")).open("w", encoding="utf-8")
                     streams.append(stream)
                     processes.append(subprocess.Popen([str(engine), "--headless", "--max-fps", "60",
-                        "--path", str(LAB), "--script", str(LAB / "udp.gd"), "--", role,
+                        *project_args, *script_args("udp.gd"), "--", role,
                         str(port), family, scenario], cwd=output, stdout=stream, stderr=subprocess.STDOUT, **flags))
                     if role == "server":
                         time.sleep(0.15)

@@ -9,46 +9,39 @@
 			<param index="0" name="later" type="int" />
 			<param index="1" name="earlier" type="int" />
 			<param index="2" name="limit" type="int" />
-			<description>
-			</description>
+			<description>Returns the unsigned difference only when later is at least earlier and the difference does not exceed limit. Check the Dictionary error before using value.</description>
 		</method>
 		<method name="checked_add" qualifiers="static">
 			<return type="Dictionary" />
 			<param index="0" name="a" type="int" />
 			<param index="1" name="b" type="int" />
-			<description>
-			</description>
+			<description>Adds unsigned values without wrapping. Returns a Dictionary with [code]error[/code] and [code]value[/code]; ignore value when the error is not [constant OK]. Overflow returns [constant ERR_PARAMETER_RANGE_ERROR].</description>
 		</method>
 		<method name="compare" qualifiers="static">
 			<return type="int" />
 			<param index="0" name="a" type="int" />
 			<param index="1" name="b" type="int" />
-			<description>
-			</description>
+			<description>Compares the two values as unsigned 64-bit integers, returning a negative value, zero or a positive value. Negative GDScript integers are valid opaque unsigned bit patterns.</description>
 		</method>
 		<method name="from_bytes" qualifiers="static">
 			<return type="Dictionary" />
 			<param index="0" name="bytes" type="PackedByteArray" />
-			<description>
-			</description>
+			<description>Decodes exactly eight bytes in little-endian order into unsigned bits. The returned Dictionary contains error and value; ignore value on failure.</description>
 		</method>
 		<method name="from_decimal" qualifiers="static">
 			<return type="Dictionary" />
 			<param index="0" name="text" type="String" />
-			<description>
-			</description>
+			<description>Parses an unsigned decimal String without a sign or fractional component, preserving all 64 bits. Check the returned Dictionary error before using value.</description>
 		</method>
 		<method name="to_bytes" qualifiers="static">
 			<return type="PackedByteArray" />
 			<param index="0" name="value" type="int" />
-			<description>
-			</description>
+			<description>Encodes the unsigned bit pattern as eight bytes in little-endian order.</description>
 		</method>
 		<method name="to_decimal" qualifiers="static">
 			<return type="String" />
 			<param index="0" name="value" type="int" />
-			<description>
-			</description>
+			<description>Formats the unsigned bit pattern as an exact decimal String. This preserves identifiers above the signed 64-bit maximum.</description>
 		</method>
 	</methods>
 </class>

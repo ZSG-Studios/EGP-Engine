@@ -28,11 +28,6 @@ LEGACY_CLASSES = {
     "WebRTCDataChannel",
     "WebRTCDataChannelExtension",
     "EGPLiteSession",
-}
-REQUIRED_CLASSES = {
-    "PhysicsServer2D",
-    "PhysicsServer3D",
-    "EGPBox3DWorld",
     "EGPNetSession",
     "EGPNetSnapshotInterpolator",
     "Superposition",
@@ -44,6 +39,17 @@ REQUIRED_CLASSES = {
     "SuperpositionSpawner",
     "SuperpositionRPCMethod",
     "SuperpositionRPC",
+}
+REQUIRED_CLASSES = {
+    "PhysicsServer2D",
+    "PhysicsServer3D",
+    "EGPBox3DWorld",
+    "SuperposSession",
+    "SuperposWorld",
+    "SuperposField",
+    "SuperposSchema",
+    "SuperposUInt64",
+    "SuperposSimulationProvider",
 }
 INTERNAL_SIGNALS = {("PhysicsServer2D", "_debug_changed"), ("PhysicsServer3D", "_debug_changed")}
 
@@ -79,7 +85,7 @@ def managed_classes(root):
 
 
 def in_scope(name):
-    return name.startswith(("Physics", "Box2D", "Box3D", "EGP", "Superposition")) or name in {
+    return name.startswith(("Physics", "Box2D", "Box3D", "EGP", "Superpos")) or name in {
         "Area2D",
         "Area3D",
         "RigidBody2D",
