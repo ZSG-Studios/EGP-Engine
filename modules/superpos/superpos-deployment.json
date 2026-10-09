@@ -25,7 +25,7 @@
     "private/session_prediction.inc": "589570448b0eee8f6f0426fcbe85fe26ed9f7293854b0581e7befe3f790bfa3b",
     "register_types.cpp": "285464ad1b5c92b82497fef8bce0de3dd0ab2fe6124e96a92536eb74b376a846",
     "register_types.h": "9ff0d137e846630001bbe441ffd7fec880fe9aec0fdafb69e6fccf79714ca9cf",
-    "rtc_embedded.lua": "58158cd46ab798623ecaae394a67bc0828ec570a6709d1f6bb774473b8371171",
+    "rtc_embedded.lua": "fec6bc5786c0b7d890c40a1c1bb5b6f3996446aadd0a5cd234f80aa76af1eb0b",
     "rtc_embedded_provider_targets.lua": "f0b9c8956189df95f3ed9a1c77257d39188bcd1229d2de9e1e9ee40fb14c9108",
     "SCsub": "767a40f740267fe143b38db324a5c2e3bb91961147f49f32b7f42cc7380ebd77",
     "source_manifest.json": "3f8d1ec8b4fbf8d16caca7cf9b4148111239b5e2b8d45ead32458d8d336a4778",
@@ -2193,5 +2193,9 @@
   },
   "materialization_sha256": "68dde940970229cffceb324dd957c732f3112fed3f1a2c4efd80d4137eb8e60e",
   "helper_correction_receipt": "C:\\Users\\Rose-X\\Documents\\EGP Workspace\\Third Party Dev\\Superpos-EGP\\.build\\rtc-engine-runtime\\current-fold\\portable-memory-policy.json",
-  "helper_correction_sha256": "29caf5462a0494cf6913a2afd14b2ec6caa8f48d623f4641d8c51f76cec7dc8a"
+  "helper_correction_sha256": "29caf5462a0494cf6913a2afd14b2ec6caa8f48d623f4641d8c51f76cec7dc8a",
+  "helper_delta_qualification": {
+    "path": "C:\\Users\\Rose-X\\Documents\\EGP Workspace\\Third Party Dev\\Superpos-EGP\\.build\\rtc-engine-runtime\\current-fold\\helper-delta-qualification.json",
+    "sha256": "567c79b0f1dfd1a329fd21ff9092113d8347334d2ccbb8091a39b2d2964f81d1"
+  }
 }

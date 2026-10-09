@@ -66,6 +66,7 @@ function capture(graph, engine_root)
         if library.name=="module_superpos" then
             local base,seen=nil,{}
             for _,source in ipairs(library.sources) do
+                assert(not seen[source.path], "Duplicate Superpos source in captured graph")
                 seen[source.path]=true
                 if source.path=="modules/superpos/core/src/session.cpp" then base=source.policy end
             end
@@ -73,12 +74,15 @@ function capture(graph, engine_root)
             for _,name in ipairs(memory.sources) do
                 assert(name:startswith("private/") and name:endswith(".cpp") and not name:find("..",1,true),"Invalid common memory source")
                 local filename="modules/superpos/"..name
-                assert(not seen[filename],"Common module memory source selected twice")
-                local policy=table.clone(base);policy.CXXFLAGS=table.copy(base.CXXFLAGS)
-                if graph.options.platform=="windows" and graph.options.use_llvm then
-                    table.insert(policy.CXXFLAGS,"/clang:-std=c++23")
+                -- The native recipe now selects the complete adapter manifest.
+                -- Retain support for older captured recipes without selecting twice.
+                if not seen[filename] then
+                    local policy=table.clone(base);policy.CXXFLAGS=table.copy(base.CXXFLAGS)
+                    if graph.options.platform=="windows" and graph.options.use_llvm then
+                        table.insert(policy.CXXFLAGS,"/clang:-std=c++23")
+                    end
+                    table.insert(library.sources,{path=filename,policy=policy});seen[filename]=true
                 end
-                table.insert(library.sources,{path=filename,policy=policy});seen[filename]=true
             end
             library.module_memory={version=1,sources=memory.sources,manifest_sha256=hash.sha256(path.join(engine_root,"modules/superpos/source_manifest.json"))}
         end
