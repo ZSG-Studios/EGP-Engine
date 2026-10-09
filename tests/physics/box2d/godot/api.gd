@@ -26,7 +26,11 @@ func build(world) -> void:
 	require(world.queue_create_body(GROUND, 0, {"type": "static"}, [{"type": "box", "half_extents": Vector2(40, 0.5), "center": Vector2(0, -0.5), "friction": 0.8}]) == OK, "ground failed")
 	# Open chain: the first and last points are ghosts, leaving three one-sided segments facing up.
 	var hills := PackedVector2Array([Vector2(62, 0), Vector2(60, 0), Vector2(50, 2), Vector2(45, 0), Vector2(40, 1), Vector2(38, 1)])
-	require(world.queue_create_body(TERRAIN, 0, {"type": "static"}, [{"type": "chain", "points": hills, "friction": 0.6},
+	# Per-segment materials (an open chain of 6 points has 3 segments).
+	var hill_materials := []
+	for i in 3:
+		hill_materials.append({"friction": 0.2 + 0.1 * i, "restitution": 0.05 * i})
+	require(world.queue_create_body(TERRAIN, 0, {"type": "static"}, [{"type": "chain", "points": hills, "materials": hill_materials, "category": 1},
 			{"type": "segment", "point_a": Vector2(-45, 0), "point_b": Vector2(-40, 3)}]) == OK, "terrain failed")
 	require(world.queue_create_body(SENSOR, 0, {"type": "static"}, [{"type": "box", "half_extents": Vector2(2, 2), "center": Vector2(0, 2), "sensor": true, "sensor_events": true}]) == OK, "sensor failed")
 	require(world.queue_create_body(BALL, 0, {"type": "dynamic", "position": Vector2(0, 3), "bullet": true, "angular_damping": 0.2},
@@ -62,11 +66,12 @@ func drive(world, tick: int) -> void:
 		require(world.queue_apply(CRATE, 1, EGPBox2DWorld.APPLY_TORQUE, Vector2(), 4.0) == OK, "torque failed")
 		require(world.queue_set_shape(BALL, 2, 1, {"friction": 0.1, "density": 0.8}) == OK, "set shape failed")
 		require(world.queue_add_shape(CRATE, 2, 4, {"type": "circle", "radius": 0.15, "center": Vector2(0, 0.9)}) == OK, "add shape failed")
-		require(world.queue_set_shape(TERRAIN, 1, 0, {"friction": 0.3, "category": 2}) == OK, "set chain failed")
+		require(world.queue_set_shape(TERRAIN, 1, 0, {"category": 2}) == OK, "set chain failed")
+		require(world.queue_set_shape(TERRAIN, 2, 0, {"friction": 0.3}, 2) == OK, "set chain material failed")
 	if tick >= 10 and tick < 40:
 		require(world.queue_apply_wind(KITE, 3, 0, Vector2(6, 0), 1.0, 0.5) == OK, "wind failed")
 	if tick == 30:
-		require(world.queue_set_world(0, {"gravity": Vector2(0, -12), "contact_hertz": 40.0, "contact_damping_ratio": 8.0, "contact_speed": 2.5}) == OK, "set world failed")
+		require(world.queue_set_world(0, {"gravity": Vector2(0, -12), "contact_hertz": 40.0, "speculative": false}) == OK, "set world failed")
 		require(world.queue_set_joint(100 + JOINT_TYPES.find("revolute"), 1, {"motor_speed": -1.0}) == OK, "set joint failed")
 		require(world.queue_set_body(CRATE, 4, {"gravity_scale": 0.5, "lock_angular": true}) == OK, "set body failed")
 	if tick == 40:
@@ -87,11 +92,23 @@ func _initialize() -> void:
 	require(world.get_body_count() == 6 + JOINT_TYPES.size() * 2, "body count")
 	require(world.get_joint_count() == JOINT_TYPES.size(), "joint count")
 	require(world.queue_set_body(BALL, 9, {"no_such_field": 1.0}) != OK, "unknown field accepted")
-	require(world.queue_set_world(9, {"contact_hertz": 30.0}) != OK, "partial contact tuning accepted")
+	require(world.queue_set_shape(BALL, 9, 0, {"friction": -0.5}) != OK, "negative friction accepted")
+	require(world.queue_joint(900, 9, "revolute", BALL, CRATE, {"lower_angle": -3.14, "upper_angle": 0.5}) != OK, "revolute limit beyond 0.99 PI accepted")
+	require(world.queue_joint(901, 9, "prismatic", BALL, CRATE, {"lower_translation": 1.0, "upper_translation": -1.0}) != OK, "inverted limits accepted")
+	require(world.queue_create_body(98, 9, {}, [{"type": "chain", "points": PackedVector2Array([Vector2.ZERO, Vector2.RIGHT, Vector2.ONE, Vector2.UP]), "materials": [{"friction": 0.1}, {"friction": 0.2}]}]) != OK, "wrong chain material table accepted")
 	require(world.queue_create_body(99, 9, {}, [{"type": "polygon", "points": PackedVector2Array([Vector2.ZERO, Vector2.ONE])}]) != OK, "two-point polygon accepted")
 	require(world.queue_set_shape(BALL, 9, 7, {"friction": 0.5}) == OK, "missing shape not queued")
 	require(world.apply_queued_commands() == ERR_INVALID_DATA, "missing shape batch applied")
 	world.clear_pending_commands()
+	var batch_rejections := [
+		func(): return world.queue_set_joint(100 + JOINT_TYPES.find("revolute"), 9, {"lower_angle": 0.9}),
+		func(): return world.queue_set_shape(TERRAIN, 9, 0, {"friction": 0.3}, 3),
+		func(): return world.queue_set_shape(BALL, 9, 0, {"friction": 0.3}, 0),
+	]
+	for queue_rejected in batch_rejections:
+		require(queue_rejected.call() == OK, "batch rule command not queued")
+		require(world.apply_queued_commands() == ERR_INVALID_DATA, "batch rule not enforced")
+		world.clear_pending_commands()
 
 	var hashes: Array[String] = []
 	var snapshot := PackedByteArray()
@@ -121,7 +138,10 @@ func _initialize() -> void:
 	require(world.get_body(CRATE).shapes == PackedInt32Array([0]), "destroyed shape still listed")
 	require(is_equal_approx(world.get_body(CRATE).gravity_scale, 0.5) and world.get_body(CRATE).lock_angular, "crate readback")
 	require(is_equal_approx(world.get_shape(BALL, 1).friction, 0.1), "shape friction readback")
-	require(is_equal_approx(world.get_shape(TERRAIN, 0).friction, 0.3) and world.get_shape(TERRAIN, 0).segment_count == 3, "chain readback")
+	var terrain: Dictionary = world.get_shape(TERRAIN, 0)
+	require(terrain.segment_count == 3 and terrain.materials.size() == 3 and is_equal_approx(terrain.materials[2].friction, 0.3) and is_equal_approx(terrain.materials[1].friction, 0.3) and is_equal_approx(terrain.materials[0].friction, 0.2), "chain material table readback")
+	var settings: Dictionary = world.get_world()
+	require(is_equal_approx(settings.contact_hertz, 40.0) and settings.contact_damping_ratio > 0.0 and not settings.speculative, "partial contact tuning readback")
 	require(world.get_world().gravity.is_equal_approx(Vector2(0, -12)), "world gravity readback")
 	for i in JOINT_TYPES.size():
 		require(world.get_joint(100 + i).get("type", "") == JOINT_TYPES[i], "joint type readback " + JOINT_TYPES[i])
@@ -142,6 +162,7 @@ func _initialize() -> void:
 	require(world.get_tick() == 45, "restore tick")
 	require(world.get_body(BALL).shapes == PackedInt32Array([0, 1]), "restored shape indices")
 	require(world.get_world().gravity.is_equal_approx(Vector2(0, -12)), "restored gravity")
+	require(is_equal_approx(world.get_world().contact_hertz, 40.0) and not world.get_world().speculative, "restored tuning mirror")
 	for tick in range(46, 121):
 		drive(world, tick)
 		require(world.step_tick(tick) == OK, "replay step failed at %d" % tick)

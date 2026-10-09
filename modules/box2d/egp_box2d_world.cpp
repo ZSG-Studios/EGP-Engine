@@ -120,7 +120,7 @@ bool to_prop(bx::FieldSet set, const bx::FieldInfo &info, const Variant &value, 
 	return false;
 }
 
-const char *const GEOMETRY_KEYS[] = { "type", "radius", "center", "angle", "half_height", "point_a", "point_b", "half_extents", "points", "loop" };
+const char *const GEOMETRY_KEYS[] = { "type", "radius", "center", "angle", "half_height", "point_a", "point_b", "half_extents", "points", "loop", "materials" };
 
 bool geometry_key(const String &name) {
 	for (const char *key : GEOMETRY_KEYS) {
@@ -144,7 +144,7 @@ Error to_props(bx::FieldSet set, const Dictionary &fields, bx::Props &props, boo
 		ERR_FAIL_COND_V_MSG(!to_prop(set, *info, fields[key], prop), ERR_INVALID_PARAMETER, "EGPBox2DWorld field " + name + " expects " + Variant::get_type_name(variant_type(info->kind)) + ".");
 		props.push_back(prop);
 	}
-	ERR_FAIL_COND_V_MSG(!bx::validate_props(set, props), ERR_INVALID_PARAMETER, "EGPBox2DWorld fields out of range (finite values; contact_hertz, contact_damping_ratio and contact_speed together).");
+	ERR_FAIL_COND_V_MSG(!bx::validate_props(set, props), ERR_INVALID_PARAMETER, "EGPBox2DWorld fields out of range (finite values, non-negative stiffness, damping, materials and thresholds, positive lengths, revolute limits within 0.99 PI).");
 	return OK;
 }
 
@@ -170,6 +170,17 @@ Error to_geometry(const Dictionary &shape, bx::Geometry &g) {
 		g.points[size_t(i)] = vec(points[i]);
 	}
 	g.loop = bool(shape.get("loop", false));
+	// Chains: one material Dictionary per point (the segment starting there).
+	const Array materials = shape.get("materials", Array());
+	for (int64_t i = 0; i < materials.size(); ++i) {
+		ERR_FAIL_COND_V_MSG(materials[i].get_type() != Variant::DICTIONARY, ERR_INVALID_PARAMETER, "EGPBox2DWorld materials are Dictionaries of material fields.");
+		bx::Props props;
+		const Error error = to_props(bx::FieldSet::SHAPE, materials[i], props);
+		if (error != OK) {
+			return error;
+		}
+		g.materials.push_back(bx::material_from(props, b2DefaultSurfaceMaterial()));
+	}
 	ERR_FAIL_COND_V_MSG(!bx::valid_geometry(g), ERR_INVALID_PARAMETER, "Invalid EGPBox2DWorld " + type + " geometry.");
 	return OK;
 }
@@ -242,7 +253,7 @@ void EGPBox2DWorld::_bind_methods() {
 	ClassDB::bind_method(D_METHOD("queue_destroy_body", "entity_id", "sequence"), &EGPBox2DWorld::queue_destroy_body);
 	ClassDB::bind_method(D_METHOD("queue_set_body", "entity_id", "sequence", "fields"), &EGPBox2DWorld::queue_set_body);
 	ClassDB::bind_method(D_METHOD("queue_add_shape", "entity_id", "sequence", "shape_index", "shape"), &EGPBox2DWorld::queue_add_shape);
-	ClassDB::bind_method(D_METHOD("queue_set_shape", "entity_id", "sequence", "shape_index", "fields"), &EGPBox2DWorld::queue_set_shape);
+	ClassDB::bind_method(D_METHOD("queue_set_shape", "entity_id", "sequence", "shape_index", "fields", "material_index"), &EGPBox2DWorld::queue_set_shape, DEFVAL(-1));
 	ClassDB::bind_method(D_METHOD("queue_destroy_shape", "entity_id", "sequence", "shape_index"), &EGPBox2DWorld::queue_destroy_shape);
 	ClassDB::bind_method(D_METHOD("queue_joint", "joint_id", "sequence", "type", "body_a", "body_b", "fields"), &EGPBox2DWorld::queue_joint, DEFVAL(Dictionary()));
 	ClassDB::bind_method(D_METHOD("queue_set_joint", "joint_id", "sequence", "fields"), &EGPBox2DWorld::queue_set_joint);
@@ -348,7 +359,7 @@ Error EGPBox2DWorld::queue_add_shape(int64_t entity, int64_t sequence, int64_t i
 	return error != OK ? error : queue_command(c);
 }
 
-Error EGPBox2DWorld::queue_set_shape(int64_t entity, int64_t sequence, int64_t index, const Dictionary &fields) {
+Error EGPBox2DWorld::queue_set_shape(int64_t entity, int64_t sequence, int64_t index, const Dictionary &fields, int64_t material_index) {
 	ERR_FAIL_COND_V(Thread::get_caller_id() != owner_thread, ERR_BUSY);
 	ERR_FAIL_COND_V(!valid_ids(entity, sequence) || index < 0 || index > int64_t(UINT32_MAX), ERR_INVALID_PARAMETER);
 	bx::Command c;
@@ -356,6 +367,8 @@ Error EGPBox2DWorld::queue_set_shape(int64_t entity, int64_t sequence, int64_t i
 	c.sequence = uint32_t(sequence);
 	c.operation = bx::Operation::SET_SHAPE;
 	c.shape_index = uint32_t(index);
+	ERR_FAIL_COND_V(material_index < -1 || material_index > 65535, ERR_INVALID_PARAMETER);
+	c.material_index = int32_t(material_index);
 	const Error error = to_props(bx::FieldSet::SHAPE, fields, c.props);
 	return error != OK ? error : queue_command(c);
 }
@@ -546,7 +559,16 @@ Dictionary EGPBox2DWorld::get_shape(int64_t entity, int64_t index) const {
 	if (entity <= 0 || index < 0 || index > int64_t(UINT32_MAX) || !simulation.read_shape(uint64_t(entity), uint32_t(index), values)) {
 		return Dictionary();
 	}
-	return to_dictionary(values);
+	Dictionary result = to_dictionary(values);
+	std::vector<bx::Values> materials;
+	if (simulation.read_shape_materials(uint64_t(entity), uint32_t(index), materials) && materials.size() > 1) {
+		Array table;
+		for (const bx::Values &material : materials) {
+			table.push_back(to_dictionary(material));
+		}
+		result["materials"] = table;
+	}
+	return result;
 }
 
 Dictionary EGPBox2DWorld::get_joint(int64_t joint) const {
@@ -725,7 +747,7 @@ PackedByteArray EGPBox2DWorld::capture_snapshot() {
 
 Error EGPBox2DWorld::restore_snapshot(const PackedByteArray &bytes) {
 	ERR_FAIL_COND_V(Thread::get_caller_id() != owner_thread, ERR_BUSY);
-	ERR_FAIL_COND_V(bytes.size() < 96 || bytes.size() > int64_t(bx::DeterministicWorld2D::MAX_SNAPSHOT_BYTES), ERR_FILE_CORRUPT);
+	ERR_FAIL_COND_V(bytes.size() < 128 || bytes.size() > int64_t(bx::DeterministicWorld2D::MAX_SNAPSHOT_BYTES), ERR_FILE_CORRUPT);
 	const std::vector<uint8_t> copy(bytes.ptr(), bytes.ptr() + bytes.size());
 	return to_error(simulation.restore_snapshot(copy));
 }

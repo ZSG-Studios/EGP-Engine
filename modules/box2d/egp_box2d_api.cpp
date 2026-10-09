@@ -278,6 +278,153 @@ void put_vec(Values &out, const char *name, b2Vec2 value) {
 	out.push_back(v);
 }
 
+enum class Rule : uint8_t { ANY,
+	NONNEGATIVE,
+	POSITIVE,
+	REVOLUTE_LIMIT };
+
+// Ranges Box2D asserts on, checked before any mutation.
+Rule rule(FieldSet set, uint16_t id) {
+	switch (set) {
+		case FieldSet::WORLD:
+			switch (id) {
+				case world_field::RESTITUTION_THRESHOLD:
+				case world_field::HIT_EVENT_THRESHOLD:
+				case world_field::CONTACT_HERTZ:
+				case world_field::CONTACT_DAMPING_RATIO:
+				case world_field::CONTACT_SPEED:
+				case world_field::CONTACT_RECYCLE_DISTANCE:
+					return Rule::NONNEGATIVE;
+				case world_field::MAXIMUM_LINEAR_SPEED:
+					return Rule::POSITIVE;
+				default:
+					return Rule::ANY;
+			}
+		case FieldSet::BODY:
+			switch (id) {
+				case body_field::LINEAR_DAMPING:
+				case body_field::ANGULAR_DAMPING:
+				case body_field::SLEEP_THRESHOLD:
+				case body_field::MASS:
+				case body_field::INERTIA:
+					return Rule::NONNEGATIVE;
+				case body_field::TARGET_TIME:
+					return Rule::POSITIVE;
+				default:
+					return Rule::ANY;
+			}
+		case FieldSet::SHAPE:
+			switch (id) {
+				case shape_field::FRICTION:
+				case shape_field::RESTITUTION:
+				case shape_field::ROLLING_RESISTANCE:
+				case shape_field::DENSITY:
+					return Rule::NONNEGATIVE;
+				default:
+					return Rule::ANY;
+			}
+		case FieldSet::JOINT:
+			switch (id) {
+				case joint_field::FORCE_THRESHOLD:
+				case joint_field::TORQUE_THRESHOLD:
+				case joint_field::CONSTRAINT_HERTZ:
+				case joint_field::CONSTRAINT_DAMPING_RATIO:
+				case joint_field::HERTZ:
+				case joint_field::DAMPING_RATIO:
+				case joint_field::MAX_MOTOR_FORCE:
+				case joint_field::MAX_MOTOR_TORQUE:
+				case joint_field::MAX_VELOCITY_FORCE:
+				case joint_field::MAX_VELOCITY_TORQUE:
+				case joint_field::LINEAR_HERTZ:
+				case joint_field::LINEAR_DAMPING_RATIO:
+				case joint_field::ANGULAR_HERTZ:
+				case joint_field::ANGULAR_DAMPING_RATIO:
+				case joint_field::MAX_SPRING_FORCE:
+				case joint_field::MAX_SPRING_TORQUE:
+					return Rule::NONNEGATIVE;
+				case joint_field::LENGTH:
+					return Rule::POSITIVE;
+				case joint_field::LOWER_ANGLE:
+				case joint_field::UPPER_ANGLE:
+					return Rule::REVOLUTE_LIMIT;
+				default:
+					return Rule::ANY;
+			}
+	}
+	return Rule::ANY;
+}
+
+bool obeys(FieldSet set, const FieldInfo &info, const Prop &p) {
+	const Rule r = rule(set, info.id);
+	const int count = info.kind == FieldKind::VEC2 ? 2 : 1;
+	for (int k = 0; k < count; ++k) {
+		const double v = p.v[k];
+		if ((r == Rule::NONNEGATIVE && v < 0.0) || (r == Rule::POSITIVE && !(v > 0.0)) || (r == Rule::REVOLUTE_LIMIT && (v < -0.99 * 3.14159265358979 || v > 0.99 * 3.14159265358979))) {
+			return false;
+		}
+	}
+	return true;
+}
+
+struct LimitPair {
+	uint16_t lower, upper;
+	const char *lower_name, *upper_name;
+};
+const LimitPair LIMIT_PAIRS[] = {
+	{ joint_field::LOWER_SPRING_FORCE, joint_field::UPPER_SPRING_FORCE, "lower_spring_force", "upper_spring_force" },
+	{ joint_field::MIN_LENGTH, joint_field::MAX_LENGTH, "min_length", "max_length" },
+	{ joint_field::LOWER_TRANSLATION, joint_field::UPPER_TRANSLATION, "lower_translation", "upper_translation" },
+	{ joint_field::LOWER_ANGLE, joint_field::UPPER_ANGLE, "lower_angle", "upper_angle" },
+};
+
+double value_of(const Values &values, const char *name, double fallback) {
+	for (const Value &v : values) {
+		if (std::strcmp(v.name, name) == 0) {
+			return v.v[0];
+		}
+	}
+	return fallback;
+}
+
+void default_limits(JointType type, Values &out) {
+	out.clear();
+	auto put_pair = [&](const char *lower, float lv, const char *upper, float uv) {
+		Value a;
+		a.name = lower;
+		a.v[0] = lv;
+		out.push_back(a);
+		Value b;
+		b.name = upper;
+		b.v[0] = uv;
+		out.push_back(b);
+	};
+	switch (type) {
+		case JointType::DISTANCE: {
+			const b2DistanceJointDef def = b2DefaultDistanceJointDef();
+			put_pair("lower_spring_force", def.lowerSpringForce, "upper_spring_force", def.upperSpringForce);
+			put_pair("min_length", def.minLength, "max_length", def.maxLength);
+			break;
+		}
+		case JointType::PRISMATIC: {
+			const b2PrismaticJointDef def = b2DefaultPrismaticJointDef();
+			put_pair("lower_translation", def.lowerTranslation, "upper_translation", def.upperTranslation);
+			break;
+		}
+		case JointType::REVOLUTE: {
+			const b2RevoluteJointDef def = b2DefaultRevoluteJointDef();
+			put_pair("lower_angle", def.lowerAngle, "upper_angle", def.upperAngle);
+			break;
+		}
+		case JointType::WHEEL: {
+			const b2WheelJointDef def = b2DefaultWheelJointDef();
+			put_pair("lower_translation", def.lowerTranslation, "upper_translation", def.upperTranslation);
+			break;
+		}
+		default:
+			break;
+	}
+}
+
 const char *const JOINT_NAMES[JOINT_TYPE_COUNT] = { "distance", "filter", "motor", "prismatic", "revolute", "weld", "wheel" };
 const char *const SHAPE_NAMES[] = { "circle", "capsule", "box", "polygon", "segment", "chain" };
 constexpr uint32_t SHAPE_TYPE_COUNT = sizeof(SHAPE_NAMES) / sizeof(SHAPE_NAMES[0]);
@@ -309,22 +456,67 @@ bool validate_props(FieldSet set, const Props &props) {
 		if (set == FieldSet::BODY && p.id == body_field::TYPE && (p.v[0] < 0 || p.v[0] > 2)) {
 			return false;
 		}
-		if (set == FieldSet::BODY && (p.id == body_field::MASS || p.id == body_field::INERTIA) && p.v[0] < 0) {
-			return false;
-		}
-		if (set == FieldSet::SHAPE && p.id == shape_field::DENSITY && p.v[0] < 0) {
-			return false;
-		}
-	}
-	if (set == FieldSet::WORLD) {
-		// Box2D has no contact tuning getter: set hertz, damping ratio and speed together.
-		const View v(props);
-		const int tuning = int(v.has(world_field::CONTACT_HERTZ)) + int(v.has(world_field::CONTACT_DAMPING_RATIO)) + int(v.has(world_field::CONTACT_SPEED));
-		if (tuning != 0 && tuning != 3) {
+		if (!obeys(set, fields[p.id], p)) {
 			return false;
 		}
 	}
 	return true;
+}
+
+bool joint_limits_ordered(JointType type, const b2JointId *existing, const Props &props) {
+	Values current;
+	if (existing) {
+		read_joint(*existing, current);
+	} else {
+		default_limits(type, current);
+	}
+	const View v(props);
+	for (const LimitPair &pair : LIMIT_PAIRS) {
+		if (!v.has(pair.lower) && !v.has(pair.upper)) {
+			continue;
+		}
+		const double lower = v.has(pair.lower) ? v.find(pair.lower)->v[0] : value_of(current, pair.lower_name, -3.0e38);
+		const double upper = v.has(pair.upper) ? v.find(pair.upper)->v[0] : value_of(current, pair.upper_name, 3.0e38);
+		if (lower > upper) {
+			return false;
+		}
+	}
+	return true;
+}
+
+bool props_material(const Props &props) {
+	const View v(props);
+	return v.has(shape_field::FRICTION) || v.has(shape_field::RESTITUTION) || v.has(shape_field::ROLLING_RESISTANCE) || v.has(shape_field::TANGENT_SPEED) || v.has(shape_field::USER_MATERIAL);
+}
+
+Props without_material(const Props &props) {
+	using namespace shape_field;
+	Props out;
+	for (const Prop &p : props) {
+		if (p.id != FRICTION && p.id != RESTITUTION && p.id != ROLLING_RESISTANCE && p.id != TANGENT_SPEED && p.id != USER_MATERIAL) {
+			out.push_back(p);
+		}
+	}
+	return out;
+}
+
+b2SurfaceMaterial material_from(const Props &props, b2SurfaceMaterial base) {
+	return material(View(props), base);
+}
+
+bool valid_material(const b2SurfaceMaterial &m) {
+	return std::isfinite(m.friction) && m.friction >= 0.0f && std::isfinite(m.restitution) && m.restitution >= 0.0f &&
+			std::isfinite(m.rollingResistance) && m.rollingResistance >= 0.0f && std::isfinite(m.tangentSpeed);
+}
+
+WorldTuning default_tuning() {
+	const b2WorldDef def = b2DefaultWorldDef();
+	WorldTuning tuning;
+	tuning.contact_hertz = def.contactHertz;
+	tuning.contact_damping_ratio = def.contactDampingRatio;
+	tuning.contact_speed = def.contactSpeed;
+	tuning.speculative = true;
+	return tuning;
 }
 
 bool joint_type_from_name(const char *name, JointType &type) {
@@ -356,6 +548,14 @@ const char *shape_type_name(ShapeType type) {
 }
 
 bool valid_geometry(const Geometry &g) {
+	for (const b2SurfaceMaterial &m : g.materials) {
+		if (!valid_material(m)) {
+			return false;
+		}
+	}
+	if (!g.materials.empty() && (g.type != ShapeType::CHAIN || g.materials.size() != chain_segments(g))) {
+		return false;
+	}
 	if (!finite2(g.center) || !finite2(g.point_a) || !finite2(g.point_b) || !finite2(g.half_extents) || !std::isfinite(g.radius) || !std::isfinite(g.angle)) {
 		return false;
 	}
@@ -612,7 +812,7 @@ b2JointId create_joint(b2WorldId world, JointType type, b2BodyId a, b2BodyId b, 
 	return b2_nullJointId;
 }
 
-void apply_world(b2WorldId world, const Props &props) {
+void apply_world(b2WorldId world, const Props &props, WorldTuning &tuning) {
 	using namespace world_field;
 	const View v(props);
 	if (v.has(GRAVITY)) {
@@ -624,8 +824,11 @@ void apply_world(b2WorldId world, const Props &props) {
 	if (v.has(HIT_EVENT_THRESHOLD)) {
 		b2World_SetHitEventThreshold(world, v.f(HIT_EVENT_THRESHOLD, 0));
 	}
-	if (v.has(CONTACT_HERTZ)) {
-		b2World_SetContactTuning(world, v.f(CONTACT_HERTZ, 0), v.f(CONTACT_DAMPING_RATIO, 0), v.f(CONTACT_SPEED, 0));
+	if (v.has(CONTACT_HERTZ) || v.has(CONTACT_DAMPING_RATIO) || v.has(CONTACT_SPEED)) {
+		tuning.contact_hertz = v.f(CONTACT_HERTZ, tuning.contact_hertz);
+		tuning.contact_damping_ratio = v.f(CONTACT_DAMPING_RATIO, tuning.contact_damping_ratio);
+		tuning.contact_speed = v.f(CONTACT_SPEED, tuning.contact_speed);
+		b2World_SetContactTuning(world, tuning.contact_hertz, tuning.contact_damping_ratio, tuning.contact_speed);
 	}
 	if (v.has(MAXIMUM_LINEAR_SPEED)) {
 		b2World_SetMaximumLinearSpeed(world, v.f(MAXIMUM_LINEAR_SPEED, 0));
@@ -640,7 +843,8 @@ void apply_world(b2WorldId world, const Props &props) {
 		b2World_EnableWarmStarting(world, v.b(WARM_STARTING, true));
 	}
 	if (v.has(SPECULATIVE)) {
-		b2World_EnableSpeculative(world, v.b(SPECULATIVE, true));
+		tuning.speculative = v.b(SPECULATIVE, true);
+		b2World_EnableSpeculative(world, tuning.speculative);
 	}
 	if (v.has(CONTACT_RECYCLE_DISTANCE)) {
 		b2World_SetContactRecycleDistance(world, v.f(CONTACT_RECYCLE_DISTANCE, 0));
@@ -748,14 +952,65 @@ void apply_shape(b2ShapeId shape, const Props &props) {
 	}
 }
 
-void apply_chain(b2ChainId chain, const Props &props) {
+size_t chain_segments(const Geometry &g) {
+	return g.loop ? g.points.size() : (g.points.size() >= 3 ? g.points.size() - 3 : 0);
+}
+
+std::vector<b2SurfaceMaterial> chain_point_materials(const Geometry &g) {
+	if (g.materials.empty() || g.loop) {
+		return g.materials;
+	}
+	// Open chain of n points: segment i uses point material i + 1 (1..n-3); entries 0,
+	// n-2 and n-1 belong to ghost points and only pad the table to n.
+	std::vector<b2SurfaceMaterial> points;
+	points.reserve(g.points.size());
+	points.push_back(g.materials.front());
+	points.insert(points.end(), g.materials.begin(), g.materials.end());
+	points.push_back(g.materials.back());
+	points.push_back(g.materials.back());
+	return points;
+}
+
+int chain_material_count(b2ChainId chain) {
+	return b2Chain_GetSurfaceMaterialCount(chain) == 1 ? 1 : b2Chain_GetSegmentCount(chain);
+}
+
+namespace {
+b2ShapeId chain_segment(b2ChainId chain, int index) {
+	std::vector<b2ShapeId> segments(static_cast<size_t>(b2Chain_GetSegmentCount(chain)));
+	const int count = b2Chain_GetSegments(chain, segments.data(), int(segments.size()));
+	return index >= 0 && index < count ? segments[size_t(index)] : b2_nullShapeId;
+}
+} // namespace
+
+b2SurfaceMaterial chain_material(b2ChainId chain, int index) {
+	if (b2Chain_GetSurfaceMaterialCount(chain) == 1) {
+		return b2Chain_GetSurfaceMaterial(chain, 0);
+	}
+	const b2ShapeId segment = chain_segment(chain, index);
+	return b2Shape_IsValid(segment) ? b2Shape_GetSurfaceMaterial(segment) : b2DefaultSurfaceMaterial();
+}
+
+void apply_chain(b2ChainId chain, const Props &props, int32_t material_index) {
 	using namespace shape_field;
 	const View v(props);
-	if (v.has(FRICTION) || v.has(RESTITUTION) || v.has(ROLLING_RESISTANCE) || v.has(TANGENT_SPEED) || v.has(USER_MATERIAL)) {
-		const int count = b2Chain_GetSurfaceMaterialCount(chain);
-		for (int i = 0; i < count; ++i) {
-			const b2SurfaceMaterial m = material(v, b2Chain_GetSurfaceMaterial(chain, i));
-			b2Chain_SetSurfaceMaterial(chain, &m, i);
+	const bool shared = b2Chain_GetSurfaceMaterialCount(chain) == 1;
+	if (material_index >= 0 || v.has(FRICTION) || v.has(RESTITUTION) || v.has(ROLLING_RESISTANCE) || v.has(TANGENT_SPEED) || v.has(USER_MATERIAL)) {
+		if (shared) {
+			// One shared material: Box2D updates every segment.
+			const b2SurfaceMaterial m = material(v, b2Chain_GetSurfaceMaterial(chain, 0));
+			b2Chain_SetSurfaceMaterial(chain, &m, 0);
+		} else {
+			// Per-segment materials live on the segment shapes.
+			const int count = b2Chain_GetSegmentCount(chain);
+			for (int i = 0; i < count; ++i) {
+				if (material_index >= 0 && i != material_index) {
+					continue;
+				}
+				const b2ShapeId segment = chain_segment(chain, i);
+				const b2SurfaceMaterial m = material(v, b2Shape_GetSurfaceMaterial(segment));
+				b2Shape_SetSurfaceMaterial(segment, &m);
+			}
 		}
 	}
 	// Filter and event flags live on the chain's segment shapes.
@@ -871,8 +1126,20 @@ void apply_joint(b2JointId joint, const Props &props) {
 	}
 }
 
-void read_world(b2WorldId world, Values &out) {
+void read_material(const b2SurfaceMaterial &m, Values &out) {
+	put(out, "friction", m.friction);
+	put(out, "restitution", m.restitution);
+	put(out, "rolling_resistance", m.rollingResistance);
+	put(out, "tangent_speed", m.tangentSpeed);
+	put_u64(out, "user_material", m.userMaterialId);
+}
+
+void read_world(b2WorldId world, const WorldTuning &tuning, Values &out) {
 	out.clear();
+	put(out, "contact_hertz", tuning.contact_hertz);
+	put(out, "contact_damping_ratio", tuning.contact_damping_ratio);
+	put(out, "contact_speed", tuning.contact_speed);
+	put_bool(out, "speculative", tuning.speculative);
 	put_vec(out, "gravity", b2World_GetGravity(world));
 	put(out, "restitution_threshold", b2World_GetRestitutionThreshold(world));
 	put(out, "hit_event_threshold", b2World_GetHitEventThreshold(world));

@@ -122,7 +122,7 @@
 			<param index="0" name="entity_id" type="int" />
 			<param index="1" name="shape_index" type="int" />
 			<description>
-				Reads shape material, density, filter, sensor and event flags and bounds. A chain reads as its first segment plus [code]segment_count[/code].
+				Reads shape material, density, filter, sensor and event flags and bounds. A chain reads as its first segment plus [code]segment_count[/code] and, with per-point materials, [code]materials[/code]. Every field is range-checked when queued (Box2D's non-negative materials, damping, stiffness, motors and thresholds, positive lengths, revolute limits within 0.99 PI, ordered lower/upper pairs).
 			</description>
 		</method>
 		<method name="get_simulation_fingerprint" qualifiers="const">
@@ -146,7 +146,7 @@
 		<method name="get_world" qualifiers="const">
 			<return type="Dictionary" />
 			<description>
-				Reads world settings and counters ([code]awake_body_count[/code], [code]body_count[/code], [code]shape_count[/code], [code]contact_count[/code], [code]joint_count[/code], [code]island_count[/code], [code]bounds_lower[/code], [code]bounds_upper[/code], [code]tick[/code]).
+				Reads world settings and counters ([code]awake_body_count[/code], [code]body_count[/code], [code]shape_count[/code], [code]contact_count[/code], [code]joint_count[/code], [code]island_count[/code], [code]bounds_lower[/code], [code]bounds_upper[/code], [code]tick[/code]), including [code]contact_hertz[/code], [code]contact_damping_ratio[/code], [code]contact_speed[/code] and [code]speculative[/code].
 			</description>
 		</method>
 		<method name="move_capsule" qualifiers="const">
@@ -222,7 +222,7 @@
 			<param index="3" name="shapes" type="Dictionary[]" />
 			<description>
 				Creates a body from any Box2D body fields (see [method get_field_names] with [code]"body"[/code]) and attaches [param shapes] as shape indices 0, 1, 2 and so on. [code]type[/code] accepts [code]"static"[/code], [code]"kinematic"[/code], [code]"dynamic"[/code] or 0-2; [code]rotation[/code] is an angle in radians. [code]fast_rotation[/code] applies at creation only.
-				Each shape is a [Dictionary] with a [code]type[/code] ([code]"circle"[/code], [code]"capsule"[/code], [code]"box"[/code], [code]"polygon"[/code], [code]"segment"[/code], [code]"chain"[/code]), geometry keys and any shape fields ([code]friction[/code], [code]restitution[/code], [code]rolling_resistance[/code], [code]tangent_speed[/code], [code]density[/code], [code]category[/code], [code]mask[/code], [code]group[/code], [code]sensor[/code], [code]contact_events[/code] and so on). Geometry keys: [code]radius[/code] (circle, capsule, or rounding of box and polygon), [code]center[/code] and [code]angle[/code] (local placement), [code]half_height[/code] or [code]point_a[/code]/[code]point_b[/code] (capsule, segment), [code]half_extents[/code] (box), [code]points[/code] (polygon hull of up to 8 points; chain points) and [code]loop[/code] (chains are one-sided segments from 4 points or more; an open chain's first and last points are ghost vertices).
+				Each shape is a [Dictionary] with a [code]type[/code] ([code]"circle"[/code], [code]"capsule"[/code], [code]"box"[/code], [code]"polygon"[/code], [code]"segment"[/code], [code]"chain"[/code]), geometry keys and any shape fields ([code]friction[/code], [code]restitution[/code], [code]rolling_resistance[/code], [code]tangent_speed[/code], [code]density[/code], [code]category[/code], [code]mask[/code], [code]group[/code], [code]sensor[/code], [code]contact_events[/code] and so on). Geometry keys: [code]radius[/code] (circle, capsule, or rounding of box and polygon), [code]center[/code] and [code]angle[/code] (local placement), [code]half_height[/code] or [code]point_a[/code]/[code]point_b[/code] (capsule, segment), [code]half_extents[/code] (box), [code]points[/code] (polygon hull of up to 8 points; chain points) and [code]materials[/code] (chains: an [Array] with one material Dictionary per segment: points for a loop, points minus 3 for an open chain), [code]loop[/code] (chains are one-sided segments from 4 points or more; an open chain's first and last points are ghost vertices).
 				[codeblock]
 				world.queue_create_body(3, 0, {"type": "dynamic", "position": Vector2(0, 4), "bullet": true},
 				        [{"type": "capsule", "radius": 0.3, "half_height": 0.5, "friction": 0.2},
@@ -303,8 +303,9 @@
 			<param index="1" name="sequence" type="int" />
 			<param index="2" name="shape_index" type="int" />
 			<param index="3" name="fields" type="Dictionary" />
+			<param index="4" name="material_index" type="int" default="-1" />
 			<description>
-				Changes shape fields: surface material, [code]density[/code] (with [code]update_body_mass[/code]), filter ([code]category[/code], [code]mask[/code], [code]group[/code]) and event flags. On a chain, material applies to every segment material and filter and events to every segment.
+				Changes shape fields: surface material, [code]density[/code] (with [code]update_body_mass[/code]), filter ([code]category[/code], [code]mask[/code], [code]group[/code]) and event flags. On a chain, material applies to every segment material and filter and events to every segment; with [param material_index] 0 or above only that entry of the chain's material table changes.
 			</description>
 		</method>
 		<method name="queue_set_world">
@@ -312,7 +313,7 @@
 			<param index="0" name="sequence" type="int" />
 			<param index="1" name="fields" type="Dictionary" />
 			<description>
-				Changes world settings: [code]gravity[/code], [code]restitution_threshold[/code], [code]hit_event_threshold[/code], [code]maximum_linear_speed[/code], [code]sleep[/code], [code]continuous[/code], [code]warm_starting[/code], [code]speculative[/code], [code]contact_recycle_distance[/code], and [code]contact_hertz[/code], [code]contact_damping_ratio[/code] and [code]contact_speed[/code] (always set together). World commands run after the batch's body commands and are part of snapshots.
+				Changes world settings: [code]gravity[/code], [code]restitution_threshold[/code], [code]hit_event_threshold[/code], [code]maximum_linear_speed[/code], [code]sleep[/code], [code]continuous[/code], [code]warm_starting[/code], [code]speculative[/code], [code]contact_recycle_distance[/code], and [code]contact_hertz[/code], [code]contact_damping_ratio[/code] and [code]contact_speed[/code]. World commands run after the batch's body commands and are part of snapshots.
 			</description>
 		</method>
 		<method name="restore_snapshot">

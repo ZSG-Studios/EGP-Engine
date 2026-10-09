@@ -17,7 +17,7 @@ constexpr uint64_t FNV_OFFSET = 14695981039346656037ull;
 constexpr uint64_t FNV_PRIME = 1099511628211ull;
 constexpr uint64_t SNAPSHOT_MAGIC = 0x3150414E53324745ull; // EG2SNAP1, little endian.
 constexpr uint64_t PROFILE_ID = 0x56edae79f2949d86ull;
-constexpr size_t HEADER_BYTES = 8 * 11;
+constexpr size_t HEADER_BYTES = 8 * 15;
 
 bool finite(b2Vec2 v) {
 	return std::isfinite(v.x) && std::isfinite(v.y);
@@ -173,6 +173,7 @@ Result DeterministicWorld2D::configure(uint32_t rate, uint32_t steps, uint32_t w
 	substeps = steps;
 	workers = worker_count;
 	configured_gravity = g;
+	tuning = default_tuning();
 	length_units = b2GetLengthUnitsPerMeter();
 	b2WorldDef def = b2DefaultWorldDef();
 	def.gravity = g;
@@ -227,12 +228,12 @@ Result DeterministicWorld2D::queue(const Command &c) {
 			}
 			break;
 		case Operation::SET_SHAPE:
-			if (!validate_props(FieldSet::SHAPE, c.props)) {
+			if (!validate_props(FieldSet::SHAPE, c.props) || c.material_index < -1 || c.material_index > 65535) {
 				return Result::INVALID_ARGUMENT;
 			}
 			break;
 		case Operation::CREATE_JOINT:
-			if (uint32_t(c.joint_type) >= JOINT_TYPE_COUNT || c.body_a == 0 || c.body_b == 0 || c.body_a == c.body_b || c.body_a > uint64_t(INT64_MAX) || c.body_b > uint64_t(INT64_MAX) || !validate_props(FieldSet::JOINT, c.props)) {
+			if (uint32_t(c.joint_type) >= JOINT_TYPE_COUNT || c.body_a == 0 || c.body_b == 0 || c.body_a == c.body_b || c.body_a > uint64_t(INT64_MAX) || c.body_b > uint64_t(INT64_MAX) || !validate_props(FieldSet::JOINT, c.props) || !joint_limits_ordered(c.joint_type, nullptr, c.props)) {
 				return Result::INVALID_ARGUMENT;
 			}
 			break;
@@ -303,10 +304,45 @@ Result DeterministicWorld2D::apply_queued_commands() {
 			return Result::INVALID_BATCH;
 		}
 	}
+	{
+		// Joint limits stay ordered through every change in the batch.
+		std::map<uint64_t, std::pair<JointType, Props>> merged;
+		for (const Command &c : pending) {
+			if (c.operation == Operation::CREATE_JOINT) {
+				merged[c.entity] = { c.joint_type, c.props };
+			}
+		}
+		for (const Command &c : pending) {
+			if (c.operation != Operation::SET_JOINT) {
+				continue;
+			}
+			const auto created_here = merged.find(c.entity);
+			if (created_here != merged.end() && !joints.count(c.entity)) {
+				Props &props = created_here->second.second;
+				props.insert(props.end(), c.props.begin(), c.props.end());
+				if (!joint_limits_ordered(created_here->second.first, nullptr, props)) {
+					return Result::INVALID_BATCH;
+				}
+				continue;
+			}
+			auto &entry = merged[c.entity];
+			const JointRecord &record = joints.find(c.entity)->second;
+			entry.first = JointType(record.kind);
+			entry.second.insert(entry.second.end(), c.props.begin(), c.props.end());
+			if (!b2Joint_IsValid(record.id) || !joint_limits_ordered(entry.first, &record.id, entry.second)) {
+				return Result::INVALID_BATCH;
+			}
+		}
+	}
 	size_t live_count = bodies.size();
 	uint64_t current_entity = 0;
 	bool entity_live = false;
-	std::set<uint32_t> entity_shapes;
+	// Shape index -> material table size (chains: 1 or one per point; others: 0, fixed).
+	std::map<uint32_t, int> entity_shapes;
+	auto materials_of = [](const ShapeSpec &spec) {
+		return spec.geometry.type != ShapeType::CHAIN ? 0 : spec.geometry.materials.empty() ? 1 :
+																							 int(chain_segments(spec.geometry));
+	};
 	for (const Command &c : pending) {
 		if (!body_operation(c.operation)) {
 			continue;
@@ -318,7 +354,7 @@ Result DeterministicWorld2D::apply_queued_commands() {
 			const auto indices = shapes.find(c.entity);
 			if (entity_live && indices != shapes.end()) {
 				for (const auto &entry : indices->second) {
-					entity_shapes.insert(entry.first);
+					entity_shapes[entry.first] = b2Chain_IsValid(entry.second.chain) ? chain_material_count(entry.second.chain) : 0;
 				}
 			}
 		}
@@ -332,7 +368,7 @@ Result DeterministicWorld2D::apply_queued_commands() {
 			}
 			entity_shapes.clear();
 			for (uint32_t index = 0; index < c.shapes.size(); ++index) {
-				entity_shapes.insert(index);
+				entity_shapes[index] = materials_of(c.shapes[index]);
 			}
 			continue;
 		}
@@ -346,15 +382,17 @@ Result DeterministicWorld2D::apply_queued_commands() {
 				--live_count;
 				break;
 			case Operation::ADD_SHAPE:
-				if (entity_shapes.size() >= MAX_SHAPES_PER_BODY || !entity_shapes.insert(c.shape_index).second) {
+				if (entity_shapes.size() >= MAX_SHAPES_PER_BODY || !entity_shapes.emplace(c.shape_index, materials_of(c.shapes[0])).second) {
 					return Result::INVALID_BATCH;
 				}
 				break;
-			case Operation::SET_SHAPE:
-				if (!entity_shapes.count(c.shape_index)) {
+			case Operation::SET_SHAPE: {
+				const auto shape = entity_shapes.find(c.shape_index);
+				if (shape == entity_shapes.end() || c.material_index >= shape->second) {
 					return Result::INVALID_BATCH;
 				}
 				break;
+			}
 			case Operation::DESTROY_SHAPE:
 				if (!entity_shapes.erase(c.shape_index)) {
 					return Result::INVALID_BATCH;
@@ -416,7 +454,7 @@ Result DeterministicWorld2D::apply_queued_commands() {
 	}
 	for (const Command &c : pending) {
 		if (c.operation == Operation::SET_WORLD) {
-			apply_world(world, c.props);
+			apply_world(world, c.props, tuning);
 		} else if (c.operation == Operation::EXPLODE) {
 			b2ExplosionDef def = b2DefaultExplosionDef();
 			def.maskBits = c.mask;
@@ -453,6 +491,11 @@ void DeterministicWorld2D::add_shape(uint64_t entity, uint32_t index, b2BodyId b
 	if (spec.geometry.type == ShapeType::CHAIN) {
 		b2SurfaceMaterial shared;
 		b2ChainDef def = chain_def(spec.props, shared);
+		const std::vector<b2SurfaceMaterial> point_materials = chain_point_materials(spec.geometry);
+		if (!point_materials.empty()) {
+			def.materials = point_materials.data();
+			def.materialCount = int(point_materials.size());
+		}
 		def.points = spec.geometry.points.data();
 		def.count = int(spec.geometry.points.size());
 		def.isLoop = spec.geometry.loop;
@@ -460,7 +503,8 @@ void DeterministicWorld2D::add_shape(uint64_t entity, uint32_t index, b2BodyId b
 		if (!b2Chain_IsValid(slot.chain)) {
 			return;
 		}
-		apply_chain(slot.chain, spec.props);
+		// Filter and event flags on every segment; materials came with the definition.
+		apply_chain(slot.chain, without_material(spec.props));
 	} else {
 		b2ShapeDef def = b2DefaultShapeDef();
 		apply_shape_def(def, spec.props);
@@ -499,7 +543,7 @@ void DeterministicWorld2D::apply_body_command(const Command &c, b2BodyId body) {
 		case Operation::SET_SHAPE: {
 			ShapeSlot &slot = shapes[c.entity][c.shape_index];
 			if (b2Chain_IsValid(slot.chain)) {
-				apply_chain(slot.chain, c.props);
+				apply_chain(slot.chain, c.props, c.material_index);
 			} else if (b2Shape_IsValid(slot.shape)) {
 				apply_shape(slot.shape, c.props);
 			}
@@ -695,6 +739,10 @@ Result DeterministicWorld2D::capture_snapshot(std::vector<uint8_t> &out) {
 	append_u64(out, bodies.size());
 	append_u64(out, table.size());
 	append_u64(out, float_bits(length_units));
+	append_u64(out, float_bits(tuning.contact_hertz));
+	append_u64(out, float_bits(tuning.contact_damping_ratio));
+	append_u64(out, float_bits(tuning.contact_speed));
+	append_u64(out, tuning.speculative ? 1 : 0);
 	const size_t image_at = out.size();
 	out.resize(image_at + size_t(size));
 	if (b2World_Snapshot(world, out.data() + image_at, size) != size) {
@@ -724,7 +772,12 @@ Result DeterministicWorld2D::restore_snapshot(const std::vector<uint8_t> &bytes)
 		return Result::INVALID_SNAPSHOT;
 	}
 	const b2Vec2 gravity = { bits_float(read_u64(bytes, 40)), bits_float(read_u64(bytes, 48)) };
-	if (!finite(gravity)) {
+	WorldTuning restored_tuning;
+	restored_tuning.contact_hertz = bits_float(read_u64(bytes, 88));
+	restored_tuning.contact_damping_ratio = bits_float(read_u64(bytes, 96));
+	restored_tuning.contact_speed = bits_float(read_u64(bytes, 104));
+	restored_tuning.speculative = read_u64(bytes, 112) != 0;
+	if (!finite(gravity) || !std::isfinite(restored_tuning.contact_hertz) || !std::isfinite(restored_tuning.contact_damping_ratio) || !std::isfinite(restored_tuning.contact_speed) || read_u64(bytes, 112) > 1) {
 		return Result::INVALID_SNAPSHOT;
 	}
 	// Parse the identity table completely before touching the world.
@@ -815,8 +868,12 @@ Result DeterministicWorld2D::restore_snapshot(const std::vector<uint8_t> &bytes)
 		joints.clear();
 		return Result::INVALID_SNAPSHOT;
 	}
-	// Box2D snapshots do not carry user data.
+	// Box2D snapshots do not carry user data. The tuning mirror is restored and applied,
+	// so the world matches it whether or not the image carried the settings.
 	tag_all();
+	tuning = restored_tuning;
+	b2World_SetContactTuning(world, tuning.contact_hertz, tuning.contact_damping_ratio, tuning.contact_speed);
+	b2World_EnableSpeculative(world, tuning.speculative);
 	tick = read_u64(bytes, 16);
 	return Result::OK;
 }
@@ -881,7 +938,7 @@ bool DeterministicWorld2D::read_world(Values &out) const {
 	if (!b2World_IsValid(world)) {
 		return false;
 	}
-	egp::box2d::read_world(world, out);
+	egp::box2d::read_world(world, tuning, out);
 	return true;
 }
 
@@ -923,6 +980,25 @@ bool DeterministicWorld2D::read_shape(uint64_t entity, uint32_t index, Values &o
 		return false;
 	}
 	egp::box2d::read_shape(found->second.shape, out);
+	return true;
+}
+
+bool DeterministicWorld2D::read_shape_materials(uint64_t entity, uint32_t index, std::vector<Values> &out) const {
+	std::lock_guard<std::recursive_mutex> guard(get_simulation_mutex());
+	out.clear();
+	const auto body = shapes.find(entity);
+	if (body == shapes.end()) {
+		return false;
+	}
+	const auto found = body->second.find(index);
+	if (found == body->second.end() || !b2Chain_IsValid(found->second.chain)) {
+		return false;
+	}
+	const int count = chain_material_count(found->second.chain);
+	out.resize(size_t(count));
+	for (int i = 0; i < count; ++i) {
+		read_material(chain_material(found->second.chain, i), out[size_t(i)]);
+	}
 	return true;
 }
 

@@ -77,8 +77,20 @@ struct Geometry {
 	// and last points are ghosts).
 	std::vector<b2Vec2> points;
 	bool loop = false;
+	// Chain materials: empty (one material from the shape fields) or one per segment
+	// (points for a loop, points - 3 for an open chain, whose end points are ghosts).
+	std::vector<b2SurfaceMaterial> materials;
 };
+size_t chain_segments(const Geometry &p_geometry);
+// The per-point table Box2D's chain definition takes, built from per-segment materials
+// (an open chain's ghost points repeat the end segments).
+std::vector<b2SurfaceMaterial> chain_point_materials(const Geometry &p_geometry);
+// A chain's material table: one shared entry, or one per segment (read and written on
+// the segment shapes; Box2D's chain material accessors assert on open chains).
+int chain_material_count(b2ChainId p_chain);
+b2SurfaceMaterial chain_material(b2ChainId p_chain, int p_index);
 bool valid_geometry(const Geometry &p_geometry);
+bool valid_material(const b2SurfaceMaterial &p_material);
 // Creates a shape (or for CHAIN a chain whose segments are returned in r_segments).
 b2ShapeId create_shape(b2BodyId p_body, const b2ShapeDef &p_def, const Geometry &p_geometry, b2ChainId *r_chain);
 // Shape-cast proxy (point cloud plus radius) for circle, capsule, box, polygon and
@@ -90,16 +102,34 @@ void apply_shape_def(b2ShapeDef &r_def, const Props &p_props);
 b2ChainDef chain_def(const Props &p_props, b2SurfaceMaterial &r_material);
 b2JointId create_joint(b2WorldId p_world, JointType p_type, b2BodyId p_a, b2BodyId p_b, const Props &p_props);
 
-void apply_world(b2WorldId p_world, const Props &p_props);
+// Box2D has no getters for contact tuning or the speculative flag: the deterministic
+// world mirrors them (and carries them in its snapshots) so partial updates and
+// readback stay exact on every peer.
+struct WorldTuning {
+	float contact_hertz = 0.0f;
+	float contact_damping_ratio = 0.0f;
+	float contact_speed = 0.0f;
+	bool speculative = true;
+};
+WorldTuning default_tuning();
+void apply_world(b2WorldId p_world, const Props &p_props, WorldTuning &r_tuning);
 void apply_body(b2BodyId p_body, const Props &p_props, float p_step);
 void apply_body_extras(b2BodyId p_body, const Props &p_props, float p_step);
 void apply_shape(b2ShapeId p_shape, const Props &p_props);
-void apply_chain(b2ChainId p_chain, const Props &p_props);
+// p_material_index >= 0 changes one entry of the chain's material table.
+void apply_chain(b2ChainId p_chain, const Props &p_props, int32_t p_material_index = -1);
 void apply_joint(b2JointId p_joint, const Props &p_props);
 
-// Finite values, known ids, complete groups (contact tuning is set as hertz, damping
-// ratio and speed together).
+// Finite values, known ids and every range Box2D asserts on (non-negative damping,
+// stiffness, thresholds and materials; positive lengths; revolute limits within 0.99 PI).
 bool validate_props(FieldSet p_set, const Props &p_props);
+// Merged lower/upper pairs (props over the joint's current values, or the type's
+// defaults when p_existing is null) stay ordered.
+bool joint_limits_ordered(JointType p_type, const b2JointId *p_existing, const Props &p_props);
+bool props_material(const Props &p_props);
+// The props without surface material fields (filter and event flags only).
+Props without_material(const Props &p_props);
+b2SurfaceMaterial material_from(const Props &p_props, b2SurfaceMaterial p_base);
 
 struct Value {
 	const char *name = "";
@@ -108,7 +138,8 @@ struct Value {
 	uint64_t bits = 0;
 };
 using Values = std::vector<Value>;
-void read_world(b2WorldId p_world, Values &r_values);
+void read_world(b2WorldId p_world, const WorldTuning &p_tuning, Values &r_values);
+void read_material(const b2SurfaceMaterial &p_material, Values &r_values);
 void read_body(b2BodyId p_body, Values &r_values);
 void read_shape(b2ShapeId p_shape, Values &r_values);
 void read_joint(b2JointId p_joint, Values &r_values);
