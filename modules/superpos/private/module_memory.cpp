@@ -1,6 +1,7 @@
 #include "module_memory.hpp"
 #include <atomic>
 #include <memory>
+#include <new>
 #include <thread>
 namespace superpos_egp { namespace {
 struct RootStorage {
