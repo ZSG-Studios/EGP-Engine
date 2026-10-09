@@ -15,7 +15,7 @@
 
 namespace superpos_egp::lifecycle_engine::fixture {
 unsigned checks{};
-#define VERIFY(...) do{++checks;if(!(__VA_ARGS__)){std::printf("NATIVE_LIFECYCLE_FAIL line=%u checks=%u expression=%s\n",__LINE__,checks,#__VA_ARGS__);std::fflush(stdout);SceneTree::get_singleton()->quit(1);return false;}}while(false)
+#define VERIFY(...) do{++checks;if(!(__VA_ARGS__)){std::printf("NATIVE_LIFECYCLE_FAIL line=%u checks=%u expression=%s\n",__LINE__,checks,#__VA_ARGS__);std::fflush(stdout);failed=true;SceneTree::get_singleton()->quit(1);return false;}}while(false)
 class Replica final:public RefCounted {
     GDCLASS(Replica,RefCounted);
 protected: static void _bind_methods(){}
@@ -76,7 +76,7 @@ struct Run {
     std::array<Ref<SuperposSession>,2> sessions;
     Ref<Factory> factory,other_factory;
     std::chrono::steady_clock::time_point deadline=std::chrono::steady_clock::now()+std::chrono::seconds(15);
-    unsigned scenario{},stage{},ticks{},cleanup_drops{};bool cleanup_remained_live{};DropSchema* drop_schema{};ObjectID departed;std::size_t baseline{};
+    unsigned scenario{},stage{},ticks{},cleanup_drops{};bool failed{},cleanup_remained_live{};DropSchema* drop_schema{};ObjectID departed;std::size_t baseline{};
     bool create(bool delay){
         carriers[0].remote=&carriers[1];carriers[1].remote=&carriers[0];
         Ref<SuperposField> field;field.instantiate();field->set_field_id(1);field->set_codec_id(3);field->set_max_bytes(8);
@@ -90,7 +90,7 @@ struct Run {
         factory.instantiate();factory->replica.instantiate();factory->delayed=delay;return true;
     }
     bool send(superpos::ReplicaWireMessage message,unsigned channel,unsigned source=0){
-        message.context={7,8,9};std::array<std::byte,8192> bytes{};auto encoded=superpos::encode_replica_message(message,bytes);VERIFY(encoded);
+        message.context={7,8,9};std::array<std::byte,8192> bytes{};auto encoded=superpos::encode_replica_message(message,bytes);if(!encoded){std::printf("NATIVE_LIFECYCLE_WIRE scenario=%u kind=%u error=%u\n",scenario,unsigned(message.kind),unsigned(encoded.error()));std::fflush(stdout);}VERIFY(encoded);
         PackedByteArray packet;VERIFY(packet.resize(*encoded)==OK);std::memcpy(packet.ptrw(),bytes.data(),*encoded);
         auto result=sessions[source]->enqueue_packet(packet,channel);VERIFY(int(result["error"])==OK);return true;
     }
@@ -99,21 +99,27 @@ struct Run {
         Registration registration{19,101,sizeof(Replica),factory};
         if(scenario==3){
             other_factory.instantiate();other_factory->replica.instantiate();other_factory->delayed=true;
-            superpos::ReplicaKey key{0,1,7,8,9,1};superpos::ReplicaWireMessage bind;bind.kind=superpos::ReplicaWireKind::Bind;bind.binding={key,superpos::ObjectHandle::from_parts(71,1),19,1,1,1};VERIFY(send(bind,0,1));
+            superpos::ReplicaKey key{1,1,7,8,9,1};superpos::ReplicaWireMessage bind;bind.kind=superpos::ReplicaWireKind::Bind;bind.binding={key,superpos::ObjectHandle::from_parts(71,1),19,1,1,1};VERIFY(send(bind,0,1));
             std::array<std::byte,8> state{};state[0]=std::byte{43};superpos::ReplicaWireMessage offer;offer.kind=superpos::ReplicaWireKind::BaselineOffer;offer.sequence=1;offer.baseline={key,0,1,1,state};offer.tick=1;VERIFY(send(offer,2,1));
         }
         VERIFY(SuperposNativeReceiverAccess::attach(*sessions[1].ptr(),std::span(&registration,1),config,{}, {4,4,1,4096})==OK);
         VERIFY(SuperposNativeReceiverAccess::attach(*sessions[1].ptr(),std::span(&registration,1),config,{}, {4,4,1,4096})==ERR_ALREADY_IN_USE);
         VERIFY(int(sessions[1]->read_packet(0)["error"])==ERR_BUSY);
-        superpos::ReplicaKey key{0,1,7,8,9,1};superpos::ReplicaWireMessage bind;bind.kind=superpos::ReplicaWireKind::Bind;bind.binding={key,superpos::ObjectHandle::from_parts(70,1),19,2,1,1};VERIFY(send(bind,0));
+        superpos::ReplicaKey key{1,1,7,8,9,1};superpos::ReplicaWireMessage bind;bind.kind=superpos::ReplicaWireKind::Bind;bind.binding={key,superpos::ObjectHandle::from_parts(70,1),19,2,1,1};VERIFY(send(bind,0));
         std::array<std::byte,8> state{};state[0]=std::byte{42};superpos::ReplicaWireMessage offer;offer.kind=superpos::ReplicaWireKind::BaselineOffer;offer.sequence=1;offer.baseline={key,0,1,1,state};offer.tick=1;VERIFY(send(offer,2));
         if(scenario==3){config.peer=1;Registration other{19,102,sizeof(Replica),other_factory};VERIFY(SuperposNativeReceiverAccess::attach(*sessions[0].ptr(),std::span(&other,1),config,{}, {4,4,1,4096})==OK);}
         return true;
     }
     bool step(){
+        if(failed)return false;
+        if(std::chrono::steady_clock::now()>=deadline){
+            std::printf("NATIVE_LIFECYCLE_TIMEOUT scenario=%u stage=%u started=%u commits=%u cancelled=%u\n",scenario,stage,factory.is_valid()?factory->started:0,factory.is_valid()?factory->commits:0,factory.is_valid()?factory->cancelled:0);std::fflush(stdout);
+        }
         VERIFY(std::chrono::steady_clock::now()<deadline);
         if(stage==0){baseline=module_backing().total();VERIFY(create(scenario!=0));stage=1;}
-        for(auto& session:sessions)if(session.is_valid()){const auto result=session->advance_tick();VERIFY(result==OK || result==ERR_BUSY || result==ERR_UNCONFIGURED);}
+        for(auto& session:sessions)if(session.is_valid()){const auto result=session->advance_tick();
+            if(result!=OK && result!=ERR_BUSY){std::printf("NATIVE_LIFECYCLE_PUMP scenario=%u stage=%u error=%d last=%d state=%s\n",scenario,stage,int(result),int(session->get_last_error()),session->get_state().utf8().get_data());std::fflush(stdout);}
+            VERIFY(result==OK || result==ERR_BUSY);}
         if(stage==1){if(sessions[0]->get_state()!=String("NetworkReady") || sessions[1]->get_state()!=String("NetworkReady"))return false;VERIFY(begin());stage=2;}
         if(stage==2){
             if((scenario==0 && !factory->commits) || (scenario!=0 && !factory->started) || (scenario==3 && !other_factory->started))return false;

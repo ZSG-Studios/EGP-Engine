@@ -90,6 +90,9 @@ Error SuperposNativeReceiverAccess::bind_fixture_transport(SuperposSession& owne
     auto* state=owner.impl;if(state->network)return ERR_ALREADY_IN_USE;
     auto created=superpos_egp::captured_create<EngineNetwork>(state->allocator,superpos::MemoryDomain::Session);
     if(!created)return translate(created.error());
+#ifdef SUPERPOS_HAS_DTLS
+    auto clock_ready=(*created)->clock.initialize();if(!clock_ready)return translate(clock_ready.error());
+#endif
     auto profile=canonical_profile(state->digest);if(!profile)return translate(profile.error());
     config.capabilities.schemas=state->world->fingerprint();config.admission.schemas=config.capabilities.schemas;
     config.capabilities.simulation=*profile;config.admission.simulation=*profile;
