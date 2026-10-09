@@ -103,10 +103,11 @@ func _index_bodies() -> void:
 
 
 # Authoritative creation (server, or a client starting from tick zero).
-func create(player_count: int) -> bool:
+func create(player_count: int, workers: int = 1) -> bool:
 	total = player_count
 	world = EGPBox3DWorld.new()
-	if world.configure(TICK_RATE, 4, 1) != OK:
+	# Solver workers run on the engine thread pool; results are identical for any count.
+	if world.configure(TICK_RATE, 4, workers) != OK:
 		return false
 	var ok := world.queue_create_box(1,0,Vector3(0,-0.5,0),Vector3(35,0.5,35),0) == OK
 	for id in range(total):
@@ -140,7 +141,7 @@ func capture() -> PackedByteArray:
 	return packed
 
 
-func restore(packed: PackedByteArray) -> bool:
+func restore(packed: PackedByteArray, workers: int = 1) -> bool:
 	if packed.size() < 4:
 		return false
 	var raw := packed.slice(4).decompress(packed.decode_u32(0), FileAccess.COMPRESSION_ZSTD)
@@ -154,7 +155,7 @@ func restore(packed: PackedByteArray) -> bool:
 	if not state is Dictionary:
 		return false
 	world = EGPBox3DWorld.new()
-	if world.configure(TICK_RATE, 4, 1) != OK or world.restore_snapshot(raw.slice(8+state_size)) != OK:
+	if world.configure(TICK_RATE, 4, workers) != OK or world.restore_snapshot(raw.slice(8+state_size)) != OK:
 		return false
 	total = int(state.total)
 	actors.clear()

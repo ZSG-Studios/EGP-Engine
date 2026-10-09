@@ -29,6 +29,7 @@
 /**************************************************************************/
 
 #include "egp_box3d_world.h"
+#include "box3d_task_system.h"
 
 #include "core/config/project_settings.h"
 #include "core/object/class_db.h"
@@ -99,7 +100,8 @@ void EGPBox3DWorld::_bind_methods() {
 Error EGPBox3DWorld::configure(int64_t rate, int64_t steps, int64_t workers, const Vector3 &g) {
 	ERR_FAIL_COND_V(Thread::get_caller_id() != owner_thread, ERR_BUSY);
 	ERR_FAIL_COND_V(rate < 1 || rate > 240 || steps < 1 || steps > 16 || workers < 1 || workers > B3_MAX_WORKERS, ERR_INVALID_PARAMETER);
-	const Error error = to_error(simulation.configure(uint32_t(rate), uint32_t(steps), uint32_t(workers), to_b3(g)));
+	// Multi-worker solving runs on the engine WorkerThreadPool.
+	const Error error = to_error(simulation.configure(uint32_t(rate), uint32_t(steps), uint32_t(workers), to_b3(g), egp::box3d::enqueue_pool_task, egp::box3d::finish_pool_task));
 	if (error != OK) {
 		return error;
 	}
@@ -111,7 +113,7 @@ Error EGPBox3DWorld::configure(int64_t rate, int64_t steps, int64_t workers, con
 	set_meta("box3d_audit_hash_mismatches", int64_t(0));
 	if (bool(GLOBAL_GET("physics/box3d/audit_determinism"))) {
 		audit_world = std::make_unique<egp::box3d::DeterministicWorld>();
-		return to_error(audit_world->configure(uint32_t(rate), uint32_t(steps), uint32_t(workers), to_b3(g)));
+		return to_error(audit_world->configure(uint32_t(rate), uint32_t(steps), uint32_t(workers), to_b3(g), egp::box3d::enqueue_pool_task, egp::box3d::finish_pool_task));
 	}
 	return OK;
 }

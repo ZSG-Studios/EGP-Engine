@@ -114,7 +114,7 @@ void DeterministicWorld::release_world() {
 	world = b3_nullWorldId;
 }
 
-Result DeterministicWorld::configure(uint32_t rate, uint32_t steps, uint32_t worker_count, b3Vec3 g) {
+Result DeterministicWorld::configure(uint32_t rate, uint32_t steps, uint32_t worker_count, b3Vec3 g, b3EnqueueTaskCallback *p_enqueue, b3FinishTaskCallback *p_finish) {
 	std::lock_guard<std::recursive_mutex> guard(get_simulation_mutex());
 	if (b3World_IsValid(world) || rate < 1 || rate > 240 || steps < 1 || steps > 16 || worker_count < 1 || worker_count > B3_MAX_WORKERS || !finite(g) || std::fegetround() != FE_TONEAREST || b3GetLengthUnitsPerMeter() != 1.0f) {
 		return Result::INVALID_ARGUMENT;
@@ -129,6 +129,12 @@ Result DeterministicWorld::configure(uint32_t rate, uint32_t steps, uint32_t wor
 	b3WorldDef def = b3DefaultWorldDef();
 	def.gravity = gravity;
 	def.workerCount = workers;
+	enqueue_task = p_enqueue;
+	finish_task = p_finish;
+	if (enqueue_task && finish_task) {
+		def.enqueueTask = enqueue_task;
+		def.finishTask = finish_task;
+	}
 	def.enableSleep = true;
 	def.enableContinuous = true;
 	world = b3CreateWorld(&def);

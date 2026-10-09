@@ -1,3 +1,4 @@
+#include "../../box3d_task_system.h"
 #include "../joints/box3d_joint_impl_3d.hpp"
 
 #include <box3d/constants.h>
@@ -41,8 +42,10 @@ bool soft_contact_filter(b3ShapeId p_a, b3ShapeId p_b, void *) {
 Box3DSpace3D::Box3DSpace3D() {
 	std::lock_guard<std::recursive_mutex> guard(egp::box3d::get_simulation_mutex());
 	b3WorldDef def = b3DefaultWorldDef();
-	// With no task callbacks set, any count above 1 engages Box3D's internal scheduler.
+	// Solver tasks run on the engine WorkerThreadPool, like the Box2D backend.
 	def.workerCount = box3d_worker_count();
+	def.enqueueTask = egp::box3d::enqueue_pool_task;
+	def.finishTask = egp::box3d::finish_pool_task;
 	contact_hertz = def.contactHertz;
 	contact_damping_ratio = def.contactDampingRatio;
 	contact_max_push_speed = def.contactSpeed;

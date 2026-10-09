@@ -153,7 +153,7 @@ func _create_physics() -> void:
 	# The authoritative world and every gameplay rule live in gameplay.gd, shared
 	# bit-for-bit with deterministic clients.
 	gameplay=GAMEPLAY.new()
-	check(gameplay.create(config.total),"Deterministic gameplay world")
+	check(gameplay.create(config.total,int(_tuning("physics_workers",1))),"Deterministic gameplay world")
 	physics=gameplay.world
 	simulation=gameplay.simulation
 	if deterministic:
@@ -1024,7 +1024,7 @@ func _read_keyframe(c: Dictionary) -> void:
 		return
 	var table_size: int=body.decode_u32(4)
 	var restored=GAMEPLAY.new()
-	if not check(restored.restore(body.slice(8+table_size)) and lockstep_client.load_keyframe(body.slice(8,8+table_size))==OK,"Deterministic keyframe join"):
+	if not check(restored.restore(body.slice(8+table_size),int(_tuning("physics_workers",1))) and lockstep_client.load_keyframe(body.slice(8,8+table_size))==OK,"Deterministic keyframe join"):
 		return
 	if gameplay!=null:
 		gameplay.close()

@@ -86,6 +86,8 @@ class DeterministicWorld {
 	uint32_t tick_rate = 60;
 	uint32_t substeps = 4;
 	uint32_t workers = 1;
+	b3EnqueueTaskCallback *enqueue_task = nullptr;
+	b3FinishTaskCallback *finish_task = nullptr;
 	b3Vec3 gravity = { 0.0f, -9.8f, 0.0f };
 	void release_world();
 
@@ -97,7 +99,9 @@ public:
 	~DeterministicWorld();
 	DeterministicWorld(const DeterministicWorld &) = delete;
 	DeterministicWorld &operator=(const DeterministicWorld &) = delete;
-	Result configure(uint32_t p_tick_rate = 60, uint32_t p_substeps = 4, uint32_t p_workers = 1, b3Vec3 p_gravity = { 0.0f, -9.8f, 0.0f });
+	// Optional task callbacks run solver work on the host's thread pool; without them a
+	// worker count above 1 uses Box3D's internal scheduler.
+	Result configure(uint32_t p_tick_rate = 60, uint32_t p_substeps = 4, uint32_t p_workers = 1, b3Vec3 p_gravity = { 0.0f, -9.8f, 0.0f }, b3EnqueueTaskCallback *p_enqueue = nullptr, b3FinishTaskCallback *p_finish = nullptr);
 	Result queue(const Command &p_command);
 	Result apply_queued_commands();
 	void clear_pending_commands() {
