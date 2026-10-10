@@ -1,0 +1,149 @@
+name: C++ SDK
+# Editor, export templates, the generated C++ SDK, Superpos native APIs and loopback
+# networking on every desktop platform.
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'core/**'
+      - 'drivers/**'
+      - 'editor/**'
+      - 'modules/**'
+      - 'platform/**'
+      - 'scene/**'
+      - 'servers/**'
+      - 'doc/classes/**'
+      - 'misc/scripts/*egp_cpp*'
+      - 'misc/scripts/*egp_generated_api*'
+      - 'misc/scripts/*superpos*'
+      - 'misc/scripts/egp_engine_process.py'
+      - 'misc/scripts/test_egp_engine_process.py'
+      - 'misc/scripts/build_egp.lua'
+      - 'misc/egp/superpos_lab/**'
+      - 'misc/egp/generated_api/**'
+      - 'misc/egp/api_contract.json'
+      - 'misc/extension_api_validation/**'
+      - 'tests/networking/**'
+      - 'tests/compatibility_test/**'
+      - 'thirdparty/godot-cpp/**'
+      - '.gitmodules'
+      - 'xmake.lua'
+      - 'build/xmake/**'
+      - '.github/actions/**'
+      - '.github/workflows/cpp-sdk.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true # Test the newest source instead of queuing behind an obsolete one.
+
+jobs:
+  qualify:
+    name: ${{ matrix.name }}
+    timeout-minutes: 180
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # TODO(W9 clang-cl): add use_llvm=yes and the .llvm binary suffix once the engine
+          # supports clang-cl + lld-link on Windows.
+          - name: Windows · x86_64
+            runner: egp-windows
+            platform: windows
+            arch: x86_64
+            editor: bin/godot.windows.editor.dev.x86_64.console.exe
+            debug: bin/godot.windows.template_debug.x86_64.exe
+            release: bin/godot.windows.template_release.x86_64.exe
+            flags: d3d12=no
+          - name: Linux · x86_64
+            runner: egp-linux
+            platform: linuxbsd
+            arch: x86_64
+            editor: bin/godot.linuxbsd.editor.dev.x86_64
+            debug: bin/godot.linuxbsd.template_debug.x86_64
+            release: bin/godot.linuxbsd.template_release.x86_64
+            flags: x11=no wayland=no use_llvm=yes linker=lld
+          - name: macOS · arm64
+            runner: egp-macos
+            platform: macos
+            arch: arm64
+            editor: bin/godot.macos.editor.dev.arm64
+            debug: bin/godot.macos.template_debug.arm64
+            release: bin/godot.macos.template_release.arm64
+            flags: metal=no
+    runs-on: [self-hosted, '${{ matrix.runner }}']
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Set up toolchain
+        uses: ./.github/actions/setup-toolchain
+
+      - name: Resolve build directory
+        id: build-cache
+        uses: ./.github/actions/build-cache
+        with:
+          cache-name: cpp-sdk-${{ matrix.platform }}-${{ matrix.arch }}
+
+      - name: Acquire Mac build lock
+        if: runner.os == 'macOS'
+        uses: ./.github/actions/lock-mac-host
+        with:
+          mode: acquire
+
+      - name: Build headless editor and production templates
+        shell: bash
+        env:
+          EGP_BUILD_CACHE: ${{ steps.build-cache.outputs.path }}
+        run: |
+          FLAGS="platform=${{ matrix.platform }} arch=${{ matrix.arch }} debug_symbols=no accesskit=no vulkan=no module_mono_enabled=no ${{ matrix.flags }}"
+          xmake lua misc/scripts/build_egp.lua "${{ matrix.platform }}" editor 4 "$EGP_BUILD_CACHE" "$FLAGS dev_build=yes"
+          xmake lua misc/scripts/build_egp.lua "${{ matrix.platform }}" template_debug 4 "$EGP_BUILD_CACHE" "$FLAGS"
+          xmake lua misc/scripts/build_egp.lua "${{ matrix.platform }}" template_release 4 "$EGP_BUILD_CACHE" "$FLAGS"
+
+      - name: Release Mac build lock
+        if: always() && runner.os == 'macOS'
+        uses: ./.github/actions/lock-mac-host
+        with:
+          mode: release
+
+      - name: Test C++ SDK packaging
+        run: python misc/scripts/test_egp_cpp_sdk.py
+
+      - name: Validate SDK builds from deeply nested projects
+        if: runner.os == 'Windows'
+        run: python misc/scripts/validate_egp_cpp_sdk_paths.py --engine ${{ matrix.editor }} --output .build/sdk-object-paths-ci --jobs 4
+
+      - name: Validate CLI and exported games
+        run: python misc/scripts/validate_egp_cpp.py --editor ${{ matrix.editor }} --debug-template ${{ matrix.debug }} --release-template ${{ matrix.release }}
+
+      - name: Compile typed Superpos C++ APIs
+        run: python misc/scripts/validate_egp_generated_api.py --engine ${{ matrix.editor }} --cpp --output .build/generated-api-cpp
+
+      - name: Validate Superpos native API, state and authenticated loopback UDP
+        run: python misc/scripts/validate_superpos.py --engine ${{ matrix.editor }} --output .build/engine-networking
+
+      - name: Validate C++ editor workflow and compiler diagnostics
+        run: python misc/scripts/validate_egp_cpp_ui.py --engine ${{ matrix.editor }} --output .build/cpp-ui-ci
+
+      - name: Upload receipts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cpp-sdk-${{ matrix.platform }}-${{ matrix.arch }}
+          retention-days: 14
+          path: |
+            .build/cpp-qualification/*.log
+            .build/cpp-qualification/results.json
+            .build/generated-api-cpp/**/receipt.json
+            .build/generated-api-cpp/**/*.log
+            .build/engine-networking/**
+            .build/cpp-ui-ci/**/receipt.json
+            .build/cpp-ui-ci/**/editor.log
+            .build/sdk-object-paths-ci/**/receipt.json
+            .build/sdk-object-paths-ci/**/*.log

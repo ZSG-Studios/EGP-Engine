@@ -1,0 +1,39 @@
+name: Test GDExtension compatibility
+description: Check that method hashes used by older GDExtensions still load in this engine build.
+
+inputs:
+  bin:
+    description: Path to the engine binary.
+    required: true
+    type: string
+  reftags:
+    description: Reference upstream tags to check (comma separated).
+    required: true
+    type: string
+
+runs:
+  using: composite
+  steps:
+    - name: Check fork compatibility selection
+      shell: sh
+      run: python -m unittest discover -s tests/compatibility_test -p 'test_*.py'
+
+    - name: Extract GDExtension interface
+      shell: sh
+      run: |
+        ${{ inputs.bin }} --headless --dump-gdextension-interface
+        mkdir tests/compatibility_test/src/deps/
+        mv gdextension_interface.h tests/compatibility_test/src/deps/
+
+    - name: Build minimal GDExtension
+      shell: sh
+      run: |
+        xmake f -y -P tests/compatibility_test -m debug
+        xmake -P tests/compatibility_test -b compatibility_test
+
+    - name: Download reference GDExtension API JSON and try to load it
+      shell: sh
+      env:
+        GODOT4_BIN: ${{ inputs.bin }}
+        REFTAGS: ${{ inputs.reftags }}
+      run: ./tests/compatibility_test/run_compatibility_test.py

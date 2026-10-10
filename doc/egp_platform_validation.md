@@ -19,8 +19,9 @@ Web rendering and exports are unsupported.
 | `drivers/`, `servers/rendering/` | Graphics APIs and shared Forward+ rendering |
 | `build/xmake/tests/`, `tests/build/` | Native graph, compiler, generator and packaging contracts |
 | `misc/scripts/build_egp.lua` | Shared command-line and CI build launcher |
-| `.github/actions/godot-build/` | Compatibility-named action that calls the shared launcher |
-| `.github/workflows/runner.yml` | Static gate, native contracts and six reusable platform workflows |
+| `.github/actions/build-engine/` | CI action that calls the shared launcher |
+| `.github/workflows/ci.yml` | Per-commit gate: static checks, native contracts and the core Linux, Windows, macOS and Android lanes |
+| `.github/workflows/nightly.yml` | Full matrix: every `_platform-<os>.yml` variant, including iOS and visionOS |
 
 Android Gradle and Apple Xcode projects are platform packaging inputs. They do
 not replace the engine's native Xmake graph. Documentation uses Sphinx, the
@@ -32,15 +33,19 @@ a supported Web platform or add it to the shipping CI matrix.
 
 This table describes checks wired into CI, not a claim that every configuration
 has passed at the current source revision. Inspect the run and its receipts.
+All jobs run on the EGP self-hosted runners (`egp-linux`, `egp-windows`,
+`egp-macos`); GitHub-hosted runners are not used and pull requests never run CI.
+Clang is the toolchain on every platform. Windows still builds with MSVC until
+clang-cl + lld-link support lands in `build/xmake/platforms/init.lua`.
 
 | Platform | Native build coverage | Runtime coverage and remaining boundary |
 | --- | --- | --- |
-| Windows | Editor/template variants and selected MSVC, clang-cl and MinGW configurations | Native unit-test summaries; GPU backend and physical device qualification need separate receipts |
-| Linux/BSD | Linux editor/template variants, sanitizers and native contracts | Linux headless unit tests and startup checks; software Vulkan stereo in the visionOS workflow; BSD needs its own native host evidence |
-| macOS | x86_64 and arm64 editor/release-template builds | Editor unit tests; arm64 Metal capability and external stereo checks in the visionOS workflow |
-| Android | arm32/arm64 debug templates, pinned NDK and Gradle packaging | Firebase instrumentation is guarded to upstream Godot, so it does not run for EGP; Android device rendering and app lifecycle remain separate requirements |
+| Windows | Editor (per commit) and release template (nightly); toolchain selectable between MSVC and clang-cl | Native unit-test summaries; GPU backend and physical device qualification need separate receipts |
+| Linux/BSD | Clang editor with Mono, ASan/UBSan and TSan editors, double-precision and minimal templates, native contracts | Linux headless unit tests and startup checks; software Vulkan stereo in the visionOS workflow; BSD needs its own native host evidence |
+| macOS | arm64 Mono editor (per commit) and universal release template (nightly) | Editor and C# tooling smoke test; template unit tests; arm64 Metal capability and external stereo checks in the visionOS workflow |
+| Android | arm64 (per commit) and arm32 (nightly) debug templates, pinned NDK and Gradle packaging | No instrumentation or device runs; Android device rendering and app lifecycle remain separate requirements |
 | iOS | arm64 release template | Compilation is not a signed app, installation or device runtime test |
-| visionOS | arm64 release template plus opt-in immersive debug library/template and unsigned app | Hosted Vulkan/Metal external-texture checks and Xcode linking; physical Vision Pro compositor, tracking, signing and lifecycle remain unverified |
+| visionOS | arm64 release template plus the immersive debug library/template and unsigned app | Software Vulkan and native Metal external-texture checks and Xcode linking; physical Vision Pro compositor, tracking, signing and lifecycle remain unverified |
 
 Android export CI explicitly disables EGP's desktop physics backends. A successful
 template build does not establish physics parity on mobile. Inspect each module's

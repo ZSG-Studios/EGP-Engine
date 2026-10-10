@@ -1,0 +1,186 @@
+name: Platform · macOS
+on:
+  workflow_call:
+    inputs:
+      lane:
+        description: core (per-commit variants) or full (core plus the nightly-only variants).
+        type: string
+        default: core
+
+# All jobs share one Mac host (16 GB, 12 cores) with other repositories' runners and agent
+# sessions, so every build holds the shared Mac build lock.
+env:
+  XMAKE_FLAGS: >-
+    dev_mode=yes
+    module_text_server_fb_enabled=yes
+
+jobs:
+  editor:
+    name: Editor · Mono · arm64
+    runs-on: [self-hosted, egp-macos]
+    timeout-minutes: 150
+    env:
+      EGP_EDITOR: bin/godot.macos.editor.dev.arm64.mono
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 1
+
+      - name: Set up toolchain
+        uses: ./.github/actions/setup-toolchain
+
+      # Mono and non-Mono editors are different binaries, so they keep separate build dirs.
+      - name: Resolve build directory
+        id: build-cache
+        uses: ./.github/actions/build-cache
+        with:
+          cache-name: macos-editor-dev-mono
+
+      - name: Report Apple and .NET toolchains
+        run: |
+          sw_vers
+          xcodebuild -version | head -1
+          dotnet --version
+
+      - name: Acquire Mac build lock
+        uses: ./.github/actions/lock-mac-host
+        with:
+          mode: acquire
+
+      - name: Configure
+        run: >-
+          xmake f -y -P . -p macosx -a arm64 -m debug --toolchain=xcode
+          "--builddir=${{ steps.build-cache.outputs.path }}" --godot_platform=macos --egp_target=editor
+          --dev_build=y --module_mono_enabled=y --module_superpos_enabled=y --accesskit=n
+
+      - name: Build
+        run: xmake -P . -j 12 editor
+
+      - name: Generate C# glue
+        run: '"$EGP_EDITOR" --headless --generate-mono-glue modules/mono/glue'
+
+      - name: Build .NET solutions
+        env:
+          XMAKE_GLOBALDIR: ${{ runner.temp }}/xmake-managed
+        run: xmake lua build/xmake/managed.lua "$EGP_EDITOR" macos single
+
+      - name: Release Mac build lock
+        if: always()
+        uses: ./.github/actions/lock-mac-host
+        with:
+          mode: release
+
+      - name: Smoke test editor and C# tools
+        run: |
+          set -o pipefail
+          "$EGP_EDITOR" --headless --version
+          project="$RUNNER_TEMP/egp-smoke-project"
+          rm -rf "$project" && mkdir -p "$project"
+          # A C# project, so the editor initializes GodotPlugins and the managed tooling.
+          printf 'config_version=5\n\n[application]\n\nconfig/name="EGP smoke"\n\n[dotnet]\n\nproject/assembly_name="EGP_smoke"\n' > "$project/project.godot"
+          "$EGP_EDITOR" --headless --editor --path "$project" --quit-after 300 2>&1 | tee .build-smoke.log || true
+          if grep -E 'GodotPlugins initialization failed|C# editor tools unavailable|CrashHandlerException' .build-smoke.log; then
+            echo "::error::Editor smoke test reported a C# tooling failure or crash"; exit 1
+          fi
+
+  template:
+    name: ${{ matrix.name }}
+    if: inputs.lane == 'full'
+    runs-on: [self-hosted, egp-macos]
+    timeout-minutes: 150
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Template release · universal
+            cache-name: macos-template-release
+            target: template_release
+            xmake-flags: debug_symbols=no
+            bin: ./bin/godot.macos.template_release.universal
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Set up toolchain
+        uses: ./.github/actions/setup-toolchain
+
+      - name: Resolve build directory
+        id: build-cache
+        uses: ./.github/actions/build-cache
+        with:
+          cache-name: ${{ matrix.cache-name }}
+
+      - name: Download prebuilt AccessKit
+        id: accesskit-sdk
+        shell: sh
+        run: |
+          if xmake lua misc/scripts/install_build_dependencies.lua accesskit; then
+            echo "ACCESSKIT_ENABLED=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::AccessKit SDK installation failed, building without AccessKit support."
+            echo "ACCESSKIT_ENABLED=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Set up Vulkan SDK
+        id: vulkan-sdk
+        run: |
+          if sh misc/scripts/install_vulkan_sdk_macos.sh; then
+            echo "VULKAN_ENABLED=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::macOS: Vulkan SDK installation failed, building without Vulkan support."
+            echo "VULKAN_ENABLED=no" >> "$GITHUB_OUTPUT"
+          fi
+        continue-on-error: true
+
+      - name: Acquire Mac build lock
+        uses: ./.github/actions/lock-mac-host
+        with:
+          mode: acquire
+
+      # Metal is not supported on x86_64; `metal=no` silences that warning.
+      - name: Build (x86_64)
+        uses: ./.github/actions/build-engine
+        with:
+          xmake-flags: ${{ env.XMAKE_FLAGS }} ${{ matrix.xmake-flags }} arch=x86_64 vulkan=${{ steps.vulkan-sdk.outputs.VULKAN_ENABLED || 'no' }} accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED || 'no' }} metal=no
+          platform: macos
+          target: ${{ matrix.target }}
+          build-cache: ${{ steps.build-cache.outputs.path }}x86_64/
+
+      - name: Build (arm64)
+        uses: ./.github/actions/build-engine
+        with:
+          xmake-flags: ${{ env.XMAKE_FLAGS }} ${{ matrix.xmake-flags }} arch=arm64 vulkan=${{ steps.vulkan-sdk.outputs.VULKAN_ENABLED || 'no' }} accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED || 'no' }}
+          platform: macos
+          target: ${{ matrix.target }}
+          build-cache: ${{ steps.build-cache.outputs.path }}arm64/
+
+      - name: Release Mac build lock
+        if: always()
+        uses: ./.github/actions/lock-mac-host
+        with:
+          mode: release
+
+      - name: Prepare binaries
+        run: |
+          lipo -create ./bin/godot.macos.${{ matrix.target }}.x86_64 ./bin/godot.macos.${{ matrix.target }}.arm64 -output ./bin/godot.macos.${{ matrix.target }}.universal
+          rm ./bin/godot.macos.${{ matrix.target }}.x86_64 ./bin/godot.macos.${{ matrix.target }}.arm64
+          rm -rf ./bin/build_deps
+          strip bin/godot.*
+          chmod +x bin/godot.*
+
+      - name: Upload binaries
+        uses: ./.github/actions/upload-build
+        with:
+          name: ${{ matrix.cache-name }}
+
+      - name: Unit tests
+        run: |
+          set -o pipefail
+          mkdir -p .build
+          ${{ matrix.bin }} --version
+          ${{ matrix.bin }} --help
+          ${{ matrix.bin }} --test --force-colors | tee .build/macos-unit-tests.log
+          xmake lua misc/scripts/validate_egp_unit_summary.lua .build/macos-unit-tests.log .build/macos-unit-tests-receipt.json

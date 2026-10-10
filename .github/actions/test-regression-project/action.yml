@@ -1,0 +1,43 @@
+name: Test regression project
+description: Import and run the upstream regression project headless and on Vulkan.
+
+inputs:
+  bin:
+    description: Path to the engine binary.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    # Download and extract zip archive with project, folder is renamed to be able to easy change used project
+    - name: Download test project
+      shell: bash
+      run: |
+        set -euo pipefail
+        wget https://github.com/godotengine/regression-test-project/archive/4.0.zip
+        unzip 4.0.zip
+        mv "regression-test-project-4.0" "test_project"
+
+    # Editor is quite complicated piece of software, so it is easy to introduce bug here.
+
+    - name: Open and close editor (Headless)
+      shell: bash
+      run: |
+        set -euo pipefail
+        timeout 600s xvfb-run ${{ inputs.bin }} --headless --rendering-driver dummy --rendering-method dummy --import --path test_project 2>&1 | tee sanitizers_log.txt
+        misc/scripts/check_ci_log.py sanitizers_log.txt
+
+    - name: Open and close editor (Vulkan)
+      shell: bash
+      run: |
+        set -euo pipefail
+        timeout 600s xvfb-run ${{ inputs.bin }} --audio-driver Dummy --rendering-driver vulkan --rendering-method forward_plus --import --path test_project 2>&1 | tee sanitizers_log.txt
+        misc/scripts/check_ci_log.py sanitizers_log.txt
+
+    # Run test project
+    - name: Run project
+      shell: bash
+      run: |
+        set -euo pipefail
+        timeout 600s xvfb-run ${{ inputs.bin }} 40 --audio-driver Dummy --rendering-driver vulkan --rendering-method forward_plus --path test_project 2>&1 | tee sanitizers_log.txt
+        misc/scripts/check_ci_log.py sanitizers_log.txt

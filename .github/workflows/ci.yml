@@ -1,0 +1,54 @@
+name: CI
+# Per-commit gate. Everything runs on EGP self-hosted runners (egp-linux, egp-windows,
+# egp-macos); GitHub-hosted runners are not used. Pull requests never trigger CI:
+# untrusted code must never execute on these hosts. The full matrix runs in nightly.yml.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static-checks:
+    name: Static checks
+    uses: ./.github/workflows/_static-checks.yml
+
+  xmake-contracts:
+    name: xmake contracts
+    needs: static-checks
+    uses: ./.github/workflows/_xmake-contracts.yml
+
+  linux:
+    name: Linux
+    needs: static-checks
+    uses: ./.github/workflows/_platform-linux.yml
+    with:
+      lane: core
+      changed-files: ${{ needs.static-checks.outputs.changed-files }}
+
+  windows:
+    name: Windows
+    needs: static-checks
+    uses: ./.github/workflows/_platform-windows.yml
+    with:
+      lane: core
+
+  macos:
+    name: macOS
+    needs: static-checks
+    uses: ./.github/workflows/_platform-macos.yml
+    with:
+      lane: core
+
+  android:
+    name: Android
+    needs: static-checks
+    uses: ./.github/workflows/_platform-android.yml
+    with:
+      lane: core

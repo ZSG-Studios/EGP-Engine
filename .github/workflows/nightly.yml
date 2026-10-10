@@ -1,0 +1,87 @@
+name: Nightly
+# Full platform matrix on EGP self-hosted runners: every shipping platform, sanitizer and
+# template variant. Skipped when master has not changed since the last successful nightly.
+on:
+  schedule:
+    - cron: '0 8 * * *' # 08:00 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+jobs:
+  freshness:
+    name: Check for new commits
+    runs-on: [self-hosted, egp-linux]
+    timeout-minutes: 5
+    outputs:
+      stale: ${{ steps.check.outputs.stale }}
+    steps:
+      - name: Compare with the last successful nightly
+        id: check
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          last=$(curl -fsSL -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+            "$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/workflows/nightly.yml/runs?branch=master&status=success&per_page=1" \
+            | jq -r '.workflow_runs[0].head_sha // ""')
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ] || [ "$last" != "$GITHUB_SHA" ]; then
+            echo "stale=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "stale=false" >> "$GITHUB_OUTPUT"; echo "master unchanged since the last successful nightly ($last)"
+          fi
+
+  xmake-contracts:
+    name: xmake contracts
+    needs: freshness
+    if: needs.freshness.outputs.stale == 'true'
+    uses: ./.github/workflows/_xmake-contracts.yml
+
+  linux:
+    name: Linux
+    needs: freshness
+    if: needs.freshness.outputs.stale == 'true'
+    uses: ./.github/workflows/_platform-linux.yml
+    with:
+      lane: full
+
+  windows:
+    name: Windows
+    needs: freshness
+    if: needs.freshness.outputs.stale == 'true'
+    uses: ./.github/workflows/_platform-windows.yml
+    with:
+      lane: full
+
+  macos:
+    name: macOS
+    needs: freshness
+    if: needs.freshness.outputs.stale == 'true'
+    uses: ./.github/workflows/_platform-macos.yml
+    with:
+      lane: full
+
+  android:
+    name: Android
+    needs: freshness
+    if: needs.freshness.outputs.stale == 'true'
+    uses: ./.github/workflows/_platform-android.yml
+    with:
+      lane: full
+
+  ios:
+    name: iOS
+    needs: freshness
+    if: needs.freshness.outputs.stale == 'true'
+    uses: ./.github/workflows/_platform-ios.yml
+
+  visionos:
+    name: visionOS
+    needs: freshness
+    if: needs.freshness.outputs.stale == 'true'
+    uses: ./.github/workflows/_platform-visionos.yml

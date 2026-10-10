@@ -54,9 +54,9 @@ log. Any engine/script error, timeout or missing success marker fails the test.
 The Windows runner keeps the window hidden/offscreen, capped at 60 FPS with a
 55-second watchdog. Linux CI uses Xvfb and Mesa's software Vulkan driver.
 
-The `Experimental visionOS Forward+` workflow builds and packages a debug device template and two
+The `visionOS · Immersive` workflow (`.github/workflows/visionos-immersive.yml`) builds and packages a debug device template and two
 editors from the candidate commit. Linux runs the stereo test. macOS records GPU
-and architecture capabilities and only runs the Metal test when the hosted
+and architecture capabilities and only runs the Metal test when the self-hosted Mac
 runner can execute the arm64 Metal editor. A `NOT_RUN.txt` artifact means runtime
 validation was unavailable, not passed. A final macOS job imports and exports the
 sample using those same build artifacts, then runs `xcodebuild` for a generic
@@ -76,14 +76,14 @@ visionOS exporter.
 
 ## Hand off to a device owner
 
-1. Download `visionos-experimental-handoff` from a successful workflow run. Open
+1. Download `visionos-immersive-handoff` from a successful workflow run. Open
    `EGPProbe.xcodeproj` in the `xcode-project` directory, select your development
    team and signing identity, and select your Vision Pro. The unsigned app is
    retained as build evidence; it cannot be installed without signing. The
    project has no development team preconfigured. Keep the shared scheme's
    `GODOT_MTL_SYNC_MODE=none` launch environment enabled.
    Alternatively, build or download the matching macOS editor from the
-   `visionos-experimental-editor` artifact to export it yourself.
+   `visionos-immersive-editor` artifact to export it yourself.
    Download `godot_visionos.zip` from the workflow's device artifact. It contains
    the debug device template; release and simulator builds are not included.
    This is not a signed, installable app.

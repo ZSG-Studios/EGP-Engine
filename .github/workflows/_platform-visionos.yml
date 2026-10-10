@@ -1,0 +1,53 @@
+name: Platform · visionOS
+on:
+  workflow_call:
+
+env:
+  XMAKE_FLAGS: >-
+    dev_mode=yes
+    module_text_server_fb_enabled=yes
+    debug_symbols=no
+
+jobs:
+  template:
+    name: Template release · arm64
+    runs-on: [self-hosted, egp-macos]
+    timeout-minutes: 90
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Set up toolchain
+        uses: ./.github/actions/setup-toolchain
+
+      - name: Resolve build directory
+        id: build-cache
+        uses: ./.github/actions/build-cache
+        with:
+          cache-name: visionos-template-release
+
+      - name: Acquire Mac build lock
+        uses: ./.github/actions/lock-mac-host
+        with:
+          mode: acquire
+
+      - name: Build
+        uses: ./.github/actions/build-engine
+        with:
+          xmake-flags: ${{ env.XMAKE_FLAGS }}
+          platform: visionos
+          target: template_release
+          build-cache: ${{ steps.build-cache.outputs.path }}
+
+      - name: Release Mac build lock
+        if: always()
+        uses: ./.github/actions/lock-mac-host
+        with:
+          mode: release
+
+      - name: Upload template
+        uses: ./.github/actions/upload-build
+        with:
+          name: visionos-template-release

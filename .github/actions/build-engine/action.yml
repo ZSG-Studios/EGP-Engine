@@ -1,0 +1,33 @@
+name: Build engine
+description: Build a native xmake engine target with explicit platform options.
+inputs:
+  target:
+    description: Native xmake target (editor, template_debug, template_release).
+    default: editor
+  platform:
+    description: Engine platform name.
+    required: true
+  xmake-flags:
+    description: Space-separated KEY=VALUE engine options.
+    default: ''
+  build-cache:
+    description: Native xmake build directory (use the build-cache action output).
+    default: ${{ github.workspace }}/.build/xmake-cache/
+  compile-commands:
+    description: Export the native xmake compilation database after linking.
+    default: 'false'
+runs:
+  using: composite
+  steps:
+    - name: Build engine with xmake
+      shell: bash
+      env:
+        EGP_BUILD_FLAGS: ${{ inputs.xmake-flags }}
+        EGP_BUILD_PLATFORM: ${{ inputs.platform }}
+        EGP_BUILD_TARGET: ${{ inputs.target }}
+        EGP_BUILD_CACHE: ${{ inputs.build-cache }}
+        EGP_COMPILE_COMMANDS: ${{ inputs.compile-commands }}
+        BUILD_NAME: ci-${{ github.event.number || github.run_number }}
+      run: |
+        xmake lua misc/scripts/build_egp.lua "$EGP_BUILD_PLATFORM" "$EGP_BUILD_TARGET" "4" "$EGP_BUILD_CACHE" "$EGP_BUILD_FLAGS"
+        ls -l bin/

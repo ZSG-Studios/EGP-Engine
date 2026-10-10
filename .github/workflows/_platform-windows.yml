@@ -1,0 +1,135 @@
+name: Platform · Windows
+on:
+  workflow_call:
+    inputs:
+      lane:
+        description: core (per-commit variants) or full (core plus the nightly-only variants).
+        type: string
+        default: core
+
+# Toolchain: the `compiler` matrix field selects msvc or clang (clang-cl + lld-link).
+# Clang is the target toolchain for every platform.
+# TODO(W9 clang-cl): switch every variant to `compiler: clang` in the same commit that adds
+# clang-cl/lld-link support to build/xmake/platforms/init.lua.
+env:
+  XMAKE_FLAGS: >-
+    dev_mode=yes
+    module_text_server_fb_enabled=yes
+    debug_symbols=no
+
+jobs:
+  core:
+    name: ${{ matrix.name }}
+    runs-on: [self-hosted, egp-windows]
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Editor
+            cache-name: windows-editor
+            target: editor
+            xmake-flags: >-
+              windows_subsystem=console
+            bin: ./bin/godot.windows.editor.x86_64
+            compiler: msvc
+
+    steps: &windows-steps
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Set up toolchain
+        uses: ./.github/actions/setup-toolchain
+
+      - name: Resolve build directory
+        id: build-cache
+        uses: ./.github/actions/build-cache
+        with:
+          cache-name: ${{ matrix.cache-name }}-${{ matrix.compiler }}
+
+      - name: Download Direct3D 12 SDK components
+        id: d3d12-sdk
+        shell: sh
+        run: |
+          if xmake lua misc/scripts/install_build_dependencies.lua d3d12 install "${{ matrix.compiler }}"; then
+            echo "D3D12_ENABLED=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Windows: Direct3D 12 SDK installation failed, building without Direct3D 12 support."
+            echo "D3D12_ENABLED=no" >> "$GITHUB_OUTPUT"
+          fi
+        continue-on-error: true
+
+      - name: Download prebuilt AccessKit
+        id: accesskit-sdk
+        shell: sh
+        run: |
+          if xmake lua misc/scripts/install_build_dependencies.lua accesskit; then
+            echo "ACCESSKIT_ENABLED=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::AccessKit SDK installation failed, building without AccessKit support."
+            echo "ACCESSKIT_ENABLED=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Select compiler
+        id: toolchain
+        shell: bash
+        run: |
+          case "${{ matrix.compiler }}" in
+            clang) echo "USE_LLVM=yes" >> "$GITHUB_OUTPUT"; echo "suffix=.llvm" >> "$GITHUB_OUTPUT" ;;
+            msvc)  echo "USE_LLVM=no" >> "$GITHUB_OUTPUT"; echo "suffix=" >> "$GITHUB_OUTPUT" ;;
+            *) echo "::error::Unsupported Windows compiler: ${{ matrix.compiler }}"; exit 1 ;;
+          esac
+
+      - name: Build
+        uses: ./.github/actions/build-engine
+        with:
+          xmake-flags: ${{ env.XMAKE_FLAGS }} ${{ matrix.xmake-flags }} use_llvm=${{ steps.toolchain.outputs.USE_LLVM }} d3d12=${{ steps.d3d12-sdk.outputs.D3D12_ENABLED || 'no' }} accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED || 'no' }}
+          platform: windows
+          target: ${{ matrix.target }}
+          build-cache: ${{ steps.build-cache.outputs.path }}
+
+      - name: Resolve binary
+        id: binary
+        shell: bash
+        run: echo "path=${{ matrix.bin }}${{ steps.toolchain.outputs.suffix }}${{ matrix.bin-suffix }}.exe" >> "$GITHUB_OUTPUT"
+
+      - name: Prepare binaries
+        shell: powershell
+        run: |
+          Remove-Item bin/build_deps -Recurse -Force -ErrorAction SilentlyContinue
+          Remove-Item bin/* -Include *.exp,*.lib,*.pdb -Force
+
+      - name: Upload binaries
+        uses: ./.github/actions/upload-build
+        with:
+          name: ${{ matrix.cache-name }}
+
+      - name: Unit tests
+        shell: powershell
+        run: |
+          New-Item -ItemType Directory -Force .build | Out-Null
+          & "${{ steps.binary.outputs.path }}" --version
+          & "${{ steps.binary.outputs.path }}" --help
+          & "${{ steps.binary.outputs.path }}" --test --force-colors 2>&1 | Tee-Object -FilePath .build/windows-unit-tests.log
+          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          xmake lua misc/scripts/validate_egp_unit_summary.lua .build/windows-unit-tests.log .build/windows-unit-tests-receipt.json
+
+  full:
+    name: ${{ matrix.name }}
+    if: inputs.lane == 'full'
+    runs-on: [self-hosted, egp-windows]
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Template release
+            cache-name: windows-template-release
+            target: template_release
+            bin: ./bin/godot.windows.template_release.x86_64
+            bin-suffix: .console
+            compiler: msvc
+
+    steps: *windows-steps

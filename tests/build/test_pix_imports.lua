@@ -73,7 +73,7 @@ function main(package)
     for _, arch in ipairs({'x64', 'ARM64'}) do
         check(io.readfile(path.join(directory, 'pix/bin', arch, 'WinPixEventRuntime.lib')) == 'preserved pinned native library ' .. arch, 'All converter failures must preserve native import libraries')
     end
-    local workflow = io.readfile(path.join(root, '.github/workflows/windows_builds.yml'))
+    local workflow = io.readfile(path.join(root, '.github/workflows/_platform-windows.yml'))
     check(workflow:find('install_build_dependencies.lua d3d12 install "${{ matrix.compiler }}"', 1, true), 'The Windows matrix must explicitly select compiler-specific SDK qualification')
     if package then
         import('lib.detect.find_tool')

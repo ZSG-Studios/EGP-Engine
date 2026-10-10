@@ -37,7 +37,7 @@ function main(destination, root)
         os.mkdir(path.directory(output)); os.cp(filename, output)
         files = files + 1
     end
-    local patch = path.join(root, '.github/actions/godot-cpp-build/egp-test.patch')
+    local patch = path.join(root, '.github/actions/test-godot-cpp/egp-test.patch')
     os.vrunv('git', {'apply', '--check', '--unidiff-zero', '--directory=' .. relative, patch}, {curdir=root})
     os.vrunv('git', {'apply', '--unidiff-zero', '--directory=' .. relative, patch}, {curdir=root})
     local templates = validate_templates(project, path.join(source, 'include'))

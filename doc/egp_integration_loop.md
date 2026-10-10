@@ -3371,7 +3371,7 @@ The interactive project changes remain outside the integration commit.
 Linux Mono job `112523217526` compiles the engine but fails the upstream godot-cpp
 4.5 test extension before its editor artifact can be uploaded. The test includes
 retired MultiplayerAPI/MultiplayerPeer headers and RPC methods. A checked patch
-in `.github/actions/godot-cpp-build/egp-test.patch` removes only that RPC portion
+in `.github/actions/test-godot-cpp/egp-test.patch` removes only that RPC portion
 from its implementation, declarations and corresponding project assertions.
 All other upstream test sources remain present. The action checks patch
 applicability before applying it; upstream drift remains an explicit failure.

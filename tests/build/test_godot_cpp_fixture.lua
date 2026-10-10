@@ -50,8 +50,8 @@ function main()
     local failure
     try {function () prepare.validate_templates(path.directory(negative), include) end, catch {function (errors) failure=tostring(errors) end}}
     check(failure and failure:find('search_array.hpp', 1, true), 'The former moving-branch header mismatch must be rejected with its missing dependency')
-    local action = assert(io.readfile(path.join(root, '.github/actions/godot-cpp-build/action.yml')))
-    local workflow = assert(io.readfile(path.join(root, '.github/workflows/linux_builds.yml')))
+    local action = assert(io.readfile(path.join(root, '.github/actions/test-godot-cpp/action.yml')))
+    local workflow = assert(io.readfile(path.join(root, '.github/workflows/_platform-linux.yml')))
     check(action:find('prepare_godot_cpp_fixture.lua', 1, true) and not action:find('actions/checkout', 1, true), 'CI must prepare the bundled matching fixture instead of selecting an unrelated upstream branch')
     check(not workflow:find('GODOT_CPP_BRANCH', 1, true) and not action:find('godot-cpp-branch', 1, true), 'Obsolete floating fixture branch configuration must be removed')
     local configuration = assert(io.readfile(path.join(receipt.project, 'project/my_test.gdextension')))

@@ -1,0 +1,51 @@
+name: Static checks
+on:
+  workflow_call:
+    outputs:
+      changed-files:
+        description: Changed C/C++ files, pre-filtered for clangd-tidy.
+        value: ${{ jobs.static-checks.outputs.changed-files }}
+      sources-changed:
+        description: Whether any build-relevant source changed.
+        value: ${{ jobs.static-checks.outputs.sources-changed }}
+
+jobs:
+  static-checks:
+    name: Style, formatting and docs
+    runs-on: [self-hosted, egp-linux]
+    timeout-minutes: 30
+    outputs:
+      changed-files: '"${{ steps.changed-files.outputs.clangd_all_changed_files }}"' # Quoted to bookend the internal separators.
+      sources-changed: ${{ steps.changed-files.outputs.sources_any_changed }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0 # Treeless clone: cheap, and diffs against any base are instant.
+          filter: tree:0
+
+      # Must run before anything writes files into the checkout.
+      - name: Check .gitignore coverage
+        run: bash ./misc/scripts/gitignore_check.sh
+
+      - name: Detect changed files
+        id: changed-files
+        uses: tj-actions/changed-files@9426d40962ed5378910ee2e21d5f8c6fcbf2dd96 # v47.0.6
+        with:
+          safe_output: false # Passed through an environment variable to avoid command injection.
+          separator: '" "' # Paths may contain spaces; items are split by quotes internally.
+          skip_initial_fetch: true
+          files_yaml_from_source_file: .github/changed_files.yml
+
+      # Native generator hooks need the pinned xmake before prek runs.
+      - name: Set up toolchain
+        uses: ./.github/actions/setup-toolchain
+
+      - name: Run prek hooks
+        uses: j178/prek-action@1382ad72dea72f9d53832f2bcb65b3e87a947204 # v3.0.1
+        env:
+          FROM_REF: >-
+            ${{ github.event.before != '0000000000000000000000000000000000000000' && github.event.before
+            || 'HEAD~1' }}
+        with:
+          extra-args: --from-ref ${{ env.FROM_REF }}

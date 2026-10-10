@@ -1,0 +1,276 @@
+name: Platform · Linux
+on:
+  workflow_call:
+    inputs:
+      lane:
+        description: core (per-commit variants) or full (core plus the nightly-only variants).
+        type: string
+        default: core
+      changed-files:
+        description: Changed C/C++ files, pre-filtered for clangd-tidy.
+        type: string
+        default: '""'
+
+env:
+  # Clang/LLVM is the only supported Linux toolchain.
+  XMAKE_FLAGS: >-
+    dev_mode=yes
+    module_text_server_fb_enabled=yes
+    use_llvm=yes
+    linker=lld
+  DOTNET_NOLOGO: true
+  DOTNET_CLI_TELEMETRY_OPTOUT: true
+  ASAN_OPTIONS: color=always:print_suppressions=1:suppressions=${{ github.workspace }}/misc/error_suppressions/asan.txt:alloc_dealloc_mismatch=0
+  LSAN_OPTIONS: color=always:print_suppressions=1:suppressions=${{ github.workspace }}/misc/error_suppressions/lsan.txt
+  TSAN_OPTIONS: color=always:print_suppressions=1:suppressions=${{ github.workspace }}/misc/error_suppressions/tsan.txt
+  UBSAN_OPTIONS: color=always:print_suppressions=1:suppressions=${{ github.workspace }}/misc/error_suppressions/ubsan.txt
+
+jobs:
+  core:
+    name: ${{ matrix.name }}
+    runs-on: [self-hosted, egp-linux]
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Editor · Mono
+            cache-name: linux-editor-mono
+            target: editor
+            xmake-flags: module_mono_enabled=yes
+            bin: ./bin/godot.linuxbsd.editor.x86_64.mono
+            build-mono: true
+            doc-test: true
+            proj-conv: true
+            proj-export: true
+            api-compat: true
+            artifact: true
+            godot-cpp: true # godot-cpp compatibility on one editor build.
+            clangd-tidy: true
+
+          - name: Editor · ASan+UBSan
+            cache-name: linux-editor-llvm-sanitizers
+            target: editor
+            xmake-flags: >-
+              dev_build=yes
+              use_asan=yes
+              use_ubsan=yes
+            bin: ./bin/godot.linuxbsd.editor.dev.x86_64.san
+            proj-test: true # The regression project needs the single-precision physics backends.
+
+    steps: &linux-steps
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Set up toolchain
+        uses: ./.github/actions/setup-toolchain
+
+      - name: Resolve build directory
+        id: build-cache
+        uses: ./.github/actions/build-cache
+        with:
+          cache-name: ${{ matrix.cache-name }}
+
+      - name: Set up .NET SDK
+        if: matrix.build-mono
+        uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Download prebuilt AccessKit
+        id: accesskit-sdk
+        shell: sh
+        run: |
+          if xmake lua misc/scripts/install_build_dependencies.lua accesskit; then
+            echo "ACCESSKIT_ENABLED=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::AccessKit SDK installation failed, building without AccessKit support."
+            echo "ACCESSKIT_ENABLED=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build
+        uses: ./.github/actions/build-engine
+        with:
+          xmake-flags: ${{ env.XMAKE_FLAGS }} ${{ matrix.xmake-flags }} accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED || 'no' }}
+          platform: linuxbsd
+          target: ${{ matrix.target }}
+          build-cache: ${{ steps.build-cache.outputs.path }}
+          compile-commands: ${{ matrix.clangd-tidy || false }}
+
+      - name: Lint changed files with clangd-tidy
+        if: matrix.clangd-tidy
+        uses: ./.github/actions/lint-clangd-tidy
+        with:
+          changed-files: ${{ inputs.changed-files }}
+
+      - name: Generate C# glue
+        if: matrix.build-mono
+        run: ${{ matrix.bin }} --headless --generate-mono-glue ./modules/mono/glue
+
+      - name: Build .NET solutions
+        if: matrix.build-mono
+        run: |
+          dotnet --info
+          xmake lua build/xmake/managed.lua "${{ matrix.bin }}" linuxbsd single werror
+
+      - name: Compile typed Superpos C# APIs
+        if: matrix.build-mono
+        run: python misc/scripts/validate_egp_generated_api.py --managed-assembly bin/GodotSharp/Api/Debug/GodotSharp.dll --output .build/generated-api-csharp
+
+      - name: Upload managed API receipt
+        if: always() && matrix.build-mono
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: generated-api-csharp-linux
+          path: |
+            .build/generated-api-csharp/**/receipt.json
+            .build/generated-api-csharp/**/*.log
+          retention-days: 14
+
+      - name: Prepare binaries
+        if: matrix.artifact
+        run: |
+          rm -rf ./bin/build_deps
+          strip bin/godot.*
+          chmod +x bin/godot.*
+
+      - name: Upload binaries
+        if: matrix.artifact
+        uses: ./.github/actions/upload-build
+        with:
+          name: ${{ matrix.cache-name }}
+
+      - name: Test godot-cpp
+        if: matrix.godot-cpp
+        uses: ./.github/actions/test-godot-cpp
+        with:
+          bin: ${{ matrix.bin }}
+
+      - name: Unit tests
+        env:
+          XDG_CACHE_HOME: ${{ github.workspace }}/.build/linux-unit-cache
+        run: |
+          set -o pipefail
+          mkdir -p .build "$XDG_CACHE_HOME"
+          ${{ matrix.bin }} --version
+          ${{ matrix.bin }} --help
+          startup_root="$(mktemp -d "$PWD/.build/linux-unit-startup.XXXXXX")"
+          XDG_CACHE_HOME="$startup_root/missing/nested/cache" timeout --signal=TERM --kill-after=5s 60s ${{ matrix.bin }} --headless --test --force-colors --test-case="[String] Assign Latin-1 char string" | tee .build/linux-unit-startup.log
+          xmake lua misc/scripts/validate_egp_unit_summary.lua .build/linux-unit-startup.log .build/linux-unit-startup-receipt.json
+          printf 'Uncreatable test cache root\n' > "$startup_root/blocked"
+          set +e
+          XDG_CACHE_HOME="$startup_root/blocked" timeout --signal=TERM --kill-after=5s 60s ${{ matrix.bin }} --headless --test --force-colors --test-case="[String] Assign Latin-1 char string" > .build/linux-unit-startup-blocked.log 2>&1
+          startup_exit=$?
+          set -e
+          test "$startup_exit" -eq 1
+          grep -q 'Failed to create test cache directory' .build/linux-unit-startup-blocked.log
+          ! grep -qE '\[doctest\].*Status:.*SUCCESS' .build/linux-unit-startup-blocked.log
+          ${{ matrix.bin }} --headless --test --force-colors | tee .build/linux-unit-tests.log
+          xmake lua misc/scripts/validate_egp_unit_summary.lua .build/linux-unit-tests.log .build/linux-unit-tests-receipt.json
+
+      - name: .NET source generator tests
+        if: matrix.build-mono
+        run: dotnet test modules/mono/editor/Godot.NET.Sdk/Godot.SourceGenerators.Tests
+
+      - name: Check class reference is up to date
+        if: matrix.doc-test
+        run: |
+          echo "Running --doctool to detect public API changes without matching class reference updates."
+          echo -e "If a diff is shown, update the class reference with --doctool.\n\n"
+          ${{ matrix.bin }} --doctool --headless 2>&1 > /dev/null || true
+          git diff --color --exit-code && ! git ls-files --others --exclude-standard | sed -e 's/^/New doc file missing in PR: /' | grep 'xml$'
+
+      - name: Check GDExtension API JSON compatibility
+        if: matrix.api-compat
+        run: ./misc/scripts/validate_extension_api.sh "${{ matrix.bin }}"
+
+      - name: Test GDExtension compatibility
+        if: matrix.api-compat
+        uses: ./.github/actions/test-gdextension-compat
+        with:
+          bin: ${{ matrix.bin }}
+          reftags: "4.5-stable,4.4-stable"
+
+      - name: Test regression project
+        if: matrix.proj-test
+        uses: ./.github/actions/test-regression-project
+        with:
+          bin: ${{ matrix.bin }}
+
+      - name: Test project export
+        if: matrix.proj-export
+        uses: ./.github/actions/test-project-export
+        with:
+          bin: ${{ matrix.bin }}
+
+      - name: Test project converter
+        if: matrix.proj-conv
+        uses: ./.github/actions/test-project-converter
+        with:
+          bin: ${{ matrix.bin }}
+
+  full:
+    name: ${{ matrix.name }}
+    if: inputs.lane == 'full'
+    runs-on: [self-hosted, egp-linux]
+    timeout-minutes: 120
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Editor · TSan
+            cache-name: linux-editor-thread-sanitizer
+            target: editor
+            xmake-flags: >-
+              dev_build=yes
+              use_tsan=yes
+            bin: ./bin/godot.linuxbsd.editor.dev.x86_64.san
+
+          # Editors require physics, and EGP's physics backends are single precision.
+          - name: Template debug · double · ASan+UBSan
+            cache-name: linux-template-double-sanitizers
+            target: template_debug
+            xmake-flags: >-
+              dev_build=yes
+              debug_symbols=no
+              precision=double
+              tests=yes
+              disable_physics_2d=yes
+              disable_physics_3d=yes
+              use_asan=yes
+              use_ubsan=yes
+            bin: ./bin/godot.linuxbsd.template_debug.dev.double.x86_64.san
+
+          - name: Template release · Mono
+            cache-name: linux-template-release-mono
+            target: template_release
+            xmake-flags: module_mono_enabled=yes
+            bin: ./bin/godot.linuxbsd.template_release.x86_64.mono
+            artifact: true
+
+          - name: Template debug · Mono
+            cache-name: linux-template-debug-mono
+            target: template_debug
+            xmake-flags: module_mono_enabled=yes
+            bin: ./bin/godot.linuxbsd.template_debug.x86_64.mono
+            artifact: true
+
+          - name: Template release · minimal
+            cache-name: linux-template-release-minimal
+            target: template_release
+            xmake-flags: >-
+              modules_enabled_by_default=no
+              module_text_server_fb_enabled=no
+              disable_3d=yes
+              disable_advanced_gui=yes
+              disable_physics_2d=yes
+              disable_physics_3d=yes
+              deprecated=no
+              minizip=no
+              brotli=no
+            bin: ./bin/godot.linuxbsd.template_release.x86_64
+            artifact: true
+
+    steps: *linux-steps

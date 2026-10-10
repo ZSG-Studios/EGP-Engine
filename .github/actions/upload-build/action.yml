@@ -1,0 +1,21 @@
+name: Upload build
+description: Upload engine binaries as a workflow artifact.
+
+inputs:
+  name:
+    description: The artifact name.
+    default: ${{ github.job }}
+  path:
+    description: The path to upload.
+    required: true
+    default: bin/*
+
+runs:
+  using: composite
+  steps:
+    - name: Upload engine binaries
+      uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+      with:
+        name: ${{ inputs.name }}
+        path: ${{ inputs.path }}
+        retention-days: 30

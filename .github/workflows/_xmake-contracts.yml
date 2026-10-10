@@ -1,0 +1,54 @@
+name: xmake contracts
+on:
+  workflow_call:
+
+jobs:
+  native-contracts:
+    name: ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Windows
+            runner: egp-windows
+            platform: windows
+            architecture: x64
+            toolchain: msvc
+            suffix: .exe
+          - name: Linux
+            runner: egp-linux
+            platform: linux
+            architecture: x86_64
+            toolchain: gcc
+            suffix: ''
+    runs-on: [self-hosted, '${{ matrix.runner }}']
+    timeout-minutes: 45
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up toolchain
+        uses: ./.github/actions/setup-toolchain
+
+      - name: Build native compression and ZIP tools
+        shell: bash
+        env:
+          XMAKE_CONFIGDIR: ${{ github.workspace }}/.build/xmake-contract-tools/config
+          XMAKE_GLOBALDIR: ${{ github.workspace }}/.build/xmake-global/contracts
+        run: |
+          cd build/xmake/tools
+          xmake f -y --toolchain="${{ matrix.toolchain }}" -P "$GITHUB_WORKSPACE/build/xmake/tools" -o "$GITHUB_WORKSPACE/.build/xmake-contract-tools" -p "${{ matrix.platform }}" -a "${{ matrix.architecture }}" -m release
+          xmake -P "$GITHUB_WORKSPACE/build/xmake/tools" -b -j 4
+
+      - name: Verify native policy, generators and artifact graphs
+        shell: bash
+        run: |
+          xmake lua misc/scripts/validate_xmake_contract.lua "$GITHUB_WORKSPACE/.build/xmake-contract-tools/bin/egp_compress${{ matrix.suffix }}" "$GITHUB_WORKSPACE/.build/xmake-contract-tools/bin/egp_zip${{ matrix.suffix }}"
+
+      - name: Upload contract receipts
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: xmake-contracts-${{ matrix.platform }}
+          path: .build/xmake-contract/
+          retention-days: 14

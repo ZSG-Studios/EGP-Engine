@@ -1,0 +1,44 @@
+name: Lock Mac host
+description: >-
+  Serialize heavy work on the shared Mac build host (16 GB, 12 cores). Runners for several
+  repositories and interactive agent sessions share the same lock directory. Acquire before
+  building and release in an `if: always()` step.
+inputs:
+  mode:
+    description: acquire or release.
+    required: true
+  purpose:
+    description: Recorded in the lock owner file.
+    default: ${{ github.workflow }} / ${{ github.job }}
+  timeout-minutes:
+    description: How long to wait for the lock before failing.
+    default: '90'
+runs:
+  using: composite
+  steps:
+    - name: Acquire Mac build lock
+      if: inputs.mode == 'acquire'
+      shell: bash
+      env:
+        EGP_LOCK_PURPOSE: ${{ inputs.purpose }}
+        EGP_LOCK_TIMEOUT: ${{ inputs.timeout-minutes }}
+      run: |
+        lock="$HOME/.egp-mac-heavy.lock"
+        deadline=$(( $(date +%s) + EGP_LOCK_TIMEOUT * 60 ))
+        until mkdir "$lock" 2>/dev/null; do
+          if [ "$(date +%s)" -ge "$deadline" ]; then
+            echo "::error::Mac build lock held for ${EGP_LOCK_TIMEOUT} minutes"; cat "$lock/owner" || true; exit 1
+          fi
+          sleep 20
+        done
+        printf 'owner=github-actions %s %s\npurpose=%s\nstart=%s\n' \
+          "$GITHUB_REPOSITORY" "$GITHUB_RUN_ID" "$EGP_LOCK_PURPOSE" "$(date -u +%FT%TZ)" > "$lock/owner"
+
+    - name: Release Mac build lock
+      if: inputs.mode == 'release'
+      shell: bash
+      run: |
+        lock="$HOME/.egp-mac-heavy.lock"
+        if grep -q "owner=github-actions $GITHUB_REPOSITORY $GITHUB_RUN_ID" "$lock/owner" 2>/dev/null; then
+          rm -rf "$lock"
+        fi

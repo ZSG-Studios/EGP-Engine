@@ -1,0 +1,140 @@
+name: Platform · Android
+on:
+  workflow_call:
+    inputs:
+      lane:
+        description: core (per-commit variants) or full (core plus the nightly-only variants).
+        type: string
+        default: core
+
+# EGP's physics backends currently target single-precision desktop only, so Android export
+# templates are built with physics disabled. Editors require physics and are not built.
+env:
+  XMAKE_FLAGS: >-
+    dev_mode=yes
+    module_text_server_fb_enabled=yes
+    disable_physics_2d=yes
+    disable_physics_3d=yes
+
+jobs:
+  core:
+    name: ${{ matrix.name }}
+    runs-on: [self-hosted, egp-linux]
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Template debug · arm64
+            cache-name: android-template-debug-arm64
+            target: template_debug
+            xmake-flags: arch=arm64
+
+    steps: &android-steps
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          submodules: recursive
+
+      - name: Set up toolchain
+        uses: ./.github/actions/setup-toolchain
+
+      - name: Resolve build directory
+        id: build-cache
+        uses: ./.github/actions/build-cache
+        with:
+          cache-name: ${{ matrix.cache-name }}
+
+      # JAVA_HOME and ANDROID_HOME come from the runner host provisioning.
+      - name: Verify native Gradle routing without legacy build tools
+        shell: bash
+        run: |
+          cd platform/android/java
+          ./gradlew --version
+          GRADLE_VERSION="$(sed -n 's/.*gradle-\([0-9.]*\)-bin.zip/\1/p' gradle/wrapper/gradle-wrapper.properties)"
+          GROOVY_JAR="$(find "${GRADLE_USER_HOME:-$HOME/.gradle}/wrapper/dists" -path "*/gradle-$GRADLE_VERSION/lib/groovy-[0-9]*.jar" -print -quit)"
+          test -n "$GROOVY_JAR"
+          "$JAVA_HOME/bin/java" -cp "$GROOVY_JAR" groovy.ui.GroovyMain "$GITHUB_WORKSPACE/tests/build/test_android_xmake.groovy" "$GITHUB_WORKSPACE"
+
+      - name: Install the Gradle-pinned Android NDK
+        shell: sh
+        run: |
+          NDK_VERSION="$(awk -F "'" '/^[[:space:]]*ndkVersion[[:space:]]*:/ { print $2; exit }' platform/android/java/app/config.gradle)"
+          test -n "$NDK_VERSION"
+          SDK_ROOT="${ANDROID_HOME:-$ANDROID_SDK_ROOT}"
+          NDK_ROOT="$SDK_ROOT/ndk/$NDK_VERSION"
+          if [ ! -x "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang" ]; then
+            PATH="$SDK_ROOT/cmdline-tools/latest/bin:$PATH"
+            sdkmanager --sdk_root="$SDK_ROOT" "ndk;$NDK_VERSION"
+          fi
+          test -x "$NDK_ROOT/toolchains/llvm/prebuilt/linux-x86_64/bin/clang"
+          printf 'ANDROID_NDK_ROOT=%s\nANDROID_NDK_HOME=%s\n' "$NDK_ROOT" "$NDK_ROOT" >> "$GITHUB_ENV"
+
+      - name: Download prebuilt AccessKit
+        id: accesskit-sdk
+        shell: sh
+        run: |
+          if xmake lua misc/scripts/install_build_dependencies.lua accesskit; then
+            echo "ACCESSKIT_ENABLED=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::AccessKit SDK installation failed, building without AccessKit support."
+            echo "ACCESSKIT_ENABLED=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download Swappy
+        id: swappy-sdk
+        shell: sh
+        run: |
+          if xmake lua misc/scripts/install_build_dependencies.lua swappy; then
+            echo "SWAPPY_ENABLED=yes" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Swappy installation failed, building without Swappy support."
+            echo "SWAPPY_ENABLED=no" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Download Perfetto
+        id: perfetto-sdk
+        shell: sh
+        run: |
+          if xmake lua misc/scripts/install_build_dependencies.lua perfetto; then
+            echo "PROFILER_ENABLED=perfetto" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::Perfetto installation failed, building without Perfetto support."
+            echo "PROFILER_ENABLED=none" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Build
+        uses: ./.github/actions/build-engine
+        with:
+          xmake-flags: ${{ env.XMAKE_FLAGS }} ${{ matrix.xmake-flags }} profiler=${{ steps.perfetto-sdk.outputs.PROFILER_ENABLED || 'none' }} swappy=${{ steps.swappy-sdk.outputs.SWAPPY_ENABLED || 'no' }} accesskit=${{ steps.accesskit-sdk.outputs.ACCESSKIT_ENABLED || 'no' }}
+          platform: android
+          target: ${{ matrix.target }}
+          build-cache: ${{ steps.build-cache.outputs.path }}
+
+      - name: Package export templates
+        run: |
+          cd platform/android/java
+          ./gradlew generateGodotTemplates
+          cd ../../..
+          ls -l bin/
+
+      - name: Upload templates
+        uses: ./.github/actions/upload-build
+        with:
+          name: ${{ matrix.cache-name }}
+
+  full:
+    name: ${{ matrix.name }}
+    if: inputs.lane == 'full'
+    runs-on: [self-hosted, egp-linux]
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Template debug · arm32
+            cache-name: android-template-debug-arm32
+            target: template_debug
+            xmake-flags: arch=arm32
+
+    steps: *android-steps

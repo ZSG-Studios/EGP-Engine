@@ -1,0 +1,32 @@
+name: Build cache
+description: >-
+  Resolve a persistent xmake build directory on the self-hosted runner. It lives outside the
+  checkout (which actions/checkout cleans every run), so builds stay incremental. A runner
+  executes one job at a time, so each cache name has a single writer per runner.
+inputs:
+  cache-name:
+    description: Build variant name, unique per configuration.
+    default: ${{ github.job }}
+  clean:
+    description: Delete the directory before building.
+    default: 'false'
+outputs:
+  path:
+    description: Absolute build directory to pass to build-engine.
+    value: ${{ steps.resolve.outputs.path }}
+runs:
+  using: composite
+  steps:
+    - name: Resolve persistent build directory
+      id: resolve
+      shell: bash
+      env:
+        EGP_CACHE_NAME: ${{ inputs.cache-name }}
+        EGP_CACHE_CLEAN: ${{ inputs.clean }}
+      run: |
+        root="$(cd "$RUNNER_WORKSPACE/.." && pwd)/_egp-build"
+        dir="$root/${GITHUB_REPOSITORY#*/}/$EGP_CACHE_NAME"
+        if [ "$EGP_CACHE_CLEAN" = "true" ]; then rm -rf "$dir"; fi
+        mkdir -p "$dir"
+        echo "path=$dir/" >> "$GITHUB_OUTPUT"
+        echo "Build directory: $dir"

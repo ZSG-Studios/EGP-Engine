@@ -1,0 +1,84 @@
+name: Set up toolchain
+description: >-
+  Select the pinned native toolchain on an EGP self-hosted runner: Git Bash (Windows), MSVC,
+  Python and xmake. Tools provisioned on the host are reused; anything missing is installed
+  into the runner tool cache at the pinned version.
+inputs:
+  python-version:
+    description: CPython used by build scripts and validators.
+    default: '3.14'
+  xmake-version:
+    description: Pinned xmake release (must match Superpos toolchain/dependencies.lock.json).
+    default: '3.1.1'
+  llvm-version:
+    description: Pinned LLVM/Clang release on Linux hosts.
+    default: '22.1.3'
+runs:
+  using: composite
+  steps:
+    # On Windows hosts `bash` on the default PATH is the WSL launcher; put Git Bash first so
+    # `shell: bash` steps run natively against the Windows toolchain.
+    - name: Select Git Bash
+      if: runner.os == 'Windows'
+      shell: powershell
+      run: |
+        $git = (Get-Command git -ErrorAction Stop).Source
+        $bin = Join-Path (Split-Path (Split-Path $git)) 'bin'
+        if (-not (Test-Path (Join-Path $bin 'bash.exe'))) { throw "Git Bash not found beside $git" }
+        $bin | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+
+    # Runner services on the Mac host start without the interactive shell PATH.
+    - name: Select Homebrew tools
+      if: runner.os == 'macOS'
+      shell: bash
+      run: |
+        for dir in /opt/homebrew/bin /opt/homebrew/opt/python@3.13/libexec/bin "$HOME/.local/bin" "$HOME/.dotnet"; do
+          if [ -d "$dir" ]; then echo "$dir" >> "$GITHUB_PATH"; fi
+        done
+
+    # Clang is the only toolchain. Linux hosts carry the pinned LLVM under /opt/egp
+    # (installer: .local/dev-env/llvm-install-wsl.sh).
+    - name: Select pinned LLVM
+      if: runner.os == 'Linux'
+      shell: bash
+      env:
+        EGP_LLVM_ROOT: /opt/egp/llvm-${{ inputs.llvm-version }}
+      run: |
+        if [ ! -x "$EGP_LLVM_ROOT/bin/clang" ]; then
+          echo "::error::Pinned LLVM ${{ inputs.llvm-version }} is missing on $RUNNER_NAME ($EGP_LLVM_ROOT); run .local/dev-env/llvm-install-wsl.sh"
+          exit 1
+        fi
+        echo "$EGP_LLVM_ROOT/bin" >> "$GITHUB_PATH"
+
+    - name: Select MSVC
+      if: runner.os == 'Windows'
+      uses: ilammy/msvc-dev-cmd@0b201ec74fa43914dc39ae48a89fd1d8cb592756 # v1.13.0
+
+    - name: Select Python
+      uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Probe xmake
+      id: xmake
+      shell: bash
+      run: |
+        if command -v xmake >/dev/null && xmake --version | head -1 | grep -q "v${{ inputs.xmake-version }}+"; then
+          echo "provisioned=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "provisioned=false" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Install xmake
+      if: steps.xmake.outputs.provisioned != 'true'
+      uses: xmake-io/github-action-setup-xmake@3a1a5dddfc7fa625d9a698738334bf55655a861a # v1.2.5
+      with:
+        xmake-version: ${{ inputs.xmake-version }}
+
+    - name: Report toolchain and register problem matchers
+      shell: bash
+      run: |
+        echo "runner: $RUNNER_NAME ($RUNNER_OS $RUNNER_ARCH)"
+        xmake --version | head -1
+        python --version
+        echo ::add-matcher::misc/utility/problem-matchers.json
