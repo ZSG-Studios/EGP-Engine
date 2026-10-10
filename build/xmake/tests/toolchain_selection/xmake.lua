@@ -5,7 +5,7 @@ local selections = {
     {platform="windows",name="msvc"},
     {platform="windows",use_llvm=true,name="clang-cl"},
     {platform="windows",use_mingw=true,name="mingw"},
-    {platform="linuxbsd",name="gcc"},
+    {platform="linuxbsd",name="clang"},
     {platform="linuxbsd",use_llvm=true,name="clang"},
     {platform="macos",name="xcode"},
     {platform="ios",name="xcode"},
@@ -112,7 +112,7 @@ for index, options in ipairs(selections) do
             assert(hosts.select({platform="windows",use_llvm=true},"windows","x64",absent).toolchain=="clang-cl")
             assert(hosts.select({platform="windows"},"windows","x64",absent).toolchain=="msvc")
             assert(hosts.select({platform="linuxbsd",use_llvm=true},"linux","x86_64",absent).toolchain=="clang")
-            assert(hosts.select({platform="linuxbsd"},"linux","x86_64",absent).toolchain=="gcc")
+            assert(hosts.select({platform="linuxbsd"},"linux","x86_64",absent).toolchain=="clang","Clang is the default Linux toolchain")
             assert(hosts.select({platform="web",arch="wasm32"},"windows","x64",function(name) return name=="g++" end).toolchain=="mingw")
             assert(hosts.select({platform="android",arch="arm64"},"linux","x86_64",function(name) return name=="clang++" end).toolchain=="clang")
             assert(hosts.select({platform="web"},"macosx","arm64",absent).toolchain=="xcode")
@@ -123,8 +123,8 @@ for index, options in ipairs(selections) do
             assert(version_policy.gcc_warning("gxx","15.2.0")==nil,"GCC before16 must retain its previous warning policy")
             assert(version_policy.gcc_warning("gxx","16.0.0")=="-Wno-sfinae-incomplete","GCC16 must retain the intentional upstream SFINAE exception")
             assert(version_policy.gcc_warning("gcc","17.0.1")=="-Wno-sfinae-incomplete","Newer GCC must retain that same compatibility policy")
-            assert(version_policy.gcc_warning("clangxx","22.1.3")==nil,"Clang must not receive a GCC-specific diagnostic option")
-            assert(version_policy.gcc_warning("clang_cl","22.1.3")==nil,"Clang-cl must retain its independent strict warning policy")
+            assert(version_policy.gcc_warning("clangxx","23.1.3")==nil,"Clang must not receive a GCC-specific diagnostic option")
+            assert(version_policy.gcc_warning("clang_cl","23.1.3")==nil,"Clang-cl must retain its independent strict warning policy")
             local compiler_name,compiler_version=version_policy.apply(target)
             local expected_warning=version_policy.gcc_warning(compiler_name,compiler_version)
             assert(table.contains(table.wrap(target:get("cxxflags")),"-Wno-sfinae-incomplete")== (expected_warning~=nil),"The actual selected native compiler must determine the deferred GCC version flag")
