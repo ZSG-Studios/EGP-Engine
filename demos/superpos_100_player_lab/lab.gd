@@ -36,13 +36,15 @@ const CHARACTER_VIEW := preload("res://character_view.gd")
 const PLAYGROUND := preload("res://playground.gd")
 const GAMEPLAY := preload("res://gameplay.gd")
 # Deterministic mode: the human client runs the same EGPBox3DWorld from the relayed
-# Superpos lockstep command stream. Lane 0 carries redundant unreliable inputs, lane 9
-# unreliable command batches, lane 10 the reliable join keyframe.
+# Superpos lockstep command stream. Lane 0 carries redundant unreliable inputs, lane 8
+# unreliable world digests (down) and desync reports (up), lane 9 unreliable command
+# batches, lane 10 the reliable join keyframe.
+const INTEGRITY_LANE := 8
 const COMMAND_LANE := 9
 const KEYFRAME_LANE := 10
 # Commands use plain unreliable delivery: a latest-wins lane would let a newer batch
 # replace an unsent one and open a gap in the incremental command stream.
-const DETERMINISTIC_MODES := [3,0,0,0,0,0,0,0,0,3,0]
+const DETERMINISTIC_MODES := [3,0,0,0,0,0,0,0,3,3,0]
 const KEYFRAME_CHUNK := 60000
 const COLORS := [Color("55ead0"), Color("72baff"), Color("b39aff"), Color("ffbc68"), Color("f87999")]
 var config: Dictionary
@@ -101,6 +103,18 @@ var sim_epoch := -1.0
 var section_ms := {"tick":[],"render":[],"animate":[],"animated":[],"engine_process":[],"engine_physics":[]}
 var gameplay: RefCounted
 var keyframe_cache := {}
+# Server: one shadow keyframe build at a time. The native snapshot is taken at the
+# tick barrier; conversion and zstd run on a worker, and every joiner within the
+# keyframe window shares the result.
+var kf_task := -1
+var kf_job := {}
+var kf_stats := {"captures":0,"served":0,"barrier_ms":[],"build_ms":[],"bytes":0,"format":"native","max_batch":0}
+# Desync detection: the server sends its digest every digest_interval ticks; each
+# client compares its own at the same tick and reports a mismatch upstream, which
+# triggers a keyframe resync.
+var integrity := {"kind":"","interval":0,"sent":0,"checks":0,"matches":0,"mismatches":0,"reports":0,"resyncs":0,"first_mismatch":[],"digest_ms":[]}
+var own_digests := {}
+var server_digests := {}
 var telemetry_cache := {}
 var live_last_time := 0.0
 var live_last_frame := 0
@@ -553,6 +567,8 @@ func _server_step_deterministic() -> void:
 	physics_ms.append(float(Time.get_ticks_usec()-started)/1000.0)
 	if physics_ms.size()>2000:
 		physics_ms.pop_front()
+	if tick%_digest_interval()==0:
+		_publish_digest(tick)
 	var replication_started := Time.get_ticks_usec()
 	if tick%6==0:
 		# Travelled distance at 10 Hz from one batched native read.
@@ -830,6 +846,8 @@ func _send_unreliable(c: Dictionary, bytes: PackedByteArray, lane: int) -> void:
 func _send_lockstep() -> void:
 	if not deterministic:
 		return
+	_poll_keyframe()
+	_read_desync_reports()
 	var still_joining: Array = []
 	for c in joining:
 		if not c.ready:
@@ -936,30 +954,183 @@ func _connection_id(key: PackedByteArray, generation: int) -> int:
 func _send_keyframe(c: Dictionary) -> void:
 	if _pending(c,KEYFRAME_LANE)>0:
 		return
-	# World snapshot + gameplay actors + the lockstep table, all at the newest tick.
-	# Joining clients in the same tick share one capture.
-	if int(keyframe_cache.get("tick",-1))!=physics.get_tick():
-		var table: PackedByteArray=lockstep_server.pack_keyframe()
-		var captured := PackedByteArray()
-		captured.resize(8)
-		captured.encode_u32(0,physics.get_tick())
-		captured.encode_u32(4,table.size())
-		captured.append_array(table)
-		var capture_started := Time.get_ticks_usec()
-		captured.append_array(gameplay.capture())
-		keyframe_cache={"tick":physics.get_tick(),"body":captured}
-		if diagnostics.size()<400:
-			diagnostics.append([snappedf(now,0.01),"keyframe_capture",float(Time.get_ticks_usec()-capture_started)/1000.0,captured.size()])
+	# Joiners share a keyframe captured within the window; the command stream replays
+	# from its tick, so a slightly older keyframe costs only a few catch-up ticks.
+	# Otherwise request one and wait for it.
+	var window: int=int(_tuning("keyframe_window",30))
+	if keyframe_cache.is_empty() or physics.get_tick()-int(keyframe_cache.tick)>window:
+		_request_keyframe()
+		return
 	c.kf_body=keyframe_cache.body
 	c.keyframe_id=int(c.get("keyframe_id",0))+1
 	c.kf_count=ceili(float(c.kf_body.size())/KEYFRAME_CHUNK)
 	c.kf_next=0
 	_send_keyframe_chunk(c)
-	c.keyframe_tick=physics.get_tick()
+	c.keyframe_tick=int(keyframe_cache.tick)
 	lockstep_server.set_stream_enabled(c.id,false)
 	lockstep_server.reset_stream(c.id,c.keyframe_tick)
 	c.resync=false
 	c.keyframes_sent=int(c.get("keyframes_sent",0))+1
+	keyframe_cache.served=int(keyframe_cache.get("served",0))+1
+	kf_stats.served+=1
+	kf_stats.max_batch=maxi(int(kf_stats.max_batch),int(keyframe_cache.served))
+
+func _request_keyframe() -> void:
+	if kf_task>=0:
+		return
+	# Barrier half on the owner thread: the lockstep table and the native snapshot at
+	# this tick. The shadow world (portable recapture) and zstd run on a worker.
+	var barrier_started := Time.get_ticks_usec()
+	var parts: Dictionary=gameplay.capture_parts()
+	var snapshot_size: int=PackedByteArray(parts.snapshot).size()
+	kf_job={"tick":physics.get_tick(),"table":lockstep_server.pack_keyframe(),"parts":parts,
+		"portable":bool(_tuning("portable_keyframes",1)) and GAMEPLAY.portable_available(),"workers":int(_tuning("physics_workers",1)),"body":PackedByteArray()}
+	var barrier_ms: float=float(Time.get_ticks_usec()-barrier_started)/1000.0
+	kf_stats.barrier_ms.append(barrier_ms)
+	if kf_stats.barrier_ms.size()>200:
+		kf_stats.barrier_ms.pop_front()
+	kf_job.requested=Time.get_ticks_usec()
+	kf_task=WorkerThreadPool.add_task(_build_keyframe.bind(kf_job),false,"Lockstep keyframe")
+	if diagnostics.size()<400:
+		diagnostics.append([snappedf(now,0.01),"keyframe_barrier",barrier_ms,snapshot_size])
+
+# Worker thread: no scene, session or authoritative-world access.
+func _build_keyframe(job: Dictionary) -> void:
+	var body := PackedByteArray()
+	var table: PackedByteArray=job.table
+	body.resize(8)
+	body.encode_u32(0,int(job.tick))
+	body.encode_u32(4,table.size())
+	body.append_array(table)
+	body.append_array(GAMEPLAY.pack(job.parts,bool(job.portable),int(job.workers)))
+	job.body=body
+
+func _poll_keyframe() -> void:
+	if kf_task<0 or not WorkerThreadPool.is_task_completed(kf_task):
+		return
+	WorkerThreadPool.wait_for_task_completion(kf_task)
+	kf_task=-1
+	var build_ms: float=float(Time.get_ticks_usec()-int(kf_job.requested))/1000.0
+	kf_stats.build_ms.append(build_ms)
+	if kf_stats.build_ms.size()>200:
+		kf_stats.build_ms.pop_front()
+	kf_stats.captures+=1
+	var body: PackedByteArray=kf_job.body
+	kf_stats.bytes=body.size()
+	kf_stats.format="portable" if int(kf_job.parts.get("format",0))==GAMEPLAY.SNAPSHOT_PORTABLE else "native"
+	if diagnostics.size()<400:
+		diagnostics.append([snappedf(now,0.01),"keyframe_build",build_ms,body.size(),kf_stats.format])
+	if body.size()>8:
+		keyframe_cache={"tick":int(kf_job.tick),"body":body,"served":0}
+	kf_job={}
+
+func _digest_interval() -> int:
+	return maxi(int(_tuning("digest_interval",60)),1)
+
+func _publish_digest(tick: int) -> void:
+	var started := Time.get_ticks_usec()
+	var digest: String=gameplay.digest()
+	integrity.digest_ms.append(float(Time.get_ticks_usec()-started)/1000.0)
+	if integrity.digest_ms.size()>300:
+		integrity.digest_ms.pop_front()
+	var message := "DG".to_ascii_buffer()
+	message.resize(6)
+	message.encode_u32(2,tick)
+	message.append_array(digest.to_ascii_buffer())
+	for c in connections:
+		# Only clients simulating from a delivered keyframe can compare.
+		if c.ready and c.pumped and int(c.get("keyframe_tick",0))>0 and int(c.keyframe_tick)<tick and not joining.has(c) and _unreliable_waiting(c,INTEGRITY_LANE)<2:
+			_send_unreliable(c,message,INTEGRITY_LANE)
+			integrity.sent+=1
+
+func _read_desync_reports() -> void:
+	# Upstream desync reports: one keyframe resync at most every 2 s per client.
+	if frame%6!=3:
+		return
+	for c in connections:
+		if not c.ready or not c.pumped:
+			continue
+		for _message in range(2):
+			var packet: Dictionary=c.session.read_packet(INTEGRITY_LANE)
+			if packet.error!=OK:
+				break
+			var acked: int=c.session.acknowledge_packet(packet.message,packet.binding_generation,INTEGRITY_LANE)
+			_acked(acked,"Desync report receipt")
+			var bytes: PackedByteArray=packet.payload
+			if bytes.size()==6 and bytes.slice(0,2).get_string_from_ascii()=="DS":
+				integrity.reports+=1
+				if now-float(c.get("resync_at",-100.0))>2.0:
+					c.resync=true
+					c.resync_at=now
+					integrity.resyncs+=1
+					if diagnostics.size()<400:
+						diagnostics.append([snappedf(now,0.01),"desync_resync",c.id,bytes.decode_u32(2)])
+				if not joining.has(c):
+					joining.append(c)
+			if acked!=OK:
+				break
+
+# Client side: the server's digests (lane 8), compared with our own at the same tick.
+func _read_digests(c: Dictionary) -> void:
+	for _message in range(4):
+		var packet: Dictionary=c.session.read_packet(INTEGRITY_LANE)
+		if packet.error!=OK:
+			return
+		var acked: int=c.session.acknowledge_packet(packet.message,packet.binding_generation,INTEGRITY_LANE)
+		_acked(acked,"Digest receipt")
+		var bytes: PackedByteArray=packet.payload
+		if bytes.size()>6 and bytes.slice(0,2).get_string_from_ascii()=="DG":
+			_compare_digest(c,bytes.decode_u32(2),bytes.slice(6).get_string_from_ascii(),true)
+		if acked!=OK:
+			return
+
+# Records one side of a checkpoint and compares once both sides are present.
+# `from_server` says which side this digest is. A mismatch asks for a keyframe.
+func _compare_digest(c: Dictionary, tick: int, digest: String, from_server: bool) -> void:
+	var mine: Dictionary=server_digests if from_server else own_digests
+	var theirs: Dictionary=own_digests if from_server else server_digests
+	if not theirs.has(tick):
+		mine[tick]=digest
+		while mine.size()>256:
+			mine.erase(mine.keys().min())
+		return
+	var other: String=theirs[tick]
+	theirs.erase(tick)
+	integrity.checks+=1
+	if other==digest:
+		integrity.matches+=1
+		return
+	integrity.mismatches+=1
+	if role=="bots":
+		# The process's shared world follows the feed bot's stream and keyframes.
+		for feed in connections:
+			if feed.id==world_feed:
+				c=feed
+	if integrity.first_mismatch.is_empty():
+		# [tick, server digest, client digest]
+		integrity.first_mismatch=[tick,digest if from_server else other,other if from_server else digest]
+	if diagnostics.size()<300:
+		diagnostics.append([snappedf(now,0.01),"desync",tick])
+	c.desync_tick=tick
+	c.desync_sent=-100.0
+
+func _report_desync(c: Dictionary) -> void:
+	# Resent every 0.5 s until a keyframe replaces the diverged world.
+	if int(c.get("desync_tick",0))==0 or not c.ready or now-float(c.get("desync_sent",-100.0))<0.5:
+		return
+	var message := "DS".to_ascii_buffer()
+	message.resize(6)
+	message.encode_u32(2,int(c.desync_tick))
+	_send_unreliable(c,message,INTEGRITY_LANE)
+	c.desync_sent=now
+
+func _digest_keyframe_loaded(c: Dictionary, tick: int) -> void:
+	# A keyframe at `tick` replaces the world: older checkpoints no longer apply.
+	c.desync_tick=0
+	for table in [own_digests,server_digests]:
+		for key in table.keys():
+			if int(key)<=tick:
+				table.erase(key)
 
 func _send_keyframe_chunk(c: Dictionary) -> void:
 	# One reliable chunk in flight per joiner: a slow link drains it at its own pace
@@ -1076,6 +1247,8 @@ func _client_step(delta: float) -> void:
 			_retire_unreliable(c)
 			_read_keyframe(c)
 			_read_commands(c)
+			_read_digests(c)
+			_report_desync(c)
 		if c.ready and c.pumped:
 			for lane in _lanes(c,STATE):
 				var packet: Dictionary=c.session.read_packet(lane)
@@ -1285,6 +1458,7 @@ func _bot_stream(c: Dictionary) -> void:
 							gameplay=restored
 							physics=gameplay.world
 							world_feed=c.id
+							_digest_keyframe_loaded(c,body.decode_u32(0))
 	# Drain every queued command batch, as a real client would each frame.
 	for _message in range(16):
 		packet=c.session.read_packet(COMMAND_LANE)
@@ -1301,6 +1475,11 @@ func _bot_stream(c: Dictionary) -> void:
 				lockstep.accept_commands(bytes.slice(8))
 		if acked!=OK:
 			break
+	# Server digests are the same for every bot; the shared world is checked against
+	# them, and the feed bot (whose keyframe seeds that world) reports a desync.
+	_read_digests(c)
+	if c.id==world_feed:
+		_report_desync(c)
 	# Non-feed bots consume their own stream (decode and apply the command tables).
 	if c.id!=world_feed:
 		while lockstep.advance_command()!=0:
@@ -1323,6 +1502,8 @@ func _bot_world_step() -> void:
 		var inputs: Array=lockstep.get_inputs()
 		gameplay.step(tick,inputs)
 		feed.kf.advanced+=1
+		if tick%_digest_interval()==0:
+			_compare_digest(feed,tick,gameplay.digest(),false)
 	if steps>0:
 		# Fresh exact positions for every bot brain in this process.
 		var states: PackedFloat32Array=physics.get_body_states(gameplay.player_ids)
@@ -1389,6 +1570,7 @@ func _read_keyframe(c: Dictionary) -> void:
 	det.tick=body.decode_u32(0)
 	det.playing=false
 	det.keyframes+=1
+	_digest_keyframe_loaded(c,int(det.tick))
 	det.last_processed=-1
 	_capture_render_state()
 	det.prev=det.curr.duplicate()
@@ -1481,6 +1663,8 @@ func _advance_deterministic(c: Dictionary) -> void:
 			det.step_ms.pop_front()
 		det.tick=tick
 		det.advanced+=1
+		if tick%_digest_interval()==0:
+			_compare_digest(c,tick,gameplay.digest(),false)
 		_capture_render_state()
 		# Reconcile the predicted avatar against the exact world at the input it consumed.
 		# The server relays which of our own input ticks it consumed at this tick.
@@ -1549,8 +1733,19 @@ func _write_telemetry(full: bool) -> void:
 		rows.append({"id":c.id,"ready":c.ready,"terminal":c.session.get_state()=="NetworkFailed","ever_ready":c.ever_ready,"generation":c.generation,"recoveries":c.recoveries,"transport_errors":c.transport_errors,"error_codes":c.get("error_codes",{}),"srtt_ms":float(stats.get("smoothed_rtt_us",0))/1000.0,"retry_ticks":int(stats.get("retry_ticks",0)),"cwnd":int(stats.get("congestion_window",0)),"flight":int(stats.get("bytes_in_flight",0)),"unreliable_pending":c.get("unreliable",[]).size(),"enqueue_failures":c.get("enqueue_failures",{}),"network_ready":bool(stats.get("network_ready",false)),"sent":c.sent,"applied":c.applied,"received":c.received,"ack_ms":c.ack_ms,"ack_p95":_pc(c,full,"r1",c.acks,0.95),"ack_p50":_pc(c,full,"r2",c.acks,0.5),"state_age_p50_ms":_pc(c,full,"r3",c.state_ages,0.5),"state_interval_p50_ms":_pc(c,full,"r4",c.state_intervals,0.5),"error_p95":_pc(c,full,"r5",c.errors,0.95),"score":c.score,"position":[c.position.x,c.position.y,c.position.z],"distance":c.distance,"max_pending":c.max_pending,"pending_tickets":c.tickets.size(),"ticket_lanes":c.tickets.map(func(t):return int(t.channel)),"oldest_ticket_ms":0 if c.tickets.is_empty() else Time.get_ticks_msec()-int(c.tickets[0].at),"send_period":c.period,"wire_bytes":c.wire_base+int(stats.get("charged_wire_bytes",0)),"rejected":c.rejected,"stale":c.stale,"corrections":c.corrections,"deterministic":det.loaded if role=="human" else deterministic,"det_tick":det.tick,"det_target":det.target,"det_starved":det.starved,"det_advanced":det.advanced,"keyframes":det.keyframes if role=="human" else int(c.kf.keyframes) if c.has("kf") else int(c.get("keyframes_sent",0)),"bot_advanced":int(c.kf.advanced) if c.has("kf") else 0,"bot_loaded":bool(c.kf.loaded) if c.has("kf") else false,"command_bytes":int(c.get("command_bytes",0)),"command_rtt_ms":float(c.get("srtt",0.0))*1000.0,"command_resends":int(lockstep_server.get_stream_status(c.id).get("rewinds",0)) if role=="server" and deterministic else 0,"decoder":(lockstep_client.get_status() if role=="human" and lockstep_client!=null else c.lockstep.get_status() if c.has("lockstep") else {}),"server_ack":int(lockstep_server.get_playout_status(c.id).get("command_acknowledged",0)) if role=="server" and deterministic else 0,"sent_newest":int(lockstep_server.get_stream_status(c.id).get("sent_tick",0)) if role=="server" and deterministic else 0,"server_tick":physics.get_tick() if physics!=null else 0,"det_lag_p95":_pc(c,full,"r6",det.lag,0.95),"det_lag_p50":_pc(c,full,"r7",det.lag,0.5),"det_buffered_p50":_pc(c,full,"r8",det.buffered,0.5),"det_buffered_p95":_pc(c,full,"r9",det.buffered,0.95),"det_step_ms_p95":_pc(c,full,"r10",det.step_ms,0.95),"playout":lockstep_server.get_playout_status(c.id) if role=="server" and deterministic and c.id==HUMAN else {},"known_entities":c.neighbors.size(),"starvations":c.starvations,"buffer_target":c.buffer_target,"buffer_p50":_pc(c,full,"r11",c.buffer_depths,0.5),"processed_tick":c.processed_tick,"received_tick":c.received_tick,"render_delay_ms":c.render_delay*1000,"exhibit_received":c.exhibit_received,"activities":c.activities,"state_age_p95_ms":_pc(c,full,"r12",c.state_ages,0.95),"state_interval_p95_ms":_pc(c,full,"r13",c.state_intervals,0.95)})
 	var report := {"diagnostics":diagnostics,"role":role,"start_unix":config.start_unix,"now":now,"failed":failed,"pid":OS.get_process_id(),"rows":rows,"physics_p95_ms":_pg(full,"g14",physics_ms,0.95),"frames":frame,"performance":{"frame_p50_ms":_pg(full,"g15",frame_times,0.5),"frame_p95_ms":_pg(full,"g16",frame_times,0.95),"frame_p99_ms":_pg(full,"g17",frame_times,0.99),"process_p95_ms":_pg(full,"g18",process_times,0.95),"gpu_p95_ms":_pg(full,"g19",gpu_times,0.95),"physics_interval_p95_ms":_pg(full,"g20",step_intervals,0.95),"samples":frame_times.size(),"server_tick_rate":float(frame)/maxf(now+10,1),"network_p95_ms":_pg(full,"g21",network_times,0.95),"application_p95_ms":_pg(full,"g22",application_times,0.95),"control_p95_ms":_pg(full,"g23",control_times,0.95),"replication_p95_ms":_pg(full,"g24",replication_times,0.95),"publish_p95_ms":_pg(full,"g25",publish_times,0.95),"application_max_ms":_pg(full,"g26",application_times,1.0),"tick_p50_ms":_pg(full,"g27",section_ms.tick,0.5),"tick_p95_ms":_pg(full,"g28",section_ms.tick,0.95),"render_p50_ms":_pg(full,"g29",section_ms.render,0.5),"render_p95_ms":_pg(full,"g30",section_ms.render,0.95),"animate_p50_ms":_pg(full,"g31",section_ms.animate,0.5),"animate_p95_ms":_pg(full,"g32",section_ms.animate,0.95),"animated_p50":_pg(full,"g33",section_ms.animated,0.5),"engine_process_p50_ms":_pg(full,"g34",section_ms.engine_process,0.5),"engine_process_p95_ms":_pg(full,"g35",section_ms.engine_process,0.95),"engine_physics_p50_ms":_pg(full,"g36",section_ms.engine_physics,0.5),"engine_physics_p95_ms":_pg(full,"g37",section_ms.engine_physics,0.95),"engine_physics_window_max_ms":Performance.get_monitor(Performance.TIME_PHYSICS_PROCESS)*1000}}
 	report.live=_live_block()
+	if deterministic:
+		var checks: Dictionary=integrity.duplicate()
+		checks.kind=GAMEPLAY.digest_kind()
+		checks.interval=_digest_interval()
+		checks.digest_ms_p50=_pg(full,"g40",integrity.digest_ms,0.5)
+		checks.digest_ms_max=_pg(full,"g41",integrity.digest_ms,1.0)
+		checks.erase("digest_ms")
+		report.integrity=checks
 	if role=="server" and deterministic:
 		report.command_totals=lockstep_server.get_command_totals()
+		report.keyframes={"captures":kf_stats.captures,"served":kf_stats.served,"max_batch":kf_stats.max_batch,"bytes":kf_stats.bytes,"format":kf_stats.format,
+			"barrier_ms_p50":_pg(full,"g42",kf_stats.barrier_ms,0.5),"barrier_ms_max":_pg(full,"g43",kf_stats.barrier_ms,1.0),
+			"build_ms_p50":_pg(full,"g44",kf_stats.build_ms,0.5),"build_ms_max":_pg(full,"g45",kf_stats.build_ms,1.0),"window_ticks":int(_tuning("keyframe_window",30))}
 	if role=="server" and (full or not telemetry_cache.has("props")):
 		var props: Array = []
 		for id in range(40):

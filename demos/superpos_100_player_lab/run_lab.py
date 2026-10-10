@@ -412,6 +412,26 @@ def main():
             storms=[r['id'] for r in rows if r['id']<args.bots and r.get('keyframes',0)>3]
             if storms:
                 errors.append('Keyframe storm: bots rejoined more than 3 times: '+str(storms[:10]))
+        # Desync detection: server digests every digest_interval ticks, compared by each
+        # client process at the same tick (plan: zero desynchronizations).
+        integrity={}
+        if 'integrity' in server_report:
+            final_reports=[json.loads(path.read_text()) for path in worker_paths]
+            client_checks=[report.get('integrity',{}) for report in final_reports]
+            integrity=dict(kind=server_report['integrity'].get('kind'),interval=server_report['integrity'].get('interval'),
+                server_sent=server_report['integrity'].get('sent',0),server_reports=server_report['integrity'].get('reports',0),
+                server_resyncs=server_report['integrity'].get('resyncs',0),server_digest_ms_p50=server_report['integrity'].get('digest_ms_p50'),
+                server_digest_ms_max=server_report['integrity'].get('digest_ms_max'),
+                checks=sum(c.get('checks',0) for c in client_checks),matches=sum(c.get('matches',0) for c in client_checks),
+                mismatches=sum(c.get('mismatches',0) for c in client_checks),
+                first_mismatch=next((c['first_mismatch'] for c in client_checks if c.get('first_mismatch')),[]),
+                per_process={report['role']+'-'+str(index):report.get('integrity',{}).get('checks',0) for index,report in enumerate(final_reports)},
+                keyframes=server_report.get('keyframes',{}))
+            print('LAB_INTEGRITY '+json.dumps(integrity),flush=True)
+            if integrity['mismatches']:
+                errors.append('Desynchronization: %d of %d digest checkpoints differed (first %s)' % (integrity['mismatches'],integrity['checks'],integrity['first_mismatch']))
+            if args.duration>=30 and not integrity['checks']:
+                errors.append('Desync detection was not exercised (no digest checkpoint compared)')
         simulation=server_report.get('simulation',{})
         if simulation.get('backend')!='EGPBox3DWorld' or simulation.get('joints',0)<100 or not simulation.get('cloth_finite') or simulation.get('pin_error',1)>0.001 or simulation.get('cloth_deformation',0)<0.1 or simulation.get('joint_travel',0)<1:
             errors.append('Native cloth/joint qualification failed')
@@ -423,7 +443,7 @@ def main():
             activities={key for row in server_rows for key in row.get('activities',{})}
             if not {'8','16','32','64','256'}.issubset(activities):
                 errors.append('Replicated bot activities not exercised')
-        summary = dict(passed=not errors,errors=errors,scope=('Local' if args.local_server else 'Remote')+' native dedicated Box3D server; local independent native Superpos UDP/DTLS streams through seeded datagram impairment',bots=args.bots,human=not args.no_human,duration=args.duration,server=server_meta,local_engine_sha256=hashlib.sha256(engine.read_bytes()).hexdigest(),clients=rows,server_clients=server_rows,proxy=proxy.rows,profiles=PROFILES,physics_p95_ms=server_report.get('physics_p95_ms'),server_exit=server_exit,simulation=simulation,performance={report['role']:report.get('performance',{}) for report in reports if report['role']=='human'},server_performance=server_report.get('performance',{}),local_server=args.local_server,proxy_gaps=proxy_gaps,diagnostics={report['role']:report.get('diagnostics',[]) for report in reports if report['role']=='human'}|{'server':server_report.get('diagnostics',[])},command_stream=stream,command_totals=server_report.get('command_totals',{}),live={report['role']:report.get('live',{}) for report in reports if report['role']=='human'}|{'server':{k:v for k,v in server_report.get('live',{}).items() if k!='streams'}})
+        summary = dict(passed=not errors,errors=errors,scope=('Local' if args.local_server else 'Remote')+' native dedicated Box3D server; local independent native Superpos UDP/DTLS streams through seeded datagram impairment',bots=args.bots,human=not args.no_human,duration=args.duration,server=server_meta,local_engine_sha256=hashlib.sha256(engine.read_bytes()).hexdigest(),clients=rows,server_clients=server_rows,proxy=proxy.rows,profiles=PROFILES,physics_p95_ms=server_report.get('physics_p95_ms'),server_exit=server_exit,simulation=simulation,performance={report['role']:report.get('performance',{}) for report in reports if report['role']=='human'},server_performance=server_report.get('performance',{}),local_server=args.local_server,proxy_gaps=proxy_gaps,diagnostics={report['role']:report.get('diagnostics',[]) for report in reports if report['role']=='human'}|{'server':server_report.get('diagnostics',[])},command_stream=stream,integrity=integrity,command_totals=server_report.get('command_totals',{}),live={report['role']:report.get('live',{}) for report in reports if report['role']=='human'}|{'server':{k:v for k,v in server_report.get('live',{}).items() if k!='streams'}})
         atomic_json(OUT/'receipt.json',summary)
         print('LAB_'+('PASS' if not errors else 'FAIL')+' clients='+str(count)+' physics_p95_ms='+str(summary['physics_p95_ms']),flush=True)
         if errors:

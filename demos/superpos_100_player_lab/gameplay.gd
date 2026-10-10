@@ -162,13 +162,44 @@ func create(player_count: int, workers: int = 1) -> bool:
 
 
 # Join keyframe: world snapshot plus gameplay actor state, zstd-compressed.
-func capture() -> PackedByteArray:
-	var snapshot := world.capture_snapshot()
-	var state := var_to_bytes({"total":total, "actors":actors, "snapshot_size":snapshot.size()})
+# Raw layout: state size, snapshot size, snapshot format (u32 each), the
+# var_to_bytes actor state, then the snapshot.
+const SNAPSHOT_NATIVE := 0
+const SNAPSHOT_PORTABLE := 1
+
+
+# The portable compact codec (EG3PORT1) when this engine build binds it.
+static func portable_available() -> bool:
+	return ClassDB.class_has_method("EGPBox3DWorld", "capture_portable_snapshot") and ClassDB.class_has_method("EGPBox3DWorld", "restore_portable_snapshot")
+
+
+# The tick-barrier half of a keyframe (owner thread): the native snapshot and the
+# actor state at this tick. Converting and compressing them can run off-thread.
+func capture_parts() -> Dictionary:
+	return {"snapshot":world.capture_snapshot(), "state":var_to_bytes({"total":total, "actors":actors})}
+
+
+# Thread-safe: no authoritative-world access. With [param portable], the native
+# snapshot is restored into a private shadow world on the calling thread and
+# recaptured with the compact portable codec; failure falls back to the native
+# snapshot. Records the format used in parts.format.
+static func pack(parts: Dictionary, portable: bool = false, workers: int = 1) -> PackedByteArray:
+	var snapshot: PackedByteArray = parts.snapshot
+	var format := SNAPSHOT_NATIVE
+	if portable and portable_available():
+		var shadow := EGPBox3DWorld.new()
+		if shadow.configure(TICK_RATE, 4, workers) == OK and shadow.restore_snapshot(snapshot) == OK:
+			var compact: PackedByteArray = shadow.call("capture_portable_snapshot", true)
+			if not compact.is_empty():
+				snapshot = compact
+				format = SNAPSHOT_PORTABLE
+	parts.format = format
+	var state: PackedByteArray = parts.state
 	var raw := PackedByteArray()
-	raw.resize(8)
+	raw.resize(12)
 	raw.encode_u32(0, state.size())
 	raw.encode_u32(4, snapshot.size())
+	raw.encode_u32(8, format)
 	raw.append_array(state)
 	raw.append_array(snapshot)
 	var packed := PackedByteArray()
@@ -178,21 +209,32 @@ func capture() -> PackedByteArray:
 	return packed
 
 
+func capture() -> PackedByteArray:
+	return pack(capture_parts())
+
+
 func restore(packed: PackedByteArray, workers: int = 1) -> bool:
 	if packed.size() < 4:
 		return false
 	var raw := packed.slice(4).decompress(packed.decode_u32(0), FileAccess.COMPRESSION_ZSTD)
-	if raw.size() < 8:
+	if raw.size() < 12:
 		return false
 	var state_size := raw.decode_u32(0)
 	var snapshot_size := raw.decode_u32(4)
-	if raw.size() != 8+state_size+snapshot_size:
+	var format := raw.decode_u32(8)
+	if raw.size() != 12+state_size+snapshot_size or format > SNAPSHOT_PORTABLE:
 		return false
-	var state = bytes_to_var(raw.slice(8, 8+state_size))
+	var state = bytes_to_var(raw.slice(12, 12+state_size))
 	if not state is Dictionary:
 		return false
 	world = EGPBox3DWorld.new()
-	if world.configure(TICK_RATE, 4, workers) != OK or world.restore_snapshot(raw.slice(8+state_size)) != OK:
+	if world.configure(TICK_RATE, 4, workers) != OK:
+		return false
+	var snapshot := raw.slice(12+state_size)
+	if format == SNAPSHOT_PORTABLE:
+		if not portable_available() or int(world.call("restore_portable_snapshot", snapshot)) != OK:
+			return false
+	elif world.restore_snapshot(snapshot) != OK:
 		return false
 	total = int(state.total)
 	actors.clear()
@@ -204,6 +246,22 @@ func restore(packed: PackedByteArray, workers: int = 1) -> bool:
 	var ok: bool = actors.size() == total and simulation.setup(world, total, false)
 	_make_players_buoyant()
 	return ok
+
+
+# Desync detector, compared between the server and every client at the same tick.
+# World part: the awake-state digest when the engine binds it (cost grows with
+# awake state only), otherwise the full body/joint state hash. Actor part: the
+# first 8 bytes of SHA-256 over the gameplay actor state.
+func digest() -> String:
+	var world_part: String = world.call("get_awake_digest") if world.has_method("get_awake_digest") else world.get_state_hash()
+	var hashing := HashingContext.new()
+	hashing.start(HashingContext.HASH_SHA256)
+	hashing.update(var_to_bytes(actors))
+	return world_part + ":" + hashing.finish().slice(0, 8).hex_encode()
+
+
+static func digest_kind() -> String:
+	return "awake" if ClassDB.class_has_method("EGPBox3DWorld", "get_awake_digest") else "state_hash"
 
 
 # One authoritative tick. inputs[slot] is the 8-byte command input of that player.
