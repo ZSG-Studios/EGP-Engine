@@ -76,6 +76,18 @@ String NativeExtensionEditor::get_status() const {
 	return status_label->get_text();
 }
 
+// EGP builds with Clang only: clang-cl (MSVC STL/CRT and Windows SDK as headers and
+// libraries) on Windows, clang on Linux and Xcode's Apple clang on macOS. Without an
+// explicit toolchain xmake would pick MSVC on Windows and GCC on Linux.
+void NativeExtensionEditor::_append_toolchain(List<String> &r_arguments) const {
+	const String platform = _platform();
+	if (platform == "windows") {
+		r_arguments.push_back("--toolchain=clang-cl");
+	} else if (platform == "linux") {
+		r_arguments.push_back("--toolchain=clang");
+	}
+}
+
 String NativeExtensionEditor::_platform() const {
 	const String name = OS::get_singleton()->get_name();
 	return name == "Windows" ? "windows" : (name == "macOS" ? "macos" : "linux");
@@ -270,6 +282,7 @@ Error NativeExtensionEditor::build_extension(const String &p_name, bool p_releas
 	arguments.push_back(build_config.to_lower());
 	arguments.push_back("--egp_cpp_sdk=" + sdk_path);
 	arguments.push_back("--egp_cpp_cache=" + EditorPaths::get_singleton()->get_cache_dir().path_join("egp_cpp/lib").path_join(String(egp_cpp_sdk_hash).left(16)));
+	_append_toolchain(arguments);
 	return _start_process(arguments) ? OK : ERR_CANT_FORK;
 }
 
@@ -644,6 +657,7 @@ Error NativeExtensionEditor::check_toolchain() {
 	arguments.push_back(build_path);
 	arguments.push_back("-m");
 	arguments.push_back("debug");
+	_append_toolchain(arguments);
 	return _start_process(arguments) ? OK : ERR_CANT_FORK;
 }
 

@@ -81,6 +81,7 @@ class NativeExtensionEditor : public VBoxContainer {
 
 	Error _prepare_sdk();
 	String _platform() const;
+	void _append_toolchain(List<String> &r_arguments) const;
 	String _suffix() const;
 	void _refresh_extensions();
 	void _create_pressed();
