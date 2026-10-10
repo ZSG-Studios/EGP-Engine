@@ -4,6 +4,9 @@ plugins {
     id 'base'
 }
 
+// Declare the shared versions and helpers in this project (Gradle 10 removes implicit lookup in parent projects).
+apply from: '../app/config.gradle'
+
 ext {
     // Retrieve the build number from the environment variable; default to 0 if none is specified.
     // The build number is added as a suffix to the version code for upload to the Google Play store.
@@ -173,8 +176,8 @@ android {
             dimension = "android_distribution"
             missingDimensionStrategy 'products', 'editor'
             ndk {
-                if (!detectedAbis.isEmpty()) {
-                    abiFilters += detectedAbis
+                if (!rootProject.detectedAbis.isEmpty()) {
+                    abiFilters += rootProject.detectedAbis
                 }
             }
         }

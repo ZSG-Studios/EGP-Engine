@@ -1,6 +1,10 @@
 apply plugin: 'maven-publish'
 apply plugin: 'signing'
 
+// Root-project publishing coordinates, read explicitly (no implicit parent-project lookup).
+def ossrhGroupId = rootProject.ossrhGroupId
+def PUBLISH_VERSION = rootProject.PUBLISH_VERSION
+
 group = ossrhGroupId
 version = PUBLISH_VERSION
 

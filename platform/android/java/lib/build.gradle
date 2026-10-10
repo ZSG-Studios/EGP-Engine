@@ -2,6 +2,9 @@ plugins {
     id 'com.android.library'
 }
 
+// Declare the shared versions and helpers in this project (Gradle 10 removes implicit lookup in parent projects).
+apply from: '../app/config.gradle'
+
 ext {
     DEBUG_PUBLISH_ARTIFACT_ID = 'godot-debug'
     PUBLISH_ARTIFACT_ID = 'godot'
@@ -107,10 +110,10 @@ android {
 // static flavor/build type table (the old variant API is gone in AGP 9) and wired lazily, by name,
 // into the matching JNI merge task so the generated libraries exist before the AAR is packaged.
 // Closure parameters (not shared 'for' loop variables) keep each task's flavor/build type/ABI.
-supportedFlavorsBuildTypes.each { String flavorName, List<String> buildTypes ->
+rootProject.supportedFlavorsBuildTypes.each { String flavorName, List<String> buildTypes ->
     buildTypes.each { String buildType ->
-        selectedAbis.each { String nativeAbi ->
-            if (!supportedAbis.contains(nativeAbi)) {
+        rootProject.selectedAbis.each { String nativeAbi ->
+            if (!rootProject.supportedAbis.contains(nativeAbi)) {
                 throw new GradleException("Invalid selected abi: $nativeAbi")
             }
 

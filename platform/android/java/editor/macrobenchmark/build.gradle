@@ -2,6 +2,9 @@ plugins {
     id 'com.android.test'
 }
 
+// Declare the shared versions and helpers in this project (Gradle 10 removes implicit lookup in parent projects).
+apply from: '../../app/config.gradle'
+
 android {
     namespace = 'org.godotengine.editor.v4.macrobenchmark'
     compileSdk = versions.compileSdk

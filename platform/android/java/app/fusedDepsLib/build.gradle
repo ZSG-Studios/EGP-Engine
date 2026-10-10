@@ -2,6 +2,9 @@ plugins {
     id 'com.android.fused-library'
 }
 
+// Declare the shared versions and helpers in this project (Gradle 10 removes implicit lookup in parent projects).
+apply from: '../config.gradle'
+
 androidFusedLibrary {
     namespace = 'com.godot.game.fuseddeps'
     // AGP 9 fused libraries take the minimum SDK through the MinSdkSpec block.

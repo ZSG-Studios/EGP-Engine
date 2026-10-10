@@ -67,10 +67,12 @@ extensions.each { key, value -> rootProject.setProperty(key, value) }
 FixtureTasks tasks = new FixtureTasks()
 Map<String, List<String>> flavorsBuildTypes = [editor: ["debug", "release"], template: ["debug", "release"]]
 flavorsBuildTypes.each { flavor, buildTypes -> buildTypes.each { tasks.agpTasks.add("merge${flavor.capitalize()}${it.capitalize()}JniLibFolders".toString()) } }
+// The lib script reads the root project's ABI and flavor tables explicitly (rootProject.*).
+rootProject.selectedAbis = ["arm32", "arm64", "x86_32", "x86_64"]
+rootProject.supportedAbis = ["arm32", "arm64", "x86_32", "x86_64"]
+rootProject.supportedFlavorsBuildTypes = flavorsBuildTypes
 Binding binding = new Binding(
     rootProject: rootProject, project: new Expando(findProperty: { String key -> key == "xmakeExecutable" ? "fixture-xmake" : null }),
-    selectedAbis: ["arm32", "arm64", "x86_32", "x86_64"], supportedAbis: ["arm32", "arm64", "x86_32", "x86_64"],
-    supportedFlavorsBuildTypes: flavorsBuildTypes,
     pathToRootDir: "../../../../", tasks: tasks, Exec: Exec,
     file: { String relative -> new File(new File(androidRoot, "lib"), relative).canonicalFile })
 String source = new File(androidRoot, "lib/build.gradle").text
