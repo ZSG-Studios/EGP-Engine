@@ -26,8 +26,9 @@ void SuperposNativeReceiverAccess::dispose(void* context) noexcept {
 }
 void SuperposNativeReceiverAccess::drain() {
     auto result=receiver_retirements.drain();
-    if(!result && result.error()!=superpos::Error::Busy && result.error()!=superpos::Error::NotReady)
+    if(!result && result.error()!=superpos::Error::Busy && result.error()!=superpos::Error::NotReady){
         ERR_PRINT_ONCE("Superpos native retirement failed; custody retained until qualified shutdown.");
+    }
 }
 Error SuperposNativeReceiverAccess::attach(SuperposSession& session,
         std::span<const superpos_egp::lifecycle_engine::Registration> factories,superpos::ReceiverConfig config,
