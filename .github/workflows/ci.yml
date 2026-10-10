@@ -12,7 +12,9 @@ permissions:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  # Let the running build finish; GitHub keeps one pending run and replaces it with the newest
+  # commit. Cancelling instead means frequent pushes never complete a build.
+  cancel-in-progress: false
 
 jobs:
   static-checks:
