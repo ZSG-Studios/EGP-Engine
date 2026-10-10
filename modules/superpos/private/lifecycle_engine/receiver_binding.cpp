@@ -126,6 +126,7 @@ Result<ReplicaSessionProgress> ReceiverBinding::pump(Session& session,std::uint6
         auto complete=application_.complete(row.work.ticket,*instance);
         if(!complete){native->destroy(*instance);stopping_=true;return fail(complete.error());}
         row.complete=true;if(stopping_)break;
-    }return result;
+    }
+    return result;
 }
 }
