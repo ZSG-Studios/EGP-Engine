@@ -1,0 +1,21 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "dr_libs",
+ "license": "Public Domain or Unlicense or MIT-0",
+ "upstream": {
+  "repository": "https://github.com/mackron/dr_libs",
+  "version": "mp3-0.7.3",
+  "commit": "5690d4671d7ad07ae6021756d7222eb159745f06"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE": "dd1c647e6f767f8ff4b2dfae0fed314726600a01e0cf1ef556afddd5fa96ff15",
+  "dr_mp3.h": "d80e6800ddde29d50988ce894affe601858802d1bb8f047f98b84b33ae66c11a"
+ },
+ "patched": {},
+ "additions": {
+  "dr_bridge.h": "1a0b1a3d31372403bd35d69018e305295b5f9f347768f68ca75191fddc06e011"
+ }
+}

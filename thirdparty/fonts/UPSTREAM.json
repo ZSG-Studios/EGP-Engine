@@ -1,0 +1,52 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "fonts",
+ "license": null,
+ "upstream": {
+  "repository": null,
+  "version": null,
+  "commit": null
+ },
+ "verification": {
+  "method": "baseline",
+  "reason": "Aggregate of independently sourced font files; per-font provenance is listed in thirdparty/README.md."
+ },
+ "files": {},
+ "patched": {},
+ "additions": {
+  "DroidSansFallback.woff2": "64b51da05d65bb81200a884e955247d011ef9f15678c1f3da364fe90369eef05",
+  "DroidSansJapanese.woff2": "58d1b7f22c7571932580850cc691798d4f7b14cbdfeac455cbb08758a8bf8f42",
+  "Inter_Bold.woff2": "3a4b76b919a9218fdf624f56f9fe58f1c7692088e9f74006f165b25c15c65574",
+  "Inter_Regular.woff2": "e06f6b1bc553aaea4e4668023ed0ab0a147129c3107f511bc7d03d361b0ae085",
+  "JetBrainsMono_Regular.woff2": "034b11f787eb126eb106284825a2fcc45fa6e9dfea34a3ac84411dd65b4ab975",
+  "LICENSE.DroidSans.txt": "d0588452395c674334105d9a39e4d8627c66080f45491013e877139581a78ed1",
+  "LICENSE.Inter.txt": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
+  "LICENSE.JetBrainsMono.txt": "cba21c71f3727ba46904a35430c384cedc1e7fcdbb2b8ac0aae093af729290f6",
+  "LICENSE.Noto.txt": "6a73f9541c2de74158c0e7cf6b0a58ef774f5a780bf191f2d7ec9cc53efe2bf2",
+  "LICENSE.OpenSans.txt": "01cd5ffb3a528c219a86e49a814c6c53bd8a69b9a3c305dd237074ba1c811af7",
+  "LICENSE.Vazirmatn.txt": "17e355067c8284f47743a1ee3b1ef7ff684ff0601eda357f9353b10b3016ab31",
+  "NotoSansBengali_Bold.woff2": "bb5ec68ff0038c7f2d49c8e9de9d51be66787b1c97aee378208cbe6b5717320d",
+  "NotoSansBengali_Regular.woff2": "0d76695bbb16d01846e130e60a573af6ef511b4987a3f92a9bfef79c3f44f9b9",
+  "NotoSansDevanagari_Bold.woff2": "ca1f217dc13d8ccb605c0c89c121d63f179fccb865ff3d5a20300277a8b8861c",
+  "NotoSansDevanagari_Regular.woff2": "394a858c5013b0dfd5c5dd6ec5cd197847c7124b667769810f6d176d3223a925",
+  "NotoSansGeorgian_Bold.woff2": "10c6d2e7d0b25409d0d59302996c82eb89fcd6a29778b0517e9298221b0a9703",
+  "NotoSansGeorgian_Regular.woff2": "ef7942bbec207b37920bfc4300f5a032d3879bfd0a5fb3076e3e22f022c17fdc",
+  "NotoSansHebrew_Bold.woff2": "e87803f3c1b0d3a4125087f86693ff2c82681f6b026d8d58390f0c13202d1b28",
+  "NotoSansHebrew_Regular.woff2": "06068dc89adf6045e66e3811eb19dd805e0073c5fa37c7d769004ee960e90efb",
+  "NotoSansMalayalamUI_Bold.woff2": "8eaf9bb911f1cadc4017654ca28aa7006676288e48060f7689682b408d22c0b5",
+  "NotoSansMalayalamUI_Regular.woff2": "b4409977cdf9905dd0217f67769b23149cb406bb78cb7ccec9e1534361574fcf",
+  "NotoSansOriya_Bold.woff2": "7dd11aa743f587e497b71463863dcd7a1130e032f524daa4bc5edbc603e846d1",
+  "NotoSansOriya_Regular.woff2": "832a2508e56b5c61eca5b7d0c9eb3f75e0827f17b9230bca4321af59d9f3c8b9",
+  "NotoSansSinhala_Bold.woff2": "2696b993e85a57493668a70837ee65c7cbcd605f8da755c5adec47495898949e",
+  "NotoSansSinhala_Regular.woff2": "cf0e80f7d40f6948fee8a79d2fef2186056e6037fa5e184987a061dcc19b75d9",
+  "NotoSansTamilUI_Bold.woff2": "834a6e31f06d139476da02d911c912abfdfea43fe640fef3fb4f41e4476df62f",
+  "NotoSansTamilUI_Regular.woff2": "5a3fd13587d70ab06f46846a4dce4cef39c583f51a0affb83a043fc9ddc0c9a5",
+  "NotoSansTeluguUI_Bold.woff2": "7972dcb1c5004e1eafb2fa76e7dd97fe797107dbb550d4837ddcd45e72ba6035",
+  "NotoSansTeluguUI_Regular.woff2": "3bf410cb522693998624e8af31ccdf07c1d2bd336bd9d060824072403a4ef2ba",
+  "NotoSansThai_Bold.woff2": "338759e882cfe380b8406737c81f249ebfc4cda84073e8388f48ad93a34f9314",
+  "NotoSansThai_Regular.woff2": "ce1d8dfafff80e58768d6c389086eec7b7b996f2532e8e0203eaf41f9152ca65",
+  "OpenSans_SemiBold.woff2": "679d184208bf8c70d3b9785845cf7773759642996db10dbfcbfa32c4f4799b30",
+  "Vazirmatn_Bold.woff2": "40e661ea554480a9b11cd8c225fd9e7cdb45e5bf989c703c9e117b44ab477181",
+  "Vazirmatn_Regular.woff2": "ce58edf0377c327417034a10ba7274cc61b61999552fcb992c33f87539942bbf"
+ }
+}

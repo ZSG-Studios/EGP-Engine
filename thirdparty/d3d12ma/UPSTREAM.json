@@ -1,0 +1,34 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "d3d12ma",
+ "license": "MIT",
+ "upstream": {
+  "repository": "https://github.com/GPUOpen-LibrariesAndSDKs/D3D12MemoryAllocator",
+  "version": "3.1.0",
+  "commit": "0fa62ed3a0a69b73230a8ec1faa752d4061c8dc8"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "D3D12MemAlloc.h": "0a76d033e79b56716a07e8084785b6be865370c94b175060eb09a449f55b4d76",
+  "D3D12MemAlloc.natvis": "2c4f5821abc4a825c322f49e17178d7028c5d29959ad478fc37ef6a98189bf8c",
+  "LICENSE.txt": "5478a2f36b736e13dd3250b9c71a4ab521bc327fb9d112a92c647bf3e69ddb68",
+  "NOTICES.txt": "7af18e6093af41d516228ffd65e782859bf2918931d8c3670c7ba8b74afa8288"
+ },
+ "patched": {
+  "D3D12MemAlloc.cpp": {
+   "upstream_path": "src/D3D12MemAlloc.cpp",
+   "upstream_sha256": "f34ee22c576216f438da46038c9e0f49e415e037049938e48b336f00017a8b2c",
+   "sha256": "5b4efd90fd86d7446c593bd9ebcb3ce70225a9999a292a815c7f3f8d122abf61"
+  },
+  "README.md": {
+   "upstream_path": "README.md",
+   "upstream_sha256": "7711db96c4b060537ffcadb43a930a2443e0529d7562921497b3303cfb5e5782",
+   "sha256": "323a9300f4bc647248b9236eb75f1ab52a80808bd924a9a6c2f57944fed1779e"
+  }
+ },
+ "additions": {
+  "patches/0001-mingw-support.patch": "b86c384e977d57a05536862de3a00ef0c2f45a1b1bcfc83bd6ffe26f85cd8873"
+ }
+}

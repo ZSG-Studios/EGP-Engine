@@ -1,0 +1,49 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "libpng",
+ "license": "libpng/zlib",
+ "upstream": {
+  "repository": "https://github.com/pnggroup/libpng",
+  "version": "1.6.58",
+  "commit": "3061454d980de7d53608f594194cfac722721d2a"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE": "bdb0a645ea18c60507d0368379b1ac5474b92255fcc2d115e07486a7672ba526",
+  "arm/arm_init.c": "7be7d3861d45a81285c6af455466d652355d481f17c8e00146578738c0896768",
+  "arm/filter_neon_intrinsics.c": "4c32620a9ff40036a1671bdbb5a3ebd2e4780d95988af2cb7295af97859c6930",
+  "arm/palette_neon_intrinsics.c": "a844760f611829df29ca583f1b08832cac1440c74a2a22b35bc35a464ddf6b5e",
+  "intel/filter_sse2_intrinsics.c": "0b41c355dc139991ebe9bb8a6979497e89228ac2576897270e306136b8f90091",
+  "intel/intel_init.c": "4474dd4e7afdeaee470746d24af4c57134c31a7e3f511ed58df0c6717657e44e",
+  "loongarch/filter_lsx_intrinsics.c": "c114d1d5159750a1910522a30bc01381baa45214418bef3199fd3a2f7e560a75",
+  "loongarch/loongarch_lsx_init.c": "86c468e73d0efcb3be44e07e92a3c43cac3385ca597a3578b3e0ae4e9c6436ea",
+  "png.c": "e675e106a5cc637a824c4ad9b5c1ee82c43bde9a47466e9ea36d38bb29aa095c",
+  "png.h": "81501c268ec5c3dc79efc6ac9fddb63b22a25e4931360ddd7b29b1744d6cb6b8",
+  "pngconf.h": "ba8620bbc7612b656cf547eab806ea90bf16b6c0b97fc99e9d39568dc926b802",
+  "pngdebug.h": "923e849bded3f15a74fa943ed87b423d88ba5699feeed214872fea09997c44fc",
+  "pngerror.c": "6e8f475172d8c1e34982f4fa4130042110d5591dccdf95723345c2a7e5c7f761",
+  "pngget.c": "3098a692f096c58b9c0f039fbfd38c29b0a86c464a498a9c775c22698a2bec95",
+  "pnginfo.h": "95fd19c965b86c6f279e426b9ee42c62e83af41a372b51fe8feb52a3427cb44d",
+  "pnglibconf.h": "1911b17912d9cc9f62126a9daf11e6f6560bd0ec1b8886d08440c92815fc82bf",
+  "pngmem.c": "2dcf91e5f7d4aaa11c53cdac246223f405e5cc3e1c7ccccb7a40650c41465b56",
+  "pngpread.c": "230e4e01a9748922a33a936d1c4a2f599d61fc6425b49270197949fd3f38443e",
+  "pngpriv.h": "44f9ecf9664767ec55632f900bb6d59f81b63d24f0039258813695ef428f7c48",
+  "pngread.c": "2a2c02673c7dcd6853f3efe8cc16c893df3f7bdffe7b53abde835e7c6e4c6fc3",
+  "pngrio.c": "3c710643f274fd2b4aa2bc154c9dc53a512edae773dda1434f205fb005f2e93e",
+  "pngrtran.c": "e7f9bcd1e85763ca5efeb2de7b1e5c59222f7cfc1935e0b3ce14a6c1d6f195f4",
+  "pngrutil.c": "748f956c603df9bafeaf82ad23f5d9ce57e2d7b0be21a68868eba46615cf8ddc",
+  "pngset.c": "59b8e464113235447540a3e542660967a9ebc8dca7716eae8494cd59ddcf66c8",
+  "pngstruct.h": "46b48213ed1691ddb989cfa7844a272e13fe7a7eb67a97037ca96d76b242bac4",
+  "pngtrans.c": "38aa34b51567a06428b15be16c5819e6f2ae0d3bfce4e1f777ae6242f74eb6d4",
+  "pngwio.c": "a25def3351807ed3f2e12a02a7801d4208f0033516185f4ad524d804d2f00ce3",
+  "pngwrite.c": "85533196464e11d7ee4602fc19c887bd3923636cff7c44c8c0dab97624a17797",
+  "pngwtran.c": "6355098f20b9058ab607cebd01f3130c61ac858dceb339c3a7d83407c1067b94",
+  "pngwutil.c": "a6e725ce8439edadea1e1f5092c4bcbf101d0a63cff0906271af6aceef89dfd3",
+  "powerpc/filter_vsx_intrinsics.c": "3252cc5242019539cad4ad482892687c1c7e4b55c04cdc54db6c3bba33373070",
+  "powerpc/powerpc_init.c": "15464b7ce5b2cd6494ae4710b8a1ab72bc1a1aebeb47c68c4ec99a1952f1357e"
+ },
+ "patched": {},
+ "additions": {}
+}

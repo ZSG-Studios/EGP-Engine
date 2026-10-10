@@ -1,0 +1,44 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "mingw-std-threads",
+ "license": "BSD-2-clause",
+ "upstream": {
+  "repository": "https://github.com/meganz/mingw-std-threads",
+  "version": "git",
+  "commit": "c931bac289dd431f1dd30fc4a5d1a7be36668073"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE": "86c148320eb0acc26607ed347e0fde9f49a236d0ec5291d36dc6a7e0e1d26b9f",
+  "mingw.invoke.h": "def88ec4e4890c928e4e17df2f30cb8f1c5f07e57607c4ce66cfffcfebc0b76f"
+ },
+ "patched": {
+  "mingw.condition_variable.h": {
+   "upstream_path": "mingw.condition_variable.h",
+   "upstream_sha256": "df9466a3ca9fd0a035ce1f96136b4d44194e321b79ac69cd99d2f7dc27bc65ba",
+   "sha256": "ea0285e9484ed9edba6a7389ef2715ad91f21507cf4703c8261629f286b222a7"
+  },
+  "mingw.mutex.h": {
+   "upstream_path": "mingw.mutex.h",
+   "upstream_sha256": "3c5df03ca38d5ebe2097f4ac942ece0eadddd9610da5bcaf0f22577c5485edbf",
+   "sha256": "15466dc2ea94757de15877c7f2dc72e30f552a1d3e861760ba22dad0530a7a5b"
+  },
+  "mingw.shared_mutex.h": {
+   "upstream_path": "mingw.shared_mutex.h",
+   "upstream_sha256": "ea5a00d291fc603e3ed78c7c926986d974da978f55bf35053a0646ce33df39db",
+   "sha256": "8a1c7bc8b3d361051258ca0cb4ac4164a59beb4bfd7f976dda4127e07b2b3a1c"
+  },
+  "mingw.thread.h": {
+   "upstream_path": "mingw.thread.h",
+   "upstream_sha256": "e0c6151dc05eba523c5562070b168b015dba3bffcb85b88339eee685896841da",
+   "sha256": "8dc8d0d31be2f5917251a6c72a07d708cad75c01debbd8646e24db550f9b3d78"
+  }
+ },
+ "additions": {
+  "patches/0001-disable-exceptions.patch": "65b224142f9fdde85f6e92d06a47544f757faa54a2db226c0ca24bba6316dc98",
+  "patches/0002-clang-std-replacements-leak.patch": "300c8d70677933d11e709fec29df5c738c54ccce8a0d75ce63f613eae998de08",
+  "patches/0003-explicit-includes.patch": "760be01844eb23465145d53eae891bd8f668514674fba96ca22245d990ce1e2e"
+ }
+}

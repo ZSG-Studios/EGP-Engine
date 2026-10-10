@@ -1,0 +1,50 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "minizip",
+ "license": "zlib",
+ "upstream": {
+  "repository": "https://github.com/madler/zlib",
+  "version": "1.3.2",
+  "commit": "da607da739fa6047df13e66a2af6b8bec7c2a498"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "MiniZip64_info.txt": "8a3aa14b12f22fa91a6cc84b39d76298dc28ea577fb6bbcf0ebe94e4eda77d1d",
+  "crypt.h": "03f9f73d2fda547427e702d250a2208c56b02f880a63ab2f1da7fc84a6637415",
+  "ints.h": "4397ab032db87bcdcb4eacd01886c2a75166a09cf2b99a1739ebce3c811f581a",
+  "skipset.h": "5ba8759eabbd45a8500fbca125aa8c6b18f4c266788cb727560b68886e286703",
+  "zip.h": "a58c41ad517c7042fd294af01917a2bacc1f9645756a7a36f8ca7978337a67ad"
+ },
+ "patched": {
+  "ioapi.c": {
+   "upstream_path": "contrib/minizip/ioapi.c",
+   "upstream_sha256": "4e769b2ca4f5f05c5bae63f2d7146856f300028b30578aa3f8a98b4b297c4047",
+   "sha256": "04790ae03f3bb1fbb2f08823919bc94406a071ff880b0a55233ff37a7a0e2c04"
+  },
+  "ioapi.h": {
+   "upstream_path": "contrib/minizip/ioapi.h",
+   "upstream_sha256": "0311a8d1869dc58acbee0a1c93bb679a38d3ee97d1f0a5b3c3c6d7868746e10e",
+   "sha256": "2e2e629046ea0f1026a69e2b49fa823a0e68196df0edfe22ec3ad9d54774250c"
+  },
+  "unzip.c": {
+   "upstream_path": "contrib/minizip/unzip.c",
+   "upstream_sha256": "8b19ab4a0fd4fdd545fa9ff99fa54d8f2b5aeebf00e1716edf38d37cf4ed360f",
+   "sha256": "ff42fc885d376f38fbe2c511186a7c1039801b88f40bd00c19ce71c53852ad68"
+  },
+  "unzip.h": {
+   "upstream_path": "contrib/minizip/unzip.h",
+   "upstream_sha256": "38cfbb7dde443d46e7fd320c5c52bc38477b4fc0e08c550b15026a98295eb69d",
+   "sha256": "c0b8185b9940401a7196512032b1861d32e84bbb5ecefb16e5402b5e2ecdf2ae"
+  },
+  "zip.c": {
+   "upstream_path": "contrib/minizip/zip.c",
+   "upstream_sha256": "dfdc9aae5e7915d777663b0df1644106978445d1f96fdd088e9151cc4c232875",
+   "sha256": "05a195508ecac59b43218896a4720c701bc9dfa2bfa709c37f890a7178245991"
+  }
+ },
+ "additions": {
+  "patches/0001-godot-seek.patch": "05c0e67b342fa7ecb43d8617668f523054853e4b90c552f9aafd0fbdb413a690"
+ }
+}

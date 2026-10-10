@@ -1,0 +1,37 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "clipper2",
+ "license": "BSL 1.0",
+ "upstream": {
+  "repository": "https://github.com/AngusJohnson/Clipper2",
+  "version": "1.5.4",
+  "commit": "ef88ee97c0e759792e43a2b2d8072def6c9244e8"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE": "c9bff75738922193e67fa726fa225535870d2aa1059f91452c411736284ad566",
+  "include/clipper2/clipper.engine.h": "c3e8b7cabc80f5ab2592dd4401a8c445bd43422139ff216591aae94de1b5a175",
+  "include/clipper2/clipper.export.h": "746d2eb871f6717722681f1cc35a612f1f9e8397f9b01797d8f5fc201cf2175d",
+  "include/clipper2/clipper.h": "b9674f21cb6add7c5e252220d80af2bdc7e773b526947d2800aa499b716069bf",
+  "include/clipper2/clipper.minkowski.h": "951b3f1d9b804f9fe9f1a142e6133c2efda2ba1c26c47e4c7de14c6d03a0eb39",
+  "include/clipper2/clipper.offset.h": "00d0b670f40d030fad5cd658b71a34b8ff3185673825bbcc9f40e63d9216cbb2",
+  "include/clipper2/clipper.rectclip.h": "279c6ae467cf9cec001c473d569dd7943a241690f5d64a17561efcb1a8e2e38e",
+  "include/clipper2/clipper.version.h": "124189ed3b71a705c04e81abf645a57d3d3e525dc1b1d9518e524c000c341bd2",
+  "src/clipper.engine.cpp": "cc24e338e0df3bbf7b9146724e6bdfa001d16128583a04944a8399a7ceff7676",
+  "src/clipper.offset.cpp": "b17738e96e1bd442f1589205fda0a752d228c7d8b4d0779ff50145fc43d4764c",
+  "src/clipper.rectclip.cpp": "f2f86e07013596d00737314584edf21bd6abcbc9b3aefc6efe547928c0590515"
+ },
+ "patched": {
+  "include/clipper2/clipper.core.h": {
+   "upstream_path": "CPP/Clipper2Lib/include/clipper2/clipper.core.h",
+   "upstream_sha256": "bb003258fa7c9ce6f7d1847ae4e0b6ff419528b6f9c58e17622ce3600018d297",
+   "sha256": "e09f1c69584057da7e6bce222e87c401e807075a52e253d299586a13622792db"
+  }
+ },
+ "additions": {
+  "patches/0001-disable-exceptions.patch": "dfc2209a72890c6f3dd59a64ce737ace3eeeabb2f4888a4ba21edf1a91bf36a6",
+  "patches/0002-llvm-21-header.patch": "5cc52a91166a3bffb975f47d31555e3807f7fc888fbaef040a65b165a9646059"
+ }
+}

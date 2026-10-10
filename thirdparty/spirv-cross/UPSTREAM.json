@@ -1,0 +1,47 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "spirv-cross",
+ "license": "Apache 2.0",
+ "upstream": {
+  "repository": "https://github.com/KhronosGroup/SPIRV-Cross",
+  "version": "git",
+  "commit": "fb0c1a307cca4b4a9d891837bf4c44d17fe2d324"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "GLSL.std.450.h": "6f56e094663fded4435ab1d3d8c24d72adb3bf82832fc002ecf0a0d4d96543e9",
+  "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+  "LICENSES/Apache-2.0.txt": "44b0a56e80b41a1b0a6bd1292515e806539fd97b30be54c2719e6c763190ab57",
+  "LICENSES/LicenseRef-KhronosFreeUse.txt": "fbeaca472f4f70e276dd1106ca5097435967a22ad6c1d8200aef7ad9f70aaf3f",
+  "LICENSES/MIT.txt": "8f25018489d6fe0dec34a352314c38dc146247b7de65735790f4398a92afa84b",
+  "include/spirv_cross/barrier.hpp": "414b81898092b8cd3d04b738a7f5247b70842eb44040436d7c731250e6917526",
+  "include/spirv_cross/external_interface.h": "45f04bb4c3e22f9eda84fa780b4ab0ac567d775c61cbe1e22474a6ed2fcccb7d",
+  "include/spirv_cross/image.hpp": "28ef603f5938314b7f4696c38a7b65da4b1176379f8e378c879cf5ec20fd3f40",
+  "include/spirv_cross/internal_interface.hpp": "33276a0e3f5038f40a889712526e3da22d8abe5fc1ca889ffdee23c850746834",
+  "include/spirv_cross/sampler.hpp": "ce751adfa65f989d583095e71fe33e24f28995136912fe51157d340ae72eceb5",
+  "include/spirv_cross/thread_group.hpp": "eecad5e505af90dd6ffd0818a786804ca034d393155debf5666cf79d62dcf57c",
+  "spirv_cfg.cpp": "248526af6c0b3c74c318f5e085cf3966a2d79683849a3de264b95e73903c279c",
+  "spirv_cfg.hpp": "7453c4b79d243051456298452d7248cdd0ef4e04d0556309f7bedfafb7085973",
+  "spirv_common.hpp": "92af3eb9b5bde1ce0865e0cb7772f918199a231da93386bb0bf85ae819140448",
+  "spirv_cross.cpp": "afa5502e66482836298a093ba2e7571eef038fb917fe0d25f8404b0a66632b66",
+  "spirv_cross.hpp": "a5791d61ec5a25df10cf3eddd7c3e908a7b809cd7ccee1b89441a55ba6ee0833",
+  "spirv_cross_containers.hpp": "81c28e562046fc518a57be4e7eb9af836d3b05a6d9fb3f766a671638c275441f",
+  "spirv_cross_error_handling.hpp": "af7ceaa02741ed3cb9a8c8dd347d428f7a27f82d41ac57dbc5ad0dbaab8a368f",
+  "spirv_cross_parsed_ir.cpp": "103f893f1a68148810a309943c65b79e60fb14e09ae9c12ee1ead2b9be7f0434",
+  "spirv_cross_parsed_ir.hpp": "bf4218f9643d99bebdfbdca86436bd18fe481bf9b23e59862086dbb6555fe757",
+  "spirv_cross_util.cpp": "9f9ce212e5d796c7833a20baba3898bd81083cc278a804996bda91718275d263",
+  "spirv_cross_util.hpp": "0942b0bae888eb986685adaf2d6741d15d4811711056d8dbc68fa80f40d18480",
+  "spirv_glsl.cpp": "f50f24fc2f930823d7243288e111078ddb313bb6760efb05699f855cb7faf80b",
+  "spirv_glsl.hpp": "ca8b018601fe09d62ea1e7a97c0e614b14d88bf21a55475dd41d68a8b6f4fc6a",
+  "spirv_msl.cpp": "f219ee63880c8681f4452ca2310659ae155025267b01b3c25c24e8ff43915dca",
+  "spirv_msl.hpp": "0a76970f464ff267ebaf29a717811104a00f5391362c839b0c65d7d8e3521b79",
+  "spirv_parser.cpp": "f64ac180b3a5eb6061d6131574d98e22aad922261a701df8395fe40710615f55",
+  "spirv_parser.hpp": "e5cc214ad1d87bd78183f2e72a902c0fb994dc18e7aa6e83e86cb2875708c2f2",
+  "spirv_reflect.cpp": "3b77c7e3e36535650cc1a1c02b1786e176e4876535878e4cf947aa3e74f4233c",
+  "spirv_reflect.hpp": "67e8a1a03f4f4e03a1a9fcd247b789c74488976d43be3d3ef0b442b94fa621ba"
+ },
+ "patched": {},
+ "additions": {}
+}

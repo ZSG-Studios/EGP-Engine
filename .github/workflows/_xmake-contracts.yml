@@ -19,7 +19,7 @@ jobs:
             runner: egp-linux
             platform: linux
             architecture: x86_64
-            toolchain: gcc
+            toolchain: clang
             suffix: ''
     runs-on: [self-hosted, '${{ matrix.runner }}']
     timeout-minutes: 45

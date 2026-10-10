@@ -1,0 +1,18 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "certs",
+ "license": "MPL 2.0",
+ "upstream": {
+  "repository": "https://github.com/bagder/ca-bundle",
+  "version": "git",
+  "commit": "38fe30abb189fb714e8b1f1b354c6c4caffbe6dc"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "ca-bundle.crt": "6ee98962bc5d0f26780053eb297fb9e023848e02e9f5d6a671580fe780cfdcf6"
+ },
+ "patched": {},
+ "additions": {}
+}

@@ -1,0 +1,184 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "thorvg",
+ "license": "MIT",
+ "upstream": {
+  "repository": "https://github.com/thorvg/thorvg",
+  "version": "1.0.3",
+  "commit": "d114cd9e3c32d7f77bc9b324ae5c71d7775cb7ae"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "CONTRIBUTORS.md": "94292b9c6f631fdd8d429c8919a73535f03d1e0d295d236fedbf012e060bdbf9",
+  "LICENSE": "74242cdc4ccaebc73fa04fbd52a538429eae2be7a231f9eaf1dbf59d2bedc16b",
+  "inc/thorvg.h": "b58095cdcb08ca88d2824f2c493278c7e75a4e15ade54921ea1c081b61f3d78f",
+  "src/common/tvgArray.h": "ac4a8e3505b2f2cf8f9ecee0eeb421fd65fc4c370fae71b75cfa0d09c929ae1b",
+  "src/common/tvgColor.h": "8fd04f50f640429129d4873df1a95b0cb85799db98caad02af91a602e7e70507",
+  "src/common/tvgCompressor.h": "13d7bc14a80bbb7091130350d65cb4f329f02b3649965b23b7a578d7037ccc09",
+  "src/common/tvgInlist.h": "44d45ec2c9444f24f92bd657247ab2bf35cbb1f7564e73c74a73d4b46a51ff7e",
+  "src/common/tvgLock.h": "d7f05ec5d6dd1c46f1a6cfb2c63b3dac503e26ba240eeb37a433fe9617891250",
+  "src/common/tvgMath.cpp": "9273f5e9bd9a78c48e385bc1039c84e3b2c296b97abbfbbda8928b4f5a00f7a8",
+  "src/common/tvgMath.h": "5665a8baa1467b2192d7215d5e7477c197921287b55abb1d1644dd9d95f117fe",
+  "src/common/tvgStr.cpp": "958170a760d1bd1de8e9e905a6cebe3778c6338f0a9a76b00e4463a520aa46f8",
+  "src/loaders/external_jpg/tvgJpgLoader.cpp": "972cbfa7e513af2711375b9ee279517d519f7bd1b5f8d5abc9cf95ffc7389316",
+  "src/loaders/external_jpg/tvgJpgLoader.h": "d663722db7da44944ceb62da3b263e2bd03ec729fb2d9993fbe2f142a0490b1a",
+  "src/loaders/external_png/tvgPngLoader.cpp": "62fecb9dc476f092a4236ad943365ecae1de381dcc5c428f9bdc50bdfcf9dfe5",
+  "src/loaders/external_png/tvgPngLoader.h": "488c53eac2c341228f867810a09de62783a96000b3bc64006761e3ba002a9615",
+  "src/loaders/external_webp/tvgWebpLoader.h": "65e8fb13ed52327832bf234d91043ba9cd60cbd476923133880a64578a879595",
+  "src/loaders/raw/tvgRawLoader.cpp": "a2abfdbd2b214a3e5cccf5cf19106e08357ede18896e93510d2d8deea9942e5b",
+  "src/loaders/raw/tvgRawLoader.h": "ec5b36282bf6a955400f5823a55b4916d0575cf98e5cab0ce876d5bfb9b12ea9",
+  "src/loaders/svg/tvgSvgCssStyle.h": "17d4ba6ab169d518096c8d9f48df081ab999f4942a8fdac6e823e9f7e95dfcdc",
+  "src/loaders/svg/tvgSvgLoader.cpp": "bf819638a342649941a8397f95d1f7f51bba38484f47aa978b4373b92c07bcca",
+  "src/loaders/svg/tvgSvgLoader.h": "f9901fb266b8c453c791fa9e3a3afde678b41bcbdb276f831f96ccffa8955550",
+  "src/loaders/svg/tvgSvgLoaderCommon.h": "25ac410e5b99da0bccacbd2ec5353c1f40e64faca2a12d2f1e4978136f5df5f2",
+  "src/loaders/svg/tvgSvgPath.cpp": "de189e9007115f19c5de7ff8e0f68516c30b1d2ea849714beda17e0ca25fe829",
+  "src/loaders/svg/tvgSvgPath.h": "11bc369beca19baace2fcaf28a7d807ed8b6dfcb0b838fad04a7f4e97bf90666",
+  "src/loaders/svg/tvgSvgSceneBuilder.cpp": "bba314363098696f397a20ad048b8657c571bea79401723087b8b99ed954493f",
+  "src/loaders/svg/tvgSvgSceneBuilder.h": "b63f16e31ed9a5811da516ec3a679931621d81d285accd3644d49f0d766fb055",
+  "src/loaders/svg/tvgSvgUtil.cpp": "6170766c21b1bf8571d781215b08546f1887852937fd966cf6aae675fc8aaed8",
+  "src/loaders/svg/tvgSvgUtil.h": "502d003ea6ced8cd0fb253070b11be6e2e766e8c7d5bf4165bc69bab964ada0b",
+  "src/loaders/svg/tvgXmlParser.cpp": "eef142ac757dfb3a5a5ed39aa457f4db95bfb2b6e5f78db61c857b1705e8441c",
+  "src/loaders/svg/tvgXmlParser.h": "fc116fc8aee0032c19520de6793ae98931ca9e8920ea72629bfe357535aca561",
+  "src/renderer/sw_engine/tvgSwCommon.h": "9ecb58c38be2ba1c3cfb3726dbe9d5fe9f87d892742ff64a7a12c3ca9af7aa02",
+  "src/renderer/sw_engine/tvgSwFill.cpp": "95813a4e2636c44fd128fbf43e27dd7722988eec781bf10ba66f9f38d4dadb2c",
+  "src/renderer/sw_engine/tvgSwImage.cpp": "344fdfb3c34c7ef259192d1dada1854c6397a1024a31604fa4280c4fcecebd43",
+  "src/renderer/sw_engine/tvgSwMath.cpp": "ff106c450b1b722b40ca53396ab992747e0831b995a4a1f011c1f2c33130eb9a",
+  "src/renderer/sw_engine/tvgSwRaster.cpp": "330ee8498b1ad016d71e3a5dd424ac649f001e74f38c130b8fd83fbadd128d64",
+  "src/renderer/sw_engine/tvgSwRasterAvx.h": "51b0966bb69962df63b41c3cbb55f1f65cb9b22733b65adaba50af25e0e1ba7d",
+  "src/renderer/sw_engine/tvgSwRasterNeon.h": "b57cf7ef4354b16463595c9e5796262d0a7da06dcd59dfa3d74acc772b8171b9",
+  "src/renderer/sw_engine/tvgSwRasterTexmap.h": "0c22189a16c745190d5305144b183cf15f207f9ff6eaf1b10fb0921fd2b16838",
+  "src/renderer/sw_engine/tvgSwRenderer.cpp": "10fb6cbbb2cffc2e7a234ee30ac50b263d2aab10fd56ed0fc48567b7bd91c6a0",
+  "src/renderer/sw_engine/tvgSwRenderer.h": "49bfbf6ce89b8ce253defe5d94e93e8a29c6721c1ecad87582698751fbd8c0f5",
+  "src/renderer/sw_engine/tvgSwStroke.cpp": "4f4946abd34fa1a703df5af56d4b15b7189f0af13c565b1869119615acaa404f",
+  "src/renderer/tvgAccessor.cpp": "fd58c10f94e42e1f43084785f0cb86f829ed2e4b7bccce2984cfaf062370b0e6",
+  "src/renderer/tvgAnimation.cpp": "8c20f71027cbe90befa8ed129b6a1de7f3fff5e287ebd287e608d64f3c2d382f",
+  "src/renderer/tvgAnimation.h": "138b7e8075039881b7b86f6e8da8fe54763295d4d2510d867a18ddc9295e09d2",
+  "src/renderer/tvgCanvas.cpp": "1584dddcb09c4dfa18154fcd982a0fd94be114f6de523f18d8929d11f6f0bcbb",
+  "src/renderer/tvgCanvas.h": "538c3f84469f6a009f52a008b62fc9a32bb6643717664decce3b68414a97d689",
+  "src/renderer/tvgFill.cpp": "fd9a7dad7a44ecb5ec7389c42acbf8e0839855615896520910d370b1518be4e6",
+  "src/renderer/tvgFill.h": "0d7c615b87b61852261ba7cdbd6a0d86e059149baaeccb7bfec2317a455e5050",
+  "src/renderer/tvgFrameModule.h": "f78b6d37978c4a2aaaa474b2aebf7646e32a564a20a3b33d7e5503be822ab401",
+  "src/renderer/tvgIteratorAccessor.h": "eb2013879e005f3c956b034a5ddac39d6cc65ec8f1a54c87dd1e4aea72589600",
+  "src/renderer/tvgLoadModule.h": "40df3d920cdd14851b2b7e1236cd72e2f0e35483a40023f0dd1d74a0e7ee6c91",
+  "src/renderer/tvgLoader.cpp": "325ec7719b19b6b1ffc20251fdb2d804e4153b79ed84eb819a685f582b4c3414",
+  "src/renderer/tvgLoader.h": "1130c7ddf955868d055471895030303a12253f2690d699d7d49467d4ca30cbbd",
+  "src/renderer/tvgPicture.h": "f1c5a35a45c98de119e5c8f8527739db34755bf005bc892991225d340d5c1991",
+  "src/renderer/tvgRender.cpp": "c67076eb126b6834cf96e11cf446b0aaef2b7f36a49f784d9b0c8f3dab267dad",
+  "src/renderer/tvgSaveModule.h": "2ba5f6151387342dbfc092423e44c200c8c01b93b14c812146f4ebfba9af8046",
+  "src/renderer/tvgSaver.cpp": "6f2b50b6ff696c4c0b7a64812c7dfcab30181668253fadc134b418015cade9bf",
+  "src/renderer/tvgScene.cpp": "4ae058f026d9e573e85eba1d2908c314fc542f640ddab91ef44e17b362c4d41b",
+  "src/renderer/tvgScene.h": "a055bacffd00afbe3b87baca5438deb43080e70a095a3547246c910352d43d1e",
+  "src/renderer/tvgShape.h": "802edf7a74b234294e8a50ade127be96b1c2e4d10a850dbe6d5ffc82d138792a",
+  "src/renderer/tvgText.cpp": "f50b8c6746bad14fbdc250abd1660018a158f017c5bb9b1496e784c0e7ab8bef",
+  "src/renderer/tvgText.h": "9f1ddc08165cf55337af62ee36ed34dac180da58a3f6eca3660ce39b88c006f5"
+ },
+ "patched": {
+  "src/common/tvgAllocator.h": {
+   "upstream_path": "src/common/tvgAllocator.h",
+   "upstream_sha256": "c97ac4862698ed9b4cef2b29bd4952ca0db3db11397a523948da2389cd25c160",
+   "sha256": "24b6fe34983a909d329e6340285a53d84282fa314618802b901cbab8f70ad642"
+  },
+  "src/common/tvgColor.cpp": {
+   "upstream_path": "src/common/tvgColor.cpp",
+   "upstream_sha256": "616fb0c7f17e7a98239c779adc7eb0eb316dcf5ab32f58ca7bf62ce6459725c6",
+   "sha256": "85f9e021ed5516137b01b114981ed6ad7c0f3e181482c6ce174c1910e0ceefcd"
+  },
+  "src/common/tvgCommon.h": {
+   "upstream_path": "src/common/tvgCommon.h",
+   "upstream_sha256": "c32ea8ff5b0d993672d4966b45dfac2834187b617425d89eb3e5a910b8a5c46e",
+   "sha256": "4c1ae273b046f74b50733398e994efd3fc01d2120b03e82e006695a5b8b1f7a3"
+  },
+  "src/common/tvgCompressor.cpp": {
+   "upstream_path": "src/common/tvgCompressor.cpp",
+   "upstream_sha256": "bce41a1ffdbdbbe7b36e0541c6beae51a7a119255a46778cc60238377db23826",
+   "sha256": "6c4f9213d3a276470239c08f32e6ca409024fbcce3807a392579274814aee9f8"
+  },
+  "src/common/tvgStr.h": {
+   "upstream_path": "src/common/tvgStr.h",
+   "upstream_sha256": "e31713d555a0388a1807f6f1651f180a9c5675ba9e792a9e7f440ca0acb2ce33",
+   "sha256": "18284c1fe75eec3334869afd090f3957a30744d50cade17a59b9a5acf1f4eca4"
+  },
+  "src/loaders/external_webp/tvgWebpLoader.cpp": {
+   "upstream_path": "src/loaders/external_webp/tvgWebpLoader.cpp",
+   "upstream_sha256": "3e713d52b3fe66359c58a4e400f96a917faca54d3641f3ea6945cc3f7d200eb4",
+   "sha256": "f621bf5d77417f3f4340679a9592ce5ddec9a32cc891433d35b45fc1962e5119"
+  },
+  "src/loaders/svg/tvgSvgCssStyle.cpp": {
+   "upstream_path": "src/loaders/svg/tvgSvgCssStyle.cpp",
+   "upstream_sha256": "982353a4fc1f754915732c969cbc40daf33bd19adfcb7a856f69d7c23b1b8be2",
+   "sha256": "8676ac67fd795e3cee869ffa5c93849768420bfcb594d9333bd621fe99c9232b"
+  },
+  "src/renderer/sw_engine/tvgSwMemPool.cpp": {
+   "upstream_path": "src/renderer/sw_engine/tvgSwMemPool.cpp",
+   "upstream_sha256": "c80f60321e0d00c28e0980d947ad79c868473b27041cf2e3a00c87dd562922e0",
+   "sha256": "2befc6422e966d8ec3b5ee54355f5ecc4b7be91942fd013bd49c1eddccbdfe7e"
+  },
+  "src/renderer/sw_engine/tvgSwPostEffect.cpp": {
+   "upstream_path": "src/renderer/sw_engine/tvgSwPostEffect.cpp",
+   "upstream_sha256": "2aba1c3cbbcd5e3551e26c4a13a35f63b5ab7223102aefe469276064f2c56c77",
+   "sha256": "5bf3cdca946cae193bb4ff936fb275d0546d8c820bd1d7bc272b94010efae9d9"
+  },
+  "src/renderer/sw_engine/tvgSwRasterC.h": {
+   "upstream_path": "src/renderer/sw_engine/tvgSwRasterC.h",
+   "upstream_sha256": "ac8b0888d62a7770863533bdb47dd8e21644544047e775ce5bf39513cce7cbd0",
+   "sha256": "3d10cee5d83bc251d3266727e2e59f1a6a943137be9c1cf86605c28834ae25ac"
+  },
+  "src/renderer/sw_engine/tvgSwRle.cpp": {
+   "upstream_path": "src/renderer/sw_engine/tvgSwRle.cpp",
+   "upstream_sha256": "cdc8bcde9bb134af14fa94d0054242a4c1fcfb9db9ac15f2cd95d0a652780b36",
+   "sha256": "34dadee97702cb9446c6b16d06fd01c07a0c70360c6e43489137af027a98bfd0"
+  },
+  "src/renderer/sw_engine/tvgSwShape.cpp": {
+   "upstream_path": "src/renderer/sw_engine/tvgSwShape.cpp",
+   "upstream_sha256": "cb2fd62fd969324e9a248ab9d438989d9795bd0bde4c080ab563fb9dab268ae2",
+   "sha256": "407c1bf4065c0c07ecda0881fb6273536a33246adf93c6a9d75ea43f2b21b1fa"
+  },
+  "src/renderer/tvgInitializer.cpp": {
+   "upstream_path": "src/renderer/tvgInitializer.cpp",
+   "upstream_sha256": "655f940aab89f0dc78ca3fb94493637b9b6f9eb7edccc18f08d3a933ca1330e7",
+   "sha256": "b4f5a6e16e574847d3bbe1d1ca805fbd0e5ab88935794cde0659b65afd57f9e0"
+  },
+  "src/renderer/tvgPaint.cpp": {
+   "upstream_path": "src/renderer/tvgPaint.cpp",
+   "upstream_sha256": "9e75e7c7b6d4054b6051de47fe80b8b8c31fcbc609fa26bc87f43b780f3e1b8a",
+   "sha256": "e4184dfc3b1fbdf1791c5123b78cb674d68a7264821602a3b1a2a22064d35cd9"
+  },
+  "src/renderer/tvgPaint.h": {
+   "upstream_path": "src/renderer/tvgPaint.h",
+   "upstream_sha256": "ffe2a8e463c90422c61a5d3b5cf38afc23f47ee931ed84ea75a3ec1ca453aef9",
+   "sha256": "487ce4e360076efd267a291649c0191a681a423d1bc1fd083c1a4b389dcc285e"
+  },
+  "src/renderer/tvgPicture.cpp": {
+   "upstream_path": "src/renderer/tvgPicture.cpp",
+   "upstream_sha256": "330e3c50b8576c92c77c5edc7da58293b8bda0dbf653ecefeac9e7afe6312904",
+   "sha256": "c5ec8b021bce100a921053961debb59d0153e8eba861783b4fb7e92bfe1a4035"
+  },
+  "src/renderer/tvgRender.h": {
+   "upstream_path": "src/renderer/tvgRender.h",
+   "upstream_sha256": "dbd9e574752a9e85a741852fd27d32dc0e05f68e57cb11b54b7483f20c0d5a1f",
+   "sha256": "b7178e01635b017f8d5789809943369cf6a88333ef94085a3606e7cd90ee568e"
+  },
+  "src/renderer/tvgShape.cpp": {
+   "upstream_path": "src/renderer/tvgShape.cpp",
+   "upstream_sha256": "40cad3aed55072be5b6bbb35c1ca67f10cad3322541a9736d28bf04ef7adeb37",
+   "sha256": "bcc486e25ec5d0c36d16c560c171a7169bb0a03907c276c894aaccfc55ed138e"
+  },
+  "src/renderer/tvgTaskScheduler.cpp": {
+   "upstream_path": "src/renderer/tvgTaskScheduler.cpp",
+   "upstream_sha256": "46df6914fa985bce8e5e228eedbe8e260b5f54418a3ce75b2271caac68659ebc",
+   "sha256": "a9f10696f7f9789321ad3d707ea0a393a007ad51505458c90ad0021fe68de328"
+  },
+  "src/renderer/tvgTaskScheduler.h": {
+   "upstream_path": "src/renderer/tvgTaskScheduler.h",
+   "upstream_sha256": "23428ce1c385b0c392aabcbe90fc707f396688c0f132be27b10aafb5d24730c1",
+   "sha256": "0737745adb44bdf19d39cb1b577298d704e9b53abe639e1a7121c4f014249a39"
+  }
+ },
+ "additions": {
+  "inc/config.h": "361800fca7aa27b01c9bf27f46322dd33607998e30f2fbea7fe7db0209ffb8cb",
+  "patches/0001-let-delete-be-delete.patch": "6d479ef50c0a10dc47fe2fb25f10f6d39d028001fef2e9e6f33b9ace70b9bf99",
+  "update-thorvg.sh": "5bb36e2da33aa9eb7a11b67d6a960d6c2ad4856224fc809e3e02925a190e4891"
+ }
+}

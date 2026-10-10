@@ -1,0 +1,35 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "offset_allocator",
+ "license": "MIT",
+ "upstream": {
+  "repository": "https://github.com/sebbbi/OffsetAllocator",
+  "version": "git",
+  "commit": "3610a7377088b1e8c8f1525f458c96038a4e6fc0"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE": "ca618b192cd46bdd230d062c5e407e972ea47b9d98bd16323af1cc2549880858"
+ },
+ "patched": {
+  "offsetAllocator.cpp": {
+   "upstream_path": "offsetAllocator.cpp",
+   "upstream_sha256": "337aedd1d455dc227fa3af1454937a69c88d2cbf0eea9d41ad65e40105307f6c",
+   "sha256": "c1f759e139833b35fb01ee4b334fe71bcec87796d62526bb1c24c9cfd72723ee"
+  },
+  "offsetAllocator.hpp": {
+   "upstream_path": "offsetAllocator.hpp",
+   "upstream_sha256": "1d1043bc4baa33bf8b385e562b74d2efbb0d70835ad974dc13d7e2b8255a35e6",
+   "sha256": "1b02d33c304c88be5db7cc074dec90e885e0db5561bf33825b0c58127dfa0f94"
+  }
+ },
+ "additions": {
+  "apply-patches.sh": "9abf36f111ce1e0da1202e641e4fb454524b364c937b53ae8239945490a02c90",
+  "patches/0001-fix-allocation-count-tracking.patch": "a8fd6607e5573ab8d8f5ce3c79abc6244df96d68bb1bd52d2e882508e43c79b2",
+  "patches/0002-fix-16-bit-node-indices.patch": "86df38be5e5a4926edc662e01efde26d288b5c7b4849d79fdc9df94e7c3e859b",
+  "patches/0003-fix-maximum-allocation-size.patch": "0cea3206aa22f35d364b4476028047ac7cd8dd2a5e2b0949c6a0ce8524655aff",
+  "patches/0004-add-header-guard.patch": "1ad17a379ec79e0576352421f96650b1b16f37e3725fb084811fb7cfd67b455c"
+ }
+}

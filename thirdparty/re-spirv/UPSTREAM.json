@@ -1,0 +1,20 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "re-spirv",
+ "license": "MIT",
+ "upstream": {
+  "repository": "https://github.com/renderbag/re-spirv",
+  "version": "git",
+  "commit": "29a77fca357567d00aa37b8ffde19c19cfe477c4"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE": "761ecab744d5ed0528b5b794239abaa6f62bd5bd36fc1980b3cb98c48ce32868",
+  "re-spirv.cpp": "c4b1a58358c43013ae4a416a6d60119a54c8dee940d385b65aa073cecea73b3a",
+  "re-spirv.h": "16757a2133b1b9f9240b560332b89208c262ea14ea483034dd2d6a6a02c1489c"
+ },
+ "patched": {},
+ "additions": {}
+}

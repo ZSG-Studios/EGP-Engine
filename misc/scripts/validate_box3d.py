@@ -11,7 +11,7 @@ import time
 from pathlib import Path
 
 import egp_xmake
-from egp_vendor_manifest import verify_excluded_files
+from egp_vendor_manifest import load_upstream_manifest, verify_excluded_files
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -85,7 +85,7 @@ def main():
 
     try:
         vendor = ROOT / "thirdparty/box3d"
-        manifest = json.loads((vendor / "UPSTREAM.json").read_text(encoding="utf-8"))
+        manifest = load_upstream_manifest(vendor)
         if manifest["commit"] != receipt["upstream_commit"]:
             raise RuntimeError("source revision and validation profile disagree")
         actual = {

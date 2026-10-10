@@ -1,0 +1,37 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "wslay",
+ "license": "MIT",
+ "upstream": {
+  "repository": "https://github.com/tatsuhiro-t/wslay",
+  "version": "1.1.1+git",
+  "commit": "0e7d106ff89ad6638090fd811a9b2e4c5dda8d40"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "COPYING": "0e602a00db6ce15c1311a180b13563aa638918a77f813b24cd78c9fe5cab63d0",
+  "wslay_event.c": "c17631f10dd138dbe98f0fc508da8bdffd9a26732d7af829880a1762e6319961",
+  "wslay_event.h": "4beafda3778fb2f0e72ae982c13902c8d4a32bf6d10237f75f9e0a8f90dbe44c",
+  "wslay_frame.c": "2845a010145256c0e0863e5aa054a74756035730b3964601d7d7b86bcca9b97c",
+  "wslay_frame.h": "df7f9e77b40a04d3db99e046b3f9a713831c74c447ec5983e92568baf1556f9e",
+  "wslay_macro.h": "b2d5d9149b05ffa05b34aeef685fa3d13c18268239310b20a3bb6cbf26765c90",
+  "wslay_net.c": "8d72114ae56ff6b724c9368c5e5b035cf91c76b3cd506801a913b7e19bebe991",
+  "wslay_net.h": "c1f87fa5987126ceb4cbef9f5873848de05cb07bff3d51a94ac73cd5c5c84dc4",
+  "wslay_queue.c": "96c96317fe956f8ed2cc745f7855664457b7a80505a8cb648839153dcba32891",
+  "wslay_queue.h": "831b6196c671e510cc03565cf6f2f0092d3a7d87435e5580579e4108d928c819"
+ },
+ "patched": {
+  "wslay/wslay.h": {
+   "upstream_path": "lib/includes/wslay/wslay.h",
+   "upstream_sha256": "222f7aef463a971a743879dd45a8d68c1169ed3ae3b769f81aa77e5ec1088a77",
+   "sha256": "556d65539acaa262e6f0fc361eb8cbd2b9d5d08f22ae3fc35fef9baecea578d8"
+  }
+ },
+ "additions": {
+  "config.h": "45f678be2362b633c9891b0091d35bf3a7367beb64592190dcd7b91095017c1e",
+  "patches/0001-msvc-build-fix.patch": "91a53e959a5586f3fbb7630f4b502c15d91afbfc9a61a317ac730378dc93ab16",
+  "wslay/wslayver.h": "8a3c436cf744daa4726a966088afbd35aefd7a8b49a47df6de63c849903e5b1e"
+ }
+}

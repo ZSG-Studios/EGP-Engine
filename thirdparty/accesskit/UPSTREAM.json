@@ -1,0 +1,19 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "accesskit",
+ "license": "MIT",
+ "upstream": {
+  "repository": "https://github.com/AccessKit/accesskit-c",
+  "version": "0.23.1",
+  "commit": "8b6ed37c20ed4c59390e253407983333053662ba"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE-MIT": "23f18e03dc49df91622fe2a76176497404e46ced8a715d9d2b67a7446571cca3",
+  "include/accesskit.h": "1a99c7a8dac2f5b4fa99ab323d0274ab5a3bbac8bee02220ef941cde4d36af4f"
+ },
+ "patched": {},
+ "additions": {}
+}

@@ -1,0 +1,26 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "swappy-frame-pacing",
+ "license": "Apache-2.0",
+ "upstream": {
+  "repository": "https://android.googlesource.com/platform/frameworks/opt/gamesdk",
+  "version": "git",
+  "commit": "1198bb06b041e2df5d42cc5cf18fac81fcefa03f"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "common/gamesdk_common.h": "2f57b4ff274ae96105a91b718c142dcdf429736a5a1cbdfc86cdf3390ab4aa00",
+  "swappyVk.h": "8b89ca6cff681f5914fcabfbedb082144d5ac7ab97b579b8b00958b3f9478b8b",
+  "swappy_common.h": "0264e382f8c63908848fe866da8feb756dbc5b5f66149249c7362ac8b4a1203f"
+ },
+ "patched": {
+  "LICENSE": {
+   "upstream_path": "LICENSE",
+   "upstream_sha256": "00f7f4e6f379ec182639009fb3f5e84e683a0f0357c3ec67a89732a77ec15397",
+   "sha256": "f2bdf6f48abaa135ee6feba72d3b2eb2fa242352a9e558585d1084f6f2a45811"
+  }
+ },
+ "additions": {}
+}

@@ -1,0 +1,44 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "etcpak",
+ "license": "BSD-3-Clause",
+ "upstream": {
+  "repository": "https://github.com/wolfpld/etcpak",
+  "version": "2.0",
+  "commit": "a43d6925bee49277945cf3e311e4a022ae0c2073"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "AUTHORS.txt": "1f64568dbc98dd11987a08a5ffc834a139d7cc36773a8f2c99ee09e94b241e6a",
+  "Dither.cpp": "ccfa7a30039a7d47d89419e9030ae53ee7cb865f94829c3326973b5627b8be28",
+  "Dither.hpp": "731f74b3b15fa15ecd9bfc0bd4220a2b1fd3b66152ea200304f7d728a5e171b4",
+  "ForceInline.hpp": "7a1b318b27670c71d78d593373802d106fe658d643951ac7836a553537c033ea",
+  "LICENSE.txt": "38f5183e1228651dc7f9dfbca5ebdcfd8711b60fabed58ed9f922bdfeaf76583",
+  "Math.hpp": "6bffd0fedf9ca1cc621750e94e5e69bd332c76309c0181ce689a708a3ef4ea3b",
+  "ProcessCommon.hpp": "1be53784d85d2b0e2846e7a1c2ed7c66f46a2523f266316582ca0d92c4ee37d8",
+  "ProcessRGB.cpp": "289cd8979fd8f4c01c4789aba2ee56052892887b03ad200a335c3e04be4d1d3c",
+  "ProcessRGB.hpp": "c291ca8fa1478ff02b5a28645eae6a493a5351bc33416764236a86074568dce2",
+  "Tables.cpp": "630b96a4136b483f924e25871ce39c7bbb3eae259942f5ae0c7cd391458fc351",
+  "Tables.hpp": "878658d2008d1d20aebac573180a9e66ae5d7964b9ec5f4afe2d4b9647ec6dd7",
+  "Vector.hpp": "8adbe77c4a33c500395fa2802b2c144128e4704c349c02b914bee3d195ad9d42"
+ },
+ "patched": {
+  "ProcessDxtc.cpp": {
+   "upstream_path": "ProcessDxtc.cpp",
+   "upstream_sha256": "2698b5f00055c0f628f1469e13ebfff3b7da90c0dd7b4126aaa77524c9a141fc",
+   "sha256": "6b4962b34e54ffadc41237f483f3ed904f2deb39594502e9a1215cbffb4d452f"
+  },
+  "ProcessDxtc.hpp": {
+   "upstream_path": "ProcessDxtc.hpp",
+   "upstream_sha256": "cdc2248a389303a93ce2abb516a6c41f8e528a96749df0afe038984d557b4f72",
+   "sha256": "7905882634c058a1d343d9d85873ac34d5b477192252868868628a97de1845e5"
+  }
+ },
+ "additions": {
+  "DecodeRGB.cpp": "206f9ed5fea3608ec57fa8ed6eba65789deb5fad1b49335566cee032de6c2d21",
+  "DecodeRGB.hpp": "c74077b99755ad7742e83e0dcf5e7e7d75dfe14d4540ec4bea10a122417abfcf",
+  "patches/0001-remove-bc7enc.patch": "ae83e648648a344268fceb3edebcfba81cd9270b56fca22e0b8ae2bf4ee8bc63"
+ }
+}

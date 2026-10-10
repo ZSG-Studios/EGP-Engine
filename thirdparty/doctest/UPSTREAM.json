@@ -1,0 +1,26 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "doctest",
+ "license": "MIT",
+ "upstream": {
+  "repository": "https://github.com/onqtam/doctest",
+  "version": "2.4.12",
+  "commit": "1da23a3e8119ec5cce4f9388e91b065e20bf06f5"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE.txt": "0fe0b331fa1513dcce8604ff1fa925f32d1cea17d8aeb1c2471fad40d291adc5"
+ },
+ "patched": {
+  "doctest.h": {
+   "upstream_path": "doctest/doctest.h",
+   "upstream_sha256": "94029a7d32da24a56249658147dbd2b33ff0b9ed665295cbbaf19aafff5b0ced",
+   "sha256": "2b143b93771ec9a2e76cf41fb5705d3fa8ade00268c91ab3e99703ffeadc44a3"
+  }
+ },
+ "additions": {
+  "patches/0001-ciso646-version.patch": "3c8edd68353a40d64caf952f69986d1173846acd05e105b1a5f3cfc918b58dd8"
+ }
+}

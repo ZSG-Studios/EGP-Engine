@@ -85,7 +85,7 @@ jobs:
           fi
 
   template:
-    name: ${{ matrix.name }}
+    name: ${{ matrix.name || 'Nightly-only variants' }}
     if: inputs.lane == 'full'
     runs-on: [self-hosted, egp-macos]
     timeout-minutes: 150

@@ -1,0 +1,58 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "cvtt",
+ "license": "MIT",
+ "upstream": {
+  "repository": "https://github.com/elasota/ConvectionKernels",
+  "version": "git",
+  "commit": "350416daa4e98f1c17ffc273b134d0120a2ef230"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "ConvectionKernels.h": "5cae471e2b1c1b6284f4d0d979257e8c49b8e2160a1cdbfb3a21703d73ac72bc",
+  "ConvectionKernels_API.cpp": "9ed06a429e1adf01407931ee34164563059dabe59a68d254b08f3b140b33d610",
+  "ConvectionKernels_AggregatedError.h": "5649f7b7c1a6f962b139d332fb6db829bc82104d3e37043b9f95a2e2d4a06a5e",
+  "ConvectionKernels_BC67.h": "988e1c036459a7b976382b8a0cd4bdf19c1ee474b86b360b5c44c199ed346043",
+  "ConvectionKernels_BC6H_IO.cpp": "8652812c1d0e319c233c0e8d62eb96b846365bc9101887342b90f074c40c5dce",
+  "ConvectionKernels_BC6H_IO.h": "7089ee909c6869c2af6b09cbcc57a6fae6086ca78e1d767e62c948b094ef7ab2",
+  "ConvectionKernels_BC7_Prio.h": "2a6ed25f5df4b68035c840a568e5be227e57bfaea40eb7812d20db0aeaa0157c",
+  "ConvectionKernels_BC7_PrioData.cpp": "a713acbee57ad5495b55e164ceca14e8eb313e81616c0e1bddddcef4ff090c41",
+  "ConvectionKernels_BC7_SingleColor.h": "f03f6ec12d439381f9f67e324f08daea08efeed6df01397e1a856790296823a7",
+  "ConvectionKernels_BCCommon.cpp": "623d4f17d7543262496b9bd68e6aa37d019653e3918064dcd28188fe8af98294",
+  "ConvectionKernels_BCCommon.h": "cbcf50731e542aaaeb8b6d5c9368da5561e3fb879c37461f1735227debaf57f1",
+  "ConvectionKernels_Config.h": "e555ad1c98d0a2d225ed98f8f04fab1122283b7e9f809ab54738c83dda3d63ef",
+  "ConvectionKernels_ETC.cpp": "78842f4bd9d2b85a3701080d6626a4dc9be15bd3882ba8a6ed0d020512a91869",
+  "ConvectionKernels_ETC.h": "73684c0204ec73dea75014ff341447a5b11745378b2aba953d1a260bd2eeedda",
+  "ConvectionKernels_ETC1.h": "8c9c5cbb8fcde8279454671b6d9944210747eef6078f6557e352e9506e4f1aa6",
+  "ConvectionKernels_ETC2.h": "c0b451517996c099edb624993c3c57401850083aefe7dadfc3444da33c328742",
+  "ConvectionKernels_ETC2_Rounding.h": "dbe9f79d73fa1c926766d855422ab5b959cea26b707bbd8f36c57098808c85ab",
+  "ConvectionKernels_EndpointRefiner.h": "aaa9411e998569a062dcefb7689095502370251a3b0a5058498a1dde00290722",
+  "ConvectionKernels_EndpointSelector.h": "cf5a986595be3b3341428a51ee333c2026adca918a02f3ad8f53aaa06ee7ca53",
+  "ConvectionKernels_FakeBT709_Rounding.h": "bbe4ef7323dc3312d12ed4b3eed04677105fb5fbafc6b0a43395fd67173a96a8",
+  "ConvectionKernels_IndexSelector.cpp": "46106ba86491763b0e84166f4dc1cf43bb72577c7108c4f14cb817a1e9e92aa4",
+  "ConvectionKernels_IndexSelector.h": "9e29a339fc09ed8350e4b312b362ff7644fcf48cd98b9d2f64f81ade5795b720",
+  "ConvectionKernels_IndexSelectorHDR.h": "70fa8b5494fa8ba8400948268537f371d7520c938e4d82f5a271b3f585fe508f",
+  "ConvectionKernels_PackedCovarianceMatrix.h": "89119e62f6190af8efbf502c8a4f1f3e200e74fbd529852721076386a6a6ceab",
+  "ConvectionKernels_ParallelMath.h": "6db480f52ed45d57d9bfc07b210be47215c3643710f5b2394eae8ed1be0274c6",
+  "ConvectionKernels_S3TC.cpp": "92f219b1e6b8b9c9992115fb6db170008825fa4e5fe9de4638ac4d3583c27f2e",
+  "ConvectionKernels_S3TC.h": "ceae87dfd015cdd839cb4f68c9fff879ff0526bb11b463d5c6092e1c3f75f75f",
+  "ConvectionKernels_S3TC_SingleColor.h": "09102a01f1b96505a04f6ad421b92b14e7603dd643482509f37e61efba783477",
+  "ConvectionKernels_SingleFile.cpp": "c33411330f5cd58376ed593668068827914ea9bc0af8a7cf6bfed2e51086d22b",
+  "ConvectionKernels_UnfinishedEndpoints.h": "c6c533d110d9d31b0621b0e73042a84b56657decdd027e06eff0d1414855ed0e",
+  "ConvectionKernels_Util.cpp": "c7b30925827700ff2cac7f5c2308c880e997dbb555ff6ea114ec3627bcf73b96",
+  "ConvectionKernels_Util.h": "def5c537ad1d133ab519546250222fe6d282549090811afe5939199f564a77ad",
+  "LICENSE.txt": "55162613b64f29d6a6f3be61d598355dc169d01fe764ba96148e1d29098fde68"
+ },
+ "patched": {
+  "ConvectionKernels_BC67.cpp": {
+   "upstream_path": "ConvectionKernels_BC67.cpp",
+   "upstream_sha256": "a195d656cf4fff9ac04219f1cfb16e9086c3bda3a40604360ef9949bb21099df",
+   "sha256": "7da63f774c68890cc7fa4528a9537b3d45148da1d65d2d8923b0b4eef3635ab2"
+  }
+ },
+ "additions": {
+  "patches/0001-revert-bc6h-reorg.patch": "3d04d70f10d0a3eb8f52d71dc9266f44c2e595478096363a4fff3aa40a8be887"
+ }
+}

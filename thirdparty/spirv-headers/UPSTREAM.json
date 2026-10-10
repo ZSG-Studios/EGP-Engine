@@ -1,0 +1,26 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "spirv-headers",
+ "license": "MIT",
+ "upstream": {
+  "repository": "https://github.com/KhronosGroup/SPIRV-Headers",
+  "version": "vulkan-sdk-1.4.335.0",
+  "commit": "b824a462d4256d720bebb40e78b9eb8f78bbb305"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "include/spirv/unified1/spirv.h": "6425af7856b45f0e8f374e3380d969660db579739e70e00ef039689cbac555b7",
+  "include/spirv/unified1/spirv.hpp": "9a09afdd235153fe7d5c680b36836db0e887be32b227b3aa30d67682231b8606",
+  "include/spirv/unified1/spirv.hpp11": "af572a06be9ca83e1f0c6372c05f53ae905ab2d01d5dc7c637ecd9552b0e1d18"
+ },
+ "patched": {
+  "LICENSE": {
+   "upstream_path": "LICENSE",
+   "upstream_sha256": "ea43b1de38a6f90c488800d66dec1ed671e68cda530266bc96951fb5b6307613",
+   "sha256": "56724af6d76732a7a1f36ea69965ed2314ae04073676313a4f94c1e2fe55342a"
+  }
+ },
+ "additions": {}
+}

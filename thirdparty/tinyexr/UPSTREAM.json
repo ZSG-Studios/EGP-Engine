@@ -1,0 +1,29 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "tinyexr",
+ "license": "BSD-3-Clause",
+ "upstream": {
+  "repository": "https://github.com/syoyo/tinyexr",
+  "version": "3.2.0",
+  "commit": "6f470c9ab24bf3992bc512ce07e8ecb00d9bf105"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE": "b90388aaadc2b6f77a5c01278697a2a0539eab471a3befc6a081728becdc3390",
+  "exr_reader.hh": "9e0bfef0487b9c3082165b2a637c75ef91d9fcc4aa55a5f32eb97f77db19f99b",
+  "streamreader.hh": "81f2d1502930ca9ca9957e7607c2a7924d3ef2fe4b08b1a4001245dc6d3fefb6",
+  "tinyexr.h": "b1d33ca1350d64e2b9a199614991cffd45d7982ff3d68f107020a1230bde38ec"
+ },
+ "patched": {
+  "tinyexr.cc": {
+   "upstream_path": "tinyexr.cc",
+   "upstream_sha256": "88bf210298beb68b886cd2218e972a72a5cc6f339281a2ee8c2cbf971085d30d",
+   "sha256": "c7d1ce4eed2ebe64e59b5f8d5ebf31bebb6bbb4b127024a8632bfc1b646f2c04"
+  }
+ },
+ "additions": {
+  "patches/0001-external-zlib.patch": "737c52cd8330783ea973da93976900284b2dda62b67f2e06f34e92d25203cc55"
+ }
+}

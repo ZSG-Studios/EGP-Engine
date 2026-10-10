@@ -1,0 +1,19 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "wayland",
+ "license": "MIT",
+ "upstream": {
+  "repository": "https://gitlab.freedesktop.org/wayland/wayland.git",
+  "version": "1.24.0",
+  "commit": "736d12ac67c20c60dc406dc49bb06be878501f86"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "COPYING": "6eefcb023622a463168a5c20add95fd24a38c7482622a9254a23b99b7c153061",
+  "protocol/wayland.xml": "60abb5864546288a660f3d8af0c838fc87c85bb386582da23e52cb8476e9adbf"
+ },
+ "patched": {},
+ "additions": {}
+}

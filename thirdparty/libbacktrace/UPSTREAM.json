@@ -1,0 +1,42 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "libbacktrace",
+ "license": "BSD-3-Clause",
+ "upstream": {
+  "repository": "https://github.com/ianlancetaylor/libbacktrace",
+  "version": "git",
+  "commit": "4d2dd0b172f2c9192f83ba93425f868f2a13c553"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE": "ef8a9b3247488f8901ca60de9b17b745d7bd67e5ec1e622f80d62364572200d8",
+  "alloc.c": "59966eb1d816e3a6c52c14cd598bd7ed599df6c247961183c51cef655c7d3c28",
+  "atomic.c": "428286aa21cc866c7631efd6fd44c3a29c7992ce436ae36069541203e1657e15",
+  "backtrace.c": "5448adba6dcfcb30ea8254f8f21c2efa4ded7de745d9780b28f79e7345ef8947",
+  "backtrace.h": "f78e4482de3f83da69e6e3590f47de1ceb8990c65d42395fa577d79e48424979",
+  "dwarf.c": "25ae0520f7b62fa5a1e8c5530382ac838029324f730d3fb6e7f0ddec25efac78",
+  "fileline.c": "cf7713f10caae4c540607a07d47f5d40e2a019bc148693bf06bbcd24e9290e6c",
+  "filenames.h": "8d2c2d284c3f071a8b418c2ce71e42e48b48caa0c4485b7319a4afe82b236c36",
+  "internal.h": "b4fe6642940a47a0b312a169e78c38657598bbb9d396f22a99206db58fc11b31",
+  "pecoff.c": "be38f258fad8981870d2cfb3bd858a6a02ed38604aa283787bd1b8249fa159a5",
+  "posix.c": "bdc7c149d65a51fd140d7970356992bdd5c65773d6ff20602773961bb6af84b0",
+  "print.c": "3a2381f9a8c6289cbaa006b1ea955b64f094daa467a8ed2508cff04d4df541ad",
+  "simple.c": "22b67e85a6eeb3087305d873f0fc55399fdadf23f3dd35887054672e59dd4a4c",
+  "sort.c": "5c8bc842b97e3e6d640702ee3cdd36c91b556eccf8c0539ae7da1c6f94b6eb29",
+  "state.c": "49f2c5a10ff150681f70a536ec8e1294844a1eb9589fb6447823e61ad0e044c4"
+ },
+ "patched": {
+  "read.c": {
+   "upstream_path": "read.c",
+   "upstream_sha256": "c065b575829a5b273f393c6fcdde3500f8bf663a1bbb19e502597436caae0682",
+   "sha256": "379bccebd25a8a3cf5102c215256136d37cdf5d4739a6941469e6dfb07b02ba0"
+  }
+ },
+ "additions": {
+  "backtrace-supported.h": "bf8d870c857f85ab186ec5c9f19b0b3cfb2a8619bffac7fcc1d1faea8ed5f078",
+  "config.h": "37ebc2134fe9fb421aaae70edfcf92aeedb19eb539957e37dd12f4dd2a2b6a58",
+  "patches/0001-big-files-support.patch": "a67016f6d6a9f8d20edee411fded206ad700ce1b2359a19e3fcf9c10be97b8d4"
+ }
+}

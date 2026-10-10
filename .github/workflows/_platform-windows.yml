@@ -117,7 +117,7 @@ jobs:
           xmake lua misc/scripts/validate_egp_unit_summary.lua .build/windows-unit-tests.log .build/windows-unit-tests-receipt.json
 
   full:
-    name: ${{ matrix.name }}
+    name: ${{ matrix.name || 'Nightly-only variants' }}
     if: inputs.lane == 'full'
     runs-on: [self-hosted, egp-windows]
     timeout-minutes: 120

@@ -1,0 +1,49 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "misc",
+ "license": null,
+ "upstream": {
+  "repository": null,
+  "version": null,
+  "commit": null
+ },
+ "verification": {
+  "method": "baseline",
+  "reason": "Aggregate of single-file sources from several upstreams; per-file provenance is listed in thirdparty/README.md."
+ },
+ "files": {},
+ "patched": {},
+ "additions": {
+  "FastNoiseLite.h": "38b24b9b04aa5e9f1e63336d4acbbbb73b11f15b697bb08a25f5ec0c6c274901",
+  "bcdec.h": "08b361b4c9516f0ce366386d9f12482a92e4335ca625886a4687b2cdb4a7f5a6",
+  "cubemap_coeffs.h": "85fe2952da093f56223b9c2c57211a36bf2f1f238d5859b53066739adb503c1e",
+  "fastlz.c": "e150086d0461ccf466962f24d7963d5eca5f6671e5e9f3ef7020c7e3540df6c8",
+  "fastlz.h": "e0fd69cf4a88e97f2b2603ba8865d5ca927f6e0f523f0fcdc401c240291b3fdb",
+  "gamemode_client.h": "049b31391063eda1c6b5af5eff17238a2066c3d76fcfef2f5abfeafc41b6cce5",
+  "ifaddrs-android.cc": "12e7fdf3c3de6d9f1baa5dd3f9d40d0af8f5c5b5a367cf8e5c4292e765e21ec5",
+  "ifaddrs-android.h": "aca197f1ffe7f0e4c5caff40d6ddebb00197baf8693e3843b3e26c35d6512d56",
+  "nvapi_minimal.h": "0b45eff50bce16bea97dd6c205c0be17948410cd9cdafbe9adba7109f72a0dc1",
+  "ok_color.h": "776f1de191840badc27df53571340ee7db39ab640f77c9b4191053b7d3934281",
+  "ok_color_shader.h": "603d8ac8cac6167427aa1cdae69412183012a68ea93d2735f30044c65db1c058",
+  "patches/FastNoiseLite-0001-namespace-warnings.patch": "123ec6a215a20154b5f33c0f63d04e1442fa6d98db0ddca4fa2960d0c3354a7c",
+  "patches/ifaddrs-android-0001-complete-struct.patch": "52e141878c03889a47de341cba6da02d2ae7ee5f3289fb315eab980b431c024a",
+  "patches/ok_color-0001-srgb_to_okhsl_precision.patch": "fb6a3e846e248b350cacb6e8cdfff57a9611b20d91924c05127c6b6d659c4f51",
+  "patches/polypartition-0001-godot-types.patch": "d7db889a0dfa0a8953c1dae6a960203bb51b5a1a571f810d41d4e473d96b52c3",
+  "patches/polypartition-0002-shadow-warning.patch": "81826d5467ca2cae4d237954b2f6a64f74232d452488bd2020e3404eed30baac",
+  "patches/smaz-0001-write-string-warning.patch": "6ae3117e13522471805a3715026b0557c07bc0d9f280ad3ce67b0f042562d192",
+  "pcg.cpp": "23b041f6584431522bed4d1876338a4a99632d0b10b567ab8ab27b30a95d148d",
+  "pcg.h": "922e5e90dc61027eebf4bcf1f0b019db320061729e1de7451c26ab80f622e3f3",
+  "polypartition.cpp": "8013fc35173c9d802013c249c15d0ad3a6daac82244c1176161d54b070c1cddb",
+  "polypartition.h": "f258c1e796078e8c6a277fc0f44f7abc235cdbf732375a47be5ffba35fcfbcf5",
+  "qoa.c": "3e070356ae4533ef9de03ae68c9048f3aceeb6933cadacc016ce5660e5f48f7a",
+  "qoa.h": "9f7bd4dc4a10afed1c561fe9d5758f33f75e151cdfbeec5bcbfe2394198f7d89",
+  "r128.c": "fb124bd9c544c567cca76706f6dca362a0fc898fdb607c2c33a8c4f2707516a5",
+  "r128.h": "2a67fffd0dc6a4042a8b2372a5f8d8407d5add6d747548e2a86941bd5d834ff6",
+  "smaz.c": "3637d1a59298dfc878b03cf95e761cb649006fefb99840436db1795cf300e7f4",
+  "smaz.h": "24fcbc2728fb9eb6fd18b3f73c1d6ec9705a8740fbb2b8dc0a8353f32a5712c5",
+  "smolv.cpp": "c3fc96b455ee173250f3302c187f1dea4dbc8ab45bf2ab370e63aa271ad0b790",
+  "smolv.h": "a4ef18392b5fed85844dec70c8fffe23b69ade92c8bea13e2986c97ad8872ca1",
+  "stb_rect_pack.h": "6388366a30de57c1b4c29b6eed4ed1c7d758fc1443d2dd95cfce943370bb3aa1",
+  "yuv2rgb.h": "53f026a44f336a31c6402d286f01c32e81db8f58ec037242a870163356e2451f"
+ }
+}

@@ -1,0 +1,52 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "astcenc",
+ "license": "Apache 2.0",
+ "upstream": {
+  "repository": "https://github.com/ARM-software/astc-encoder",
+  "version": "5.3.0",
+  "commit": "bf32abd05eccaf3042170b2a85cebdf0bfee5873"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE.txt": "494accc32e50eb523a0e384d0ae6d4b702db867a89d6971216760e92b240ee12",
+  "astcenc.h": "e695f7d841fd523903af50075d5a55253071c4faaaccafa40c71212109ccb7a9",
+  "astcenc_averages_and_directions.cpp": "4a586a88068f2e360e994ea6360088a87147bb91c59d09d6f0de3152d5f367ff",
+  "astcenc_block_sizes.cpp": "8b5c141258e1f7a167faedb5aeb3355bc6a8e3f1202a3a43fdfd22c244520558",
+  "astcenc_color_quantize.cpp": "eba701ab54ff208e0bc2e232b5fc67c38f6c971958b4c3090cf2680ec52a9f33",
+  "astcenc_color_unquantize.cpp": "d3ca49d581ed2c29cf45313521c10d161e2c1442f9d60f237fcc12aaed68f032",
+  "astcenc_compress_symbolic.cpp": "00ff712aff53ca67236ad3488ccb0b9192a27c342d9e955b45ceb86fc5473d51",
+  "astcenc_compute_variance.cpp": "bb8e5ec428284ba7b185020114fc59b4ba85ffad1bbb1198202a230636d03538",
+  "astcenc_decompress_symbolic.cpp": "94115a33859346ce74ad2e98990672e2f30edbd5c09615cecdca4b251080ab0b",
+  "astcenc_diagnostic_trace.cpp": "a540301c0fa7c520b288d45139455fb72ccb5e15c070f7be1103619a5a691552",
+  "astcenc_diagnostic_trace.h": "23fbc794086a8ac8f090523a544186cdf6c82575e3f6f78b361b4446a519a183",
+  "astcenc_entry.cpp": "8b79b310e89b2acf42edb08e72b17a1c1da8c354e445e2008418ff58d62bf263",
+  "astcenc_find_best_partitioning.cpp": "6094eabddfa9915ddf4e660880bb57d4ea669da75e676b3850ebdb6d76cc89e2",
+  "astcenc_ideal_endpoints_and_weights.cpp": "7390e324194a25f5abc15535f50cf691e79f8ac6d778407ca4ec4120f2cde26b",
+  "astcenc_image.cpp": "34e06ccbd37ce265e7aab91fd14c24a6c4bd807cfb4aff1f387799154d857010",
+  "astcenc_integer_sequence.cpp": "23127ed919d38e1d13c7d32d6c6d93315ac0cbb1d71b9ca236d5c245e291fe4b",
+  "astcenc_internal.h": "46f3d96f35fa642b8254fddebda7503bc5514a1fbed9258c730dd5016bd74011",
+  "astcenc_internal_entry.h": "dbc4421c2b7fc9ef8eb7ea3a31dd34e583b637efa40acad6a6f71d8ea9a5609f",
+  "astcenc_mathlib.cpp": "9b207409e5026eb509c95ec31db70dd33183e5153ef9286e4ac18dc6eee39b6f",
+  "astcenc_mathlib.h": "dad4a510d8678167f3c059643f613efe8a3827526e3a23b70d8ef95df19ebbc7",
+  "astcenc_mathlib_softfloat.cpp": "f854596cde2c2a061ca52c1f10aeb789de60d2945d0658d26989e3b574270551",
+  "astcenc_partition_tables.cpp": "71926b39d3b002e19fa7e868c2dfdd6946e04856e83e2696519a3041c6761201",
+  "astcenc_percentile_tables.cpp": "f689127e0b83b6c45ef7fa8625481818f1bdd6892e1eb2981844e3d9cfa04af0",
+  "astcenc_pick_best_endpoint_format.cpp": "0d6a837c73b4e05ec8b3df35facadb1370916b4e38c81c3411910237e31bf343",
+  "astcenc_quantization.cpp": "266b513e5432f7e95ca44a3c36d4c51ab5ee0ffaeb9c1d8b1f1ed971f37aeb15",
+  "astcenc_symbolic_physical.cpp": "73526b9721f5a0ecde2e2ae5ad496883057391b914d3f5b74d36b5131b934b49",
+  "astcenc_vecmathlib.h": "c516ed2df4995950bf7e835e8894af004448fa343208f3ae55481fa6a05ee3e7",
+  "astcenc_vecmathlib_avx2_8.h": "43408670d0d36988513f0b7a1b19a093d0dd183ad44b172e6c7ad32003b700ad",
+  "astcenc_vecmathlib_common_4.h": "3716064454dc9ed922de985b0332f4c6668c99bee4448af5ab4e0ad1b775dace",
+  "astcenc_vecmathlib_neon_4.h": "371df95a4b852944f315f261d0f2805a8adc6189665f24a7fc32bd08192baa60",
+  "astcenc_vecmathlib_none_4.h": "f6e178428543f2b8f98a398cadbb2edf0ab8111b2a3b673571843d661c07d7a7",
+  "astcenc_vecmathlib_sse_4.h": "fb5b1291500edc0aec2aa0a02af7236cd35723688a16a9ae37406149e2701981",
+  "astcenc_vecmathlib_sve_8.h": "f45b36fca48cd27e396cf534a6e9bdb3637d09c2f1182dd81d945d275451675b",
+  "astcenc_weight_align.cpp": "2452e2c0288158664391d453242fba7d010bc1b6b5974b772de9308d20f32ed7",
+  "astcenc_weight_quant_xfer_tables.cpp": "4799c8c99c540cd43a58cfab007a0654b88e6c4ec2d7b5b80cfd70fc188c4b9f"
+ },
+ "patched": {},
+ "additions": {}
+}

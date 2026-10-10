@@ -1,0 +1,120 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "amd-fsr2",
+ "license": "MIT",
+ "upstream": {
+  "repository": "https://github.com/GPUOpen-Effects/FidelityFX-FSR2",
+  "version": "2.2.1",
+  "commit": "1680d1edd5c034f88ebbbb793d8b88f8842cf804"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE.txt": "6a12d0fdb5410839473f80b5395cf9493e8c007f76faed9f3fa41ab2f273803e",
+  "ffx_assert.cpp": "25ef32fd2c4a6d2491792891b6b23bbba7167aa2331adedd03d8c29d87056b0a",
+  "ffx_assert.h": "5f6d3b91a3a91140612ee7abe913c7a1a573c46367c02e784a05af842eb3d49d",
+  "ffx_error.h": "62d57608160128e51f4b6e0154e3423b3e10ce5c494ab24d56f9987f6a7a7c84",
+  "ffx_fsr2_interface.h": "e4a06c446fbea473f872d38fdfd83ae7eef0a01731fdf2a7049a3156247ef830",
+  "ffx_fsr2_maximum_bias.h": "d962801b9f335dfeb5a304db7bc6a8894f7895667fdac4097e16d5b826bb6e67",
+  "ffx_util.h": "f2254f1ea4133f8b9631abcd517446af54c5912de6bf014b8f5fe9ad80beaf64",
+  "shaders/ffx_common_types.h": "d3df5c07c2fe5a4a7fbf2c0f94104efbc6d6d41f746bbdd74a50676587ad67e8",
+  "shaders/ffx_core.h": "e6c540d1f58849c00edfcec54f660d9a0de2575a6814c0d6c6c316821c8741a6",
+  "shaders/ffx_core_cpu.h": "4e16859289556e6536aa58f34aa257e4f195eec6342cb18e4bc5da0cf7789736",
+  "shaders/ffx_core_glsl.h": "04f0160149b92773660a941cebf13cf6f19dc9270f547329bd21f79134865ffd",
+  "shaders/ffx_core_gpu_common.h": "c0fd763863a47ab798ab2aa80626f0cd0d2bff67bcd2cadfa8c3d169cc6fd8af",
+  "shaders/ffx_core_gpu_common_half.h": "5fa3d56f2c0cb573b97875fa334b6f8cc3b46376347332fdefea47a43a613588",
+  "shaders/ffx_core_hlsl.h": "70833745b4df6e9cd1732c92987f4b7cba757a385c6d1cecfc0129f533f21d7b",
+  "shaders/ffx_core_portability.h": "539f1f036bfbd951fc0226b75396b7fa0ace29bfa457eac1607e58b87bf75bbe",
+  "shaders/ffx_fsr1.h": "afdc5b77abb998f201e6848c86233828b7323c8e49e98cc7c32da143b215a338",
+  "shaders/ffx_fsr2_accumulate.h": "e178ec34a6b20a3a3952e38c138480a258a0f1272eae8b99211e64d24676a77e",
+  "shaders/ffx_fsr2_callbacks_hlsl.h": "b9b8edd4dc5a5e5f13998a0f3ec7d8497677753671b8261a8b74af3eb13f857b",
+  "shaders/ffx_fsr2_common.h": "e1fbdb6210f8bac6b5b4f20a8d3a0fa6e35ea8bd80789e260a83abfef9696c13",
+  "shaders/ffx_fsr2_compute_luminance_pyramid.h": "3a27f920b94ecbbf3dfd418e9592a7aaa3e345185868ec0eeb9bfdb871a65c39",
+  "shaders/ffx_fsr2_depth_clip.h": "bcce211e0ed0eecba97ff4942c43b8dadff31b0b4ed3735d768b6092eb250293",
+  "shaders/ffx_fsr2_lock.h": "c9a1f633fa9c3e854a1fdc54ebc292c360e0a430118d494a9f78bccd618cff5f",
+  "shaders/ffx_fsr2_postprocess_lock_status.h": "f27250780b248ef991c7fffd35a4094f67e63537794a7ef0f8dd9cb9446027b8",
+  "shaders/ffx_fsr2_rcas.h": "e584dd15627f133aae492a5e5782b8cf8c4b0d2dcd8a56e80c12b66c4542565f",
+  "shaders/ffx_fsr2_reconstruct_dilated_velocity_and_previous_depth.h": "3580ddb521eb0e50dac8cafe5f55d29e8760285cfd80590543514efe27d7cb02",
+  "shaders/ffx_fsr2_reproject.h": "fbbf4a12aa401f2c0e597324b8a93610a0981ccf259d5d03d8f37be474505396",
+  "shaders/ffx_fsr2_resources.h": "7a25271fa48e470bf362122b22934b09199a139e42077ad970d91bb80ea526cf",
+  "shaders/ffx_fsr2_sample.h": "bd15f15182c04c082c3f5331b6fff22514a8443ed5fdb888aa76d90bcabd5e47",
+  "shaders/ffx_fsr2_tcr_autogen.h": "f316d05a0941ef10083272a34baa3fb3089ecbcc2ae1cf005597559043953a27",
+  "shaders/ffx_fsr2_upsample.h": "0da2583177f381acd6d07b0743569c1578f20090c023951dcb9a3d876961c6d4",
+  "shaders/ffx_spd.h": "ab745880de2647c1b1ab94ad9c1cd9fc4361b6d55126bcdc23de419fde4d5fac"
+ },
+ "patched": {
+  "ffx_fsr2.cpp": {
+   "upstream_path": "src/ffx-fsr2-api/ffx_fsr2.cpp",
+   "upstream_sha256": "821cc79317d904d520e8f2527f5484daffc353e1f821a09440c68a3e52b37036",
+   "sha256": "2754be55279310cdca842add3d9f380f06e13984694de248d5cc1d3f7973bb3f"
+  },
+  "ffx_fsr2.h": {
+   "upstream_path": "src/ffx-fsr2-api/ffx_fsr2.h",
+   "upstream_sha256": "8f21d66c916b04c41775963c34511bc9aa5f25b297699549ba0d629dbff734bb",
+   "sha256": "aae74df499009da388913ba2aeb6d61cd853a8e69b603e2455157615cf55c2da"
+  },
+  "ffx_fsr2_private.h": {
+   "upstream_path": "src/ffx-fsr2-api/ffx_fsr2_private.h",
+   "upstream_sha256": "bf2e83b9c39edcba89847a13951761174d9bc22111c348e919e25a9e06ae52f6",
+   "sha256": "edb6f1a2af1f8017b5c6b895012a443f62f0230764719f7ff8c84abd6640fbd2"
+  },
+  "ffx_types.h": {
+   "upstream_path": "src/ffx-fsr2-api/ffx_types.h",
+   "upstream_sha256": "2fa1b8edece4a668d91558ec8bf161375d0582bee312ad07c51e10416a222b52",
+   "sha256": "a954b0849995f62e80496332524025bd0f7c09c20caf974d6e980ce2dd1d62e3"
+  },
+  "shaders/ffx_fsr2_accumulate_pass.glsl": {
+   "upstream_path": "src/ffx-fsr2-api/shaders/ffx_fsr2_accumulate_pass.glsl",
+   "upstream_sha256": "9d1dddc7b04edf701aa68db080e05dac1c56105ce64b0deec8b427e421e648b0",
+   "sha256": "7066c468414330bcdb0266109864bf865ccd3e8a949c9ef1eb4cac54b87d6f00"
+  },
+  "shaders/ffx_fsr2_autogen_reactive_pass.glsl": {
+   "upstream_path": "src/ffx-fsr2-api/shaders/ffx_fsr2_autogen_reactive_pass.glsl",
+   "upstream_sha256": "b70d2ace860317fbc869923ee295cdb0c3997783deddfa91c8f956a3b7cb695f",
+   "sha256": "cdb1357f1774d0d997ba7599e97ed29779312fc072af16b222a0a617a26b78c1"
+  },
+  "shaders/ffx_fsr2_callbacks_glsl.h": {
+   "upstream_path": "src/ffx-fsr2-api/shaders/ffx_fsr2_callbacks_glsl.h",
+   "upstream_sha256": "df595f8448121d8afc1825e4c37bbd733afc03c3d7b0bcc0ba07deaa9c8c82a2",
+   "sha256": "5eee58cc63eb955f330778d630e746cd3a1fb2ab5e4ffdbec8c8ff819ccbdc3c"
+  },
+  "shaders/ffx_fsr2_compute_luminance_pyramid_pass.glsl": {
+   "upstream_path": "src/ffx-fsr2-api/shaders/ffx_fsr2_compute_luminance_pyramid_pass.glsl",
+   "upstream_sha256": "252acabb8fc36921e111e646d4e4a284aed3e4d4bfa8a3078ebd9406b4bcc99c",
+   "sha256": "5a4d5c295472f3983add4ac14e8ee571b94822063d19324607366d65fb9fa967"
+  },
+  "shaders/ffx_fsr2_depth_clip_pass.glsl": {
+   "upstream_path": "src/ffx-fsr2-api/shaders/ffx_fsr2_depth_clip_pass.glsl",
+   "upstream_sha256": "e02493a1f49cd2c2eb98fd9099b94222cad98522edbaa11574bec9437436cfae",
+   "sha256": "61f9f9251a09af7ef48a2ef01d2fbcf058bb909d844c4ad288a0da42201090c2"
+  },
+  "shaders/ffx_fsr2_lock_pass.glsl": {
+   "upstream_path": "src/ffx-fsr2-api/shaders/ffx_fsr2_lock_pass.glsl",
+   "upstream_sha256": "cc2f24c934383818125d2c130a00ffcacb1d4a0f5ede4ff2f0ba20f023c61b3f",
+   "sha256": "881190759df2819c4a8befea8dbb7e8ecf8048f5150f31eddb7214c7dd4d99f7"
+  },
+  "shaders/ffx_fsr2_rcas_pass.glsl": {
+   "upstream_path": "src/ffx-fsr2-api/shaders/ffx_fsr2_rcas_pass.glsl",
+   "upstream_sha256": "6c72c1f3620cf9651d520ce47a13f312b66341adf20ca253bed5e8cfc526f1ec",
+   "sha256": "59c8e2f3a9d04d84742a9622c4d502cd96aafefd8464f6da18b44bcbade3d6cb"
+  },
+  "shaders/ffx_fsr2_reconstruct_previous_depth_pass.glsl": {
+   "upstream_path": "src/ffx-fsr2-api/shaders/ffx_fsr2_reconstruct_previous_depth_pass.glsl",
+   "upstream_sha256": "6176cd0dc41f0151ebe05144208e4b5eddcaff568d11e1e36b5e66e31f58787b",
+   "sha256": "6302db1494faa7dcd7d2350299bcb0caaeeda4721d59d898e68802ff109a8429"
+  },
+  "shaders/ffx_fsr2_tcr_autogen_pass.glsl": {
+   "upstream_path": "src/ffx-fsr2-api/shaders/ffx_fsr2_tcr_autogen_pass.glsl",
+   "upstream_sha256": "959922eb81bd949512a396a23c9f4a55ce9497baf79b77606b528d4308e1af26",
+   "sha256": "ea52108bfaa56da577441375b7ecff11e836f5a50781be69790d55c10d80c598"
+  }
+ },
+ "additions": {
+  "patches/0001-build-fixes.patch": "2537238bd1ebba96080e91d02c576297ba06d16d3de263aed7e83cdd241f906b",
+  "patches/0002-godot-fsr2-options.patch": "be19e6b5c7041cac32c2aae04ec40efa0a578af10a11fdfb14be507a3098c00d",
+  "patches/0003-storage-format-fix.patch": "27622dec686abf695939147bb131f6e2eed8d6d7c7a7381d4bacede6c09d334d",
+  "shaders/ffx_fsr2_force16_begin.h": "a2b0e0272a64451b471a0066867d8fbdb8129cbc7b8f552b65941cde07a8c920",
+  "shaders/ffx_fsr2_force16_end.h": "a2b0e0272a64451b471a0066867d8fbdb8129cbc7b8f552b65941cde07a8c920"
+ }
+}

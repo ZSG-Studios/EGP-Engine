@@ -10,7 +10,7 @@ import time
 from pathlib import Path
 
 import egp_xmake
-from egp_vendor_manifest import verify_excluded_files
+from egp_vendor_manifest import load_upstream_manifest, verify_excluded_files
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -25,7 +25,7 @@ def main():
     vendor = ROOT / "thirdparty/box2d"
     output = (ROOT / args.output / args.configuration).resolve()
     output.mkdir(parents=True, exist_ok=True)
-    manifest = json.loads((vendor / "UPSTREAM.json").read_text())
+    manifest = load_upstream_manifest(vendor)
     receipt = {
         "schema": 1,
         "upstream_commit": manifest["commit"],

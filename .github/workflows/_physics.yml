@@ -1,37 +1,25 @@
-name: Physics · Box2D
-# Pinned Box2D source integrity and deterministic validation on every desktop platform.
+name: Physics
+# Box2D and Box3D qualification: pinned source verification, native build, upstream test
+# suites and cross-platform determinism. Source integrity for every vendored library
+# (including these two) is checked in static checks by egp_thirdparty.py.
 on:
-  push:
-    branches: [master]
-    paths:
-      - 'thirdparty/box2d/**'
-      - 'modules/box2d/**'
-      - 'tests/physics/box2d/**'
-      - 'misc/scripts/validate_box2d.py'
-      - 'misc/scripts/egp_xmake.py'
-      - 'misc/scripts/test_egp_xmake_qualification.py'
-      - 'misc/xmake/**'
-      - 'xmake.lua'
-      - 'build/xmake/**'
-      - '.github/workflows/physics-box2d.yml'
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  workflow_call:
+    inputs:
+      configurations:
+        description: JSON list of build configurations (Debug, Release).
+        type: string
+        default: '["Release"]'
 
 jobs:
   validate:
-    name: ${{ matrix.os }} · ${{ matrix.configuration }}
+    name: ${{ matrix.engine }} · ${{ matrix.os }} · ${{ matrix.configuration }}
     strategy:
       fail-fast: false
       matrix:
+        engine: [Box2D, Box3D]
         os: [windows, linux, macos]
-        configuration: [Debug, Release]
-        # Clang everywhere: clang on Linux, Apple Clang (xcode) on macOS.
+        configuration: ${{ fromJSON(inputs.configurations) }}
+        # Clang everywhere: pinned LLVM on Linux, Apple Clang (xcode) on macOS.
         # TODO(W9 clang-cl): set `toolchain: clang-cl` for Windows once LLVM is pinned on the runner.
         include:
           - os: windows
@@ -56,7 +44,12 @@ jobs:
           mode: acquire
 
       - name: Validate Box2D
+        if: matrix.engine == 'Box2D'
         run: python misc/scripts/validate_box2d.py --configuration ${{ matrix.configuration }} ${{ matrix.toolchain && format('--toolchain {0}', matrix.toolchain) || '' }}
+
+      - name: Validate Box3D
+        if: matrix.engine == 'Box3D'
+        run: python misc/scripts/validate_box3d.py --config ${{ matrix.configuration }} --upstream-tests ${{ matrix.toolchain && format('--toolchain {0}', matrix.toolchain) || '' }}
 
       - name: Release Mac build lock
         if: always() && runner.os == 'macOS'
@@ -68,6 +61,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: box2d-${{ matrix.os }}-${{ matrix.configuration }}
-          path: .build/box2d-validation/
+          name: physics-${{ matrix.engine }}-${{ matrix.os }}-${{ matrix.configuration }}
           retention-days: 14
+          path: |
+            .build/box2d-validation/
+            .build/box3d-validation/${{ matrix.configuration }}/receipt.json
+            .build/box3d-validation/${{ matrix.configuration }}/*.log
+          if-no-files-found: ignore

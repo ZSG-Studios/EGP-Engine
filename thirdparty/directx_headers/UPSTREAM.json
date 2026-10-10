@@ -1,0 +1,50 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "directx_headers",
+ "license": "MIT",
+ "upstream": {
+  "repository": "https://github.com/microsoft/DirectX-Headers",
+  "version": "main",
+  "commit": "25411c74bb9cc7c416b2ff01b3ad8a306811dfdd"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE": "fd532481d828e13a0b13ccb598e02338a3617740675a862ee6bdc1541b68e93d",
+  "include/directx/DirectML.h": "7105c86903c5fcf0f2e15feb78d2d64de0a76c18436f5140cb741bd89ab6b2dc",
+  "include/directx/d3d12.h": "d365a3c49dd6dd00f54d3b1e9432d8444dbc5b213306747fe5b76d85b3a4b64e",
+  "include/directx/d3d12compatibility.h": "73c4a0d01c62f72abe1797341f8240ff667d57e00019c15387c1b6ffd1de1e86",
+  "include/directx/d3d12compiler.h": "0c0a18ad212e122579828b5ffdcd39abd68c4e71debd946ff0562f3630ac83f1",
+  "include/directx/d3d12sdklayers.h": "d4a10d32c91673c5b72be7fae0656c2c56dca501861597327d6f0ff46e24531e",
+  "include/directx/d3d12shader.h": "11d9b10ec2d3dae18e32044afa116c6eb13ea78dbff72c2c07a5cafc0dcc4fd0",
+  "include/directx/d3d12video.h": "c02c2b02f470c4ebcfab5842ff101e518c32cd00e5f22ede94f142b41eb76d93",
+  "include/directx/d3dcommon.h": "edcdf06d1d7fbc5200565110df3dbaf5f6c4feaeb77b4625ae54c0ca6d2ffded",
+  "include/directx/d3dshadercacheregistration.h": "a4d3ec8419366f2df66d63682505f2d732e58d0534f391b04dcbf459aac32f0f",
+  "include/directx/d3dx12.h": "601b02323eaffdf6137a5be74e77c9a41725e6b4671676585dec121fc629977f",
+  "include/directx/d3dx12_barriers.h": "d3ab0932c8bb7fd66a1f8e5335547246939e9799a9aed9d3775cf1e4b5191270",
+  "include/directx/d3dx12_check_feature_support.h": "049607307c44b0378ba9d5d1014ad28d57f7be98012b3a1a83729508f26d4fbc",
+  "include/directx/d3dx12_core.h": "e6e1dc0ae7abf32d3d78cef629528fa5ab5b1a35cea5a87e750c1dc441dbb465",
+  "include/directx/d3dx12_default.h": "a41a985b72913cfc53946f1a99f7dd1964e75e44109db95d18978080b01c65c8",
+  "include/directx/d3dx12_pipeline_state_stream.h": "53ec4da7c3d23d187673812e7dcb47f5ed98100b0707474c02327e55f2fa6aa0",
+  "include/directx/d3dx12_property_format_table.h": "1fa486e39acdbf64a2ba56f1aa6502ba1e5b3ad2e6febd305a96786ea6305c19",
+  "include/directx/d3dx12_render_pass.h": "b3b7cce48c17b2e6e420ac6d9b707146a2f680e5f2653077271ecbb60b0f84a3",
+  "include/directx/d3dx12_resource_helpers.h": "3e9ce4ac21fe7b12fb9f85831bbf37855b22141a76adf60dc882697fafc35c76",
+  "include/directx/d3dx12_state_object.h": "40c8bcb91987192ba2675ad71fba5baa36ec79f46e214b8b93ccb193df6c2b02",
+  "include/directx/dxcore.h": "0fd290896c2b68124246cef50a37df8712fa327f9804706bf4474b0b6e0f45b3",
+  "include/directx/dxcore_interface.h": "1aa8d9f709044b41cf66fdba0649d13a812122c26634d6d0165b5a3a0301414c",
+  "include/directx/dxgicommon.h": "8d07bb3266a7c750605b372ff8572538da4e3b27d7b9f29529ea61547446afdf",
+  "include/directx/dxgiformat.h": "48df2f31927ce6167597c6fb41046ca4d9d771de9e11dac80f44a900d66162dd",
+  "include/dxguids/dxguids.h": "0f9b64b2ded830d325ddfcc68b6677aec538a658090396826ca30583e6aebbc4"
+ },
+ "patched": {
+  "include/directx/d3dx12_root_signature.h": {
+   "upstream_path": "include/directx/d3dx12_root_signature.h",
+   "upstream_sha256": "b6446912da91384cb368c6f3c15ed6e21c33987af0483352d459066bd64abc86",
+   "sha256": "41e8f4894137159df763476dfb1e14082542fd3eb85d98a98872063b7f15a2d6"
+  }
+ },
+ "additions": {
+  "patches/0001-win7-8-dynamic-load.patch": "3902d9e40c4df6bf9d40049faca978526f312016e0d8ba390839eacb3243a6a7"
+ }
+}

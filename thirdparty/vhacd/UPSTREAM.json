@@ -1,0 +1,102 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "vhacd",
+ "license": "BSD-3-Clause",
+ "upstream": {
+  "repository": "https://github.com/kmammou/v-hacd",
+  "version": "git",
+  "commit": "1a49edf29c69039df15286181f2f27e17ceb9aef"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE": "245c933225f5bd28a10336137b26f1f86551b6b1d29f804253eb5e1d73744c2e",
+  "inc/FloatMath.h": "b4569a8a7a4ce605b9dd1f5b06a7a09476034e04a1718551efef7a02d470eb7f",
+  "inc/vhacdCircularList.h": "18309822396e92c66b73e3125816245a8d5792a1d5a0d7fa86e376ff711b2f5f",
+  "inc/vhacdCircularList.inl": "b342caad1ee78a03e3b148c64a61541f1100170e28bfea852834272b18242158",
+  "inc/vhacdMesh.h": "c0dddc69297b029435cb599451e959e3adb57df3bfa75e55f7b06deca040aa25",
+  "inc/vhacdRaycastMesh.h": "9e85a3885d6555d3c130ab382becc45e34bcd59fd68a36ee4e97a27e12233f68",
+  "inc/vhacdSArray.h": "a0dd71865853f6634281e2a947383a96abb43984ce8e0efb281f12b1629305b1",
+  "inc/vhacdTimer.h": "d4859a490ed1ae0c58dc2dc7d8140cc790e089c4e558ccc101c7049ae70b4948",
+  "inc/vhacdVHACD.h": "6fffb6d7fb5f5888428acc28b7b689ce04840d5a2ca75576012af365f7fdae09",
+  "inc/vhacdVector.h": "c534df32e853c10ba608acad83f9cf2d00ea2e6d8dffb1325ae7f62d226855ac",
+  "inc/vhacdVector.inl": "080fd801d43cf452ebf4b3214cccfb44b3a47ef3bee8530f4733f1d7146f4a6d",
+  "inc/vhacdVolume.h": "ab9d2feb998cf56c3a7b52db632404e47224d7b5e3a168c8f31f2108ed5d9008",
+  "public/VHACD.h": "45b890f9f6bed864bd0a09040b1ccdacdc832936c40b1da229cc0dde3e626761",
+  "src/FloatMath.cpp": "f63b0518eea832078558a257d906d0c9b4252a50d77acb7fd5ca376cc71904f3",
+  "src/FloatMath.inl": "b22501044d98c42d7b7e428e8f5dd58e6b280f7235d25f1666a3ee20dc0e3e58",
+  "src/VHACD-ASYNC.cpp": "c1fa848b861b17165657885bf112366c3a6e0ceb8a188d7c18672fc04a613e42",
+  "src/VHACD.cpp": "3942fa97e03c5ba0556573ff492b26b493326cc10b46180fe72ccb77eb7467b0",
+  "src/vhacdICHull.cpp": "ea96fedf6349680642fcf9effc859bb8e24256b03199212f5c01a0aa162ee060",
+  "src/vhacdManifoldMesh.cpp": "71da66653a3a3d9f5efda5cd73ab2240f8aaafc986df0797461d6d96f6e56ca3",
+  "src/vhacdMesh.cpp": "6877770a4dcd4a97ccb0b7d47f5abaf80138f50ebcb3f05c7d1f34a6d8784712",
+  "src/vhacdRaycastMesh.cpp": "7a17b61ce77a35050ef55a45454cca92953c00d6b71fdf26853e4ca790fc4ca6",
+  "src/vhacdVolume.cpp": "732078d8d1a669dbbf932a110865f018355b0ca360602c3150c55d9a9f3ba0ef"
+ },
+ "patched": {
+  "inc/btAlignedAllocator.h": {
+   "upstream_path": "src/VHACD_Lib/inc/btAlignedAllocator.h",
+   "upstream_sha256": "0bb7a43349f37215a4f19642c6178558d604709e23fb45e62b92ddd94b8a68f2",
+   "sha256": "1aa42f2547e82d52dcd7feda90ee351bdf39016ccaa6b1dedfe32442476a0404"
+  },
+  "inc/btAlignedObjectArray.h": {
+   "upstream_path": "src/VHACD_Lib/inc/btAlignedObjectArray.h",
+   "upstream_sha256": "e32ab9015714332dafbe67b5171c4763188cb0ea6d3f49c53a6fa53e4c75e22f",
+   "sha256": "2f9f37858492e96dabb0a33ef5badb7710664edc88690af4e4e7a339124788d9"
+  },
+  "inc/btConvexHullComputer.h": {
+   "upstream_path": "src/VHACD_Lib/inc/btConvexHullComputer.h",
+   "upstream_sha256": "394bffc40cec009e0ed9527e60f87e422356b0c614debc6307d8f8bd19ec436d",
+   "sha256": "852139b4baae38d1309d2e23579599088d15ae29126b9e25e2394058fd25d5df"
+  },
+  "inc/btMinMax.h": {
+   "upstream_path": "src/VHACD_Lib/inc/btMinMax.h",
+   "upstream_sha256": "644f5b24b31bd879ee78f235bcc2dc8bab82ebf75153667eea52fc5013d7d4d6",
+   "sha256": "51db8d715cfd2a7f3969b1be6d416e8ce3ca3d2c6390c4bf6beaae73acdee8d3"
+  },
+  "inc/btScalar.h": {
+   "upstream_path": "src/VHACD_Lib/inc/btScalar.h",
+   "upstream_sha256": "f0cf6f893e63005d50acac5c417ad1c7c8e287ab0aa26ef653f5bfae6b09a18b",
+   "sha256": "64b277370e9f1f70649620b6d399f536c4992f0a508002b5876408cd3dc06a13"
+  },
+  "inc/btVector3.h": {
+   "upstream_path": "src/VHACD_Lib/inc/btVector3.h",
+   "upstream_sha256": "3382e8afb51b43221b73b58b08d9ce918daa8fd5ae7ee1423a5d80ca2a77f0b6",
+   "sha256": "8fd055fd681f6cd3649f89e56e55c8129a3aa7cd9616146c1cad5fa0ab765275"
+  },
+  "inc/vhacdICHull.h": {
+   "upstream_path": "src/VHACD_Lib/inc/vhacdICHull.h",
+   "upstream_sha256": "01c967fae2b2e172b7d89e4a1fb0c2a9a0f7f3a4501aae41946ed40520b5a197",
+   "sha256": "6161d5db896fe71af97c49052d01598ca327224467283905c9f5cea084e7de93"
+  },
+  "inc/vhacdManifoldMesh.h": {
+   "upstream_path": "src/VHACD_Lib/inc/vhacdManifoldMesh.h",
+   "upstream_sha256": "bdd6140523836ffd7ab42354686b57faf4c4e2de9d5f43bb32d2dbcfb5c1ea00",
+   "sha256": "750dad91bda42089c90932102416e06f25d27e00e025fac8e810080dfac33a38"
+  },
+  "inc/vhacdMutex.h": {
+   "upstream_path": "src/VHACD_Lib/inc/vhacdMutex.h",
+   "upstream_sha256": "93a0180a905b73720400ba23cb13316d328b33ddb5e39569c8bd98d90f4b7ace",
+   "sha256": "a5a591af8c0f5b805fac7b2b543b94c297626dc46f8c8b99866303a616bc41e8"
+  },
+  "src/btAlignedAllocator.cpp": {
+   "upstream_path": "src/VHACD_Lib/src/btAlignedAllocator.cpp",
+   "upstream_sha256": "fd548b80c224481c0fbd9fb2d0ebe987bcef82b896bf4277b2b24227616f95f0",
+   "sha256": "3f4425907fee6cc5e83451859b8f9dea480328799a461267674f27748d501c64"
+  },
+  "src/btConvexHullComputer.cpp": {
+   "upstream_path": "src/VHACD_Lib/src/btConvexHullComputer.cpp",
+   "upstream_sha256": "e5c4c22871277fd27b92d69a697611d7710707b147312cba3e986eb50b644634",
+   "sha256": "27f692722c2acd5a9e4c28a6f84088c4272cdb6b94693bfede323c8eb8cd7806"
+  }
+ },
+ "additions": {
+  "patches/0001-bullet-namespace.patch": "45dc7caa70eab3326754249b88cf761001c3d503919cd2f3ddc7cb6cab5a4eab",
+  "patches/0002-fpermissive-fix.patch": "240fce34e17d93a1111028703a78f5262640f41f9fc3f801317d10aef298d8f5",
+  "patches/0003-fix-musl-build.patch": "fcd76a8080baa66c2aaa384edb3e63e09ad065cae66b0c71f95755bbb399d24f",
+  "patches/0004-fix-msvc-arm-build.patch": "fa56a4df53e5c2ced3a8d9262fa00d8040bf711e1bb0f143f5d634d2eba79a7c",
+  "patches/0005-fix-scale-calculation.patch": "f9e7f173a5009298c9ad39e6cdefed1e32ab5319b645f328b1e67d8922be1b8a",
+  "patches/0006-gcc13-include-fix.patch": "da6a722bf8d86fb3b079c9c995189ae28d75a561d360523906b42087a7053754"
+ }
+}

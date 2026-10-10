@@ -1,0 +1,53 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "miniupnpc",
+ "license": "BSD-3-Clause",
+ "upstream": {
+  "repository": "https://github.com/miniupnp/miniupnp",
+  "version": "2.3.3",
+  "commit": "bf4215a7574f88aa55859db9db00e3ae58cf42d6"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE": "52bdad87d7aefe3eab35cb02426aa748510f9398a1e2d520d93bcbb18f10dd11",
+  "include/miniupnpc/igd_desc_parse.h": "0870c64b1868f9b4e66bc6f962ebdb983daa8d9d36767d5b472885d096ad6b5c",
+  "include/miniupnpc/miniupnpc.h": "7d753d220249ba73f29efca981b98e9c5b86b6ba9a3ee4bfdd6d2cbded04c70b",
+  "include/miniupnpc/miniupnpc_declspec.h": "f35c22a0091e94116adf7323c57e5ac07b860e2772957606acf133d8f01208d8",
+  "include/miniupnpc/miniupnpctypes.h": "62dde625d294ce107e74118190ccad03d30b44fc2caad5ae1b18d94a91af9796",
+  "include/miniupnpc/miniwget.h": "30fe160115f33453f261cff3e97bd6d7ed49e5f514b40300435dd09418f75575",
+  "include/miniupnpc/portlistingparse.h": "f7e1463f6508fd3f76a42bb62dd5683cd57480f145812f61e0b21943f43ae1ad",
+  "include/miniupnpc/upnpcommands.h": "cab4476bf2970adf5d17dd7e73d95dd1b187330c967320b91f0a1da808820ba4",
+  "include/miniupnpc/upnpdev.h": "b9393174902c0097f44386e09c6ae600fb5455e50d889e040becd79fbc3ef088",
+  "include/miniupnpc/upnpreplyparse.h": "d9082cd19845251c39af33c214c80c014130a81eb1403c6840105220179d9549",
+  "src/addr_is_reserved.c": "552e41a29f50da0b992bb8df2bb8a8fac869ad1010405da96a471037dbd73bf4",
+  "src/addr_is_reserved.h": "eeabd4007490cbda5aad649af23afde447243904d30e5591ca3cc0395a8c9712",
+  "src/codelength.h": "4a2e3f09def5e166bcac9f95507ff01a318e8cb46f1708dcf0d4016ddd930011",
+  "src/connecthostport.c": "8f2f1584c087ed0c8cdd266792f38f04a4f1187ff5674b9f2494434268b32d22",
+  "src/connecthostport.h": "046e9b4853c05e500277593b520e6535a3efa97ac928e86d37e24da50216ccdb",
+  "src/igd_desc_parse.c": "ae6538fb6148006571f2ea147fb1fd46304ae90e52a9d50fc64be33e19620aed",
+  "src/minisoap.c": "2fffd1da37030ba434d4a0a3948fef24ae46904546d9948cbd47659102ca11d6",
+  "src/minisoap.h": "b94d04017c27f824538147323a54a25d8e0357d726f8dbca3f7802b23d5794ed",
+  "src/minissdpc.c": "171bd4b655274054408c10333f3a1c81afe4ec9b46877ed065ebdd5822f96f50",
+  "src/minissdpc.h": "f91c1c17da5f5d3f6a055a16c8b48fd5899e52cf6e204ca91acedc6a97e34f20",
+  "src/miniupnpc.c": "17f61d6c9ede4f86a04843a24be25088672e29e93e0abc794341cc9852a944f7",
+  "src/miniupnpc_socketdef.h": "b8b26397d7a442eb9ab8f6bdab3241ea55ffe4e80cbdea41296f5aba68b36f26",
+  "src/miniwget.c": "015eba6beff6dfd0f7690bd150db52564f26b72fb79f9530372a7eba7bed1069",
+  "src/miniwget_private.h": "9f8774868cdba0f3419ce3631397d6285f9926a249fd16979fbf4d540477ec8e",
+  "src/minixml.c": "fe0b42ddbd873cd21ea25aabc3000d90b37f671c338b8e662141758b498392c4",
+  "src/minixml.h": "35572c2ae7735958b1ad3b3729d2e79375f8cbc97118d7cbda939d7a0dcbb73a",
+  "src/minixmlvalid.c": "83b015efff5ac428b0aed05a361e9727b7e2ddbd156f91b375f78be5c428bd9f",
+  "src/portlistingparse.c": "1d004c3da2fe4c501932d8d9a969513ad56e50bb66324022c809de09fda329a3",
+  "src/receivedata.c": "17d48018b1346e9804f6a46120b2237d38d5297669371f53f1cec20c1b7327ea",
+  "src/receivedata.h": "2d2c9ff788a0f763903da6f53bf7d98bc7b8dbee64aaec80c9288fbbdd049508",
+  "src/upnpcommands.c": "eb02eda45058bc8b8e5851a24ce5265c512f93e15abfeb12aec50644083ee651",
+  "src/upnpdev.c": "0f479ceeb9dd2023ba004bd862fea39cf596b2904794944e9e96c3f9e7b560e0",
+  "src/upnpreplyparse.c": "3766a1b9290858269fea9c991cd3678cf967dc4d7da425f37c5ba0d9d91f1fd4",
+  "src/win32_snprintf.h": "2024101fd880daebe432caa68017b2b50764babf9d670a4cb865c97bc814c4c9"
+ },
+ "patched": {},
+ "additions": {
+  "src/miniupnpcstrings.h": "b7901076d463985af85e7d22215e8b8ad7f02f8a82428caa62d71e595b31f540"
+ }
+}

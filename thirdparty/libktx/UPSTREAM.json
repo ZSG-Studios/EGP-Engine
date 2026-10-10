@@ -1,0 +1,78 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "libktx",
+ "license": "Apache 2.0",
+ "upstream": {
+  "repository": "https://github.com/KhronosGroup/KTX-Software",
+  "version": "4.4.2",
+  "commit": "4d6fc70eaf62ad0558e63e8d97eb9766118327a6"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "Apache-2.0.txt": "44b0a56e80b41a1b0a6bd1292515e806539fd97b30be54c2719e6c763190ab57",
+  "LICENSE.dfdutils.adoc": "8ee9fdaf365c301bb413656765fc85c5424a807c50e35a8ae622b99f4ea22244",
+  "LICENSE.md": "0f92b4ce771585dfebc963ede074a30b4431b9e327911db44097d83ccf372128",
+  "external/dfdutils/KHR/khr_df.h": "e9b47d80016d5a856ced43c6905678bf04c59623a86168fba18f965ef6c84d67",
+  "external/dfdutils/colourspaces.c": "a15191f54647f0169eda6ec1c3afc902f1a9c425563492bed7e5ce708fbaa09c",
+  "external/dfdutils/createdfd.c": "36b977dbb3d168e1267e9115b06f22bb77786bc039ed741fe93ad49fe573045b",
+  "external/dfdutils/dfd.h": "ae2496b076fe04aa07951a0f02d49eb940ef01b27a3a9f083af3c1a842ebb0c9",
+  "external/dfdutils/dfd2vk.inl": "6e1e8e256ff089b07ffe127cc4a552635b891705f0847ea40237370a9d7b95c8",
+  "external/dfdutils/interpretdfd.c": "0b9999efdda1cc55403ca407666686623036c524e7411e57dae3ae0907d0edb5",
+  "external/dfdutils/printdfd.c": "eadbde1586e482bfe6b9e152d3d243216d010d49e7ab4abb3dbdd0e2fd9388d8",
+  "external/dfdutils/queries.c": "4cff039e61d240bd06a1650da12592c2d359f9a13cfe8a8c99369f0c541ef94b",
+  "external/dfdutils/vk2dfd.c": "8203bed277d72ce10bbe1f7b70430270624943339bf1bf2022e9ad2b7dd6bdcd",
+  "include/KHR/khr_df.h": "e9b47d80016d5a856ced43c6905678bf04c59623a86168fba18f965ef6c84d67",
+  "include/ktx.h": "00e5c85d4abcc19d925eb1fa775a50964848e1ff504f2158bc358731186eb504",
+  "include/ktxvulkan.h": "6463e37eab48e71a0b115b922074859a7e55ff88923483ae1a69ce7ddd441eca",
+  "lib/basis_sgd.h": "7ba719aaae6fd03d2a9d88184aa96c52cdbe15b9ff900542c48ff0e4993a379a",
+  "lib/checkheader.c": "fb2cc5f6cd028f72b64e9231f9a714b7e16171cd6e439ebcdf142164836b2601",
+  "lib/filestream.c": "587632723ea2ffbc48ea8ea5c4dcb0e07660c72bb6644b6dc0122cbea365042b",
+  "lib/filestream.h": "91fe6dc04bb0ee4fca2a1456f43b90805c948d39b5ddbbd6908c32421c9aa488",
+  "lib/formatsize.h": "86de888383e53a2b9de312d9177a69ebc702487a446d123d43562a047fb178b0",
+  "lib/gl_format.h": "50b83179a22f3fd3dd85954f7d810e478c3891b84b054b66214cd68cd0f9046a",
+  "lib/hashlist.c": "17cdff676520842bbc0ba35a90c331712141e4f3c40ac256803d97e00230d221",
+  "lib/ktxint.h": "60aa510a27fcb5a79b70861309ae119cb76f8eb2a0fa1c9d227aef0961686230",
+  "lib/memstream.c": "959adc4513dc3311e9e645bc0ccf95e300d05107d93c69527ed6ad587d3aa7e3",
+  "lib/memstream.h": "257472bd715d251bd736fb8d92efe6a054fd11a3b533632a082860d155128612",
+  "lib/swap.c": "5636cd4d1efdb0612cdd33748a7739637d200bdf0bf577fc87b22e4ad5519f03",
+  "lib/texture.c": "703dde4f55393d745688ec5f13cc3578c7d2e87cd1d92c2d7710d5f93fe9d401",
+  "lib/texture.h": "c595978c7237c7fb42b3a91b6f8e962226185905c2d2604c52da3bab30d1c889",
+  "lib/texture1.c": "9eb2772c6d8461570a0ac5ccb2569fd6b2ca54030d1c33561cd67be98ac2909d",
+  "lib/texture1.h": "c2b8487d689c1ccf92de63e8d3b8e2ee3593c374185fa83fd341a06a10715f46",
+  "lib/texture2.c": "bf44ce599dc4828d483617a1f7dce3caf59c9c2e276ad9b5a360ee0690e7c70a",
+  "lib/texture2.h": "f7744dc73385b7c38c17517cf50e83e368179d7b7a73a4a6bf28b7c91e231db7",
+  "lib/texture_funcs.inl": "b5a8f535afe9728f305d7ab9b8c5b049e3d78361a51c43c44fbf2d3df91b94ee",
+  "lib/uthash.h": "965161b818b4da54d252399d4af6b6bb7869160e8ab21efee1938f546bf3d57f",
+  "lib/vk_format.h": "7c114637a6d693bc6ffd004e7bd1d41f8bcd7b62cc54c67ecdb758bc6b58c0a9",
+  "lib/vkformat_check.c": "e2ad0b7add9e88d5b50cfb6a8c5c3c57076d251e952bb5cb13a8de1c1a2e636e",
+  "lib/vkformat_check_variant.c": "96220dc94372ea0041b199cb1e924ff414d69b54809fc544d55c33900960784b",
+  "lib/vkformat_enum.h": "a6a267d17b57d56e19bc03d7d0ed4fb804d180dca2d36171e80b3ca162823389",
+  "lib/vkformat_typesize.c": "132cd68f1c91a7737790ac433603415b0a0c43452709e1df52247666338dff6b",
+  "other_include/KHR/khrplatform.h": "bbca133eec0bd0b62fc6f8d27d993aedda3c79f0de8ad3637f8cf42ffbeb8e7b",
+  "utils/unused.h": "67d078888f3d5a349400e88b5bcecf34700daf0c30d563293db2add52474ef4b"
+ },
+ "patched": {
+  "external/dfdutils/vk2dfd.inl": {
+   "upstream_path": "external/dfdutils/vk2dfd.inl",
+   "upstream_sha256": "79bc70554302392bcc30bc04358c2c640932935fc72fac364ebd8789098779b3",
+   "sha256": "85ec25fac6eef85a29ac11f8dd3fea8f054b6883396c300ab2d15e8bb900e0a5"
+  },
+  "lib/basis_transcode.cpp": {
+   "upstream_path": "lib/basis_transcode.cpp",
+   "upstream_sha256": "92e76a78dc0d981353cdfbdcc33dcf42d9cf0fe05d2450c10bde5d7357682187",
+   "sha256": "c0a4b1be2f7eedd35e212a2cc87f7883be93062777daf1881facba86f9e79d9e"
+  },
+  "lib/miniz_wrapper.cpp": {
+   "upstream_path": "lib/miniz_wrapper.cpp",
+   "upstream_sha256": "12cf3a67484a3685bc867f96c169d0d9ded2a83f9ae03f5a710691d9a655e5e4",
+   "sha256": "8f77da58f089acd8db0acbe68e8ee2817c26123a6bd8db3341cd3651d5ed752e"
+  }
+ },
+ "additions": {
+  "patches/0001-external-basisu.patch": "78e0b01def8660cd0ac205528e3a211a701b38d402d3f9cdc26bc67275790034",
+  "patches/0002-disable-astc-block-ext.patch": "d333bde178eba6229baed3ddfb062d0db9c3ae5adeb24b011e526c0117068ec1",
+  "patches/0003-basisu-1.60.patch": "d2d1b6ffd325172a8373638f9babcc330bdc4c7f093de43bb6d913ef475cac6e"
+ }
+}

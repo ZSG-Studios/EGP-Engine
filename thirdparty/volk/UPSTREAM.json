@@ -1,0 +1,20 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "volk",
+ "license": "MIT",
+ "upstream": {
+  "repository": "https://github.com/zeux/volk",
+  "version": "vulkan-sdk-1.4.335.0",
+  "commit": "4f3bcee79618a9abe79f4c717c50379197c77512"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE.md": "33c831f76b79501665e66c23ac8f876020457c216d44526a8f747da897999b35",
+  "volk.c": "4585dbd625106bf099795f768283d1b9c2c06251138b18d11fdcc43d4a4ce0fc",
+  "volk.h": "402281b18efb3b15af8a3f015adc64495c49732ad87bee892b1641c9116417cc"
+ },
+ "patched": {},
+ "additions": {}
+}

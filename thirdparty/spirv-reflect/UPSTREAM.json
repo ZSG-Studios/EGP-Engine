@@ -1,0 +1,33 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "spirv-reflect",
+ "license": "Apache 2.0",
+ "upstream": {
+  "repository": "https://github.com/KhronosGroup/SPIRV-Reflect",
+  "version": "vulkan-sdk-1.4.335.0",
+  "commit": "ef913b3ab3da1becca3cf46b15a10667c67bebe5"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE": "c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4"
+ },
+ "patched": {
+  "spirv_reflect.c": {
+   "upstream_path": "spirv_reflect.c",
+   "upstream_sha256": "1e6c732a61859175c280131b3a9aa9e322123f2bfb3e1d9f268c758532b68f25",
+   "sha256": "4945af02e8f7eb0546e90d8f16401c01a01ac2fd5907a282792a65ac0aa52855"
+  },
+  "spirv_reflect.h": {
+   "upstream_path": "spirv_reflect.h",
+   "upstream_sha256": "3b15f03e650c0a134fbfa6c65a7694f59ff936cb175426e2d9e7160f9b388eb4",
+   "sha256": "8846960d327cbbead82661fb98e770f90e4ba95936b3e4ce3a1c632550b6dc19"
+  }
+ },
+ "additions": {
+  "patches/0001-zero-size-for-sc-sized-arrays.patch": "cc69855262ba0592b29c8dc45c176bc98cb7b1aad4dbb5b0795507cca0c30107",
+  "patches/0002-spirv-headers.patch": "7712e2e2994bd8d380fd98b162c069cb9a65d879127b00fc336bb8bf12356bc7",
+  "patches/0003-findnode-id-lookup-table.patch": "f9dc33a29fe9b54c091a47de75141f9386b128010605238dc44fee092703a70c"
+ }
+}

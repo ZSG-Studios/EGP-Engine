@@ -74,6 +74,14 @@ jobs:
     with:
       lane: full
 
+  physics:
+    name: Physics
+    needs: freshness
+    if: needs.freshness.outputs.stale == 'true'
+    uses: ./.github/workflows/_physics.yml
+    with:
+      configurations: '["Debug", "Release"]'
+
   ios:
     name: iOS
     needs: freshness

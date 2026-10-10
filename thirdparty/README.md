@@ -4,6 +4,12 @@ Please keep categories (`##` level) listed alphabetically and matching their
 respective folder names. Use two empty lines to separate categories for
 readability.
 
+Every library folder also carries an `UPSTREAM.json` manifest (schema `egp-thirdparty/1`)
+that pins each vendored file to its upstream commit, records local patches and
+additions, and is checked in CI by `misc/scripts/egp_thirdparty.py verify`. After
+updating a library, refresh its manifest with `misc/scripts/egp_thirdparty.py pin <folder>`
+and review the reported patched files and additions.
+
 
 ## accesskit
 
@@ -47,18 +53,6 @@ Patches:
 - `0002-godot-fsr2-options.patch` ([GH-81197](https://github.com/godotengine/godot/pull/81197))
 
 
-## angle
-
-- Upstream: https://chromium.googlesource.com/angle/angle/
-- Version: git (chromium/5907, 430a4f559cbc2bcd5d026e8b36ee46ddd80e9651, 2023)
-- License: BSD-3-Clause
-
-Files extracted from upstream source:
-
-- `include/*`
-- `LICENSE`
-
-
 ## astcenc
 
 - Upstream: https://github.com/ARM-software/astc-encoder
@@ -93,6 +87,21 @@ Patches:
 - `0006-explicit-includes.patch` ([GH-111557](https://github.com/godotengine/godot/pull/111557))
 
 
+## box2d
+
+- Upstream: https://github.com/erincatto/box2d
+- Version: 3.2 development (56edae79f2949d86142b03450d5d60f63bcf5a6f)
+- License: MIT
+
+The solver, including upstream tests, is vendored with one recorded EGP patch
+(`modules/box2d/upstream_patches/egp-box2d-local-replay.patch`) and EGP-authored
+local replay and portable checkpoint sources, all pinned in `UPSTREAM.json`.
+The modified native adapter in `modules/box2d` derives from
+[erincatto/godot-box2d](https://github.com/erincatto/godot-box2d), revision
+`66260bc0eb77a9e6eb78b80cc163ed2c912b448b`, MIT, Andrew Song. Its original
+license and source hashes are retained in that module.
+
+
 ## box3d
 
 - Upstream: https://github.com/erincatto/box3d
@@ -103,6 +112,12 @@ The `include`, `src`, `test`, and `shared` directories and `LICENSE` are vendore
 with one recorded EGP patch (`modules/box3d/upstream_patches/egp-box3d.patch`).
 `UPSTREAM.json` records normalized upstream and patched hashes.
 EGP's adapter and deterministic compilation policy live in `modules/box3d`.
+
+The sole native 3D scene physics adapter in `modules/box3d/scene_backend` is adapted
+from [godot-box3d](https://github.com/bearlikelion/godot-box3d), revision
+`dd7964f7091d8c74fb21fdd47d6a536eccbcc20f`, MIT, Mark Arneman 2026. Its original
+license and source provenance are retained beside the modified files. It shares
+the pinned Box3D solver; it does not vendor another solver or godot-cpp runtime.
 
 
 ## brotli
@@ -252,7 +267,6 @@ The `modules/raycast/godot_update_embree.py` script can be used to pull the
 relevant files from the latest Embree release and apply patches automatically.
 
 
-
 ## etcpak
 
 - Upstream: https://github.com/wolfpld/etcpak
@@ -373,33 +387,6 @@ Files extracted from upstream source:
 Patches:
 
 - `0001-fix-warnings.patch` ([GH-111679](https://github.com/godotengine/godot/pull/111679))
-
-## glad
-
-- Upstream: https://github.com/Dav1dde/glad
-- Version: 2.0.8 (73db193f853e2ee079bf3ca8a64aa2eaf6459043, 2024)
-- License: CC0 1.0 and Apache 2.0
-
-Files extracted from upstream source:
-- `LICENSE`
-
-Files generated from [upstream web instance](https://gen.glad.sh/):
-- `EGL/eglplatform.h`
-- `KHR/khrplatform.h`
-- `egl.c`
-- `glad/egl.h`
-- `gl.c`
-- `glad/gl.h`
-- `glx.c`
-- `glad/glx.h`
-
-See the permalinks in `glad/egl.h`, `glad/gl.h` and `glad/glx.h`
-to regenerate the files with a new version of the web instance.
-
-Patches:
-
-- `0001-enable-both-gl-and-gles.patch` ([GH-72831](https://github.com/godotengine/godot/pull/72831))
-- `0002-revert-egl_static-removal.patch` ([GH-107312](https://github.com/godotengine/godot/pull/107312))
 
 
 ## glslang
@@ -693,6 +680,18 @@ Patches:
 - `0001-fix-msvc-light.patch` ([GH-124014](https://github.com/godotengine/godot/pull/124014))
 
 
+## meshoptimizer
+
+- Upstream: https://github.com/zeux/meshoptimizer
+- Version: 1.2 (9d9890c73011d75920af614485296d1e03e95448, 2026)
+- License: MIT
+
+Files extracted from upstream repository:
+
+- All files in `src/`
+- `LICENSE.md`
+
+
 ## metal-cpp
 
 - Upstream: https://developer.apple.com/metal/cpp/
@@ -707,18 +706,6 @@ Update instructions:
 Patches:
 
 * 0002-sharedptr-nil-safe-retain-release.patch ([GH-123439](https://github.com/godotengine/godot/pull/123439))
-
-
-## meshoptimizer
-
-- Upstream: https://github.com/zeux/meshoptimizer
-- Version: 1.2 (9d9890c73011d75920af614485296d1e03e95448, 2026)
-- License: MIT
-
-Files extracted from upstream repository:
-
-- All files in `src/`
-- `LICENSE.md`
 
 
 ## mingw-std-threads
@@ -927,6 +914,7 @@ Patches:
 
 - `0001-remove-try-catch.patch` ([GH-123123](https://github.com/godotengine/godot/pull/123123))
 
+
 ## pcre2
 
 - Upstream: https://pcre2project.github.io/pcre2/
@@ -944,18 +932,6 @@ Files extracted from upstream source:
 - `AUTHORS.md` and `LICENCE.md`
 
 
-## recastnavigation
-
-- Upstream: https://github.com/recastnavigation/recastnavigation
-- Version: 1.6.0 (6dc1667f580357e8a2154c28b7867bea7e8ad3a7, 2023)
-- License: zlib
-
-Files extracted from upstream source:
-
-- `Recast/` folder without `CMakeLists.txt`
-- `License.txt`
-
-
 ## re-spirv
 
 - Upstream: https://github.com/renderbag/re-spirv
@@ -967,6 +943,18 @@ Files extracted from upstream source:
 - `re-spirv.cpp`
 - `re-spirv.h`
 - `LICENSE`
+
+
+## recastnavigation
+
+- Upstream: https://github.com/recastnavigation/recastnavigation
+- Version: 1.6.0 (6dc1667f580357e8a2154c28b7867bea7e8ad3a7, 2023)
+- License: zlib
+
+Files extracted from upstream source:
+
+- `Recast/` folder without `CMakeLists.txt`
+- `License.txt`
 
 
 ## rvo2
@@ -994,18 +982,6 @@ and solve conflicts and also enrich the feature set originally
 proposed by these libraries and better integrate them with Godot.
 
 
-## smaa
-
-- Upstream: https://github.com/iryoku/smaa
-- Version: git (71c806a838bdd7d517df19192a20f0c61b3ca29d, 2013)
-- License: MIT
-
-Files extracted from upstream source:
-
-- `LICENSE`
-- Textures generated using the Python scripts in the `Scripts` folder
-
-
 ## sdl
 
 - Upstream: https://github.com/libsdl-org/SDL
@@ -1028,6 +1004,18 @@ Patches:
 - `0008-ios-link.patch` ([GH-123903](https://github.com/godotengine/godot/pull/123903))
 - `0009-ios-iostream-no-prefpath.patch` ([GH-123899](https://github.com/godotengine/godot/pull/123899))
 - `0010-fix-linux-getenv-unsafe.patch` ([GH-124017](https://github.com/godotengine/godot/pull/124017))
+
+
+## smaa
+
+- Upstream: https://github.com/iryoku/smaa
+- Version: git (71c806a838bdd7d517df19192a20f0c61b3ca29d, 2013)
+- License: MIT
+
+Files extracted from upstream source:
+
+- `LICENSE`
+- Textures generated using the Python scripts in the `Scripts` folder
 
 
 ## spirv-cross
@@ -1220,7 +1208,7 @@ Files extracted from upstream source:
 - `COPYING`
 
 
-# wayland-protocols
+## wayland-protocols
 
 - Upstream: https://gitlab.freedesktop.org/wayland/wayland-protocols
 - Version: 1.47 (88223018d1b578d0d8869866da66d9608e05f928, 2025)
@@ -1297,6 +1285,17 @@ Files extracted from upstream source:
 - `LICENSE`
 
 
+## yojimbo
+
+- Upstream: https://github.com/mas-bandwidth/yojimbo
+- Version: 1.13.5 (272153a10f32135bb44bb60e7467072baf48f762)
+- License: BSD-3-Clause
+
+Bundled netcode, reliable, serialize and TLSF notices and the ISC libsodium notice are retained.
+The ephemeral bind-port integration patch and the networking validator's raw/LF pins are
+recorded in `EGP-UPSTREAM.json`.
+
+
 ## zlib
 
 - Upstream: https://github.com/madler/zlib
@@ -1319,28 +1318,3 @@ Files extracted from upstream source:
 
 - `lib/{common/,compress/,decompress/,zstd.h,zstd_errors.h}`
 - `LICENSE`
-
-## Box2D and native scene adapter
-
-The unchanged solver in `thirdparty/box2d` is pinned to
-`56edae79f2949d86142b03450d5d60f63bcf5a6f`, MIT, Erin Catto.
-`UPSTREAM.json` records normalized source hashes, including upstream tests.
-The modified native adapter in `modules/box2d` derives from
-[erincatto/godot-box2d](https://github.com/erincatto/godot-box2d), revision
-`66260bc0eb77a9e6eb78b80cc163ed2c912b448b`, MIT, Andrew Song. Its original
-license and source hashes are retained in that module.
-
-## godot-box3d (EGP native scene adapter)
-
-The sole native 3D scene physics adapter in `modules/box3d/scene_backend` is adapted
-from [godot-box3d](https://github.com/bearlikelion/godot-box3d), revision
-`dd7964f7091d8c74fb21fdd47d6a536eccbcc20f`, MIT, Mark Arneman 2026. Its original
-license and source provenance are retained beside the modified files. It shares
-the pinned Box3D solver; it does not vendor another solver or godot-cpp runtime.
-
-## Yojimbo (EGP native networking)
-
-- Upstream: https://github.com/mas-bandwidth/yojimbo
-- Version: 1.13.5, commit 272153a10f32135bb44bb60e7467072baf48f762
-- BSD-3-Clause, with bundled netcode/reliable/serialize/TLSF and ISC libsodium notices retained.
-- File hashes and the ephemeral bind-port integration patch are in yojimbo/EGP-UPSTREAM.json.

@@ -1,0 +1,21 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "smaa",
+ "license": "MIT",
+ "upstream": {
+  "repository": "https://github.com/iryoku/smaa",
+  "version": "git",
+  "commit": "71c806a838bdd7d517df19192a20f0c61b3ca29d"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "LICENSE.txt": "6088dabb2126729ddb2355b179ce0598e7c246406677b30395f22220695d69fe"
+ },
+ "patched": {},
+ "additions": {
+  "AreaTex.png": "8120ccf2dca733685f2d8900d4883e2eb138f7f3b68b47df472192fe6f64258a",
+  "SearchTex.png": "094902686705395476633d1ab52f53ddb5b63284a004947c70dd7eda35be3427"
+ }
+}

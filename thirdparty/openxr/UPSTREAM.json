@@ -1,0 +1,93 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "openxr",
+ "license": "Apache 2.0",
+ "upstream": {
+  "repository": "https://github.com/KhronosGroup/OpenXR-SDK",
+  "version": "1.1.63",
+  "commit": "f2448a8797c85814aa892efc1ab8707900fbcc78"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {
+  "COPYING.adoc": "2fd738273dace4314bea8935c4332026138a1d7f9ecb5e66a284ffaeef73818a",
+  "LICENSE": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+  "include/openxr/openxr.h": "17e8e334a7ad0c6933b31143330d4771010e393df5d5d9d08566eb15bb171a15",
+  "include/openxr/openxr_loader_negotiation.h": "ebcca0946b4b738ebee41943b821abe4df518b3a37766e0ce6883bcefce65124",
+  "include/openxr/openxr_platform.h": "f17e6d752e0065ede9f2a4c8932155acff96462306a2468a67a6ad77484641d8",
+  "include/openxr/openxr_platform_defines.h": "a458ba5777415f2de518fdcdcc87fcf8651ba0468c9f69a101378672aad80946",
+  "include/openxr/openxr_reflection.h": "d02a72f92b6df3257f9b35605654e7db894019286fcb8e85766eaad1bbdfbb9a",
+  "include/openxr/openxr_reflection_parent_structs.h": "c614fb5d654cee811d1b007353494adca3ae75e98fc1739b9e7bfab5f00373b2",
+  "include/openxr/openxr_reflection_structs.h": "e00d7dc787c1bf6712b1e80ba08a4d67310606b4a44040e3316169cfaa428ec2",
+  "src/common/android_logging.h": "7e9a0c936c9ef2ce8a5a5c4acd0929e9e2d58ee3e100cb033965b24f6679fcb3",
+  "src/common/extra_algorithms.h": "e29d0fa4f00b292dcef85c3c73ea1fbc71750923fe8621961bf936f0addd06ac",
+  "src/common/filesystem_utils.cpp": "3eb3d11cdd53c5f8e436ef6ba9bb452b0ee79ba6a79d6ed49e31f04715bda89f",
+  "src/common/filesystem_utils.hpp": "eec623b1711aeddbf2c0763a1efee180c9c9c9d4e9eecc129e4d73c64fe3f2a0",
+  "src/common/hex_and_handles.h": "d742e6edcc58b8f5b5c2b43a42bfae0de092bc330858df6f957ef7e180e07768",
+  "src/common/object_info.cpp": "bbab98a2afc2d92c932e214d72a365d4b26b9a104dcb2550c8172323c2976a2a",
+  "src/common/object_info.h": "ba2f0dc3ada0f564ebe8b13bed074323b7bca5088b0d2b6caa2e0bc072b0574e",
+  "src/common/platform_exports.h": "4af39f953f8fe10406242c77d4678805f98842d444dff8e27dfb3a6943c2f934",
+  "src/common/platform_utils.hpp": "41e6592258d1d6c6d0ae795b38347a54534c5f521597ef20fa6f5d08b821925e",
+  "src/common/stdfs_conditions.h": "5a29c205083a48e05c3d794f5af442e965b3cf0ec8794833b4809d1e5e37d6a8",
+  "src/common/unique_asset.h": "e9dabff366c3a4ff7a7b281caa40c414f31e6a6fbd65e430fe17b280e7c5387f",
+  "src/common/vulkan_debug_object_namer.hpp": "805e09cc79c8535baad03b93d4861ea768cc42b635cbdf0dfe20cfa2fa02086b",
+  "src/common/xr_dependencies.h": "61e0bc67631f2ca2c60056fa417262a5c9f4848eeb33fa657a61c3741ed939a8",
+  "src/common/xr_linear.h": "a6ce9694e45eb8ae866d22096899bce2ad47118d03e2b8e869a2e04ecb21ba6c",
+  "src/external/jsoncpp/AUTHORS": "0b21b1d9c90421380d30e8b55a02204949cd737535d98bf56076d661816deec4",
+  "src/external/jsoncpp/LICENSE": "cec0db5f6d7ed6b3a72647bd50aed02e13c3377fd44382b96dc2915534c042ad",
+  "src/external/jsoncpp/include/json/allocator.h": "12cfdee59e575f09703eb619d2cc14a18e638db77fb33e50c1cc4fe38066b09b",
+  "src/external/jsoncpp/include/json/assertions.h": "ea30b8fb30ef70a52a6435f6e6efbc37de03555fa192b33832e65cbd159b68bb",
+  "src/external/jsoncpp/include/json/config.h": "a607e32e34497e2c51df1c61e6627760618d7d6964d9f47dfa8165ad305063b9",
+  "src/external/jsoncpp/include/json/forwards.h": "4e5144062f296c821107af272c39df31b7ac6fcfefbeb66637958738fc09a117",
+  "src/external/jsoncpp/include/json/json.h": "05ccb35afa55a068f8cc2a195db46d89a7f6a458d1943ae009465834c6404a67",
+  "src/external/jsoncpp/include/json/json_features.h": "9a3a209af311356da182e0b768c7c1f5993863df9d2d0f9dfa8f96d492282494",
+  "src/external/jsoncpp/include/json/reader.h": "c8e50d2d3a6fd84e6b069ef4706871faec682f9bb247acc72e3ea4a281088ecb",
+  "src/external/jsoncpp/include/json/value.h": "55a69f64308bb9dba10fe783733ad4d8da5f7178d4cac6c6ce4c7dfaf9cde307",
+  "src/external/jsoncpp/include/json/version.h": "bfab32f44b28a60656b24835303a1bc96e8cc533300af37b776c2e090c3ba677",
+  "src/external/jsoncpp/include/json/writer.h": "1828e708ae2f28207b0b0c618aa14038c3e223af9d25de2efab0fcf4fbd25591",
+  "src/external/jsoncpp/src/lib_json/json_reader.cpp": "d2a4cf73844f81bce79b7943daccbaecf64738ccd0c71bd892bb97dcc9d90da3",
+  "src/external/jsoncpp/src/lib_json/json_tool.h": "dd86b80bad3a960b34589b97047c63be63a34db1fcdd51a93dbc6aef150cfaf8",
+  "src/external/jsoncpp/src/lib_json/json_value.cpp": "50d96806819b3c53419f6aa362014c07d222f23f43e5b6d35aae573b6f1b8604",
+  "src/external/jsoncpp/src/lib_json/json_valueiterator.inl": "5b37b47184f65f7a01ea9dbdc454a5be0eee472eff47829f3ffd06de798deaa4",
+  "src/external/jsoncpp/src/lib_json/json_writer.cpp": "5ec2ce4256cfc01788a0710eed6519b93a4db3521f5cfca2fcbe6b830c92ea39",
+  "src/loader/android_utilities.cpp": "a23daa9d764190484ce39b4acf3fef426a2a3033629bdf5fed22a15884d65d22",
+  "src/loader/android_utilities.h": "42e1b69a45abc7ab638e1251f0fa0940e813b0e0981a70aa9faf4b8f28b5a22c",
+  "src/loader/api_layer_interface.hpp": "b9eeef0da3ae437c2f7109be88a13584133a2bd2bc3b8afd986c74393889da4b",
+  "src/loader/exception_handling.hpp": "7a962690189c803b1494e6af21460611baf4baa13795d8078d115efd7cf81210",
+  "src/loader/loader_core.cpp": "dbdc5348ef559a1688d46ce81d4519b4293e0d7731e5099f0452b4ab718f7746",
+  "src/loader/loader_init_data.cpp": "0aea59dff9d781253d947bd91936fcbefa045dbca559a08c01b26bdc2c32b8d4",
+  "src/loader/loader_init_data.hpp": "92d4dbc78e6488c710fcfeb18d2b20668bfea4e02f8b13f26b89beefbd350bfa",
+  "src/loader/loader_instance.cpp": "6ec80ee511b54365bfa2be43219701c3dfefb522768daaa0cbe79d7008d9bd18",
+  "src/loader/loader_instance.hpp": "a5b430534f3f363b2c8e97a35e26cd51e82ec86aa0ccce0142c9bbcd4e532797",
+  "src/loader/loader_logger.cpp": "c7c8057c02f4b2e3a065e08dc663a02414f712d45d15d4326b2cccdfcc6c8e33",
+  "src/loader/loader_logger.hpp": "c9d3054d19a00ebeec50513ba03fc3c3d1df71a0eb7c8edd27cbc2e36224d88e",
+  "src/loader/loader_logger_recorders.cpp": "cc8d69eb91c5f48f91a1bb5bb1fa333991e8350c62a65e3317a4b58833c24fa3",
+  "src/loader/loader_logger_recorders.hpp": "cc5bc835f22a366bbd26b0838a79a2ea4c2191bfb40eb6effe3c36521f936f26",
+  "src/loader/loader_platform.hpp": "f4cd920069c9ba17305aa43bbfdd155a5984a894d018de89029dd2ec18b8761b",
+  "src/loader/loader_properties.cpp": "f8880d7888356989cd83ce7fc04d36ea7437515ab47b1d27c78f58fc3e261bad",
+  "src/loader/loader_properties.hpp": "760a2b9c80c21e0bcc97c2e7c9f73f12d05833dc3f073dc8eb9dd04709e2144e",
+  "src/loader/manifest_file.cpp": "87b1fb8fd837989dfbd0d9eaa11d1ada033c8efd56d9140540c0ffe4a0616105",
+  "src/loader/manifest_file.hpp": "5cf29c4e597643ea3fedba8d4034c120201c35cf21b05e1c5fe7f6b52420b602",
+  "src/loader/runtime_interface.hpp": "7c3b217cee7764ec854918a48a2e394248aa83fe18e16f837f1cf3560df57ecd",
+  "src/loader/xr_generated_loader.cpp": "ed3b7d1cf132b36a871669eafaa7f992dd4e8b1aff678b043db9da0a90bf10f7",
+  "src/loader/xr_generated_loader.hpp": "6c7e524bc747abf75263efb43cd34ed0463411e631d9de6f6d36e1cd97abdda4",
+  "src/xr_generated_dispatch_table_core.c": "631bd574fc7f618bf723ee65496787a50a17f3cc69878bb4bd5342743ee9f28e",
+  "src/xr_generated_dispatch_table_core.h": "03a021a9bc8bc44f18f1cbcc78d234f3e6a9ca2213a03a07f25f7a0894bae50f"
+ },
+ "patched": {
+  "src/loader/api_layer_interface.cpp": {
+   "upstream_path": "src/loader/api_layer_interface.cpp",
+   "upstream_sha256": "6a8dd3d078e48218d7219b555a4692d23e7c47de5ea748969ddb8c7933351b3a",
+   "sha256": "346bc58787d678c2212df569616affcbeadcef1e83fe7441559b006c5cfcc35b"
+  },
+  "src/loader/runtime_interface.cpp": {
+   "upstream_path": "src/loader/runtime_interface.cpp",
+   "upstream_sha256": "b0de729bf97f1793a3a1acdaf2ebae2c8d6892f789b04d5a5c11667090ca75ae",
+   "sha256": "523e1757a7508d8d625303f2621651564a4598e699e6961e075b2b6bb559ae66"
+  }
+ },
+ "additions": {
+  "patches/0001-remove-try-catch.patch": "6fff7612dc58ab38876619603745761ecb7836cc97ae76da4579dc5dfe7c437a"
+ }
+}

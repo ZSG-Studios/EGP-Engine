@@ -124,7 +124,7 @@ jobs:
           name: ${{ matrix.cache-name }}
 
   full:
-    name: ${{ matrix.name }}
+    name: ${{ matrix.name || 'Nightly-only variants' }}
     if: inputs.lane == 'full'
     runs-on: [self-hosted, egp-linux]
     timeout-minutes: 60

@@ -9,6 +9,7 @@ checkout content. This function does not rewrite files or regenerate a manifest.
 from __future__ import annotations
 
 import hashlib
+import json
 import re
 from pathlib import Path
 from typing import Any
@@ -75,3 +76,51 @@ def verify_excluded_files(vendor: Path, manifest: dict[str, Any]) -> None:
         for key in ("normalized_lf_sha256", "egp_patched_sha256"):
             if key in entry and re.fullmatch(r"[0-9a-f]{64}", entry[key]) is None:
                 raise ValueError("Invalid excluded upstream digest: " + relative)
+
+
+THIRDPARTY_SCHEMA = "egp-thirdparty/1"
+
+
+def load_upstream_manifest(vendor: Path) -> dict[str, Any]:
+    """Read `vendor/UPSTREAM.json` (schema egp-thirdparty/1) as the pin view validators use.
+
+    The view keeps the upstream pin as exactly the upstream commit: `files`/`sha256_lf` map every
+    upstream-derived path to its upstream digest (patched files included at their upstream
+    baseline), `egp_patches` groups patched files by the pinned patch that produced them, and
+    `egp_additions` holds files that are not from upstream.
+    """
+    manifest = json.loads((vendor / "UPSTREAM.json").read_text(encoding="utf-8"))
+    if manifest.get("schema") != THIRDPARTY_SCHEMA:
+        raise ValueError(f"{vendor.name}: UPSTREAM.json is not {THIRDPARTY_SCHEMA}")
+    upstream_pin = dict(manifest.get("files", {}))
+    patches = {
+        patch["name"]: {
+            **{key: patch[key] for key in ("name", "path", "sha256", "purpose") if key in patch},
+            "files": {},
+        }
+        for patch in manifest.get("patches", [])
+    }
+    for relative, entry in manifest.get("patched", {}).items():
+        if entry.get("upstream_path") not in (relative, None):
+            raise ValueError(f"{vendor.name}: relocated patched file {relative} is not supported by this view")
+        if entry["upstream_sha256"] is not None:
+            upstream_pin[relative] = entry["upstream_sha256"]
+        if "patch" in entry:
+            patches[entry["patch"]]["files"][relative] = {
+                "upstream_sha256": entry["upstream_sha256"],
+                "patched_sha256": entry["sha256"],
+            }
+    view = {
+        "repository": manifest["upstream"]["repository"],
+        "commit": manifest["upstream"]["commit"],
+        "files": upstream_pin,
+        "sha256_lf": upstream_pin,
+        "egp_patches": list(patches.values()),
+        "excluded_upstream_files": manifest.get("excluded_upstream_files", {}),
+    }
+    if manifest.get("additions"):
+        view["egp_additions"] = {
+            "reason": manifest.get("additions_reason", ""),
+            "sha256_lf": dict(manifest["additions"]),
+        }
+    return view

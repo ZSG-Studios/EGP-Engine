@@ -1,0 +1,30 @@
+{
+ "schema": "egp-thirdparty/1",
+ "name": "grisu2",
+ "license": "Apache and MIT",
+ "upstream": {
+  "repository": "https://github.com/simdjson/simdjson",
+  "version": "git",
+  "commit": "667d0ed3c77f55cbda2082b034168d69898d1f88"
+ },
+ "verification": {
+  "method": "upstream-commit"
+ },
+ "files": {},
+ "patched": {
+  "LICENSE": {
+   "upstream_path": "LICENSE",
+   "upstream_sha256": "5fa8894e890bd77958f93b165433e0fb0dffa5bc982bfb147e4748e95bad24e5",
+   "sha256": "9b2646fd3a16b9c382853aadc2e707d7a872c4c03eb5af7401e6389a7fe42f1a"
+  },
+  "README.md": {
+   "upstream_path": "README.md",
+   "upstream_sha256": "818bb288ff535baa2731f0de2db02640935bc6ecd1c1cdae35fae8fd416ba64c",
+   "sha256": "5d2295742c4846f4831071a4749cfbd4e09a13bf5a1789caecbb893fdea39b28"
+  }
+ },
+ "additions": {
+  "grisu2.h": "688f91431f5d0c64e672b1103aff3cbba1bbf5e31f08fb38d1c1d58b4229fcc2",
+  "patches/0001-godot-changes.patch": "56232dce5820aaf085e25f594d9c7a025262646060fb6c61c6aff1b0242fdbaa"
+ }
+}
