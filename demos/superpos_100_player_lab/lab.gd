@@ -197,7 +197,7 @@ func _create_physics() -> void:
 	simulation=gameplay.simulation
 	if deterministic:
 		lockstep_server=ClassDB.instantiate("SuperposLockstepServer")
-		check(lockstep_server.configure(GAMEPLAY.INPUT_BYTES,config.total,{"command_history_ticks":int(_tuning("command_history_ticks",2048))})==OK,"Lockstep server")
+		check(lockstep_server.configure(GAMEPLAY.INPUT_BYTES,config.total,{"command_history_ticks":int(_tuning("command_history_ticks",2048)),"stream_resync_backlog_bytes":int(_tuning("resync_backlog_bytes",262144))})==OK,"Lockstep server")
 
 func _open(c: Dictionary) -> void:
 	if not c.has("sprinting"):
@@ -287,10 +287,12 @@ func _open(c: Dictionary) -> void:
 		# Real-time floor: the lockstep stream needs ~15 kB/s; wireless loss must not starve it.
 		transport = {"channel_modes":DETERMINISTIC_MODES,"minimum_rate":int(_tuning("minimum_rate",16384))}
 	var connection_id := _connection_id(key,c.generation)
+	# Port plan (all below the OS ephemeral range, which starts at 49152): server
+	# port_base, clients port_base-3000+id, packet proxy front -2000+id, back -1000+id.
 	if not bool(_tuning("single_port",1)):
 		# A/B reference: one connected UDP association per client port pair.
-		var local_port: int = config.port_base + (0 if server else 1000) + c.id
-		var remote_port: int = config.port_base + (3000 if server else 2000) + c.id
+		var local_port: int = config.port_base + (c.id if server else c.id-3000)
+		var remote_port: int = config.port_base + (c.id-1000 if server else c.id-2000)
 		var legacy := [server,config.server_ip if server else "127.0.0.1",local_port,config.client_ip if server else "127.0.0.1",remote_port,53100+c.id,60000+c.id,key,transport]
 		check(session.callv("configure_udp",legacy) == OK,"UDP association provision")
 	elif server:
@@ -302,7 +304,7 @@ func _open(c: Dictionary) -> void:
 		check(session.configure_udp_listener(udp_listener,connection_id,53100+c.id,60000+c.id,key,transport) == OK,"UDP association provision")
 	else:
 		transport.connection_id = connection_id
-		var args := [false,"127.0.0.1",config.port_base+1000+c.id,"127.0.0.1",config.port_base+2000+c.id,53100+c.id,60000+c.id,key,transport]
+		var args := [false,"127.0.0.1",config.port_base-3000+c.id,"127.0.0.1",config.port_base-2000+c.id,53100+c.id,60000+c.id,key,transport]
 		check(session.callv("configure_udp",args) == OK,"UDP association provision")
 	c.unreliable=[]
 	c.session = session

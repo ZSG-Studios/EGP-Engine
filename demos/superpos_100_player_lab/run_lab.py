@@ -74,13 +74,14 @@ class Proxy:
             stats = dict(id=peer, packets=0, forwarded=0, dropped=0, duplicated=0, expedited=0, blackout_drops=0, overflow=0, bytes=0, max_queue_bytes=0)
             self.rows.append(stats)
             front, back = socket.socket(socket.AF_INET, socket.SOCK_DGRAM), socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            front.bind(('127.0.0.1', BASE+2000+peer))
-            back.bind((CLIENT_IP, BASE+3000+peer))
+            # Below the OS ephemeral range (49152+), where other processes' sockets collide.
+            front.bind(('127.0.0.1', BASE-2000+peer))
+            back.bind((CLIENT_IP, BASE-1000+peer))
             front.setblocking(False)
             back.setblocking(False)
             # The server listens on one port (single-port UDP); its connection ID prefix routes.
             server_port = BASE if SINGLE_PORT else BASE+peer
-            for source, target, dest, direction in [(front, back, (SERVER_IP, server_port), 'up'), (back, front, ('127.0.0.1', BASE+1000+peer), 'down')]:
+            for source, target, dest, direction in [(front, back, (SERVER_IP, server_port), 'up'), (back, front, ('127.0.0.1', BASE-3000+peer), 'down')]:
                 lane = dict(peer=peer, source=source, target=target, dest=dest, direction=direction,
                             rng=random.Random(83117+peer*13+(1 if direction=='up' else 2)), jitter=0.0, bad=False, tail=0.0, queued=0, stats=stats)
                 self.selector.register(source, selectors.EVENT_READ, lane)
@@ -137,7 +138,7 @@ class Proxy:
                     payload, address = lane['source'].recvfrom(65536)
                 except (BlockingIOError, ConnectionResetError):
                     break
-                expected = ('127.0.0.1',BASE+1000+lane['peer']) if lane['direction']=='up' else (SERVER_IP,BASE if SINGLE_PORT else BASE+lane['peer'])
+                expected = ('127.0.0.1',BASE-3000+lane['peer']) if lane['direction']=='up' else (SERVER_IP,BASE if SINGLE_PORT else BASE+lane['peer'])
                 if address==expected:
                     self.admit(lane,payload,current)
         current = time.time()
