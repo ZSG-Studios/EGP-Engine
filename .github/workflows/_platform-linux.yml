@@ -73,9 +73,12 @@ jobs:
         with:
           cache-name: ${{ matrix.cache-name }}
 
+      # Self-hosted runners have no root: install into the runner tool cache, not /usr/share/dotnet.
       - name: Set up .NET SDK
         if: matrix.build-mono
         uses: actions/setup-dotnet@a98b56852c35b8e3190ac28c8c2271da59106c68 # v6.0.0
+        env:
+          DOTNET_INSTALL_DIR: ${{ runner.tool_cache }}/dotnet
         with:
           dotnet-version: 10.0.x
 

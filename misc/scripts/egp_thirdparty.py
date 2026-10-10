@@ -46,6 +46,7 @@ import subprocess
 import sys
 import tempfile
 from pathlib import Path, PurePosixPath
+from typing import Any
 
 SCHEMA = "egp-thirdparty/1"
 ROOT = Path(__file__).resolve().parents[2]
@@ -123,11 +124,15 @@ def counterpart(path: str, upstream_paths: list[str]) -> str | None:
     return best
 
 
-def classify(vendored: dict[str, str], upstream: dict[str, str]) -> tuple[dict, dict, dict]:
+def classify(
+    vendored: dict[str, str], upstream: dict[str, str]
+) -> tuple[dict[str, str], dict[str, dict[str, str]], dict[str, str]]:
     by_digest: dict[str, list[str]] = {}
     for path, digest in upstream.items():
         by_digest.setdefault(digest, []).append(path)
-    files, patched, additions = {}, {}, {}
+    files: dict[str, str] = {}
+    patched: dict[str, dict[str, str]] = {}
+    additions: dict[str, str] = {}
     upstream_paths = sorted(upstream)
     for path, digest in sorted(vendored.items()):
         if digest in by_digest:
@@ -141,10 +146,9 @@ def classify(vendored: dict[str, str], upstream: dict[str, str]) -> tuple[dict, 
     return files, patched, additions
 
 
-def write_manifest(library: Path, manifest: dict) -> None:
-    (library / MANIFEST).write_text(
-        json.dumps(manifest, indent=1, sort_keys=False) + "\n", encoding="utf-8", newline="\n"
-    )
+def write_manifest(library: Path, manifest: dict[str, Any]) -> None:
+    with open(library / MANIFEST, "w", encoding="utf-8", newline="\n") as stream:
+        stream.write(json.dumps(manifest, indent=1, sort_keys=False) + "\n")
 
 
 def pin(arguments: argparse.Namespace) -> int:
@@ -309,7 +313,7 @@ def main(argv: list[str] | None = None) -> int:
     create.add_argument("--baseline", metavar="REASON", help="Pin current content without an upstream comparison")
     create.set_defaults(handler=pin)
     arguments = parser.parse_args(argv)
-    return arguments.handler(arguments)
+    return int(arguments.handler(arguments))
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ from egp_vendor_manifest import load_upstream_manifest
 
 
 def digest(text: str) -> str:
-    return thirdparty.content_digest(text.encode())
+    return str(thirdparty.content_digest(text.encode()))
 
 
 class ContentDigestTest(unittest.TestCase):
