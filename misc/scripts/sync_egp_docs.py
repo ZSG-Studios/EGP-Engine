@@ -46,7 +46,6 @@ def tracked_xml_sources() -> list[Path]:
         ROOT / name
         for name in tracked
         if name.endswith(".xml")
-        and not name.startswith("modules/egp_net/")
         and (name.startswith("doc/classes/") or "doc_classes" in Path(name).parts)
         and (ROOT / name).is_file()
     ]

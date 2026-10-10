@@ -39,43 +39,6 @@ rule("egp.qualification.precise")
     end)
 rule_end()
 
--- Preserved old-network-only profile (modules/egp_net/tests); removed only after
--- every Superpos cutover gate passes.
-target("egp_qualification_sodium")
-    set_kind("static")
-    set_default(false)
-    set_languages("gnu11")
-    set_warnings("none")
-    add_rules("egp.qualification.precise")
-    add_files(path.join(root, "thirdparty/yojimbo/sodium/sodium.c"))
-    add_includedirs(path.join(root, "thirdparty/yojimbo/sodium"))
-    on_config(function (target)
-        -- Exempt only the pinned zero-length sodium memcpy paths, never first-party sources.
-        if not target:has_tool("cc", "cl", "clang_cl") then
-            target:add("cxflags", "-fno-sanitize=nonnull-attribute", {force = true})
-        end
-    end)
-target_end()
-
-target("egp_qualification_yojimbo")
-    set_kind("static")
-    set_default(false)
-    set_languages("gnu11", "c++17")
-    add_rules("egp.qualification.precise")
-    add_files(path.join(root, "thirdparty/yojimbo/source/*.cpp"))
-    add_files(path.join(root, "thirdparty/yojimbo/tlsf/tlsf.c"),
-              path.join(root, "thirdparty/yojimbo/netcode/netcode.c"),
-              path.join(root, "thirdparty/yojimbo/reliable/reliable.c"))
-    add_deps("egp_qualification_sodium")
-    for _, directory in ipairs({"", "include", "sodium", "tlsf", "netcode", "reliable", "serialize"}) do
-        add_includedirs(path.join(root, "thirdparty/yojimbo", directory), {public = true})
-    end
-    add_defines("NETCODE_ENABLE_TESTS=1", "RELIABLE_ENABLE_TESTS=1")
-    if is_plat("windows") then
-        add_syslinks("ws2_32", "iphlpapi", {public = true})
-    end
-target_end()
-
 -- Upstream Debug tests keep Box3D's additional validation enabled; adapter qualification
 -- retains the original embedded-library profile without those optional checks.
 target("egp_qualification_box3d_checked")
