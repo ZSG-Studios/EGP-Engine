@@ -4,7 +4,10 @@ plugins {
 
 androidFusedLibrary {
     namespace = 'com.godot.game.fuseddeps'
-    minSdk = versions.minSdk
+    // AGP 9 fused libraries take the minimum SDK through the MinSdkSpec block.
+    minSdk {
+        version = release(versions.minSdk)
+    }
 }
 
 dependencies {
