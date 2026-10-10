@@ -20,6 +20,9 @@ const CLOTH_JOINT_BASE := 1
 const CHAIN_JOINT_BASE := 500
 const SPRING_JOINT := 600
 const FLOAT_DENSITIES := [0.35,0.85,1.8]
+# Exhibit blocks knocked off the arena fall forever; below this plane they return home.
+const KILL_PLANE := -20.0
+const RESPAWN_SEQUENCE := 900000
 
 var world: EGPBox3DWorld
 var original := PackedVector3Array()
@@ -78,10 +81,10 @@ func setup(target: EGPBox3DWorld, _total: int, create_bodies: bool = true) -> bo
 	var ok := true
 	# Equal-volume objects with different density demonstrate float versus sink.
 	for i in range(6):
-		ok = ok and world.queue_create_box(FLOAT_BASE+i,0,WATER+Vector3((i%3-1)*2,0.1,(i/3-0.5)*3),Vector3.ONE*0.5,2,FLOAT_DENSITIES[i%3]) == OK
+		ok = ok and world.queue_create_box(FLOAT_BASE+i,0,_exhibit_home(i),Vector3.ONE*0.5,2,FLOAT_DENSITIES[i%3]) == OK
 	# Native rigid dominoes, independently identified in the same world.
 	for i in range(16):
-		ok = ok and world.queue_create_box(FLOAT_BASE+6+i,0,IMPACT+Vector3((i%8-3.5)*0.85,0.8,float(i/8)*2),Vector3(0.12,0.8,0.5),2,0.6) == OK
+		ok = ok and world.queue_create_box(FLOAT_BASE+6+i,0,_exhibit_home(6+i),Vector3(0.12,0.8,0.5),2,0.6) == OK
 	# Cloth: particle spheres; the two top corners are static pins.
 	for i in range(CLOTH_SIZE*CLOTH_SIZE):
 		ok = ok and world.queue_create_sphere(CLOTH_BASE+i,0,original[i],PARTICLE_RADIUS,0 if pinned(i) else 2,20.0) == OK
@@ -129,9 +132,23 @@ func setup(target: EGPBox3DWorld, _total: int, create_bodies: bool = true) -> bo
 	return ok
 
 
+# Rest pose of exhibit block i: six floats, then sixteen dominoes.
+func _exhibit_home(i: int) -> Vector3:
+	if i < 6:
+		return WATER+Vector3((i%3-1)*2,0.1,(i/3-0.5)*3)
+	var d := i-6
+	return IMPACT+Vector3((d%8-3.5)*0.85,0.8,float(d/8)*2)
+
+
 func step(target: EGPBox3DWorld, actors: Array[Dictionary], time: float) -> void:
 	world = target
 	var tick := world.get_tick()+1
+	if tick % 30 == 0:
+		# Deterministic kill plane: every peer reads the same state and queues the same reset.
+		for i in range(22):
+			var state: Dictionary = world.get_body_state(FLOAT_BASE+i)
+			if not state.is_empty() and state.position.y < KILL_PLANE:
+				world.queue_body_state(FLOAT_BASE+i,RESPAWN_SEQUENCE,_exhibit_home(i),Quaternion.IDENTITY,Vector3.ZERO,Vector3.ZERO)
 	if tick % 3 == 0:
 		# Deterministic gusting wind on every free cloth particle, one batched call.
 		var ids := PackedInt64Array()
