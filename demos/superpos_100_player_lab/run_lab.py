@@ -11,6 +11,7 @@ KEY = Path.home() / '.ssh/build-helper-admin'
 SSH = ['ssh', '-o', 'BatchMode=yes', '-o', 'ConnectTimeout=10', '-o', 'StrictHostKeyChecking=yes', '-i', str(KEY), HOST]
 REMOTE_ROOT = r'C:\EGP Workspace\EGP-Engine'
 SERVER_IP, CLIENT_IP, BASE = '10.77.64.1', '10.77.64.2', 48000
+SINGLE_PORT = True
 PROFILES = [
     dict(name='Fibre', up=5, down=7, jitter=1, loss=0.0005, duplicate=0, reorder=0, rate=1000000, burst=0),
     dict(name='Broadband', up=14, down=21, jitter=4, loss=0.003, duplicate=0.001, reorder=0.005, rate=300000, burst=0),
@@ -77,7 +78,9 @@ class Proxy:
             back.bind((CLIENT_IP, BASE+3000+peer))
             front.setblocking(False)
             back.setblocking(False)
-            for source, target, dest, direction in [(front, back, (SERVER_IP, BASE+peer), 'up'), (back, front, ('127.0.0.1', BASE+1000+peer), 'down')]:
+            # The server listens on one port (single-port UDP); its connection ID prefix routes.
+            server_port = BASE if SINGLE_PORT else BASE+peer
+            for source, target, dest, direction in [(front, back, (SERVER_IP, server_port), 'up'), (back, front, ('127.0.0.1', BASE+1000+peer), 'down')]:
                 lane = dict(peer=peer, source=source, target=target, dest=dest, direction=direction,
                             rng=random.Random(83117+peer*13+(1 if direction=='up' else 2)), jitter=0.0, bad=False, tail=0.0, queued=0, stats=stats)
                 self.selector.register(source, selectors.EVENT_READ, lane)
@@ -134,7 +137,7 @@ class Proxy:
                     payload, address = lane['source'].recvfrom(65536)
                 except (BlockingIOError, ConnectionResetError):
                     break
-                expected = ('127.0.0.1',BASE+1000+lane['peer']) if lane['direction']=='up' else (SERVER_IP,BASE+lane['peer'])
+                expected = ('127.0.0.1',BASE+1000+lane['peer']) if lane['direction']=='up' else (SERVER_IP,BASE if SINGLE_PORT else BASE+lane['peer'])
                 if address==expected:
                     self.admit(lane,payload,current)
         current = time.time()
@@ -194,7 +197,7 @@ def cohort(peer, bots):
 
 
 def main():
-    global SERVER_IP, CLIENT_IP
+    global SERVER_IP, CLIENT_IP, SINGLE_PORT
     parser = argparse.ArgumentParser()
     parser.add_argument('--duration', type=int, default=180)
     parser.add_argument('--bots', type=int, default=100)
@@ -208,7 +211,12 @@ def main():
     if not 1<=args.bots<=255 or args.duration<15:
         parser.error('Use 1..255 bots and at least 15 seconds')
     OUT.mkdir(parents=True,exist_ok=True)
+    # The parse-error watch reads these before each process rewrites its own log:
+    # a previous run's error must not fail this one.
+    for stale in [*OUT.glob('clients-*-error.log'),OUT/'human-error.log',OUT/'server-error.log']:
+        stale.unlink(missing_ok=True)
     affinity(priority=ABOVE_NORMAL)
+    SINGLE_PORT = bool(json.loads(args.tuning).get('single_port', 1))
     if args.local_server:
         SERVER_IP=CLIENT_IP="127.0.0.1"
     else:
@@ -438,5 +446,7 @@ if __name__=='__main__':
     try:
         sys.exit(main())
     except Exception as error:
+        import traceback
+        traceback.print_exc()
         print('LAB_ERROR '+str(error),file=sys.stderr)
         sys.exit(1)

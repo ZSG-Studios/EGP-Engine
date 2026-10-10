@@ -71,6 +71,8 @@ var zoom := 20.0
 var jump_requested := false
 var pulse_requested := false
 var live_report: Dictionary = {}
+# Server: one single-port UDP socket carries every client association.
+var udp_listener: SuperposUdpListener
 var capture_saved := false
 var human_profile := 0
 var human_offline_until := 0.0
@@ -279,16 +281,29 @@ func _open(c: Dictionary) -> void:
 	check(c.handle != 0,"Canonical interest object")
 	var spec: Dictionary = c.spec
 	var server := role == "server"
-	var local_port: int = config.port_base + (0 if server else 1000) + c.id
-	var remote_port: int = config.port_base + (3000 if server else 2000) + c.id
-	var local_ip: String = config.server_ip if server else "127.0.0.1"
-	var remote_ip: String = config.client_ip if server else "127.0.0.1"
 	var key := Marshalls.base64_to_raw(spec.key)
-	var args := [server,local_ip,local_port,remote_ip,remote_port,53100+c.id,60000+c.id,key]
+	var transport := {}
 	if deterministic:
 		# Real-time floor: the lockstep stream needs ~15 kB/s; wireless loss must not starve it.
-		args.append({"channel_modes":DETERMINISTIC_MODES,"minimum_rate":int(_tuning("minimum_rate",16384))})
-	check(session.callv("configure_udp",args) == OK,"UDP association provision")
+		transport = {"channel_modes":DETERMINISTIC_MODES,"minimum_rate":int(_tuning("minimum_rate",16384))}
+	var connection_id := _connection_id(key,c.generation)
+	if not bool(_tuning("single_port",1)):
+		# A/B reference: one connected UDP association per client port pair.
+		var local_port: int = config.port_base + (0 if server else 1000) + c.id
+		var remote_port: int = config.port_base + (3000 if server else 2000) + c.id
+		var legacy := [server,config.server_ip if server else "127.0.0.1",local_port,config.client_ip if server else "127.0.0.1",remote_port,53100+c.id,60000+c.id,key,transport]
+		check(session.callv("configure_udp",legacy) == OK,"UDP association provision")
+	elif server:
+		# Every client reaches the server's one port; the connection ID routes its datagrams
+		# to this association and DTLS authenticates it with the admission key.
+		if udp_listener == null:
+			udp_listener = SuperposUdpListener.new()
+			check(udp_listener.bind(config.server_ip,config.port_base,{"maximum_associations":int(config.total)+16,"receive_buffer_bytes":8388608}) == OK,"Single-port UDP listener")
+		check(session.configure_udp_listener(udp_listener,connection_id,53100+c.id,60000+c.id,key,transport) == OK,"UDP association provision")
+	else:
+		transport.connection_id = connection_id
+		var args := [false,"127.0.0.1",config.port_base+1000+c.id,"127.0.0.1",config.port_base+2000+c.id,53100+c.id,60000+c.id,key,transport]
+		check(session.callv("configure_udp",args) == OK,"UDP association provision")
 	c.unreliable=[]
 	c.session = session
 	if role=="server" and deterministic and lockstep_server!=null:
@@ -897,6 +912,20 @@ func _varuints(bytes: PackedByteArray, offset: int, count: int) -> Array:
 				break
 		values.append(value)
 	return values
+
+# Admission hands each association its routing ID with its key: derived from the private
+# stream key and the association generation, it is nonzero, unpredictable without the key
+# and fresh on every re-admission. Both ends derive the same value.
+func _connection_id(key: PackedByteArray, generation: int) -> int:
+	var hashing := HashingContext.new()
+	hashing.start(HashingContext.HASH_SHA256)
+	hashing.update(key)
+	var counter := PackedByteArray()
+	counter.resize(8)
+	counter.encode_u64(0,generation)
+	hashing.update(counter)
+	var id := hashing.finish().decode_u64(0) & 0x7FFFFFFFFFFFFFFF
+	return id if id != 0 else 1
 
 func _send_keyframe(c: Dictionary) -> void:
 	if _pending(c,KEYFRAME_LANE)>0:
