@@ -4,20 +4,29 @@
  "license": "Apache 2.0",
  "upstream": {
   "repository": "https://github.com/Mbed-TLS/mbedtls",
-  "version": "4.1.1",
-  "commit": "0a8fda272a5a0abef3b47c91bed37185d5a726b1"
+  "version": "4.2.0",
+  "commit": "ece41aa84d7879d7e55c59e955a5884b541f7f3b"
  },
  "verification": {
   "method": "upstream-commit"
  },
+ "patches": [
+  {
+   "name": "0001-fix-msvc-light",
+   "path": "thirdparty/mbedtls/patches/0001-fix-msvc-light.patch",
+   "sha256": "2811903376eebcc97c78ee9467d2766a6cc2ba17c3a8c43656909a3f7d58e0a1",
+   "purpose": "Upstream godotengine/godot GH-124014: MBEDTLS_PK_MAX_PUBKEY_RAW_LEN starts at 1, not 0, so light builds without RSA/EC public keys never declare a zero-length array (rejected by MSVC; a GNU/Clang extension that -pedantic flags). Mbed TLS 4.2.0 still defines 0, so the patch stays for clang-cl and every other compiler."
+  }
+ ],
+ "additions_reason": "Godot/EGP glue: build configuration headers and platform hooks in godot/, the extraction script and the patch file. LICENSE keeps only the Apache-2.0 text; godot/threading_alt.h adapts upstream's alt-dummy header.",
  "files": {
-  "include/mbedtls/build_info.h": "98a0db0008837772b9af56516a7127a8900ed97757a79503dc6fcedd5c22246d",
+  "include/mbedtls/build_info.h": "4dc8ea1524cd0870504481896eae9bd410f569452958363bedd297179ccd9198",
   "include/mbedtls/debug.h": "399b727789850acbd6900151ff22896420283dee3c2cf7ffc50494b35fef3604",
   "include/mbedtls/error.h": "29605122aedda859d9848523348aa0496433594e40d8096cd461df3b9ec6dabd",
-  "include/mbedtls/mbedtls_config.h": "1e7a532709cf98d745b9bf470fdb6f58a5cf0a3ca73e16e011758f229e047bb3",
+  "include/mbedtls/mbedtls_config.h": "20cb4275e9c2746faad28a6267e3db1b254a033d87820148700580d18bc08b78",
   "include/mbedtls/net_sockets.h": "eb673ffc4de336e6e765cdd7696c6ed7ab01bfd32ea386c3af978c0626d75425",
   "include/mbedtls/oid.h": "18867ca787e5d469e81400e93f91487a77524ac07e5f56a4bfa535aed963cb0a",
-  "include/mbedtls/pkcs7.h": "ed9d122b081dd2fd593a7bd6639082d3f87f5ba0cc41659b595e67ee3d102454",
+  "include/mbedtls/pkcs7.h": "c15434cccd69825e62d799be87c72833ee3744831da7d5e458de43253c7d9cdf",
   "include/mbedtls/private/config_adjust_ssl.h": "906637ce3c4cbaad589de7f0a310d74c6ab51fc3a75e4efff59a15667e8020a6",
   "include/mbedtls/private/config_adjust_x509.h": "37f5e9bf29aa6b1cf8d4c1e442b7642ff4b82dd0fe52cad081923fe97cda1f8b",
   "include/mbedtls/ssl.h": "daffb37b840f01aea2e46ef858e29e226c01d380d06addcfa5c37e3b819e4262",
@@ -33,9 +42,13 @@
   "include/mbedtls/x509_csr.h": "9d113fdfe8f166651a7f293f98e9fdccdfddcaa6fa56dd80d4807099d0e294b9",
   "library/debug.c": "10d8431f13a66c096b764532b15e491b0bd75301a38a5ec13bd1e420998898ef",
   "library/debug_internal.h": "10c97cbda4ac76f0fd19dcea6ad07acc0d7d3295b2230f9c6411d595e854b99a",
+  "library/error.c": "0e93918964c61c1a6ae241bdaf61acc3c102f5ebeab8917a2464cc6e700bd1d6",
   "library/mbedtls_check_config.h": "e206977d2c98e9b1b7d9f13a334a0cff80ae185b2281098bc518835028ee5baa",
   "library/mbedtls_common.h": "d6a4f2e7718d16080af66f5bd270151185bc89da6d1f97f204795bef2af0cd2e",
   "library/mbedtls_config.c": "832539ac59421606c9ff9f824adbb348b5ebe077fdc16a4c1a12d993695c5533",
+  "library/mbedtls_config_check_before.h": "c18eabbd03332b93755203b31590ea6259bccf705f467f4154d18eed628356de",
+  "library/mbedtls_config_check_final.h": "865f9a832a42ab549e5b78eb7fd61159cc0562883f0f9033ec89b6cee6cd33ab",
+  "library/mbedtls_config_check_user.h": "b2db1d4631b8cdafef387c5d7abf7f68816f0be930e3229d5fe9ca44097fd321",
   "library/mbedtls_platform_requirements.h": "715c85c7607cdb9b2920d17dd7cad12ce38f49d64d6da3cf3d52ec6a5dc3559a",
   "library/mbedtls_utils.h": "75acd21f2e182912c51ad2d9437f152b6c0caedaf951f8c038b64ecf16a70c50",
   "library/mps_common.h": "3dfffd9855b73ebfdd08ee764f24e8eb09f5a1e3a0333f1e8e23d33ae81328aa",
@@ -45,7 +58,7 @@
   "library/mps_trace.c": "223443e336e6e695bcf2e9309673ebfdd5c661aa17865189d287076a2534e74b",
   "library/mps_trace.h": "b06719d78762710a53e7b2054a7afa26bfcd7b3771cb2a45850ee5b9171b4773",
   "library/net_sockets.c": "66ee0d0710bdf717fef1c10850abdf431410b7d4cbe2169c0cce2e06758766d1",
-  "library/pkcs7.c": "93725dc7f656554b9f4d9df647a0c80f8c2dc60310698f433a1c8ff38ee91d24",
+  "library/pkcs7.c": "e30c7f81bdeb34a82b3435f9cfd08074618290c6344557236d759fc5bafea371",
   "library/ssl_cache.c": "518badf0e8b7f405f24a4abe9e29d508fd7b1853a3b9b0a6d0b04fffcdd29357",
   "library/ssl_ciphersuites.c": "b013b5f67cc4f3d1cbc1b937200243dc7de5590ebf3a0cfe353b0349e91a5f0d",
   "library/ssl_ciphersuites_internal.h": "62b85eee65518be85489a7e944dc2983454193581a1ddeef0019e3490c90f050",
@@ -53,6 +66,7 @@
   "library/ssl_client.h": "e1f5031b5c41ff83cdf1f1251a51b781ffc27323803cb40cb13c372382a388f5",
   "library/ssl_cookie.c": "6a44e514585fe9db1b616e1efa1141e7517c556a2877974817dcc2e0263c5540",
   "library/ssl_debug_helpers.h": "611d8388389c64cc500b4afd4a619fb2736c00434dc4a320f78b6055880a15ea",
+  "library/ssl_debug_helpers_generated.c": "ff6f9712f06d920c450f2e6d27676e77488ddc56f3a4a9adf6ec5f5244f55664",
   "library/ssl_misc.h": "110c563a7b9f02a792d86d707f3471f02c5ae0048189b4816ec58edb23d6e5cf",
   "library/ssl_msg.c": "46716c891f1ce273909e636cd1dad1447276aed01541b377813733be7470d449",
   "library/ssl_ticket.c": "73a387024259119744a9ac509af05e0aa530a991bddd68cb56cf3b4598b2e643",
@@ -67,6 +81,7 @@
   "library/ssl_tls13_server.c": "cd2f6c0aed8acb008fa7328acfc3e093eb10f44b85785ba33702323e5eb2bf75",
   "library/timing.c": "c161bb618a0e275a899235bfdf4781f3e16b81bfb5dffa310c2b411a61b840a8",
   "library/version.c": "caae12f8d0080d9eeb15df7647b69d97a5f47d7d5bb2ab7632345cd73a04c04f",
+  "library/version_features.c": "7aeaf9fc8d9537a007380bef169b06cef42bf44a60b624f6e796939117466dd1",
   "library/x509.c": "676b48c20aaa08c97ee871982eea739763810d7643e6299c3208d4bc0683653b",
   "library/x509_create.c": "fcc9d93ec815f57cac34d018ca729687be4b4dd1617e6bd5e9483e82936e7148",
   "library/x509_crl.c": "f97f7f881aa9ea1aeb181e2f6c77ecb4798468552d877532cc25cce4fc977d01",
@@ -77,50 +92,15 @@
   "library/x509_oid.h": "28c9f7978655640b50fea217c6a9e0a182e7c2603822092dd8d08bbc79a2fef3",
   "library/x509write.c": "1d1018f2745786dbb9b50bdf1f7ebe9abf68177ef2acd45e43fd0e9f5fcec51a",
   "library/x509write_crt.c": "2c3730e5b7ad8a3a29c2bc12ecd1daeb876f69528fc50ff246cb9404c9c91b04",
-  "library/x509write_csr.c": "e603e14a01d61444d0d6ca7837b0eff0816be67680421658d3ca0f0b5322338e"
- },
- "patched": {
-  "LICENSE": {
-   "upstream_path": "LICENSE",
-   "upstream_sha256": "9b405ef4c89342f5eae1dd828882f931747f71001cfba7d114801039b52ad09b",
-   "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
-  },
-  "godot/threading_alt.h": {
-   "upstream_path": "tests/include/alt-dummy/threading_alt.h",
-   "upstream_sha256": "a769a9fe9aca497258ccaedfe2061cc4bd5c3ab3e546c6de49d9000e9658433c",
-   "sha256": "6bd66262a2ae46ec56b52b9026c8958216900eeac0fadc6effcfc0b3a9e75e79"
-  },
-  "tf-psa-crypto/include/tf-psa-crypto/build_info.h": {
-   "upstream_path": "include/mbedtls/build_info.h",
-   "upstream_sha256": "98a0db0008837772b9af56516a7127a8900ed97757a79503dc6fcedd5c22246d",
-   "sha256": "71a69adadbe42003d053bc4ead7782422b4c416b7527e1af75d45d988f65ebf0"
-  },
-  "tf-psa-crypto/include/tf-psa-crypto/version.h": {
-   "upstream_path": "include/mbedtls/version.h",
-   "upstream_sha256": "24a6c4f73bcaef3a67db311304ea49fd48ebb65c644d599102da845caf0822d3",
-   "sha256": "362c0940bd377f38f1c495353101d8f6dc12d0305fea78cbd8785c10d6721733"
-  }
- },
- "additions": {
-  "extract_mbedtls_sources.py": "94c10c60d2620c60d8c15e7d88b350e26a74a9070075641048fb9565cb207688",
-  "godot/godot_mbedtls_config.h": "970e3ce91bdbd2e5389706a0799b31249d6f509811e63e6e56c7e09bec958c4b",
-  "godot/godot_mbedtls_platform.cpp": "cc7a26c68709e595b54ca732cb87e06d24b65e37735d28ecf0ff5af9bb9dc2b5",
-  "godot/godot_psa_config.h": "3b0942953c1e973f20abe8257dd77855c0d63cddb1c8b339f1f7daf1fe1e3ace",
-  "library/error.c": "649b29de6ae271814701e47cc360b8557d65ff320bcc9785b30c44e0081ebbd3",
-  "library/mbedtls_config_check_before.h": "c18eabbd03332b93755203b31590ea6259bccf705f467f4154d18eed628356de",
-  "library/mbedtls_config_check_final.h": "865f9a832a42ab549e5b78eb7fd61159cc0562883f0f9033ec89b6cee6cd33ab",
-  "library/mbedtls_config_check_user.h": "b2db1d4631b8cdafef387c5d7abf7f68816f0be930e3229d5fe9ca44097fd321",
-  "library/ssl_debug_helpers_generated.c": "ff6f9712f06d920c450f2e6d27676e77488ddc56f3a4a9adf6ec5f5244f55664",
-  "library/version_features.c": "7aeaf9fc8d9537a007380bef169b06cef42bf44a60b624f6e796939117466dd1",
-  "patches/0001-fix-msvc-light.patch": "2811903376eebcc97c78ee9467d2766a6cc2ba17c3a8c43656909a3f7d58e0a1",
+  "library/x509write_csr.c": "e603e14a01d61444d0d6ca7837b0eff0816be67680421658d3ca0f0b5322338e",
   "tf-psa-crypto/core/alignment.h": "8cd667908e46cd372bbbaaf8f2081267067ae81953bd819f20798d34f7adafbb",
   "tf-psa-crypto/core/check_crypto_config.h": "75d61a6be2265288bb3e81d972fe3c66e974e5d6b1e8c4ae1a00b2ae09832b07",
   "tf-psa-crypto/core/psa_crypto.c": "ee01d38758699a45ba12518e875c7d88062e31afd1ed31ddae718e9e9de60f20",
   "tf-psa-crypto/core/psa_crypto_client.c": "622b752075a924573fc68aebd4fbb498b9d3a6bf30d03e28879ce7b1d7c169d9",
   "tf-psa-crypto/core/psa_crypto_core.h": "86e9b1db4b018533d3918cd1014880aa717d9f56047d126dd398f774d4b2c8a8",
   "tf-psa-crypto/core/psa_crypto_core_common.h": "70f3a62d9a20b50373e032a92d20c25c5b75d150976fa9a7baf33dd5e7b2f828",
-  "tf-psa-crypto/core/psa_crypto_driver_wrappers.h": "6672ffb641805c65598400c105449123a52a4609b96550685dbdda95a631ae41",
-  "tf-psa-crypto/core/psa_crypto_driver_wrappers_no_static.c": "92d1d9001187cb5fdcac77d15963758e225f45d6d4f0022afe9c5ff849051008",
+  "tf-psa-crypto/core/psa_crypto_driver_wrappers.h": "eedfb3392b8d49099dc7a098b430586eebf7ab1794a480a6f25422f09877ae8f",
+  "tf-psa-crypto/core/psa_crypto_driver_wrappers_no_static.c": "5df3788bac5e533e544ede07fc74ecb07941025e8095dc9821da0fe132a91c7e",
   "tf-psa-crypto/core/psa_crypto_invasive.h": "f6e9f315671ac156cc0d7e60caff8b876d68ace797daf363ed910d7e6a6bb918",
   "tf-psa-crypto/core/psa_crypto_its.h": "4185d069d75537d8cb419ff0d4624eacd6f70ab982777a294104d878fa13465e",
   "tf-psa-crypto/core/psa_crypto_random.c": "631ee70a47e239e428fd18f9be6de0dc130d14283d2af7786d07bb268715a292",
@@ -154,7 +134,7 @@
   "tf-psa-crypto/drivers/builtin/include/mbedtls/private/config_adjust_test_accelerators.h": "a71f7542b87a56c463410e26e69d0c3c0e52b1fd465bd5707048c9ddd240b405",
   "tf-psa-crypto/drivers/builtin/include/mbedtls/private/crypto_adjust_config_enable_builtins.h": "667aaa33a280af5a64639f16aa771377a047c27869b83b062adadfc70f82830f",
   "tf-psa-crypto/drivers/builtin/include/mbedtls/private/crypto_adjust_config_tweak_builtins.h": "dc5c45ebad1f17855da4c7f7c6ac708e1488ea65d94abce22bb57e870a04261f",
-  "tf-psa-crypto/drivers/builtin/include/mbedtls/private/crypto_builtin_composites.h": "c700a32279e723f06ca412dd09625b664dcc126e0fa2f8ffb1a72529c326b97d",
+  "tf-psa-crypto/drivers/builtin/include/mbedtls/private/crypto_builtin_composites.h": "14ef3cda0cc6a875ca27da61e51ddf53517fadb8f615d9bbb5222e05e36f90a8",
   "tf-psa-crypto/drivers/builtin/include/mbedtls/private/crypto_builtin_key_derivation.h": "95a12a5858c5836d975b512b5799e7dfe8aa87aea74413c3cb99afd3ca29960a",
   "tf-psa-crypto/drivers/builtin/include/mbedtls/private/crypto_builtin_primitives.h": "52fdbf7e8fa785fda41b545acd6c315702a033e06baad321f399458f0b8e9f1e",
   "tf-psa-crypto/drivers/builtin/include/mbedtls/private/ctr_drbg.h": "2acaac8cc3c49dc9102edb4b01912686480ff5a2bc0b240e2124e6ec91922004",
@@ -211,7 +191,6 @@
   "tf-psa-crypto/drivers/builtin/src/ecjpake.c": "74ba66ef37cbfb338affc1ba814150f985edb9373866b2d99528f8bf32c96fb2",
   "tf-psa-crypto/drivers/builtin/src/ecp.c": "00817db6b92900dd29b3aa97754dcbd191cde933ee4e1eb64e9b438da25592f6",
   "tf-psa-crypto/drivers/builtin/src/ecp_curves.c": "e3b2aafc3b5f75ae1a345f3e626835d988e3918f4e822ff2da5a91a915d2f1db",
-  "tf-psa-crypto/drivers/builtin/src/ecp_curves_new.c": "c6466b6bbc781931565f3819482b2668949c340fb43e613240c444a1db04bf38",
   "tf-psa-crypto/drivers/builtin/src/ecp_invasive.h": "55098064a5d0465ccfe448c01968d0c5c79286c13683fffe0588b4cfa7ab33e2",
   "tf-psa-crypto/drivers/builtin/src/entropy.c": "d5c9118b971fee3ee4bca3f1c9ec11f7a334899c8572d9959f4d08fe6d4c557a",
   "tf-psa-crypto/drivers/builtin/src/entropy_poll.c": "d8ad38faf55340574e6e9d4e054ef5881cba2816bf958a8c1df6c721e8f48a9b",
@@ -276,33 +255,34 @@
   "tf-psa-crypto/include/mbedtls/memory_buffer_alloc.h": "26109625f9167dff7f81018e95e33ef824c73ad3fd21a2147af11c4dcc10c971",
   "tf-psa-crypto/include/mbedtls/nist_kw.h": "9d43b4c61e96b17411dc159d5de64f91e50f0d49dcb8db17de47ea345e98a4d8",
   "tf-psa-crypto/include/mbedtls/pem.h": "d1b563d01c1d61cc3ae3f339d31cde332fc20c90045b6f352cc9916f14693b0a",
-  "tf-psa-crypto/include/mbedtls/pk.h": "8f48a5fdaa55f36e7758464c775de22105e005248fe8d1495fdb79d49afa1775",
   "tf-psa-crypto/include/mbedtls/platform.h": "624e0b940e616faba8ace12296aba20599a3d617e07148070c3543126c166ac6",
   "tf-psa-crypto/include/mbedtls/platform_time.h": "5f7779fd9b4c7b7d41c65729af0cd47e61e384b4e1a11483abbef03adf954b98",
   "tf-psa-crypto/include/mbedtls/platform_util.h": "ed9d0bef1fdb5ff248954a5e2cf9d54eb72ee7e9e3abb5cfcaa843d8cdf3b860",
   "tf-psa-crypto/include/mbedtls/private/pk_private.h": "d1cb3efe76d7937d2c2462faffd13c8065098f68637d644e397086dcc081bf6d",
   "tf-psa-crypto/include/mbedtls/psa_util.h": "73682c9b4a59fd9b821ec8614bc7d07162fce068750d25210d77b355d78696ec",
   "tf-psa-crypto/include/mbedtls/threading.h": "6940a001a387c443546bb0984cc4bddefceb6e2da78c1407039ca28717425863",
-  "tf-psa-crypto/include/psa/crypto.h": "8f0b7e1c227875076540809d19c4686b38a765f929caa1559df2babc418cdb85",
+  "tf-psa-crypto/include/psa/crypto.h": "b748de68b33b734970bb024220215b47a24d398de165d77654faf7463123e0a5",
   "tf-psa-crypto/include/psa/crypto_compat.h": "81577947a637229e5146f2f4132a8c241fb7e5ce36f98cdfa1a917d913d5b118",
-  "tf-psa-crypto/include/psa/crypto_config.h": "dc4753d99690d2584ab33edd46aa09c6562f3193ac49a171916ae513937357f2",
+  "tf-psa-crypto/include/psa/crypto_config.h": "55350b32f243f7a5d9d703162b70a15d1bf643d46eab2d19a31cb07fa5379602",
   "tf-psa-crypto/include/psa/crypto_driver_common.h": "e6bdf56f96cd1fc6b018b5c23875a54dd0cefae2116d13cda5a14a2c2b7ae4be",
-  "tf-psa-crypto/include/psa/crypto_driver_contexts_composites.h": "8c2b7f03843d29381c8474ca4c183f04e06ae5108348365477aaa1839baa2e8c",
+  "tf-psa-crypto/include/psa/crypto_driver_contexts_composites.h": "633748b1472b4bd324c5a1d32f4f289351775be657cd59cb2656f4cb9c4f11c5",
   "tf-psa-crypto/include/psa/crypto_driver_contexts_key_derivation.h": "59a9401d7a2bd4819f760a1567ee70b59fd96da286a4df74b70504a503ab9ad6",
   "tf-psa-crypto/include/psa/crypto_driver_contexts_primitives.h": "453753cd945b30e6cf894f1abff90899946ec28d5545daac1927071614979409",
   "tf-psa-crypto/include/psa/crypto_driver_random.h": "9dcb54b74a1bacd9885ac83e46bf5b9e7fb6f102b2f262d70bc73a47f2de78b6",
   "tf-psa-crypto/include/psa/crypto_extra.h": "2dacfd0bc3d36058897f944e0b3cfd3267d40f38d1ed3ee0cfbb5578bec4f4b5",
   "tf-psa-crypto/include/psa/crypto_platform.h": "3fc7691ade6f2081f81c3fe0fc1db88e360afd642542f90afdd66a0a64e23b33",
   "tf-psa-crypto/include/psa/crypto_sizes.h": "87693b7058f391a472b34378893452789fdcf0542e6f7bb5612d59b7b4bc2267",
-  "tf-psa-crypto/include/psa/crypto_struct.h": "3006c42c3eb1850fe7c86ef98afeeb5e8a76e951ac39094fd5e15e9a65f1734c",
+  "tf-psa-crypto/include/psa/crypto_struct.h": "203bc57f3e87148e0515c5afb3e862266a8fba1f902e6bb0c890bb80e8d5ada0",
   "tf-psa-crypto/include/psa/crypto_types.h": "17d5ba7a99f8adf5b26b5647f8c21437b79fcef524ec080688c1ed8b627e9956",
   "tf-psa-crypto/include/psa/crypto_values.h": "cb22bf205eae93e14b05af6a41c046cf1cfbbb8cc09595d4970fe9933a74657c",
+  "tf-psa-crypto/include/tf-psa-crypto/build_info.h": "c80551c118b748996052267c98850fa9370765b5c85659d490dcb64237b514a7",
   "tf-psa-crypto/include/tf-psa-crypto/private/crypto_adjust_config_auto_enabled.h": "eacd51ae9fed3091a846d4a43fd15b498d6c837d479b702d0b33928f5d62750b",
-  "tf-psa-crypto/include/tf-psa-crypto/private/crypto_adjust_config_dependencies.h": "98640b00df793cf138c0103a401dc9428443892665f4241094e1be0c738019f1",
+  "tf-psa-crypto/include/tf-psa-crypto/private/crypto_adjust_config_dependencies.h": "c7250bf02732fa69c9cf580b736adfbab0d973969a07d8a9651a68247257b529",
   "tf-psa-crypto/include/tf-psa-crypto/private/crypto_adjust_config_derived.h": "e220972852f9c682e0dcdd05f6a41b1149ecbded8c8602efb7fe80e82137681d",
   "tf-psa-crypto/include/tf-psa-crypto/private/crypto_adjust_config_key_pair_types.h": "b9df2faddbd13d4978f28d32c4b324f2fdbba70a38e999f51a87d46a533a8f5d",
   "tf-psa-crypto/include/tf-psa-crypto/private/crypto_adjust_config_support.h": "e5ac397ae21eaf82360563bf5855cc9215b8bdbb93e90003d661d1a93d6a644f",
   "tf-psa-crypto/include/tf-psa-crypto/private/crypto_adjust_config_synonyms.h": "7fc60929c2529202688f30b08bbbb707598996601c55098ebc74c2f877f871d2",
+  "tf-psa-crypto/include/tf-psa-crypto/version.h": "362c0940bd377f38f1c495353101d8f6dc12d0305fea78cbd8785c10d6721733",
   "tf-psa-crypto/platform/memory_buffer_alloc.c": "399b3c9aa7a6ccb7e7d3cf071545ad2f2f262a94438e6acad93d34570ebf327f",
   "tf-psa-crypto/platform/platform.c": "a56426c9d7ae2c4f233afe4b21a402a440a2e4554f632267c13398cd3c3b0fc0",
   "tf-psa-crypto/platform/platform_util.c": "8b2abd057d159e2d924cc30d824baeb74411460f1d2a5b1b6256bb0c54bc7330",
@@ -319,5 +299,30 @@
   "tf-psa-crypto/utilities/oid.c": "97190a28b514306e8613b96494c4bea9959064c023739d68bb9aa753fff46d4e",
   "tf-psa-crypto/utilities/pem.c": "3090d640bb733a7bcb7206c5faa4cdaf3d112e602d7f5b71e702b89fe17e2b39",
   "tf-psa-crypto/utilities/pkcs5.c": "ce5c0bbf80cd741850c1a0f8219c059e4a197ce8cdcf320bb505d5edbd38cc6d"
+ },
+ "patched": {
+  "LICENSE": {
+   "upstream_path": "LICENSE",
+   "upstream_sha256": "9b405ef4c89342f5eae1dd828882f931747f71001cfba7d114801039b52ad09b",
+   "sha256": "cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30"
+  },
+  "godot/threading_alt.h": {
+   "upstream_path": "tests/include/alt-dummy/threading_alt.h",
+   "upstream_sha256": "a769a9fe9aca497258ccaedfe2061cc4bd5c3ab3e546c6de49d9000e9658433c",
+   "sha256": "6bd66262a2ae46ec56b52b9026c8958216900eeac0fadc6effcfc0b3a9e75e79"
+  },
+  "tf-psa-crypto/include/mbedtls/pk.h": {
+   "upstream_path": "tf-psa-crypto/include/mbedtls/pk.h",
+   "upstream_sha256": "91dcedf5c44007f85324cd826fdc5910b1ea3b9606b41c3d16879d09d4cdba7e",
+   "sha256": "8f48a5fdaa55f36e7758464c775de22105e005248fe8d1495fdb79d49afa1775",
+   "patch": "0001-fix-msvc-light"
+  }
+ },
+ "additions": {
+  "extract_mbedtls_sources.py": "94c10c60d2620c60d8c15e7d88b350e26a74a9070075641048fb9565cb207688",
+  "godot/godot_mbedtls_config.h": "970e3ce91bdbd2e5389706a0799b31249d6f509811e63e6e56c7e09bec958c4b",
+  "godot/godot_mbedtls_platform.cpp": "cc7a26c68709e595b54ca732cb87e06d24b65e37735d28ecf0ff5af9bb9dc2b5",
+  "godot/godot_psa_config.h": "3b0942953c1e973f20abe8257dd77855c0d63cddb1c8b339f1f7daf1fe1e3ace",
+  "patches/0001-fix-msvc-light.patch": "2811903376eebcc97c78ee9467d2766a6cc2ba17c3a8c43656909a3f7d58e0a1"
  }
 }

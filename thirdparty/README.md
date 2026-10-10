@@ -657,7 +657,7 @@ Patches:
 ## mbedtls
 
 - Upstream: https://github.com/Mbed-TLS/mbedtls
-- Version: 4.1.1 (0a8fda272a5a0abef3b47c91bed37185d5a726b1, 2026)
+- Version: 4.2.0 (ece41aa84d7879d7e55c59e955a5884b541f7f3b, 2026)
 - License: Apache 2.0
 
 Update instructions:
@@ -678,6 +678,10 @@ File extracted from upstream release tarball:
 Patches:
 
 - `0001-fix-msvc-light.patch` ([GH-124014](https://github.com/godotengine/godot/pull/124014))
+
+Verification: `thirdparty/mbedtls/UPSTREAM.json`, pinned with `misc/scripts/egp_thirdparty.py pin`
+against the extracted official release tarball (`--upstream-dir`), so the bundled TF-PSA-Crypto
+sources and generated files are verified too.
 
 
 ## meshoptimizer
