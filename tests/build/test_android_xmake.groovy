@@ -21,6 +21,14 @@ class NativeTask {
         }
     }
 }
+class NamedTasks {
+    NativeTask task
+    void configureEach(Closure configure) {
+        configure.delegate = task
+        configure.resolveStrategy = Closure.DELEGATE_FIRST
+        configure.call(task)
+    }
+}
 class FixtureTasks {
     Map<String, NativeTask> entries = [:]
     // Names of the AGP tasks the production script may wire into (created later by AGP).
@@ -36,15 +44,10 @@ class FixtureTasks {
         return task
     }
     // Lazy, name-filtered configuration (TaskContainer.named(Spec<String>).configureEach).
-    Expando named(Closure spec) {
-        return new Expando(configureEach: { Closure configure ->
-            List<String> matches = agpTasks.findAll { spec.call(it) }
-            assert matches.size() == 1
-            NativeTask task = getAt(matches[0])
-            configure.delegate = task
-            configure.resolveStrategy = Closure.DELEGATE_FIRST
-            configure.call(task)
-        })
+    NamedTasks named(Closure spec) {
+        List<String> matches = agpTasks.findAll { spec.call(it) }
+        assert matches.size() == 1
+        return new NamedTasks(task: getAt(matches[0]))
     }
     NativeTask getAt(String name) {
         if (!entries.containsKey(name)) { entries[name] = new NativeTask(name: name) }
