@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposRpc" inherits="Resource" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>A registered typed RPC declaration of a schema.</brief_description>
+	<description>Declared in [member SuperposSchema.rpcs]. The wire names an RPC only by its numeric ID and a target object handle; it never carries a method, script, resource or property name. Calls are authorized at execution: on the authority against the live World (declared RPC, payload bound, authority epoch and [member permission], with the current ownership revision for Owner calls), and on a client only for a Ready replica whose schema declares the RPC.</description>
+	<tutorials>
+	</tutorials>
+	<members>
+		<member name="maximum_payload" type="int" setter="set_maximum_payload" getter="get_maximum_payload" default="4096">Largest accepted payload in bytes, 1 through 4096.</member>
+		<member name="permission" type="int" setter="set_permission" getter="get_permission" default="1">Who may call it: [constant PERMISSION_AUTHORITY] (only the authority), [constant PERMISSION_OWNER] (the current owner of the target object) or [constant PERMISSION_ADMITTED_PEER] (any admitted peer).</member>
+		<member name="rpc_id" type="int" setter="set_rpc_id" getter="get_rpc_id" default="1">Nonzero unsigned RPC identifier, unique within its schema.</member>
+	</members>
+	<constants>
+		<constant name="PERMISSION_AUTHORITY" value="0" enum="Permission">
+			Only the authority may call this RPC.
+		</constant>
+		<constant name="PERMISSION_OWNER" value="1" enum="Permission">
+			Only the current owner of the target object may call this RPC.
+		</constant>
+		<constant name="PERMISSION_ADMITTED_PEER" value="2" enum="Permission">
+			Any admitted peer may call this RPC.
+		</constant>
+	</constants>
+</class>

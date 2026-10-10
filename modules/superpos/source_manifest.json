@@ -24,6 +24,9 @@
     "superpos_replica_view.cpp",
     "superpos_spawner.cpp",
     "private/spawning/spawn_runtime.cpp",
+    "superpos_replication_server.cpp",
+    "private/replication/link_authority.cpp",
+    "private/replication/rpc_endpoint.cpp",
     "superpos_lockstep.cpp"
   ],
   "core_manifest": "core/source_manifest.json",
@@ -37,6 +40,7 @@
   "classes": [
     "SuperposUInt64",
     "SuperposField",
+    "SuperposRpc",
     "SuperposSchema",
     "SuperposSimulationProvider",
     "SuperposUdpListener",
@@ -48,6 +52,7 @@
     "SuperposSpawnCatalog",
     "SuperposReplicaView",
     "SuperposSpawner",
+    "SuperposReplicationServer",
     "SuperposLockstepClient",
     "SuperposLockstepServer"
   ],
@@ -149,17 +154,50 @@
       "files": {
         "superpos_spawn_catalog.h": "9907dfc0cfbcf6a202e688d4bfbda12a60a75497412c899d03edb2171883dd25",
         "superpos_spawn_catalog.cpp": "bb99ae9c6f203a53ac4944c13768afe4c46ec3f7023bf06626e093cf4c61a675",
-        "superpos_replica_view.h": "26ca497a31a97292f650e8cda004bdbb10afbdfb2eb26956f2fe63896691e72b",
-        "superpos_replica_view.cpp": "7e531b8dd1dbf2cc7cb7ff2856be7ceaca1c048eb63ed3e8f2901ad69c9cb039",
-        "superpos_spawner.h": "22c14acb333263b8b4430be16e4c7aab41d91d820a7575b4f1a88e1fa8a31e5c",
-        "superpos_spawner.cpp": "66e614a2f05e307463c855d6cb3da2f688f8a3a59324b662f92d191b946c1fa9",
-        "private/spawning/spawn_runtime.hpp": "2f7e589d0f97702ad5adeaf22ae103f1312f4f81a1454a235072eadf8e67b7ac",
+        "superpos_replica_view.h": "64e4d47e5c6d1f6206bad7b8fdfca9b1fba6c69835b9b71ed56bb247c6addd06",
+        "superpos_replica_view.cpp": "983f7067e41659dce9c8901269d711bdd72749438615e45689305c9982e7acdc",
+        "superpos_spawner.h": "b8c9ac286ee1e5cb0104a74bae45ee4be9e0427fbbf15e5def9428a485d300ed",
+        "superpos_spawner.cpp": "82a4ba22c098d363878aee79ac70bd04ba82121519bcc6addf575eaeaba63a45",
+        "private/spawning/spawn_runtime.hpp": "070a8a7d650c56be071cfa17904a2bc1b530ebd29a8c355cedd99a290ef1a785",
         "private/spawning/spawn_runtime.cpp": "ca67e3a5a054ca9b82fc7f37e35f9780430a6a7b11df3bb635949052a933d769",
-        "private/spawning/receiver_public_access.hpp": "e720c256c4bdbf7a082c7fa73783eeb60dbb40a8d58a2a379731cd0edc9a161f",
-        "private/spawning/session_public.inc": "1d6076fd465119abb02e46f59965ccd9e4ef4296bd7f06d1602c2f2af6052611",
+        "private/spawning/receiver_public_access.hpp": "2949d20c50a03ec238b4a91c4f07383a69f1b9753416271ad09fcde1fcbdc14c",
+        "private/spawning/session_public.inc": "bb78318d7933d55af918e484f24ec3302a7a0209ba2d86eb9ad55e3a217ad5ab",
         "private/spawning/projection_queue.hpp": "a63c3af6f55dca3481afede235b95f6fc512ca26fbaa7a887ca476726f9775b6",
         "private/spawning/public_fixture.inc": "a5de93bcad29b49122d47efe4d733e1d52c6db5d2016a3e6e7c82d0dbdd2c64d"
       }
+    },
+    "native_replication": {
+      "version": 1,
+      "status": "experimental_pending_engine_runtime",
+      "classes": [
+        "SuperposReplicationServer",
+        "SuperposRpc",
+        "SuperposUdpListener"
+      ],
+      "sources": [
+        "superpos_replication_server.cpp",
+        "private/replication/link_authority.cpp",
+        "private/replication/rpc_endpoint.cpp",
+        "superpos_udp_listener.cpp"
+      ],
+      "transport": "native_udp_dtls12_psk;single_port_listener_or_connected",
+      "relevance": "region_index_interest;dormancy;weight_age_priority;per_link_byte_budget",
+      "groups": "explicit_atomic_16_objects_64KiB",
+      "rpc": {
+        "wire": "tag_0x52_v1",
+        "maximum_payload": 4096,
+        "inbox": [
+          64,
+          65536
+        ],
+        "pre_readiness_buffer": [
+          64,
+          65536
+        ],
+        "buffer_lifetime_ms": 15000,
+        "authorization": "World::authorize_rpc_at_execution"
+      },
+      "close_from_callback": "deferred_to_outermost_callback_boundary"
     }
   }
 }

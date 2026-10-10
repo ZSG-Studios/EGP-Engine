@@ -17,6 +17,11 @@
 			<return type="Dictionary" />
 			<description>First marks pending constructions whose spawn readiness timeout has expired, then projects at most [member projection_budget] pending replicas. Returns [code]error[/code], [code]timed_out[/code] (newly expired constructions), [code]completed[/code] and [code]failed[/code]. Returns [constant ERR_BUSY] while a projection is already running or the spawner is stopping, and [constant ERR_UNCONFIGURED] when not started. After [method start], the spawner also calls this from process notifications.</description>
 		</method>
+		<method name="read_rpcs">
+			<return type="Array" />
+			<param index="0" name="maximum" type="int" default="16" />
+			<description>Takes at most [param maximum] (at most 64) authority RPCs, each a Dictionary with [code]handle[/code], [code skip-lint]rpc_id[/code], [code]ownership_revision[/code] and [code]payload[/code]. A call is delivered only for a Ready replica whose schema declares it. Calls that arrive before their replica is ready wait in a pre-readiness buffer of at most 64 calls and 64 KiB; beyond that the newest call is dropped and counted, and buffered calls expire after 15 seconds. A call whose replica retired before it is taken is discarded. Counters are in [method SuperposSession.read_receiver_status] under [code]rpc[/code].</description>
+		</method>
 		<method name="read_status" qualifiers="const">
 			<return type="Dictionary" />
 			<description>Returns [code]error[/code], [code]canonical_ready[/code], [code]scene_ready[/code], [code]scene_failed[/code], [code]spawn_timed_out[/code], [code]spawn_timeout_ms[/code], [code]stopping[/code], [code]owned_native_bytes[/code] and [code]scene_projection[/code]. Returns [constant ERR_UNCONFIGURED] when not started.</description>
@@ -24,7 +29,7 @@
 		<method name="start">
 			<return type="int" enum="Error" />
 			<param index="0" name="receiver_config" type="Dictionary" />
-			<description>Snapshots the catalog, reserves every native row, proxy, slot and projection cell, and attaches the receiver to [member session]. Accepted integer keys are [code]authority_epoch[/code], [code]connection_epoch[/code], [code]replica_epoch[/code], [code]peer[/code], [code]maximum_active[/code] (at most 1000), [code]maximum_transitions[/code] (at most 64), [code]control_channel[/code], [code]state_channel[/code], [code]bulk_channel[/code], [code]native_bytes[/code] (at most 64 MiB) and [code]spawn_timeout_ms[/code] (1 through 60000, default 15000). Unknown keys, including atomic-scene requests, return [constant ERR_INVALID_PARAMETER]. The spawner must be inside the scene tree.</description>
+			<description>Snapshots the catalog, reserves every native row, proxy, slot and projection cell, and attaches the receiver to [member session]. Accepted integer keys are [code]authority_epoch[/code], [code]connection_epoch[/code], [code]replica_epoch[/code], [code]peer[/code], [code]maximum_active[/code] (at most 1000), [code]maximum_transitions[/code] (at most 64), [code]control_channel[/code], [code]state_channel[/code], [code]bulk_channel[/code], [code]native_bytes[/code] (at most 64 MiB), [code]spawn_timeout_ms[/code] (1 through 60000, default 15000) and [code]rpc_channel[/code] (default 3: a reliable ordered application channel distinct from the replication channels). Unknown keys, including atomic-scene requests, return [constant ERR_INVALID_PARAMETER]. The spawner must be inside the scene tree.</description>
 		</method>
 		<method name="stop">
 			<return type="int" enum="Error" />

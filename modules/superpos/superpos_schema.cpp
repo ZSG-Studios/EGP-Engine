@@ -37,6 +37,24 @@ Dictionary SuperposSchema::bake() const {
         sorted[i] = field;
     }
     std::sort(sorted.begin(), sorted.begin() + count, [](const SuperposField *a, const SuperposField *b) { return a->get_field_id() < b->get_field_id(); });
+    // Optional typed RPC block (manifest version 2). Without RPCs the manifest
+    // keeps version 1, so existing schema fingerprints are unchanged.
+    if (rpcs.size() > int(superpos::Schema::maximum_rpcs)) { return result; }
+    const TypedArray<SuperposRpc> owned_rpcs = rpcs;
+    std::array<SuperposRpc *, superpos::Schema::maximum_rpcs> sorted_rpcs{};
+    const size_t rpc_count = size_t(rpcs.size());
+    for (size_t i = 0; i < rpc_count; ++i) {
+        auto *rpc = Object::cast_to<SuperposRpc>(static_cast<Object *>(owned_rpcs[int(i)]));
+        if (!rpc || !rpc->get_rpc_id() || rpc->get_permission() > 2 || !rpc->get_maximum_payload() || rpc->get_maximum_payload() > 4096) { return result; }
+        sorted_rpcs[i] = rpc;
+    }
+    std::sort(sorted_rpcs.begin(), sorted_rpcs.begin() + rpc_count, [](const SuperposRpc *a, const SuperposRpc *b) { return a->get_rpc_id() < b->get_rpc_id(); });
+    std::array<superpos::RpcDescriptor, superpos::Schema::maximum_rpcs> rpc_descriptors{};
+    for (size_t i = 0; i < rpc_count; ++i) {
+        if (i && sorted_rpcs[i]->get_rpc_id() == sorted_rpcs[i - 1]->get_rpc_id()) { return result; }
+        rpc_descriptors[i] = {sorted_rpcs[i]->get_rpc_id(), static_cast<superpos::RpcPermission>(sorted_rpcs[i]->get_permission()), sorted_rpcs[i]->get_maximum_payload()};
+    }
+    if (rpc_count) { manifest_size += 4 + 16 * rpc_count; }
     uint64_t previous = 0, payload_limit = 0;
     std::array<superpos::FieldDescriptor, superpos::Schema::maximum_fields> descriptors{};
     for (size_t i = 0; i < count; ++i) {
@@ -55,7 +73,7 @@ Dictionary SuperposSchema::bake() const {
         payload_limit += field->get_max_bytes();
         if (payload_limit > superpos::Schema::maximum_state_bytes) { return result; }
     }
-    auto schema = superpos::Schema::create(schema_id, std::span(descriptors).first(count));
+    auto schema = superpos::Schema::create(schema_id, std::span(descriptors).first(count), std::span(rpc_descriptors).first(rpc_count));
     if (!schema) { return result; }
     // One bounded, checked engine allocation. Failed allocation publishes no
     // manifest/fingerprint and cannot advance a Session registry.
@@ -66,7 +84,7 @@ Dictionary SuperposSchema::bake() const {
     std::span<uint8_t> encoding{manifest.ptrw(), manifest_size};
     encoding[0] = 'S'; encoding[1] = 'P'; encoding[2] = 'G'; encoding[3] = 'S';
     size_t position = 4;
-    if (!append(encoding, position, 1, 4) || !append(encoding, position, schema_id, 8) ||
+    if (!append(encoding, position, rpc_count ? 2 : 1, 4) || !append(encoding, position, schema_id, 8) ||
             !append(encoding, position, revision, 8) || !append(encoding, position, count, 4)) { return result; }
     for (size_t i = 0; i < count; ++i) {
         const auto &field = sorted[i];
@@ -82,6 +100,13 @@ Dictionary SuperposSchema::bake() const {
                 position > encoding.size() || size_t(name.length()) > encoding.size() - position) { return result; }
         for (int c = 0; c < name.length(); ++c) { encoding[position++] = uint8_t(name[c]); }
     }
+    if (rpc_count) {
+        if (!append(encoding, position, rpc_count, 4)) { return result; }
+        for (size_t i = 0; i < rpc_count; ++i) {
+            if (!append(encoding, position, rpc_descriptors[i].id, 8) || !append(encoding, position, uint64_t(rpc_descriptors[i].permission), 4) ||
+                    !append(encoding, position, rpc_descriptors[i].maximum_payload, 4)) { return result; }
+        }
+    }
     if (position != manifest_size) { return result; }
     unsigned char hash[32];
     Error error = CryptoCore::sha256(manifest.ptr(), manifest.size(), hash);
@@ -92,6 +117,7 @@ Dictionary SuperposSchema::bake() const {
     result["schema_id"] = superpos_egp::signed_bits(schema_id);
     result["revision"] = superpos_egp::signed_bits(revision);
     result["state_bytes"] = int64_t(schema->state_bytes());
+    result["rpcs"] = int64_t(rpc_count);
     return result;
 }
 String SuperposSchema::get_fingerprint() const { return bake().get("fingerprint", String()); }
@@ -122,6 +148,20 @@ void SuperposField::_bind_methods() {
     ADD_PROPERTY(PropertyInfo(Variant::FLOAT, "maximum"), "set_maximum", "get_maximum");
     ADD_PROPERTY(PropertyInfo(Variant::INT, "quantization_levels"), "set_quantization_levels", "get_quantization_levels");
 }
+void SuperposRpc::_bind_methods() {
+    ClassDB::bind_method(D_METHOD("set_rpc_id", "value"), &SuperposRpc::set_rpc_id);
+    ClassDB::bind_method(D_METHOD("get_rpc_id"), &SuperposRpc::get_rpc_id);
+    ClassDB::bind_method(D_METHOD("set_permission", "value"), &SuperposRpc::set_permission);
+    ClassDB::bind_method(D_METHOD("get_permission"), &SuperposRpc::get_permission);
+    ClassDB::bind_method(D_METHOD("set_maximum_payload", "value"), &SuperposRpc::set_maximum_payload);
+    ClassDB::bind_method(D_METHOD("get_maximum_payload"), &SuperposRpc::get_maximum_payload);
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "rpc_id"), "set_rpc_id", "get_rpc_id");
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "permission", PROPERTY_HINT_ENUM, "Authority,Owner,AdmittedPeer"), "set_permission", "get_permission");
+    ADD_PROPERTY(PropertyInfo(Variant::INT, "maximum_payload", PROPERTY_HINT_RANGE, "1,4096,1"), "set_maximum_payload", "get_maximum_payload");
+    BIND_ENUM_CONSTANT(PERMISSION_AUTHORITY);
+    BIND_ENUM_CONSTANT(PERMISSION_OWNER);
+    BIND_ENUM_CONSTANT(PERMISSION_ADMITTED_PEER);
+}
 void SuperposSchema::_bind_methods() {
     ClassDB::bind_method(D_METHOD("set_schema_id", "value"), &SuperposSchema::set_schema_id);
     ClassDB::bind_method(D_METHOD("get_schema_id"), &SuperposSchema::get_schema_id);
@@ -129,9 +169,12 @@ void SuperposSchema::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_revision"), &SuperposSchema::get_revision);
     ClassDB::bind_method(D_METHOD("set_fields", "fields"), &SuperposSchema::set_fields);
     ClassDB::bind_method(D_METHOD("get_fields"), &SuperposSchema::get_fields);
+    ClassDB::bind_method(D_METHOD("set_rpcs", "rpcs"), &SuperposSchema::set_rpcs);
+    ClassDB::bind_method(D_METHOD("get_rpcs"), &SuperposSchema::get_rpcs);
     ClassDB::bind_method(D_METHOD("bake"), &SuperposSchema::bake);
     ClassDB::bind_method(D_METHOD("get_fingerprint"), &SuperposSchema::get_fingerprint);
     ADD_PROPERTY(PropertyInfo(Variant::INT, "schema_id"), "set_schema_id", "get_schema_id");
     ADD_PROPERTY(PropertyInfo(Variant::INT, "revision"), "set_revision", "get_revision");
     ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "fields", PROPERTY_HINT_ARRAY_TYPE, "SuperposField"), "set_fields", "get_fields");
+    ADD_PROPERTY(PropertyInfo(Variant::ARRAY, "rpcs", PROPERTY_HINT_ARRAY_TYPE, "SuperposRpc"), "set_rpcs", "get_rpcs");
 }

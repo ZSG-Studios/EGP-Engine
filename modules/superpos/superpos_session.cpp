@@ -8,6 +8,9 @@
 #include "superpos_spawner.h"
 #include "private/spawning/receiver_public_access.hpp"
 #include "private/spawning/spawn_runtime.hpp"
+#include "private/replication/link_authority.hpp"
+#include "private/replication/replication_access.hpp"
+#include "private/replication/rpc_endpoint.hpp"
 #if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
 #include "private/recovery/native_authority.hpp"
 #endif
@@ -213,6 +216,36 @@ struct EngineNetwork {
 #endif
     std::optional<superpos::Session> session;
     superpos_egp::CapturedOwner<superpos_egp::lifecycle_engine::NativeReceiver> receiver;
+    // Authority-side replication owner (SuperposReplicationServer link).
+    // Declared after session: destroyed first; it borrows only the Session.
+    superpos_egp::CapturedOwner<superpos_egp::replication::LinkAuthority> publisher;
+    std::optional<superpos::PeerId> publisher_peer;
+    // Typed RPC path of the attached receiver or publisher (its own channel).
+    superpos_egp::CapturedOwner<superpos_egp::replication::RpcEndpoint> rpc;
+    // Replication and RPC routes are reserved from attachment: generic packet
+    // APIs never read, send, acknowledge or retire them.
+    bool reserved(uint32_t channel) const noexcept {
+        return (receiver && !receiver->raw_allowed(channel)) || (publisher && !publisher->raw_allowed(channel)) ||
+            (rpc && rpc->reserved() && channel == rpc->channel());
+    }
+    // A client delivers an authority call only for a Ready replica whose schema
+    // declares it; unknown or pending replicas buffer (pre-readiness, bounded).
+    // The authority delivers every structurally valid call and authorizes it
+    // when gameplay takes it (World::authorize_rpc at execution).
+    static superpos_egp::replication::RpcDisposition classify_rpc(void *context, const superpos_egp::replication::RpcFrame &frame) noexcept {
+        using superpos_egp::replication::RpcDisposition;
+        auto *self = static_cast<EngineNetwork *>(context);
+        if (!self->receiver) { return RpcDisposition::Deliver; }
+        auto record = self->receiver->find_handle(frame.handle);
+        if (!record || record->phase != superpos::ReceiverPhase::Ready || !record->catalog) { return RpcDisposition::Buffer; }
+        const auto *descriptor = record->catalog->schema.rpc(frame.rpc);
+        if (!descriptor || frame.payload.size() > descriptor->maximum_payload) { return RpcDisposition::Drop; }
+        return RpcDisposition::Deliver;
+    }
+    superpos::Status pump_rpc(superpos::Session &target) noexcept {
+        if (!rpc) { return {}; }
+        return rpc->pump(target, OS::get_singleton()->get_ticks_msec(), &EngineNetwork::classify_rpc, this);
+    }
 #if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
     // Declared after session: destroyed first. It borrows only the Session.
     superpos_egp::CapturedOwner<superpos_egp::recovery::NativeAuthority> authority;
@@ -234,8 +267,9 @@ struct EngineNetwork {
         // The authority bridge pumps its Session; never pump it twice a tick.
         if(authority){auto result=authority->pump(tick);return result?superpos::Status{}:superpos::fail(result.error());}
 #endif
+        if(publisher && publisher->bound()){auto result=publisher->pump(tick);if(!result)return superpos::fail(result.error());return pump_rpc(*access.operator->());}
         if(receiver && receiver->drained())return {};
-        if(receiver){auto result=receiver->pump(*access.operator->(),generation,tick);return result?superpos::Status{}:superpos::fail(result.error());}
+        if(receiver){auto result=receiver->pump(*access.operator->(),generation,tick);if(!result)return superpos::fail(result.error());return pump_rpc(*access.operator->());}
 #ifdef SUPERPOS_HAS_DTLS
         if(packet) {
             const uint64_t at=OS::get_singleton()->get_ticks_usec();
@@ -425,8 +459,10 @@ Error SuperposSession::configure(const TypedArray<SuperposSchema> &p_schemas, ui
         Error baked_error = Error(int(baked.get("error", ERR_INVALID_DATA)));
         if (baked_error != OK) { return last_error = baked_error; }
         PackedByteArray bytes = baked["manifest"];
-        int position = 8;
+        int position = 4;
         bool ok = bytes.size() >= 28;
+        const uint64_t manifest_version = read_uint(bytes, position, 4, ok);
+        if (!ok || (manifest_version != 1 && manifest_version != 2)) { return last_error = ERR_INVALID_DATA; }
         uint64_t schema_id = read_uint(bytes, position, 8, ok);
         uint64_t schema_revision = read_uint(bytes, position, 8, ok);
         auto count = read_uint(bytes, position, 4, ok);
@@ -449,8 +485,21 @@ Error SuperposSession::configure(const TypedArray<SuperposSchema> &p_schemas, ui
             position += int(name_length);
             fields[size_t(f)] = field;
         }
+        std::array<superpos::RpcDescriptor, superpos::Schema::maximum_rpcs> rpcs{};
+        uint64_t rpc_count = 0;
+        if (manifest_version == 2) {
+            rpc_count = read_uint(bytes, position, 4, ok);
+            if (!ok || !rpc_count || rpc_count > superpos::Schema::maximum_rpcs) { return last_error = ERR_INVALID_DATA; }
+            for (uint64_t r = 0; r < rpc_count; ++r) {
+                rpcs[size_t(r)].id = read_uint(bytes, position, 8, ok);
+                const uint64_t permission = read_uint(bytes, position, 4, ok);
+                rpcs[size_t(r)].maximum_payload = uint32_t(read_uint(bytes, position, 4, ok));
+                if (!ok || permission > 2) { return last_error = ERR_INVALID_DATA; }
+                rpcs[size_t(r)].permission = static_cast<superpos::RpcPermission>(permission);
+            }
+        }
         if (!ok || position != bytes.size()) { return last_error = ERR_INVALID_DATA; }
-        auto schema = superpos::Schema::create(schema_id, std::span(fields).first(size_t(count)));
+        auto schema = superpos::Schema::create(schema_id, std::span(fields).first(size_t(count)), std::span(rpcs).first(size_t(rpc_count)));
         if (!schema) { return last_error = translate(schema.error()); }
         for (size_t prior = 0; prior < size_t(s); ++prior) { if (candidate->records[prior].schema.id() == schema_id) { return last_error = ERR_INVALID_DATA; } }
         stride = std::max(stride, schema->state_bytes());
@@ -497,9 +546,16 @@ Error SuperposSession::configure(const TypedArray<SuperposSchema> &p_schemas, ui
 Error SuperposSession::close_checked() {
     if (Thread::get_caller_id() != owner_thread) { return ERR_BUSY; }
     if (owner_retired) { return ERR_UNCONFIGURED; }
-    if (managed_reload_paused || (closing && !pending_native_retirement) || simulation_in_flight || callbacks_in_flight) { return last_error = ERR_BUSY; }
+    if (managed_reload_paused || (closing && !pending_native_retirement)) { return last_error = ERR_BUSY; }
     if (pending_native_retirement) { return last_error = ERR_BUSY; }
     if (!impl) { return last_error = ERR_OUT_OF_MEMORY; }
+    if (simulation_in_flight || callbacks_in_flight) {
+        // Callback-safe teardown: accept the request, report "Closing", and
+        // tear down after the callback frame (no partial mutation inside it).
+        close_requested = true;
+        return last_error = OK;
+    }
+    close_requested = false;
 #if defined(SUPERPOS_HAS_DTLS) || defined(SUPERPOS_HAS_RTC)
     if (auto pending=SuperposNativeReceiverAccess::close(*this);pending!=OK) { return last_error=pending; }
 #endif
@@ -539,7 +595,7 @@ void SuperposSession::close() { close_checked(); }
 String SuperposSession::get_state() const {
     if (Thread::get_caller_id() != owner_thread) { return "WrongThread"; }
     if (owner_retired) { return "Retired"; }
-    if (closing || simulation_in_flight) { return "Closing"; }
+    if (closing || simulation_in_flight || close_requested) { return "Closing"; }
     if (!impl || !impl->world) { return "Closed"; }
     if (managed_reload_paused) { return "ManagedReloadPaused"; }
 #if defined(SUPERPOS_HAS_DTLS) || defined(SUPERPOS_HAS_RTC)
@@ -624,6 +680,7 @@ Error SuperposSession::advance_owned_tick(uint64_t p_owner, uint64_t p_physics_f
 }
 Error SuperposSession::step_tick() {
     if (owner_retired) { return last_error = ERR_UNCONFIGURED; }
+    if (close_requested) { _apply_deferred_close(); return last_error = ERR_UNCONFIGURED; }
     if (managed_reload_paused || closing || simulation_in_flight || callbacks_in_flight) { return last_error = ERR_BUSY; }
     Ref<SuperposSession> keep_alive(this);
     if (!impl || !impl->world) { return last_error = ERR_UNCONFIGURED; }
@@ -636,6 +693,7 @@ Error SuperposSession::step_tick() {
     if (impl->network) {
         auto sampled = impl->network->refresh();
         if (!sampled) {
+            impl->network->failure = sampled.error();
             impl->network->error = translate(sampled.error());
             return last_error = impl->network->error;
         }
@@ -742,7 +800,7 @@ Error SuperposSession::_configure_udp_route(bool p_server, const SuperposUdpRout
 
         const String name = key;
 
-        if (name != "bundle_frames" && name != "burst_datagrams" && name != "receive_frames" && name != "channel_modes" && name != "minimum_rate" &&
+        if (name != "bundle_frames" && name != "burst_datagrams" && name != "receive_frames" && name != "channel_modes" && name != "channel_purposes" && name != "minimum_rate" &&
                 (name != "connection_id" || p_route.kind != SuperposUdpRoute::Kind::Routed)) { return last_error = ERR_INVALID_PARAMETER; }
 
     }
@@ -756,6 +814,13 @@ Error SuperposSession::_configure_udp_route(bool p_server, const SuperposUdpRout
     const int64_t minimum_rate = p_transport.get("minimum_rate", 0);
 
     const Array channel_modes = p_transport.get("channel_modes", Array());
+    // Application (0) or Control (1) per channel, HELLO-negotiated like modes.
+    // A Control channel carries the 4 KiB replication/lifecycle record route.
+    const Array channel_purposes = p_transport.get("channel_purposes", Array());
+    if (channel_purposes.size() > 32) { return last_error = ERR_INVALID_PARAMETER; }
+    for (int i = 0; i < channel_purposes.size(); ++i) {
+        if (channel_purposes[i].get_type() != Variant::INT || int64_t(channel_purposes[i]) < 0 || int64_t(channel_purposes[i]) > int64_t(superpos::ChannelPurpose::Control)) { return last_error = ERR_INVALID_PARAMETER; }
+    }
 
     if (burst_datagrams < 1 || burst_datagrams > 16 || receive_frames < 1 || receive_frames > 64 || channel_modes.size() > 32 || minimum_rate < 0 || minimum_rate > 1073741824) { return last_error = ERR_INVALID_PARAMETER; }
 
@@ -837,6 +902,7 @@ Error SuperposSession::_configure_udp_route(bool p_server, const SuperposUdpRout
     config.limits.fragment_payload_bytes = 894; // DTLS frame minus packet and delivery envelopes.
 
     for (int i = 0; i < channel_modes.size(); ++i) { config.channel_modes[i] = superpos::DeliveryMode(int64_t(channel_modes[i])); }
+    for (int i = 0; i < channel_purposes.size(); ++i) { config.channel_purposes[i] = superpos::ChannelPurpose(int64_t(channel_purposes[i])); }
     config.capabilities.schemas = impl->world->fingerprint();
     config.capabilities.simulation = *profile;
     config.capabilities.history_ticks = impl->prediction_history_ticks;
@@ -916,7 +982,7 @@ Dictionary SuperposSession::enqueue_packet(const PackedByteArray &p_payload, uin
 #if defined(SUPERPOS_HAS_DTLS) || defined(SUPERPOS_HAS_RTC)
     if (!impl || !impl->network || p_channel >= 32) { return result; }
     if (impl->network->error != OK) { result["error"] = impl->network->error; return result; }
-    if(impl->network->receiver && !impl->network->receiver->raw_allowed(p_channel)){ result["error"] = ERR_BUSY; return result; }
+    if(impl->network->reserved(p_channel)){ result["error"] = ERR_BUSY; return result; }
 #if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
 
     if(impl->network->authority && !impl->network->authority->raw_allowed(p_channel)){ result["error"] = ERR_BUSY; return result; }
@@ -946,7 +1012,7 @@ Dictionary SuperposSession::read_packet(uint32_t p_channel) const {
     if (impl->network->error != OK) { result["error"] = impl->network->error; return result; }
     auto authority = impl->world->world().authority_epoch();
     if (!authority) { result["error"] = translate(authority.error()); return result; }
-    if(impl->network->receiver && !impl->network->receiver->raw_allowed(p_channel)){ result["error"] = ERR_BUSY; return result; }
+    if(impl->network->reserved(p_channel)){ result["error"] = ERR_BUSY; return result; }
 #if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
 
     if(impl->network->authority && !impl->network->authority->raw_allowed(p_channel)){ result["error"] = ERR_BUSY; return result; }
@@ -981,7 +1047,7 @@ Error SuperposSession::acknowledge_packet(uint64_t p_message, uint64_t p_binding
     if (!impl || !impl->network) { return last_error = ERR_UNCONFIGURED; }
     if (impl->network->error != OK) { return last_error = impl->network->error; }
     if (!p_message || p_channel >= 32 || p_binding_generation != impl->binding_generation) { return last_error = ERR_INVALID_PARAMETER; }
-    if(impl->network->receiver && !impl->network->receiver->raw_allowed(p_channel)){ return last_error = ERR_BUSY; }
+    if(impl->network->reserved(p_channel)){ return last_error = ERR_BUSY; }
 #if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
 
     if(impl->network->authority && !impl->network->authority->raw_allowed(p_channel)){ return last_error = ERR_BUSY; }
@@ -1004,7 +1070,7 @@ Dictionary SuperposSession::get_packet_outcome(uint64_t p_message, uint64_t p_bi
     if (!impl || !impl->network) { return result; }
     if (impl->network->error != OK) { result["error"] = impl->network->error; return result; }
     if (!p_message || p_channel >= 32 || p_binding_generation != impl->binding_generation) { result["error"] = ERR_INVALID_PARAMETER; return result; }
-    if(impl->network->receiver && !impl->network->receiver->raw_allowed(p_channel)){ result["error"] = ERR_BUSY; return result; }
+    if(impl->network->reserved(p_channel)){ result["error"] = ERR_BUSY; return result; }
 #if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
 
     if(impl->network->authority && !impl->network->authority->raw_allowed(p_channel)){ result["error"] = ERR_BUSY; return result; }
@@ -1029,7 +1095,7 @@ Error SuperposSession::retire_packet(uint64_t p_message, uint64_t p_binding_gene
     if (!impl || !impl->network) { return last_error = ERR_UNCONFIGURED; }
     if (impl->network->error != OK) { return last_error = impl->network->error; }
     if (!p_message || p_channel >= 32 || p_binding_generation != impl->binding_generation) { return last_error = ERR_INVALID_PARAMETER; }
-    if(impl->network->receiver && !impl->network->receiver->raw_allowed(p_channel)){ return last_error = ERR_BUSY; }
+    if(impl->network->reserved(p_channel)){ return last_error = ERR_BUSY; }
 #if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
 
     if(impl->network->authority && !impl->network->authority->raw_allowed(p_channel)){ return last_error = ERR_BUSY; }
@@ -1103,7 +1169,11 @@ Error SuperposReceiverPublicAccess::retry(SuperposSession &, uint64_t, uint64_t,
 Error SuperposReceiverPublicAccess::attach(SuperposSession &, SuperposSpawner &, const Dictionary &) { return ERR_UNAVAILABLE; }
 Error SuperposReceiverPublicAccess::detach(SuperposSession &) { return ERR_UNAVAILABLE; }
 void SuperposReceiverPublicAccess::abandon(SuperposSession &) noexcept {}
+Error SuperposReceiverPublicAccess::call_rpc(SuperposSession &, uint64_t, uint64_t, const std::array<uint64_t, 6> &, uint64_t, const PackedByteArray &) { return ERR_UNAVAILABLE; }
+Array SuperposReceiverPublicAccess::take_rpcs(SuperposSession &, uint32_t) { return Array(); }
+Dictionary SuperposReceiverPublicAccess::rpc_status(SuperposSession &) { Dictionary r; r["error"] = ERR_UNAVAILABLE; return r; }
 #endif
+#include "private/replication/session_replication.inc"
 Error SuperposSession::attach_receiver(SuperposSpawner *spawner, const Dictionary &configuration) { return spawner ? SuperposReceiverPublicAccess::attach(*this, *spawner, configuration) : ERR_INVALID_PARAMETER; }
 Error SuperposSession::detach_receiver() { return SuperposReceiverPublicAccess::detach(*this); }
 Dictionary SuperposSession::read_receiver_status() const {
@@ -1114,6 +1184,7 @@ Dictionary SuperposSession::read_receiver_status() const {
         Ref<superpos_egp::spawning::SuperposSpawnRuntime> runtime(Object::cast_to<superpos_egp::spawning::SuperposSpawnRuntime>(ObjectDB::get_instance(impl->network->spawn_runtime)));
         if (runtime.is_valid()) result = runtime->status();
         result["attached"] = true;
+        result["rpc"] = SuperposReceiverPublicAccess::rpc_status(*const_cast<SuperposSession *>(this));
     }
 #endif
     return result;
@@ -1188,6 +1259,7 @@ Dictionary SuperposSession::get_statistics() const {
         if(!accessed){ result["error"]=translate(accessed.error()); return result; }
         result["network_ready"] = !managed_reload_paused && impl->network->error == OK && (*accessed)->ready();
         result["network_error"] = impl->network->error;
+        result["network_failure"] = int(impl->network->failure);
 #ifdef SUPERPOS_HAS_DTLS
         if (impl->network->packet) {
         auto stats = impl->network->packet->statistics();
@@ -1223,7 +1295,7 @@ Error SuperposSession::read_raw(uint32_t p_channel, PackedByteArray &r_payload, 
 #if defined(SUPERPOS_HAS_DTLS) || defined(SUPERPOS_HAS_RTC)
     if (!impl || !impl->network || p_channel >= 32) { return ERR_UNCONFIGURED; }
     if (impl->network->error != OK) { return impl->network->error; }
-    if (impl->network->receiver && !impl->network->receiver->raw_allowed(p_channel)) { return ERR_BUSY; }
+    if (impl->network->reserved(p_channel)) { return ERR_BUSY; }
     auto accessed = impl->network->access();
     if (!accessed) { return translate(accessed.error()); }
     auto received = (*accessed)->receive(uint8_t(p_channel));
@@ -1251,7 +1323,7 @@ Error SuperposSession::enqueue_raw(const uint8_t *p_data, size_t p_size, uint32_
 #if defined(SUPERPOS_HAS_DTLS) || defined(SUPERPOS_HAS_RTC)
     if (!impl || !impl->network || p_channel >= 32) { return ERR_UNCONFIGURED; }
     if (impl->network->error != OK) { return impl->network->error; }
-    if (impl->network->receiver && !impl->network->receiver->raw_allowed(p_channel)) { return ERR_BUSY; }
+    if (impl->network->reserved(p_channel)) { return ERR_BUSY; }
     auto accessed = impl->network->access();
     if (!accessed) { return translate(accessed.error()); }
     auto accepted = (*accessed)->send(std::span<const std::byte>(reinterpret_cast<const std::byte *>(p_data), p_size), impl->tick, uint8_t(p_channel));
@@ -1409,12 +1481,25 @@ void SuperposSession::_finish_retirement() {
 void SuperposSession::_end_callback() {
     ERR_FAIL_COND(Thread::get_caller_id() != owner_thread || !callbacks_in_flight);
     --callbacks_in_flight;
+    _apply_deferred_close();
     _finish_retirement();
+}
+void SuperposSession::_apply_deferred_close() {
+    // Only at the outermost callback boundary and outside other teardown; a
+    // request that cannot apply yet stays pending for the next boundary or
+    // the next tick.
+    if (!close_requested || callbacks_in_flight || simulation_in_flight || closing || owner_retired ||
+            managed_reload_paused || pending_native_retirement) { return; }
+    close_requested = false;
+    Ref<SuperposSession> keep_alive(this);
+    const Error closed = close_checked();
+    if (closed != OK && closed != ERR_BUSY) { last_error = closed; }
 }
 
 Error SuperposSession::_reload_preflight() const {
 #if defined(SUPERPOS_HAS_DTLS) || defined(SUPERPOS_HAS_RTC)
     if(impl && impl->network && impl->network->receiver)return ERR_BUSY;
+    if(impl && impl->network && impl->network->publisher)return ERR_BUSY;
 #endif
 #if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
     if(impl && impl->network && impl->network->authority)return ERR_BUSY;
@@ -1510,11 +1595,12 @@ Error SuperposSession::_reload_validate(const SuperposManagedReload::Ticket &p_t
         // Retained ownership is not a reusable time/authority receipt. Sample
         // and run the ordinary live transport gates before native resume.
         auto sampled = impl->network->refresh();
-        if (!sampled) { impl->network->error = translate(sampled.error()); return impl->network->error; }
+        if (!sampled) { impl->network->failure = sampled.error(); impl->network->error = translate(sampled.error()); return impl->network->error; }
         auto accessed=impl->network->access();
         if(!accessed){ return translate(accessed.error()); }
         auto progressed = impl->network->pump(*accessed,impl->binding_generation,impl->tick);
         if (!progressed && progressed.error() != superpos::Error::Busy) {
+            impl->network->failure = progressed.error();
             impl->network->error = translate(progressed.error());
             return impl->network->error;
         }

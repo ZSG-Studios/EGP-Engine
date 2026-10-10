@@ -64,8 +64,8 @@ Error SuperposReceiverPublicAccess::attach(SuperposSession &owner,
     if (owner.owner_retired || owner.closing || owner.managed_reload_paused || owner.callbacks_in_flight ||
             owner.simulation_in_flight || !owner.impl || !owner.impl->network || !owner.impl->registry) return ERR_UNCONFIGURED;
     if (spawner.runtime_id.is_valid() || spawner.catalog.is_null() || spawner.session.ptr() != &owner) return ERR_INVALID_PARAMETER;
-    static const std::array<StringName, 11> allowed{ "authority_epoch", "connection_epoch", "replica_epoch", "peer",
-        "maximum_active", "maximum_transitions", "control_channel", "state_channel", "bulk_channel", "native_bytes", "spawn_timeout_ms" };
+    static const std::array<StringName, 12> allowed{ "authority_epoch", "connection_epoch", "replica_epoch", "peer",
+        "maximum_active", "maximum_transitions", "control_channel", "state_channel", "bulk_channel", "native_bytes", "spawn_timeout_ms", "rpc_channel" };
     for (int i = 0; i < configuration.size(); ++i) {
         const Variant key = configuration.get_key_at_index(i);
         if (key.get_type() != Variant::STRING && key.get_type() != Variant::STRING_NAME) return ERR_INVALID_PARAMETER;
@@ -89,6 +89,10 @@ Error SuperposReceiverPublicAccess::attach(SuperposSession &owner,
             !config.maximum_active || config.maximum_active > 1000 || !config.maximum_transitions || config.maximum_transitions > 64 ||
             !native_bytes || native_bytes > (64u << 20) || control >= 32 || state >= 32 || bulk >= 32 ||
             !spawn_timeout_ms || spawn_timeout_ms > 60000) return ERR_INVALID_PARAMETER;
+    // Typed RPCs use their own reliable ordered application channel.
+    const uint64_t rpc_channel = value("rpc_channel", 3);
+    if (rpc_channel >= 32 || rpc_channel == control || rpc_channel == state || rpc_channel == bulk ||
+            control == state || control == bulk || state == bulk) return ERR_INVALID_PARAMETER;
     SuperposSpawnCatalog::Snapshot catalog;
     Ref<SuperposSpawnCatalog> catalog_source = spawner.catalog;
     if (ObjectDB::get_instance(spawner_id) != &spawner || catalog_source.is_null() || spawner.catalog != catalog_source) return ERR_UNCONFIGURED;
@@ -114,6 +118,10 @@ Error SuperposReceiverPublicAccess::attach(SuperposSession &owner,
     const Error initialized = runtime->initialize(superpos_egp::module_backing(), std::move(catalog), spawner, owner,
         *receiver_binding, owner.impl->binding_generation, uint32_t(config.maximum_active + config.maximum_transitions), native_bytes, spawn_timeout_ms);
     if (initialized != OK) return initialized;
+    // Complete RPC capacity (inbox and pre-readiness buffer) before admission.
+    auto endpoint = superpos_egp::captured_create<superpos_egp::replication::RpcEndpoint>(owner.impl->allocator, superpos::MemoryDomain::Session, owner.impl->allocator);
+    if (!endpoint) return translate(endpoint.error());
+    if (auto reserved = (*endpoint)->reserve(uint8_t(rpc_channel)); !reserved) return translate(reserved.error());
     std::array<superpos_egp::lifecycle_engine::Registration, 64> registrations;
     const auto prepared = runtime->registrations(std::span(registrations).first(count));
     if (!prepared) return translate(prepared.error());
@@ -126,6 +134,7 @@ Error SuperposReceiverPublicAccess::attach(SuperposSession &owner,
     spawner.runtime_id = runtime->get_instance_id();
     owner.impl->network->spawn_runtime = spawner.runtime_id;
     owner.impl->network->spawn_binding = *receiver_binding;
+    owner.impl->network->rpc = std::move(*endpoint);
     return OK;
 }
 
@@ -151,6 +160,7 @@ Error SuperposReceiverPublicAccess::detach(SuperposSession &owner) {
     if (!released) return translate(released.error());
     receiver_owners[owned->native_slot] = nullptr;
     owned->network->receiver.reset();
+    owned->network->rpc.reset();
     owned->network->spawn_runtime = ObjectID{};
     owned->network->spawn_binding = 0;
     owned->native_recipient = ObjectID{};
@@ -160,4 +170,98 @@ Error SuperposReceiverPublicAccess::detach(SuperposSession &owner) {
 void SuperposReceiverPublicAccess::abandon(SuperposSession &owner) noexcept {
     if (Thread::is_main_thread() && owner.impl && owner.impl->network && owner.impl->network->receiver)
         SuperposNativeReceiverAccess::orphan(owner);
+}
+
+Error SuperposReceiverPublicAccess::call_rpc(SuperposSession &owner, uint64_t binding, uint64_t handle,
+        const std::array<uint64_t, 6> &identity, uint64_t rpc_id, const PackedByteArray &payload) {
+    if (!Thread::is_main_thread() || Thread::get_caller_id() != owner.owner_thread) return ERR_BUSY;
+    if (owner.owner_retired || !owner.impl || !owner.impl->network || !owner.impl->network->receiver || !owner.impl->network->rpc) return ERR_UNCONFIGURED;
+    if (owner.managed_reload_paused || owner.closing || owner.simulation_in_flight) return ERR_BUSY;
+    if (!binding || owner.impl->network->spawn_binding != binding || identity[0] > UINT16_MAX || !rpc_id) return ERR_INVALID_PARAMETER;
+    auto &store = owner.impl->network->receiver->receiver_;
+    if (!store) return ERR_UNCONFIGURED;
+    const superpos::ReplicaKey key{uint16_t(identity[0]), identity[1], identity[2], identity[3], identity[4], identity[5]};
+    const auto record = store->inspect_record(key);
+    if (!record) return translate(record.error());
+    if (record->handle.value != handle) return ERR_INVALID_DATA;
+    if (record->phase != superpos::ReceiverPhase::Ready || !record->catalog) return ERR_BUSY;
+    const auto *descriptor = record->catalog->schema.rpc(rpc_id);
+    if (!descriptor) return ERR_UNAVAILABLE;
+    if (size_t(payload.size()) > descriptor->maximum_payload) return ERR_INVALID_PARAMETER;
+    auto local = owner.impl->network->receiver->local_peer();
+    if (!local) return translate(local.error());
+    // A client is never the authority. Owner calls carry the observed
+    // ownership revision; the authority rechecks both at execution.
+    if (descriptor->permission == superpos::RpcPermission::Authority) return ERR_UNAUTHORIZED;
+    if (descriptor->permission == superpos::RpcPermission::Owner && record->owner != *local) return ERR_UNAUTHORIZED;
+    auto access = owner.impl->network->access();
+    if (!access) return translate(access.error());
+    const superpos_egp::replication::RpcFrame frame{rpc_id, record->handle, record->ownership_revision, byte_view(payload)};
+    auto sent = owner.impl->network->rpc->send(*access->operator->(), owner.impl->tick, frame);
+    return sent ? OK : translate(sent.error());
+}
+
+Array SuperposReceiverPublicAccess::take_rpcs(SuperposSession &owner, uint32_t maximum) {
+    Array result;
+    if (!Thread::is_main_thread() || Thread::get_caller_id() != owner.owner_thread) return result;
+    if (owner.owner_retired || owner.closing || !owner.impl || !owner.impl->network || !owner.impl->network->receiver || !owner.impl->network->rpc) return result;
+    auto &endpoint = *owner.impl->network->rpc;
+    auto &inbox = endpoint.inbox();
+    while (inbox.size() && uint32_t(result.size()) < std::min<uint32_t>(maximum, 64)) {
+        const auto frame = inbox.frame(0);
+        // Execution-time recheck: the replica must still be Ready.
+        auto record = owner.impl->network->receiver->find_handle(frame.handle);
+        if (!record || record->phase != superpos::ReceiverPhase::Ready) {
+            ++endpoint.totals().rejected_stale;
+            inbox.remove(0);
+            continue;
+        }
+        PackedByteArray payload;
+        if (payload.resize(int64_t(frame.payload.size())) != OK) break;
+        if (!frame.payload.empty()) memcpy(payload.ptrw(), frame.payload.data(), frame.payload.size());
+        Dictionary call;
+        call["handle"] = superpos_egp::signed_bits(frame.handle.value);
+        call["rpc_id"] = superpos_egp::signed_bits(frame.rpc);
+        call["ownership_revision"] = superpos_egp::signed_bits(frame.ownership_revision);
+        call["payload"] = payload;
+        result.append(call);
+        ++endpoint.totals().taken;
+        inbox.remove(0);
+    }
+    return result;
+}
+
+Dictionary rpc_totals_dictionary(const superpos_egp::replication::RpcEndpoint &endpoint) {
+    const auto &totals = endpoint.totals();
+    Dictionary result;
+    result["channel"] = int64_t(endpoint.channel());
+    result["inbox"] = int64_t(endpoint.inbox().size());
+    result["inbox_bytes"] = int64_t(endpoint.inbox().bytes());
+    result["pre_readiness"] = int64_t(endpoint.pending().size());
+    result["pre_readiness_bytes"] = int64_t(endpoint.pending().bytes());
+    result["sent"] = superpos_egp::signed_bits(totals.sent);
+    result["send_refused"] = superpos_egp::signed_bits(totals.send_refused);
+    result["retired"] = superpos_egp::signed_bits(totals.retired);
+    result["received"] = superpos_egp::signed_bits(totals.received);
+    result["delivered"] = superpos_egp::signed_bits(totals.delivered);
+    result["buffered"] = superpos_egp::signed_bits(totals.buffered);
+    result["buffer_overflow"] = superpos_egp::signed_bits(totals.buffer_overflow);
+    result["expired"] = superpos_egp::signed_bits(totals.expired);
+    result["dropped"] = superpos_egp::signed_bits(totals.dropped);
+    result["taken"] = superpos_egp::signed_bits(totals.taken);
+    result["rejected_permission"] = superpos_egp::signed_bits(totals.rejected_permission);
+    result["rejected_stale"] = superpos_egp::signed_bits(totals.rejected_stale);
+    result["rejected_unsupported"] = superpos_egp::signed_bits(totals.rejected_unsupported);
+    result["failure"] = int(endpoint.failure());
+    return result;
+}
+
+Dictionary SuperposReceiverPublicAccess::rpc_status(SuperposSession &owner) {
+    Dictionary result;
+    result["error"] = ERR_UNCONFIGURED;
+    if (Thread::get_caller_id() != owner.owner_thread) { result["error"] = ERR_BUSY; return result; }
+    if (!owner.impl || !owner.impl->network || !owner.impl->network->rpc) return result;
+    result = rpc_totals_dictionary(*owner.impl->network->rpc);
+    result["error"] = OK;
+    return result;
 }

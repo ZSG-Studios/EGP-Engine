@@ -35,10 +35,18 @@ Error SuperposReplicaView::retry_projection() const {
     Ref<SuperposSession> owner(Object::cast_to<SuperposSession>(ObjectDB::get_instance(session_id)));
     return owner.is_valid() ? SuperposReceiverPublicAccess::retry(*owner.ptr(), binding, handle, identity) : ERR_UNCONFIGURED;
 }
+Error SuperposReplicaView::call_rpc(uint64_t p_rpc_id, const PackedByteArray &p_payload) const {
+    if (!Thread::is_main_thread()) { return ERR_BUSY; }
+    Ref<SuperposSession> owner(Object::cast_to<SuperposSession>(ObjectDB::get_instance(session_id)));
+    if (owner.is_null()) { return ERR_UNCONFIGURED; }
+    return SuperposReceiverPublicAccess::call_rpc(*owner.ptr(), binding, handle, identity, p_rpc_id, p_payload);
+}
+
 void SuperposReplicaView::_bind_methods() {
     ClassDB::bind_method(D_METHOD("get_handle"), &SuperposReplicaView::get_handle);
     ClassDB::bind_method(D_METHOD("get_binding_generation"), &SuperposReplicaView::get_binding_generation);
     ClassDB::bind_method(D_METHOD("retry_projection"), &SuperposReplicaView::retry_projection);
     ClassDB::bind_method(D_METHOD("read_status"), &SuperposReplicaView::read_status);
     ClassDB::bind_method(D_METHOD("read_fields", "fields"), &SuperposReplicaView::read_fields);
+    ClassDB::bind_method(D_METHOD("call_rpc", "rpc_id", "payload"), &SuperposReplicaView::call_rpc);
 }

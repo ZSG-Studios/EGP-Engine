@@ -52,6 +52,10 @@ Dictionary SuperposSpawner::read_status() const {
     if (runtime.is_valid()) return runtime->status();
     Dictionary result; result["error"] = ERR_UNCONFIGURED; return result;
 }
+Array SuperposSpawner::read_rpcs(uint32_t maximum) {
+    if (!Thread::is_main_thread() || session.is_null() || resolve_runtime(runtime_id).is_null()) return Array();
+    return SuperposReceiverPublicAccess::take_rpcs(*session.ptr(), maximum);
+}
 TypedArray<SuperposReplicaView> SuperposSpawner::get_replicas(uint32_t offset, uint32_t limit) const {
     if (!Thread::is_main_thread()) return {};
     Ref<superpos_egp::spawning::SuperposSpawnRuntime> runtime = resolve_runtime(runtime_id);
@@ -85,6 +89,7 @@ void SuperposSpawner::_bind_methods() {
     ClassDB::bind_method(D_METHOD("stop"), &SuperposSpawner::stop);
     ClassDB::bind_method(D_METHOD("project_pending"), &SuperposSpawner::project_pending);
     ClassDB::bind_method(D_METHOD("read_status"), &SuperposSpawner::read_status);
+    ClassDB::bind_method(D_METHOD("read_rpcs", "maximum"), &SuperposSpawner::read_rpcs, DEFVAL(16));
     ClassDB::bind_method(D_METHOD("get_replicas", "offset", "limit"), &SuperposSpawner::get_replicas, DEFVAL(0), DEFVAL(64));
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "session", PROPERTY_HINT_RESOURCE_TYPE, "SuperposSession"), "set_session", "get_session");
     ADD_PROPERTY(PropertyInfo(Variant::OBJECT, "catalog", PROPERTY_HINT_RESOURCE_TYPE, "SuperposSpawnCatalog"), "set_catalog", "get_catalog");

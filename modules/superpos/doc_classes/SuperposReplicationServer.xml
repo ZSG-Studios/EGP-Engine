@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposReplicationServer" inherits="RefCounted" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>Authority-side fan-out of one canonical World to authenticated client links.</brief_description>
+	<description>Replicates every live object of one configured [SuperposSession] (the World) to each attached link Session, one per client. A link is a separate [SuperposSession] configured with the same schemas and authority epoch and connected to the client through [method SuperposSession.configure_udp] with replication routes: channel 0 a control channel, channels 1 and 2 reliable unordered. The client attaches a [SuperposSpawner] to its own Session.
+		Each link runs the native sender store and replication bridge: spawn binding and initial baseline, atomic state publications of up to 16 objects, ownership resets, leaves and full repairs on request, with retransmission and receipts owned by native delivery. Owner-only fields are hidden from peers that do not own the object, and authority-only fields are never sent. Wire revisions are per link and strictly increasing, so an atomic group is never partially stale. Native work is bounded by four in-flight captures per link; refused work is retried on the next [method publish]. No script, getter, setter or user callback runs in the publish path. The World and link Sessions are weak native identities.
+		Relevance: every object belongs to a region (0 by default). Region 0 is visible to every link; a link with an interest filter ([method set_peer_interest]) also sees its interest regions and nothing else, and replicas that leave its interest are retired. Enrollment walks the region index one region per publish, so a link never scans the whole World. A dormant object keeps its replicas but publishes no state until it is woken. Pending publications are ordered by priority weight times age within an optional per-link byte budget. Objects in one explicit group (at most 16 objects and 64 KiB of state) publish together in one atomic message, and only once every replicated member is ready. After a large publication the link promotes the object's baseline to the published state (at most twice per second per object), so later deltas stay small.
+		Typed RPCs: [method send_rpc] calls a registered schema RPC on one link's replica, and [method read_rpcs] returns client calls, each authorized at that moment against the live World: declared RPC, payload bound, authority epoch and permission (Owner calls also require the current ownership revision). Rejected calls are counted, never delivered. Incoming data never selects a method, script or resource.
+		Per link at most 1000 replicas are active and 64 lifecycle transitions are pending. Objects beyond that are deferred until capacity frees. Paired RTC links are not supported yet and return [constant ERR_UNAVAILABLE].
+		All methods are main-thread and owner-thread only. GDScript, C# and C++ call the same native ClassDB implementation.
+		[codeblock]
+		var server := SuperposReplicationServer.new()
+		server.configure(world)
+		server.attach_peer(link) # link: a configure_udp server Session for one client
+		# Every frame, after canonical writes to the World:
+		server.publish()
+		link.advance_tick()
+		[/codeblock]</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="attach_peer">
+			<return type="int" enum="Error" />
+			<param index="0" name="link" type="SuperposSession" />
+			<param index="1" name="configuration" type="Dictionary" default="{}" />
+			<description>Reserves every native pool for [param link] and starts replicating to it once its Session is admitted. The link must have a native UDP association, the World's exact schema fingerprint and authority epoch, and no attached receiver. Accepted integer keys are [code]peer[/code] (defaults to the admitted remote peer), [code]replica_epoch[/code] (default 1, must match the client's receiver), [code]maximum_active[/code] (1 through 1000), [code]maximum_transitions[/code] (1 through 64), [code]scan_budget[/code] (World slots visited per publish when enrolling objects, 1 through 100000, default 4096), [code]control_channel[/code], [code]state_channel[/code] and [code]bulk_channel[/code] (defaults 0, 1 and 2), [code]rpc_channel[/code] (default 3, reliable ordered), [code]state_budget[/code] (delta and repair bytes queued per publish, 0 for unbounded, at most 1 MiB) and [code]baseline_promotion[/code] (1 by default, 0 disables). Unknown keys return [constant ERR_INVALID_PARAMETER]. Generic packet methods on the link reject the three replication channels from attachment.</description>
+		</method>
+		<method name="close">
+			<return type="void" />
+			<description>Detaches every link and forgets the World. Links keep their sessions; clients keep their last replicas until the links close.</description>
+		</method>
+		<method name="configure">
+			<return type="int" enum="Error" />
+			<param index="0" name="world" type="SuperposSession" />
+			<param index="1" name="configuration" type="Dictionary" default="{}" />
+			<description>Selects the World Session to replicate. Accepted keys are [code]maximum_peers[/code] (1 through 256, default 32), [code]maximum_regions[/code] (1 through 65536, default 256) and [code]maximum_per_region[/code] (objects one region can hold, 1 through 4096, default 1000). Region and attribute storage for every World slot is reserved here. Reconfiguring the World Session invalidates the server: [method publish] then returns [constant ERR_INVALID_DATA].</description>
+		</method>
+		<method name="detach_peer">
+			<return type="int" enum="Error" />
+			<param index="0" name="link" type="SuperposSession" />
+			<description>Stops replicating to [param link] and releases its native pools and reserved channels. Already delivered replicas are not retired; close the link to end the client's view. Returns [constant ERR_DOES_NOT_EXIST] when the link is not attached.</description>
+		</method>
+		<method name="get_last_error" qualifiers="const">
+			<return type="int" enum="Error" />
+			<description>Returns the error recorded by the last call.</description>
+		</method>
+		<method name="send_rpc">
+			<return type="int" enum="Error" />
+			<param index="0" name="link" type="SuperposSession" />
+			<param index="1" name="handle" type="int" />
+			<param index="2" name="rpc_id" type="int" />
+			<param index="3" name="payload" type="PackedByteArray" />
+			<description>Sends the registered schema RPC [param rpc_id] of World object [param handle] to [param link]'s client. The client delivers it once its replica is ready. Returns [constant ERR_UNAVAILABLE] for an undeclared RPC, [constant ERR_INVALID_PARAMETER] for an oversize payload, [constant ERR_UNCONFIGURED] before the link is admitted and [constant ERR_BUSY] while eight sends are still awaiting delivery.</description>
+		</method>
+		<method name="set_object_dormant">
+			<return type="int" enum="Error" />
+			<param index="0" name="handle" type="int" />
+			<param index="1" name="dormant" type="bool" />
+			<description>Marks a live World object dormant (no state publications on any link; replicas stay) or wakes it, after which its latest state is published.</description>
+		</method>
+		<method name="set_object_group">
+			<return type="int" enum="Error" />
+			<param index="0" name="handle" type="int" />
+			<param index="1" name="group" type="int" />
+			<description>Puts a live World object in explicit atomic group [param group] (0 removes it). A group holds at most 16 live objects and 64 KiB of state; joining a full group returns [constant ERR_OUT_OF_MEMORY].</description>
+		</method>
+		<method name="set_object_priority">
+			<return type="int" enum="Error" />
+			<param index="0" name="handle" type="int" />
+			<param index="1" name="weight" type="int" />
+			<description>Sets the publication weight (1 through 256, default 1). Pending publications are ordered by weight times the publishes they have waited.</description>
+		</method>
+		<method name="set_object_region">
+			<return type="int" enum="Error" />
+			<param index="0" name="handle" type="int" />
+			<param index="1" name="region" type="int" />
+			<description>Moves a live World object to [param region] (below [code]maximum_regions[/code]; 0 is global). Returns [constant ERR_OUT_OF_MEMORY] when the region already holds [code]maximum_per_region[/code] objects.</description>
+		</method>
+		<method name="set_peer_interest">
+			<return type="int" enum="Error" />
+			<param index="0" name="link" type="SuperposSession" />
+			<param index="1" name="regions" type="PackedInt64Array" />
+			<param index="2" name="filter" type="bool" default="true" />
+			<description>Sets the regions [param link] sees besides region 0: at most 64 distinct nonzero regions below [code]maximum_regions[/code]. With [param filter] false every object is visible again. Replicas outside the new interest are retired; newly visible objects are enrolled.</description>
+		</method>
+		<method name="publish">
+			<return type="Dictionary" />
+			<description>Reads the World once and queues lifecycle, repair and state work on every attached link. Call once per frame after the World's canonical writes and before the links advance. Returns [code]error[/code], [code]peers[/code], [code]stepped[/code], [code]waiting[/code] (links not yet admitted), [code]busy[/code], [code]failed[/code], [code]dropped[/code] (links freed or reconfigured, removed from the server) and [code]tick[/code]. A link that fails with a protocol or capacity error records it as its network error and stops.</description>
+		</method>
+		<method name="read_object_policy" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="handle" type="int" />
+			<description>Returns [code]error[/code], [code]region[/code], [code]dormant[/code], [code]weight[/code], [code]group[/code] and [code]indexed[/code] for a live World object. Policies reset when the World slot is reused.</description>
+		</method>
+		<method name="read_peer_status" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="link" type="SuperposSession" />
+			<description>Returns [code]error[/code], [code]attached[/code], [code]bound[/code], [code]network_error[/code], [code]failure[/code] (the native error code, 0 for none), [code]peer[/code], [code]authority_epoch[/code] and [code]connection_epoch[/code] once bound, [code]replica_epoch[/code], the replica counts [code]tracked[/code], [code]spawning[/code], [code]ready[/code], [code]retiring[/code], [code]resetting[/code] and [code]repairs_pending[/code], [code]wire_revision[/code] and a [code]totals[/code] Dictionary of native counters. Full-width values are signed bit patterns.</description>
+		</method>
+		<method name="read_rpcs">
+			<return type="Array" />
+			<param index="0" name="link" type="SuperposSession" />
+			<param index="1" name="maximum" type="int" default="16" />
+			<description>Takes at most [param maximum] (at most 64) client RPCs from [param link], each a Dictionary with [code]handle[/code], [code skip-lint]rpc_id[/code], [code]sender[/code], [code]ownership_revision[/code] and [code]payload[/code]. Every call is authorized when it is taken (execution time); rejected calls are counted in [method read_peer_status] under [code]rpc[/code] and discarded. The inbox holds at most 64 calls and 64 KiB; further calls wait in the ordered channel.</description>
+		</method>
+		<method name="read_status" qualifiers="const">
+			<return type="Dictionary" />
+			<description>Returns [code]error[/code], [code]configured[/code], [code]peers[/code], [code]maximum_peers[/code], [code]publishes[/code] and [code]authority_epoch[/code].</description>
+		</method>
+	</methods>
+</class>

@@ -152,10 +152,14 @@ func _initialize() -> void:
 			check(retired_binding.error == ERR_UNCONFIGURED and not retired_binding.has("value"), "retired binding has no value")
 		var reentrant := SuperposSession.new()
 		check(reentrant.configure([schema], 4) == OK, "reentrant callback world configured")
-		var callback_close := [OK]
-		reentrant.simulation_tick.connect(func(_tick: int): callback_close[0] = reentrant.close_checked(), CONNECT_ONE_SHOT)
-		check(reentrant.advance_tick() == OK and callback_close[0] == ERR_BUSY and reentrant.get_state() == "Configured", "tick callback close refuses without partial mutation")
-		check(reentrant.close_checked() == OK and reentrant.get_state() == "Closed", "owner closes after callback boundary")
+		var callback_close := [FAILED, ""]
+		reentrant.simulation_tick.connect(func(_tick: int):
+			callback_close[0] = reentrant.close_checked()
+			callback_close[1] = reentrant.get_state(), CONNECT_ONE_SHOT)
+		# Callback-safe teardown: accepted inside the callback, reported as
+		# Closing, applied when the native callback returns.
+		check(reentrant.advance_tick() == OK and callback_close[0] == OK and callback_close[1] == "Closing" and reentrant.get_state() == "Closed", "tick callback close deferred to the callback boundary")
+		check(reentrant.close_checked() == OK and reentrant.get_state() == "Closed", "closing an already closed Session stays closed")
 	if failed:
 		print("SUPERPOS_EGP_RUNTIME_FAILED checks=", checks)
 		quit(1)

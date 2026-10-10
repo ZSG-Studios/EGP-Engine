@@ -36,6 +36,16 @@ Status NativeReceiver::initialize(Session& session,SchemaRegistry& registry,std:
 Result<ReplicaSessionProgress> NativeReceiver::pump(Session& session,std::uint64_t generation,Tick tick) noexcept {
     return binding_.pump(session,generation,tick);
 }
+Result<ReceiverRecord> NativeReceiver::find_handle(ObjectHandle handle) const noexcept {
+    if(!receiver_ || !handle)return fail(superpos::Error::NotReady);
+    for(const auto& row:receiver_rows_.span())if(row.phase!=ReceiverPhase::Empty && row.handle==handle)return row;
+    return fail(superpos::Error::StaleGeneration);
+}
+Result<PeerId> NativeReceiver::local_peer() const noexcept {
+    if(!receiver_)return fail(superpos::Error::NotReady);
+    auto config=receiver_->configuration();if(!config)return fail(config.error());
+    return config->peer;
+}
 Status NativeReceiver::progress_retirement(bool shutdown) noexcept {
     if(shutdown)for(auto& factory:factory_pins_)if(factory.is_valid()){
         auto settled=factory->quiesce_native();if(!settled)return settled;

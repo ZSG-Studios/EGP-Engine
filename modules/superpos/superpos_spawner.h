@@ -26,6 +26,8 @@ public:
     Error stop();
     Dictionary project_pending();
     Dictionary read_status() const;
+    // Authority RPCs for Ready replicas, at most p_maximum (<= 64) per call.
+    Array read_rpcs(uint32_t p_maximum = 16);
     // At most 64 immutable weak views per explicit call. No implicit scene
     // scan or global World-handle lookup occurs on the receive path.
     TypedArray<SuperposReplicaView> get_replicas(uint32_t p_offset = 0, uint32_t p_limit = 64) const;

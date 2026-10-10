@@ -35,11 +35,32 @@ public:
     uint32_t get_quantization_levels() const { return quantization_levels; }
 };
 
+// A registered typed RPC on a schema. The wire names it by rpc_id only; no
+// method, script, resource or property name is ever sent or resolved.
+class SuperposRpc : public Resource {
+    GDCLASS(SuperposRpc, Resource);
+    uint64_t rpc_id = 1;
+    uint32_t permission = 1;
+    uint32_t maximum_payload = 4096;
+protected:
+    static void _bind_methods();
+public:
+    enum Permission { PERMISSION_AUTHORITY = 0, PERMISSION_OWNER = 1, PERMISSION_ADMITTED_PEER = 2 };
+    void set_rpc_id(uint64_t p_value) { rpc_id = p_value; emit_changed(); }
+    uint64_t get_rpc_id() const { return rpc_id; }
+    void set_permission(uint32_t p_value) { permission = p_value; emit_changed(); }
+    uint32_t get_permission() const { return permission; }
+    void set_maximum_payload(uint32_t p_value) { maximum_payload = p_value; emit_changed(); }
+    uint32_t get_maximum_payload() const { return maximum_payload; }
+};
+VARIANT_ENUM_CAST(SuperposRpc::Permission);
+
 class SuperposSchema : public Resource {
     GDCLASS(SuperposSchema, Resource);
     uint64_t schema_id = 1;
     uint64_t revision = 1;
     TypedArray<SuperposField> fields;
+    TypedArray<SuperposRpc> rpcs;
 protected:
     static void _bind_methods();
 public:
@@ -49,6 +70,8 @@ public:
     uint64_t get_revision() const { return revision; }
     void set_fields(const TypedArray<SuperposField> &p_fields) { fields = p_fields; emit_changed(); }
     TypedArray<SuperposField> get_fields() const { return fields; }
+    void set_rpcs(const TypedArray<SuperposRpc> &p_rpcs) { rpcs = p_rpcs; emit_changed(); }
+    TypedArray<SuperposRpc> get_rpcs() const { return rpcs; }
     // Native author declarations only: no Object::get or script callbacks.
     Dictionary bake() const;
     String get_fingerprint() const;

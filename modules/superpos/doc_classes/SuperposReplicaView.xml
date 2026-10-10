@@ -5,6 +5,12 @@
 	<tutorials>
 	</tutorials>
 	<methods>
+		<method name="call_rpc" qualifiers="const">
+			<return type="int" enum="Error" />
+			<param index="0" name="rpc_id" type="int" />
+			<param index="1" name="payload" type="PackedByteArray" />
+			<description>Sends the registered schema RPC [param rpc_id] for this replica to the authority over the receiver's RPC channel. The replica must be canonical-ready and its schema must declare the RPC; [param payload] may not exceed the declared maximum. A client is never the authority, so an Authority-permission RPC returns [constant ERR_UNAUTHORIZED], and an Owner-permission RPC returns it unless this peer owns the replica. The call carries the observed ownership revision; the authority authorizes it again when gameplay takes it. Returns [constant ERR_BUSY] while eight sends are still awaiting delivery, and [constant ERR_UNAVAILABLE] for an undeclared RPC.</description>
+		</method>
 		<method name="get_binding_generation" qualifiers="const">
 			<return type="int" />
 			<description>Returns the unsigned receiver binding generation this view was created for.</description>

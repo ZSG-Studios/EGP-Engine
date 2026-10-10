@@ -40,7 +40,7 @@ Error SuperposNativeReceiverAccess::attach(SuperposSession& session,
     struct ClosingGuard { SuperposSession& owner;~ClosingGuard(){if(!owner.pending_native_retirement)owner.closing=false;} } closing{session};
     ++session.callbacks_in_flight;
     struct CallbackGuard { SuperposSession& owner;~CallbackGuard(){owner._end_callback();} } callbacks{session};
-    auto* owned=session.impl;if(owned->network->receiver)return ERR_ALREADY_IN_USE;
+    auto* owned=session.impl;if(owned->network->receiver || owned->network->publisher)return ERR_ALREADY_IN_USE;
 #if defined(SUPERPOS_HAS_DURABLE_RECOVERY)
     if(owned->network->authority)return ERR_ALREADY_IN_USE;
 #endif

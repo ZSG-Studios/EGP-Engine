@@ -25,4 +25,6 @@ public:
     Dictionary read_status() const;
     Error retry_projection() const;
     Dictionary read_fields(const PackedInt64Array &p_fields) const;
+    // Sends a registered schema RPC to the authority for this replica.
+    Error call_rpc(uint64_t p_rpc_id, const PackedByteArray &p_payload) const;
 };

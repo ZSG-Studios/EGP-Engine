@@ -33,6 +33,9 @@ public:
     superpos::Status stop() noexcept { return binding_.stop(); }
     bool drained() const noexcept { return binding_.drained(); }
     bool raw_allowed(std::uint32_t channel) const noexcept { return routes_.raw_allowed(channel); }
+    // Bounded scan of the fixed receiver rows; the handle is an identity only.
+    superpos::Result<superpos::ReceiverRecord> find_handle(superpos::ObjectHandle) const noexcept;
+    superpos::Result<superpos::PeerId> local_peer() const noexcept;
     superpos::Status progress_retirement(bool shutdown) noexcept;
 private:
     std::array<Ref<SuperposNativeFactory>,64> factory_pins_{};

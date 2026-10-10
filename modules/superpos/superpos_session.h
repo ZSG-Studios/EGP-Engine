@@ -23,12 +23,17 @@ class SuperposSession : public RefCounted {
     friend struct SuperposNativeReceiverAccess;
     friend class SuperposReceiverPublicAccess;
     friend struct SuperposRecoveryAccess;
+    friend struct SuperposReplicationAccess;
     void *pending_native_retirement = nullptr;
     friend class SuperposSimulationScope;
     friend class SuperposManagedReload;
     uint64_t reload_world_owner = 0, managed_reload_epoch = 0;
     uint32_t callbacks_in_flight = 0;
     bool managed_reload_paused = false, closing = false;
+    // A close requested from inside a native callback (signal, simulation
+    // provider) is applied right after the outermost callback unwinds.
+    bool close_requested = false;
+    void _apply_deferred_close();
     bool simulation_in_flight = false;
     bool simulation_tick_phase = false;
     Error _simulation_preflight(uint64_t binding, uint64_t epoch, bool registered) const;
