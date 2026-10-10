@@ -1,5 +1,5 @@
 diff --git a/include/box3d/box3d.h b/include/box3d/box3d.h
-index 7385973..65cb949 100644
+index fb88062..846c2b1 100644
 --- a/include/box3d/box3d.h
 +++ b/include/box3d/box3d.h
 @@ -199,6 +199,9 @@ B3_API void b3World_Explode( b3WorldId worldId, const b3ExplosionDef* explosionD
@@ -22,7 +22,7 @@ index 7385973..65cb949 100644
  /**
   * @defgroup recording Recording
   * @brief Record and replay world state for debugging.
-@@ -1629,6 +1635,15 @@ B3_API float b3SphericalJoint_GetMaxMotorTorque( b3JointId jointId );
+@@ -1632,6 +1638,15 @@ B3_API float b3SphericalJoint_GetMaxMotorTorque( b3JointId jointId );
  
  /// Create a weld joint
  /// @see b3WeldJointDef for details
@@ -39,7 +39,7 @@ index 7385973..65cb949 100644
  
  /// Set the weld joint linear stiffness in Hertz. 0 is rigid.
 diff --git a/include/box3d/types.h b/include/box3d/types.h
-index 20c9745..6fd1b1e 100644
+index 57e5e75..8ba9ead 100644
 --- a/include/box3d/types.h
 +++ b/include/box3d/types.h
 @@ -624,6 +624,8 @@ typedef enum b3JointType
@@ -51,7 +51,7 @@ index 20c9745..6fd1b1e 100644
  } b3JointType;
  
  /// Base joint definition used by all joint types. The local frames are measured from the
-diff --git a/current/src/generic_joint.c b/src/generic_joint.c
+diff --git a/src/generic_joint.c b/src/generic_joint.c
 new file mode 100644
 index 0000000..9205c55
 --- /dev/null
@@ -572,7 +572,7 @@ index c48253d..2f58bc4 100644
  {
  	b3World* world = b3GetUnlockedWorldFromId( worldId );
 diff --git a/src/recording.h b/src/recording.h
-index bcc6608..1b0d740 100644
+index 0bc3fcf..fbd3f37 100644
 --- a/src/recording.h
 +++ b/src/recording.h
 @@ -52,7 +52,7 @@ typedef struct b3World b3World;
@@ -598,11 +598,11 @@ index d2c992b..7af7539 100644
 +B3_REC_OP( 0xF4, GenericJointSetParam, RET_NONE, ARG( JOINTID, joint ) ARG( I32, axis ) ARG( I32, param ) ARG( F32, value ) )
 +B3_REC_OP( 0xF5, GenericJointSetFlag, RET_NONE, ARG( JOINTID, joint ) ARG( I32, axis ) ARG( I32, flag ) ARG( BOOL, value ) )
 +B3_REC_OP( 0xF6, GenericJointSetTargetRotation, RET_NONE, ARG( JOINTID, joint ) ARG( QUAT, rotation ) )
-diff --git a/src/recording_replay.c b/src/recording_replay.c
-index 9c0247c..533a51a 100644
---- a/src/recording_replay.c
-+++ b/src/recording_replay.c
-@@ -1268,6 +1268,28 @@ static void b3RecDispatch_CreateSphericalJoint( const b3RecArgs_CreateSphericalJ
+diff --git a/src/replay.c b/src/replay.c
+index 26f20a0..f1250c4 100644
+--- a/src/replay.c
++++ b/src/replay.c
+@@ -1238,6 +1238,28 @@ static void b3RecDispatch_CreateSphericalJoint( const b3RecArgs_CreateSphericalJ
  	b3RecCheckJointId( rdr, b3CreateSphericalJoint( rdr->replayWorldId, &def ), recId );
  }
  
@@ -644,13 +644,3 @@ index c2c1054..7787e6c 100644
  	b3World* world = b3GetWorld( jointId.world0 );
  	B3_REC( world, SphericalJointSetConeLimit, jointId, angleRadians );
  	b3JointSim* base = b3GetJointSimCheckType( jointId, b3_sphericalJoint );
---- a/src/CMakeLists.txt
-+++ b/src/CMakeLists.txt
-@@ -42,6 +42,7 @@
- 	island.c
- 	island.h
- 	joint.c
-+	generic_joint.c
- 	joint.h
- 	manifold.c
- 	manifold.h

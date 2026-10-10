@@ -26,7 +26,7 @@ constexpr uint64_t SNAPSHOT_MAGIC_JOINTS = 0x3250414E53334745ull;
 // Box3D serializes its id pools, so restored ids are exact. Names are not used: the
 // recording interns them by a 32-bit hash, which collides at about 10^5 names.
 constexpr uint64_t SNAPSHOT_MAGIC_IDS = 0x3350414E53334745ull;
-constexpr uint64_t PROFILE_ID = 0xe77352cd606dc1a3ull;
+constexpr uint64_t PROFILE_ID = 0x5d83df83ab47172cull;
 // Box3D world-slot allocation and replay length-scale updates are process globals.
 // Serialize entry from independent owners and managed finalizers. Solver workers
 // still run in parallel inside a step. Recursive locking permits boundary helpers.
@@ -1112,7 +1112,7 @@ void DeterministicWorld::apply_fluid() {
 
 std::string DeterministicWorld::get_simulation_fingerprint() const {
 	char text[200];
-	std::snprintf(text, sizeof(text), "egp-box3d-v1:e77352cd606dc1a34209094076199549a52ea0a1:egp-joints1:f32:simd4:precise:no-fma:hz%u:ss%u:g%08x,%08x,%08x:sleep1:ccd1", tick_rate, substeps, float_bits(configured_gravity.x), float_bits(configured_gravity.y), float_bits(configured_gravity.z));
+	std::snprintf(text, sizeof(text), "egp-box3d-v1:5d83df83ab47172c2c745b44315e7538ead02397:egp-joints1:f32:simd4:precise:no-fma:hz%u:ss%u:g%08x,%08x,%08x:sleep1:ccd1", tick_rate, substeps, float_bits(configured_gravity.x), float_bits(configured_gravity.y), float_bits(configured_gravity.z));
 	return text;
 }
 

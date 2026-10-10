@@ -36,7 +36,7 @@ def main():
     output.mkdir(parents=True, exist_ok=True)
     receipt = {
         "schema": 1,
-        "upstream_commit": "e77352cd606dc1a34209094076199549a52ea0a1",
+        "upstream_commit": "5d83df83ab47172c2c745b44315e7538ead02397",
         "platform": platform.platform(),
         "architecture": platform.machine(),
         "configuration": args.config,
@@ -105,7 +105,16 @@ def main():
                     raise RuntimeError("Invalid EGP patch baseline: " + relative)
                 patched[relative] = hashes["patched_sha256"]
         receipt["egp_patches"] = manifest.get("egp_patches", [])
-        expected_files = {**manifest["files"], **patched}
+        # EGP-authored sources inside the scanned directories (for example generic_joint.c)
+        # are pinned as additions, separately from the upstream pin.
+        additions = {
+            relative: digest
+            for relative, digest in manifest.get("egp_additions", {}).get("sha256_lf", {}).items()
+            if relative.split("/")[0] in ("include", "src", "test", "shared")
+        }
+        if set(additions) & set(manifest["files"]):
+            raise RuntimeError("EGP additions overlap the upstream Box3D pin")
+        expected_files = {**manifest["files"], **patched, **additions}
         if actual != set(expected_files):
             raise RuntimeError("vendored source file set differs from the pin and EGP patch manifest")
         for relative, expected in expected_files.items():

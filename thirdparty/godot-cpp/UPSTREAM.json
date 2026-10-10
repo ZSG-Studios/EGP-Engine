@@ -4,7 +4,7 @@
  "license": "MIT",
  "upstream": {
   "repository": "https://github.com/godotengine/godot-cpp",
-  "version": "10.0.0, pinned master commit 507ed9d840c01a3c5b2a39af8bb4000bfac30bf5",
+  "version": "10.0.0-stable",
   "commit": "507ed9d840c01a3c5b2a39af8bb4000bfac30bf5"
  },
  "verification": {

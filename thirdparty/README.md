@@ -105,7 +105,7 @@ license and source hashes are retained in that module.
 ## box3d
 
 - Upstream: https://github.com/erincatto/box3d
-- Version: 0.1.0 development (e77352cd606dc1a34209094076199549a52ea0a1)
+- Version: 0.1.0 development, main 2026-10-07 (5d83df83ab47172c2c745b44315e7538ead02397)
 - License: MIT
 
 The `include`, `src`, `test`, and `shared` directories and `LICENSE` are vendored
@@ -420,7 +420,7 @@ Patches:
 ## godot-cpp
 
 - Upstream: https://github.com/godotengine/godot-cpp
-- Version: 10.0.0, pinned master commit 507ed9d840c01a3c5b2a39af8bb4000bfac30bf5 (2026)
+- Version: 10.0.0-stable (507ed9d840c01a3c5b2a39af8bb4000bfac30bf5, 2026-09-15)
 - License: MIT
 
 The upstream sources are retained as a pinned submodule. EGP generates and embeds
