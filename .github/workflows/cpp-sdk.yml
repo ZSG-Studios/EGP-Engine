@@ -125,6 +125,8 @@ jobs:
         run: python misc/scripts/validate_egp_cpp.py --editor ${{ matrix.editor }} --debug-template ${{ matrix.debug }} --release-template ${{ matrix.release }}
 
       - name: Compile typed Superpos C++ APIs
+        env:
+          EGP_BUILD_CACHE: ${{ steps.build-cache.outputs.path }}
         run: python misc/scripts/validate_egp_generated_api.py --engine ${{ matrix.editor }} --cpp --output .build/generated-api-cpp
 
       - name: Validate Superpos native API, state and authenticated loopback UDP

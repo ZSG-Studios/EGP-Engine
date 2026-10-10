@@ -8,7 +8,6 @@ import re
 import shutil
 import struct
 import subprocess
-import time
 import zlib
 from pathlib import Path
 
@@ -28,9 +27,15 @@ def extract_sdk(output, engine, api_sha256, sdk_header=None):
     if sdk_header:
         candidates = [sdk_header.resolve()]
     else:
+        # CI runners keep persistent native graphs outside the checkout (EGP_BUILD_CACHE).
+        roots = [ROOT / ".build"]
+        if os.environ.get("EGP_BUILD_CACHE"):
+            roots.append(Path(os.environ["EGP_BUILD_CACHE"]))
         candidates = [
             stamp.parent.parent / "generated/editor/settings/gdextension/native_extension_sdk.gen.h"
-            for stamp in (ROOT / ".build").glob("**/engine-api/sdk-stamp.json")
+            for root in roots
+            if root.is_dir()
+            for stamp in root.glob("**/engine-api/sdk-stamp.json")
         ]
     for candidate in candidates:
         # Accept native graph output only, never historical source-tree headers.
@@ -191,8 +196,12 @@ def main():
             if api_sha256 and receipt["sdk_metadata"]["api_sha256"] != api_sha256:
                 raise RuntimeError("SDK metadata does not match the selected final editor API")
             for name in (
-                "superpos_session", "superpos_world", "superpos_schema",
-                "superpos_field", "superpos_u_int64", "superpos_simulation_provider",
+                "superpos_session",
+                "superpos_world",
+                "superpos_schema",
+                "superpos_field",
+                "superpos_u_int64",
+                "superpos_simulation_provider",
             ):
                 if not (sdk / "gen/include/godot_cpp/classes" / (name + ".hpp")).is_file():
                     raise RuntimeError("Matching SDK header missing: " + name)
