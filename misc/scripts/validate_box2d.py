@@ -82,7 +82,10 @@ def main():
         patched = {}
         for entry in manifest.get("egp_patches", []):
             patch_path = ROOT / entry["path"]
-            if not patch_path.is_file() or hashlib.sha256(patch_path.read_bytes().replace(b"\r\n", b"\n")).hexdigest() != entry["sha256"]:
+            if (
+                not patch_path.is_file()
+                or hashlib.sha256(patch_path.read_bytes().replace(b"\r\n", b"\n")).hexdigest() != entry["sha256"]
+            ):
                 raise RuntimeError("EGP patch manifest mismatch: " + entry["name"])
             for relative, hashes in entry["files"].items():
                 if hashes["upstream_sha256"] != manifest["sha256_lf"].get(relative) or relative in patched:

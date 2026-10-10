@@ -108,6 +108,10 @@ for _, library in ipairs({"box2d", "box3d"}) do
             end
         else
             add_defines("BOX2D_VALIDATE", {public = true})
+            -- EGP local replay sources: the pinned core.c patch routes b2Alloc/b2Free
+            -- through their reservation allocator, as in the engine recipe.
+            add_files(path.join(root, "thirdparty/box2d/src/local_replay/*.c"))
+            add_includedirs(path.join(root, "thirdparty/box2d/src/local_replay"))
         end
     target_end()
 
