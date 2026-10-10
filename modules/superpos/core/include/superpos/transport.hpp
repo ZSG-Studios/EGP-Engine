@@ -23,6 +23,9 @@ struct TransportCapabilities {
  // carrier (for example a browser data channel) may only queue them, and its
  // receiver drains a bounded ring per quantum.
  bool coalescing{};
+ // Increases each time the provider moves its traffic to a newly validated
+ // peer address. Path-dependent state above it (path MTU) restarts on change.
+ std::uint64_t path_generation{};
 };
 class Clock { public: virtual ~Clock()=default; virtual std::uint64_t now_ms() noexcept=0; };
 class AuthProvider {

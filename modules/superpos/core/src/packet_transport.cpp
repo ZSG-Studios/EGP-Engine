@@ -56,7 +56,7 @@ struct PacketTransport::Impl {
     std::array<std::byte,raw_ceiling> overflow{};
     std::size_t overflow_size{};
     std::size_t head{},count{};
-    std::uint64_t largest{},bits{},largest_received_at{},ack_due{},last_time{};
+    std::uint64_t largest{},bits{},largest_received_at{},ack_due{},last_time{},path_generation{};
     bool have_time{},ack_dirty{},carrier_blocked{},probe_due{},failed{},active_call{};
     PacketTransportStats stats{};
     // Complete UDP payload sizes; frame = size - overhead. All state is bounded
@@ -133,6 +133,15 @@ struct PacketTransport::Impl {
         }
         path.high=path.target;
         next_target(now_us);
+    }
+    // A validated move to a new peer address invalidates the old path's size:
+    // send at the base until the new path confirms more, probing the ceiling first.
+    void path_moved(std::uint64_t now_us) noexcept {
+        ++stats.path_changes;
+        if(path.state==PathMtuState::Disabled)return;
+        path.outstanding=false;path.large_losses=0;path.low=path.base;set_current(path.base);
+        path.high=static_cast<std::uint16_t>(path.ceiling+1);path.ceiling_first=true;path.state=PathMtuState::Searching;
+        path.raise_backoff=config.path_mtu.raise_interval_ms*1000;next_target(now_us);
     }
     void path_suspect() noexcept {
         if(path.state==PathMtuState::Disabled||path.state==PathMtuState::Confirming||path.current<=path.base)return;
@@ -491,6 +500,7 @@ Result<PacketTransport> PacketTransport::create(Allocator& allocator,Clock& cloc
         mtu.confirm_interval_ms<mtu.raise_interval_ms || mtu.confirm_interval_ms>86400000))return fail(Error::InvalidArgument);
     auto* memory=allocator.allocate(sizeof(Impl),alignof(Impl),MemoryDomain::Backend);if(!memory)return fail(Error::OutOfMemory);
     PacketTransport result;result.allocator_=&allocator;result.impl_=new(memory)Impl(clock,provider,config,caps);
+    result.impl_->path_generation=caps.path_generation;
     auto flow=PacketCongestion::create(config.congestion,result.impl_->records);
     if(!flow)return fail(flow.error());result.impl_->flow.emplace(std::move(*flow));
     if(mtu.probing) {
@@ -522,6 +532,9 @@ Status PacketTransport::advance() noexcept {
     }
     self.carrier_blocked=false;
     if(!self.provider->ready())return fail(Error::Busy);
+    if(const auto generation=self.provider->capabilities().path_generation;generation!=self.path_generation) {
+        self.path_generation=generation;self.path_moved(*now);
+    }
     std::array<std::byte,raw_ceiling> bytes{};
     for(unsigned quantum=0;quantum<16;++quantum) {
         auto received=self.provider->receive(bytes);

@@ -184,7 +184,7 @@ Error SuperposLockstepServer::configure(int64_t p_input_bytes, int64_t p_slots, 
     if (p_input_bytes < 1 || p_input_bytes > int64_t(superpos::lockstep_input_bytes) || p_slots < 1 || p_slots > int64_t(superpos::lockstep_slots)) { return ERR_INVALID_PARAMETER; }
     for (const Variant &key : p_playout.keys()) {
         const String name = key;
-        if (name != "initial_target" && name != "minimum_target" && name != "maximum_target" && name != "relax_ticks" && name != "catch_up_margin" && name != "command_history_ticks" && name != "command_change_capacity" && name != "stream_redundant_ticks" && name != "stream_catch_up_ticks") { return ERR_INVALID_PARAMETER; }
+        if (name != "initial_target" && name != "minimum_target" && name != "maximum_target" && name != "relax_ticks" && name != "catch_up_margin" && name != "command_history_ticks" && name != "command_change_capacity" && name != "stream_redundant_ticks" && name != "stream_catch_up_ticks" && name != "stream_resync_backlog_bytes" && name != "stream_resync_holdoff_ms") { return ERR_INVALID_PARAMETER; }
     }
     superpos::PlayoutConfig config;
     config.input_bytes = size_t(p_input_bytes);
@@ -204,9 +204,15 @@ Error SuperposLockstepServer::configure(int64_t p_input_bytes, int64_t p_slots, 
     if (!commands) { return lockstep_error(commands.error()); }
     const int64_t redundant = int64_t(p_playout.get("stream_redundant_ticks", int64_t(1)));
     const int64_t catch_up = int64_t(p_playout.get("stream_catch_up_ticks", int64_t(30)));
-    if (redundant < 0 || redundant > 16 || catch_up < 0) { return ERR_INVALID_PARAMETER; }
+    // A client whose unacknowledged backlog exceeds this many encoded bytes is
+    // reported stale (resync by keyframe) instead of replaying it; 0 disables.
+    const int64_t resync_backlog = int64_t(p_playout.get("stream_resync_backlog_bytes", int64_t(0)));
+    const int64_t resync_holdoff = int64_t(p_playout.get("stream_resync_holdoff_ms", int64_t(30000)));
+    if (redundant < 0 || redundant > 16 || catch_up < 0 || resync_backlog < 0 || resync_holdoff < 0 || resync_holdoff > 3600000) { return ERR_INVALID_PARAMETER; }
     impl->stream_policy.redundant_ticks = size_t(redundant);
     impl->stream_policy.catch_up_ticks = superpos::Tick(catch_up);
+    impl->stream_policy.resync_backlog_bytes = uint64_t(resync_backlog);
+    impl->stream_policy.resync_holdoff_us = uint64_t(resync_holdoff) * 1000;
     for (auto &stream : impl->streams) { stream = superpos::CommandStream(impl->stream_policy); }
     impl->playout = config;
     impl->commands.emplace(std::move(*commands));
@@ -345,6 +351,7 @@ Dictionary SuperposLockstepServer::get_stream_status(int64_t p_slot) const {
     result["rewinds"] = int64_t(status.rewinds);
     result["repairs"] = int64_t(status.repairs);
     result["redundancy"] = int64_t(status.redundancy);
+    result["resyncs"] = int64_t(status.resyncs);
     result["bytes"] = int64_t(impl->links[size_t(p_slot)].bytes);
     result["skipped"] = int64_t(impl->links[size_t(p_slot)].skipped);
     result["enabled"] = impl->links[size_t(p_slot)].enabled;

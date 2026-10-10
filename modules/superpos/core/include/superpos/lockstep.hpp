@@ -141,13 +141,17 @@ public:
     Result<std::size_t> encode_table(std::span<std::byte> output) const noexcept;
     Tick newest() const noexcept { return newest_; }
     Tick oldest() const noexcept { return ticks_ ? newest_-ticks_+1 : newest_+1; }
+    // Encoded bytes of every sealed tick after `after` (0 when nothing is newer;
+    // UINT64_MAX when `after` predates retained history). Constant time.
+    std::uint64_t backlog_bytes(Tick after) const noexcept;
     std::size_t retained() const noexcept { return ticks_; }
     // Lifetime totals over sealed ticks: changed slots, changed input bytes and
     // encoded change bytes (slot gaps, masks and values), for budget telemetry.
     struct Totals { std::uint64_t ticks{}, changes{}, changed_bytes{}, encoded_bytes{}; };
     Totals totals() const noexcept { return totals_; }
 private:
-    struct TickMeta { std::size_t first{}, count{}, bytes{}; };
+    // cumulative: lifetime encoded bytes through this tick (backlog in O(1)).
+    struct TickMeta { std::size_t first{}, count{}, bytes{}; std::uint64_t cumulative{}; };
     CommandEncoder(Allocator& allocator, CommandStreamConfig config) noexcept
         : config_(config), ring_(allocator, MemoryDomain::History), meta_(allocator, MemoryDomain::History), processed_(allocator, MemoryDomain::History) {}
     TickMeta* meta() const noexcept { return reinterpret_cast<TickMeta*>(const_cast<std::byte*>(meta_.bytes().data())); }
@@ -192,12 +196,22 @@ struct CommandStreamPolicy {
     // the gap persisted, max(srtt / 4, minimum_reorder_us).
     Tick reorder_ticks{3};
     std::uint64_t minimum_reorder_us{10000};
+    // Resync advice: once the recipient's unacknowledged backlog exceeds this many
+    // encoded bytes (0: never), next() fails with StaleEpoch so the owner sends a
+    // keyframe. A client far behind on a constrained link catches up faster from a
+    // keyframe than by replaying a backlog larger than it.
+    std::uint64_t resync_backlog_bytes{0};
+    // Advice waits this long after each reset (keyframe): commands accumulate while a
+    // keyframe crosses a slow link, and advising again at once would loop keyframes.
+    std::uint64_t resync_holdoff_us{30000000};
 };
 struct CommandStreamStatus {
     Tick acknowledged{}, sent{};
     std::uint64_t batches{}, rewinds{}, repairs{};
     // Redundant ticks currently granted per batch.
     std::size_t redundancy{};
+    // Keyframe resyncs advised because the backlog exceeded resync_backlog_bytes.
+    std::uint64_t resyncs{};
 };
 class CommandStream {
 public:
@@ -209,14 +223,14 @@ public:
     // `held` is the newest command tick the recipient reported holding (0: unknown).
     Result<std::size_t> next(const CommandEncoder&, Tick acknowledged, std::uint64_t now_us, std::uint64_t srtt_us,
         std::span<std::byte> output, std::uint32_t recipient = lockstep_no_recipient, Tick held = 0) noexcept;
-    CommandStreamStatus status() const noexcept { return {acknowledged_, sent_, batches_, rewinds_, repairs_, redundancy()}; }
+    CommandStreamStatus status() const noexcept { return {acknowledged_, sent_, batches_, rewinds_, repairs_, redundancy(), resyncs_}; }
 private:
     std::size_t redundancy() const noexcept {
         return policy_.adaptive_redundancy && clean_ >= policy_.clean_batches ? 0 : policy_.redundant_ticks;
     }
     CommandStreamPolicy policy_{};
     Tick acknowledged_{}, sent_{}, repaired_{}, gap_{};
-    std::uint64_t acknowledged_at_{}, batches_{}, rewinds_{}, repairs_{}, repaired_at_{}, gap_since_{}, clean_{};
+    std::uint64_t acknowledged_at_{}, batches_{}, rewinds_{}, repairs_{}, repaired_at_{}, gap_since_{}, clean_{}, resyncs_{}, reset_at_{};
     bool started_{};
 };
 

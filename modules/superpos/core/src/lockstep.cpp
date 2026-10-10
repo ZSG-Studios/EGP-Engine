@@ -266,8 +266,15 @@ Status CommandEncoder::end() noexcept {
     std::memcpy(ring,scratch.data()+split,length-split);
     used_+=length;
     totals_.changed_bytes+=changed_bytes;++totals_.ticks;totals_.changes+=changed;totals_.encoded_bytes+=length;
+    tick.cumulative=totals_.encoded_bytes;
     std::memcpy(processed()+(open_%history)*config_.slots,staged_processed_.data(),config_.slots*sizeof(Tick));
     table_=staged_;newest_=open_;sealed_any_=true;open_any_=false;++ticks_;return {};
+}
+std::uint64_t CommandEncoder::backlog_bytes(Tick after) const noexcept {
+    if(!ticks_ || after>=newest_)return 0;
+    if(after+1<oldest())return std::numeric_limits<std::uint64_t>::max();
+    const auto& next=meta()[(after+1)%config_.history_ticks];
+    return totals_.encoded_bytes-(next.cumulative-next.bytes);
 }
 std::size_t CommandEncoder::fit_forward(Tick first,Tick last,std::size_t body,std::size_t capacity,std::uint32_t recipient) const noexcept {
     const auto history=config_.history_ticks;
@@ -349,7 +356,7 @@ Result<std::size_t> CommandEncoder::encode_table(std::span<std::byte> output) co
 }
 
 void CommandStream::reset(Tick keyframe,std::uint64_t now) noexcept {
-    acknowledged_=sent_=keyframe;acknowledged_at_=now;started_=true;
+    acknowledged_=sent_=keyframe;acknowledged_at_=reset_at_=now;started_=true;
 }
 Result<std::size_t> CommandStream::next(const CommandEncoder& encoder,Tick acknowledged,std::uint64_t now,std::uint64_t srtt,
     std::span<std::byte> output,std::uint32_t recipient,Tick held) noexcept {
@@ -378,6 +385,11 @@ Result<std::size_t> CommandStream::next(const CommandEncoder& encoder,Tick ackno
     const std::uint64_t guard=std::max(policy_.minimum_repair_us,srtt+srtt/4);
     if(lost && sent_>acknowledged_ && (repaired_!=acknowledged_ || now<repaired_at_ || now-repaired_at_>=guard)) {
         sent_=acknowledged_;repaired_=acknowledged_;repaired_at_=now;acknowledged_at_=now;++repairs_;clean_=0;
+    }
+    // A backlog costlier than a keyframe: advise the owner to resync this recipient.
+    const bool settled=now>=reset_at_ && now-reset_at_>=policy_.resync_holdoff_us;
+    if(policy_.resync_backlog_bytes && settled && encoder.backlog_bytes(acknowledged_)>policy_.resync_backlog_bytes) {
+        ++resyncs_;return fail(Error::StaleEpoch);
     }
     const bool behind=encoder.newest()>acknowledged_+policy_.catch_up_ticks;
     auto size=encoder.encode_window(acknowledged_,sent_,output,recipient,behind?0:redundancy());

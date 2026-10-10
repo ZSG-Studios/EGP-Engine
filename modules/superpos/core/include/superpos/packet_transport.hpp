@@ -58,6 +58,9 @@ struct PacketTransportStats {
     // estimate (1/16 weight per packet) in parts per million, for consumers that
     // adapt redundancy to this recipient. Path MTU probes are excluded.
     std::uint64_t packets_acknowledged{}, packets_lost{};
+    // Validated peer-address changes reported by the carrier; each restarts
+    // path MTU discovery from the base with an immediate ceiling probe.
+    std::uint64_t path_changes{};
     std::uint32_t loss_rate_ppm{};
 };
 

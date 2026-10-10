@@ -157,7 +157,9 @@ Result<DtlsAssociation> DtlsAssociation::create(Allocator&a,Clock&c,DatagramIO&i
  return result;
 }
 Result<DtlsStatistics> DtlsAssociation::statistics() const noexcept {if(!impl_)return fail(Error::NotReady);return impl_->stats;}
-TransportCapabilities DtlsAssociation::capabilities() const noexcept {return {true,true,true,false,maximum_frame_bytes,37};}
+TransportCapabilities DtlsAssociation::capabilities() const noexcept {
+ TransportCapabilities caps{true,true,true,false,maximum_frame_bytes,37};caps.path_generation=impl_?impl_->stats.path_promotions:0;return caps;
+}
 bool DtlsAssociation::ready() const noexcept {return impl_&&impl_->connected&&!impl_->failed;}
 Status DtlsAssociation::advance() noexcept {
  if(!impl_||impl_->failed)return fail(Error::NotReady);auto&s=*impl_;
