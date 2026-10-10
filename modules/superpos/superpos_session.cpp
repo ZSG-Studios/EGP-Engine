@@ -29,7 +29,10 @@
 #include "superpos/udp.hpp"
 #include "superpos/packet_transport.hpp"
 #include "superpos/platform_clock.hpp"
+#include "superpos/udp_mux.hpp"
+#include "private/udp_listener_access.hpp"
 #endif
+#include "superpos_udp_listener.h"
 #include <array>
 #include <bit>
 #include <memory>
@@ -193,7 +196,12 @@ struct EngineNetwork {
     superpos::CryptoRuntime crypto{superpos::CryptoOwnership::Borrowed};
     EngineClock clock;
     ProvisionedKey authentication;
+    // Single-port server: the listener owning the shared socket is pinned
+    // until the port (declared after it, destroyed before it) has detached.
+    Ref<SuperposUdpListener> listener;
     std::optional<superpos::UdpSocket> socket;
+    std::optional<superpos::RoutedUdpSocket> routed;
+    std::optional<superpos::UdpMuxPort> port;
     std::optional<superpos::DtlsAssociation> dtls;
     std::optional<superpos::PacketTransport> packet;
     // Pump cadence (callers pump at their own rate), used to express the carrier's
@@ -250,6 +258,10 @@ struct EngineNetwork {
 #ifdef SUPERPOS_HAS_RTC
         if(rtc)return "native_paired_rtc";
 #endif
+#ifdef SUPERPOS_HAS_DTLS
+        if(port)return "native_single_port_udp_dtls12_psk_aes128_gcm";
+        if(routed)return "native_routed_udp_dtls12_psk_aes128_gcm";
+#endif
         return "native_connected_udp_dtls12_psk_aes128_gcm";
     }
     superpos::Status refresh() noexcept {
@@ -301,6 +313,19 @@ superpos::Result<superpos::Fingerprint> canonical_profile(EngineSha256 &digest) 
 }
 #endif
 }
+#ifdef SUPERPOS_HAS_DTLS
+// How one association reaches its peer: a connected socket, a client socket
+// routed to a single-port server by connection ID, or a server-side port of a
+// shared listener.
+struct SuperposUdpRoute {
+    enum class Kind { Connected, Routed, Listener } kind = Kind::Connected;
+    superpos::IpEndpoint local{}, remote{};
+    uint64_t connection_id = 0;
+    SuperposUdpListener *listener = nullptr;
+};
+#else
+struct SuperposUdpRoute {};
+#endif
 struct SuperposSession::Impl {
     superpos::BudgetAllocator* metadata_parent;
     superpos::QuotaAllocator allocator;
@@ -654,8 +679,59 @@ Error SuperposSession::configure_udp(bool p_server, const String &p_local_addres
     return last_error = ERR_UNAVAILABLE;
 #else
     if (impl->network) { return last_error = ERR_ALREADY_IN_USE; }
-    if (!p_local_port || p_local_port > 65535 || !p_remote_port || p_remote_port > 65535 ||
-        !p_session_id || !p_peer_identity || p_admission_key.size() != 32) { return last_error = ERR_INVALID_PARAMETER; }
+    if (!p_local_port || p_local_port > 65535 || !p_remote_port || p_remote_port > 65535) { return last_error = ERR_INVALID_PARAMETER; }
+    for (const auto &address : {p_local_address, p_remote_address}) {
+        if (address.is_empty() || address.length() > 45) { return last_error = ERR_INVALID_PARAMETER; }
+        for (int i = 0; i < address.length(); ++i) {
+            const char32_t c = address[i];
+            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') || c == ':' || c == '.')) {
+                return last_error = ERR_INVALID_PARAMETER;
+            }
+        }
+    }
+    const CharString local_text = p_local_address.utf8(), remote_text = p_remote_address.utf8();
+    auto local = superpos::IpEndpoint::parse({local_text.get_data(), size_t(local_text.length())}, uint16_t(p_local_port));
+    auto remote = superpos::IpEndpoint::parse({remote_text.get_data(), size_t(remote_text.length())}, uint16_t(p_remote_port));
+    if (!local || !remote) { return last_error = ERR_INVALID_PARAMETER; }
+    SuperposUdpRoute route;
+    route.local = *local;
+    route.remote = *remote;
+    // A client of a single-port server names its admitted connection ID.
+    if (p_transport.has("connection_id")) {
+        const Variant connection = p_transport["connection_id"];
+        if (p_server || connection.get_type() != Variant::INT || !int64_t(connection)) { return last_error = ERR_INVALID_PARAMETER; }
+        route.kind = SuperposUdpRoute::Kind::Routed;
+        route.connection_id = uint64_t(int64_t(connection));
+    }
+    return _configure_udp_route(p_server, route, p_session_id, p_peer_identity, p_admission_key, p_transport);
+#endif
+}
+Error SuperposSession::configure_udp_listener(const Ref<SuperposUdpListener> &p_listener, uint64_t p_connection_id, uint64_t p_session_id,
+        uint64_t p_peer_identity, const PackedByteArray &p_admission_key, const Dictionary &p_transport) {
+    if (Thread::get_caller_id() != owner_thread) { return ERR_BUSY; }
+    if (owner_retired) { return ERR_UNCONFIGURED; }
+    if (managed_reload_paused || closing || simulation_in_flight) { return last_error = ERR_BUSY; }
+    if (!Thread::is_main_thread()) { return last_error = ERR_UNAVAILABLE; }
+    if (!impl || !impl->world) { return last_error = ERR_UNCONFIGURED; }
+#if !defined(SUPERPOS_HAS_DTLS) || defined(WEB_ENABLED)
+    return last_error = ERR_UNAVAILABLE;
+#else
+    if (impl->network) { return last_error = ERR_ALREADY_IN_USE; }
+    if (p_listener.is_null() || !p_listener->is_bound()) { return last_error = ERR_UNCONFIGURED; }
+    if (!p_connection_id || p_transport.has("connection_id")) { return last_error = ERR_INVALID_PARAMETER; }
+    SuperposUdpRoute route;
+    route.kind = SuperposUdpRoute::Kind::Listener;
+    route.connection_id = p_connection_id;
+    route.listener = p_listener.ptr();
+    return _configure_udp_route(true, route, p_session_id, p_peer_identity, p_admission_key, p_transport);
+#endif
+}
+Error SuperposSession::_configure_udp_route(bool p_server, const SuperposUdpRoute &p_route, uint64_t p_session_id,
+        uint64_t p_peer_identity, const PackedByteArray &p_admission_key, const Dictionary &p_transport) {
+#if !defined(SUPERPOS_HAS_DTLS) || defined(WEB_ENABLED)
+    return last_error = ERR_UNAVAILABLE;
+#else
+    if (!p_session_id || !p_peer_identity || p_admission_key.size() != 32) { return last_error = ERR_INVALID_PARAMETER; }
     bool nonzero_key = false;
     for (int i = 0; i < p_admission_key.size(); ++i) { nonzero_key |= p_admission_key[i] != 0; }
     if (!nonzero_key) { return last_error = ERR_UNAUTHORIZED; }
@@ -666,7 +742,8 @@ Error SuperposSession::configure_udp(bool p_server, const String &p_local_addres
 
         const String name = key;
 
-        if (name != "bundle_frames" && name != "burst_datagrams" && name != "receive_frames" && name != "channel_modes" && name != "minimum_rate") { return last_error = ERR_INVALID_PARAMETER; }
+        if (name != "bundle_frames" && name != "burst_datagrams" && name != "receive_frames" && name != "channel_modes" && name != "minimum_rate" &&
+                (name != "connection_id" || p_route.kind != SuperposUdpRoute::Kind::Routed)) { return last_error = ERR_INVALID_PARAMETER; }
 
     }
 
@@ -687,19 +764,6 @@ Error SuperposSession::configure_udp(bool p_server, const String &p_local_addres
         if (channel_modes[i].get_type() != Variant::INT || int64_t(channel_modes[i]) < 0 || int64_t(channel_modes[i]) > int64_t(superpos::DeliveryMode::Unreliable)) { return last_error = ERR_INVALID_PARAMETER; }
 
     }
-    for (const auto &address : {p_local_address, p_remote_address}) {
-        if (address.is_empty() || address.length() > 45) { return last_error = ERR_INVALID_PARAMETER; }
-        for (int i = 0; i < address.length(); ++i) {
-            const char32_t c = address[i];
-            if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F') || c == ':' || c == '.')) {
-                return last_error = ERR_INVALID_PARAMETER;
-            }
-        }
-    }
-    const CharString local_text = p_local_address.utf8(), remote_text = p_remote_address.utf8();
-    auto local = superpos::IpEndpoint::parse({local_text.get_data(), size_t(local_text.length())}, uint16_t(p_local_port));
-    auto remote = superpos::IpEndpoint::parse({remote_text.get_data(), size_t(remote_text.length())}, uint16_t(p_remote_port));
-    if (!local || !remote) { return last_error = ERR_INVALID_PARAMETER; }
     auto prepared=superpos_egp::captured_create<EngineNetwork>(impl->allocator,superpos::MemoryDomain::Session,p_peer_identity,p_admission_key);
     if(!prepared)return last_error=translate(prepared.error());
     auto candidate=std::move(*prepared);
@@ -711,11 +775,38 @@ Error SuperposSession::configure_udp(bool p_server, const String &p_local_addres
         : canonical_profile(impl->digest);
     if (!profile) { return last_error = translate(profile.error()); }
     candidate->simulation = *profile;
-    auto socket = superpos::UdpSocket::open(*local, *remote);
-    if (!socket) { return last_error = translate(socket.error()); }
-    candidate->socket.emplace(std::move(*socket));
-    auto association = superpos::DtlsAssociation::create(impl->allocator, candidate->clock, *candidate->socket,
-        candidate->authentication, {p_server, p_peer_identity, 15000, 1200}, {remote->address.data(), remote->length});
+    // Complete UDP payload ceiling 1,200 bytes including any routing prefix.
+    superpos::DtlsConfig dtls_config{p_server, p_peer_identity, 15000, 1200, false};
+    superpos::DatagramIO *io = nullptr;
+    std::span<const std::byte> address_identity;
+    uint32_t routing_overhead = 0;
+    if (p_route.kind == SuperposUdpRoute::Kind::Listener) {
+        // Path validation moves outbound traffic only after an encrypted
+        // challenge from the new address; the first handshake binds the path.
+        candidate->listener = Ref<SuperposUdpListener>(p_route.listener);
+        auto attached = SuperposUdpListenerAccess::attach(*p_route.listener, p_route.connection_id);
+        if (!attached) { return last_error = attached.error() == superpos::Error::InvalidArgument ? ERR_ALREADY_IN_USE : translate(attached.error()); }
+        candidate->port.emplace(std::move(*attached));
+        io = &*candidate->port;
+        dtls_config.path_validation = true;
+    } else if (p_route.kind == SuperposUdpRoute::Kind::Routed) {
+        auto routed = superpos::RoutedUdpSocket::open(p_route.local, p_route.remote, p_route.connection_id);
+        if (!routed) { return last_error = translate(routed.error()); }
+        candidate->routed.emplace(std::move(*routed));
+        io = &*candidate->routed;
+        dtls_config.path_validation = true;
+        dtls_config.udp_payload_ceiling = 1200 - superpos::UdpMux::routing_bytes;
+        routing_overhead = uint32_t(superpos::UdpMux::routing_bytes);
+        address_identity = {p_route.remote.address.data(), p_route.remote.length};
+    } else {
+        auto socket = superpos::UdpSocket::open(p_route.local, p_route.remote);
+        if (!socket) { return last_error = translate(socket.error()); }
+        candidate->socket.emplace(std::move(*socket));
+        io = &*candidate->socket;
+        address_identity = {p_route.remote.address.data(), p_route.remote.length};
+    }
+    auto association = superpos::DtlsAssociation::create(impl->allocator, candidate->clock, *io,
+        candidate->authentication, dtls_config, address_identity);
     if (!association) { return last_error = translate(association.error()); }
     candidate->dtls.emplace(std::move(*association));
     const auto checked_epoch = impl->world->world().authority_epoch();
@@ -726,6 +817,7 @@ Error SuperposSession::configure_udp(bool p_server, const String &p_local_addres
     superpos::PacketTransportConfig packet_config;
 
     packet_config.association_epoch = epoch;
+    packet_config.routing_overhead_bytes = routing_overhead;
 
     packet_config.bundle_frames = bundle_frames;
 
@@ -1243,6 +1335,7 @@ void SuperposSession::_bind_methods() {
     ClassDB::bind_method(D_METHOD("read_prediction_info", "binding", "epoch"), &SuperposSession::read_prediction_info);
     ClassDB::bind_method(D_METHOD("read_simulation_profile"), &SuperposSession::read_simulation_profile);
     ClassDB::bind_method(D_METHOD("configure_udp", "server", "local_address", "local_port", "remote_address", "remote_port", "session_id", "peer_identity", "admission_key", "transport"), &SuperposSession::configure_udp, DEFVAL(Dictionary()));
+    ClassDB::bind_method(D_METHOD("configure_udp_listener", "listener", "connection_id", "session_id", "peer_identity", "admission_key", "transport"), &SuperposSession::configure_udp_listener, DEFVAL(Dictionary()));
     ClassDB::bind_method(D_METHOD("enqueue_packet", "payload", "channel"), &SuperposSession::enqueue_packet, DEFVAL(0));
     ClassDB::bind_method(D_METHOD("read_packet", "channel"), &SuperposSession::read_packet, DEFVAL(0));
     ClassDB::bind_method(D_METHOD("acknowledge_packet", "message", "binding_generation", "channel"), &SuperposSession::acknowledge_packet, DEFVAL(0));

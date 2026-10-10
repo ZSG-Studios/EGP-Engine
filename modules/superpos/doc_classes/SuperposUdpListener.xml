@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposUdpListener" inherits="RefCounted" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>Single-port native UDP server socket shared by many Session associations.</brief_description>
+	<description>Binds one UDP socket that carries every server-side association attached with [method SuperposSession.configure_udp_listener]. Each client prefixes its datagrams with the connection ID it was admitted with (pass [code]connection_id[/code] in the [method SuperposSession.configure_udp] transport profile); server replies carry no prefix. The connection ID routes and never authenticates: DTLS authenticates the peer with its admission key, and a changed client address (for example a NAT rebinding) receives outbound traffic only after it answers an encrypted path challenge. Datagrams without a prefix, with an unknown connection ID, or anything but a handshake before an association has a path are dropped without a reply or an allocation. Until an address is authenticated, bytes sent to it are limited to [code]amplification_factor[/code] times the bytes received from it, and every association has its own bounded receive queue.
+		Connection IDs come from trusted admission, must be nonzero and must be unpredictable. Every attached Session keeps this listener alive until its network is closed. All methods are main-thread and owner-thread only.</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="bind">
+			<return type="int" enum="Error" />
+			<param index="0" name="address" type="String" />
+			<param index="1" name="port" type="int" />
+			<param index="2" name="configuration" type="Dictionary" default="{}" />
+			<description>Binds a numeric IPv4 or IPv6 [param address] and [param port] (0 picks a free port; see [method get_local_port]). The socket binds exclusively, so another process cannot bind the same address and port. Accepted integer keys are [code]maximum_associations[/code] (1 through 4096, default 256), [code]queue_datagrams[/code] (per association, 1 through 256, default 32), [code]poll_quantum[/code] (datagrams drained per poll, 1 through 4096, default 256), [code]amplification_factor[/code] (1 through 10, default 3) and [code]receive_buffer_bytes[/code] (kernel receive buffer request, 0 keeps the system default, at most 64 MiB). Unknown keys return [constant ERR_INVALID_PARAMETER]; an address already in use returns [constant ERR_ALREADY_IN_USE] or [constant ERR_CANT_CREATE].</description>
+		</method>
+		<method name="close">
+			<return type="int" enum="Error" />
+			<description>Closes the socket. Returns [constant ERR_BUSY] while any Session association is attached; close those Sessions first.</description>
+		</method>
+		<method name="get_last_error" qualifiers="const">
+			<return type="int" enum="Error" />
+			<description>Returns the error recorded by the last call.</description>
+		</method>
+		<method name="get_local_port" qualifiers="const">
+			<return type="int" />
+			<description>Returns the bound port, or 0 when not bound.</description>
+		</method>
+		<method name="is_bound" qualifiers="const">
+			<return type="bool" />
+			<description>Returns [code]true[/code] while the socket is bound.</description>
+		</method>
+		<method name="read_status" qualifiers="const">
+			<return type="Dictionary" />
+			<description>Returns [code]error[/code], [code]port[/code], [code]attached[/code] and the shared-socket counters [code]datagrams_received[/code], [code]datagrams_routed[/code], [code]datagrams_sent[/code], [code]malformed[/code], [code]unknown_connection[/code], [code]not_handshake[/code], [code]foreign_during_handshake[/code], [code]queue_overflow[/code], [code]amplification_limited[/code], [code]candidate_paths[/code] and [code]path_promotions[/code].</description>
+		</method>
+	</methods>
+</class>

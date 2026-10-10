@@ -8,6 +8,8 @@
 #include "superpos_managed_reload.h"
 
 class SuperposSpawner;
+class SuperposUdpListener;
+struct SuperposUdpRoute;
 class SuperposReceiverPublicAccess;
 
 class SuperposSession : public RefCounted {
@@ -48,6 +50,8 @@ class SuperposSession : public RefCounted {
     Error advance_owned_tick(uint64_t p_owner, uint64_t p_physics_frame);
     Error set_physics_owner(uint64_t p_owner);
     Error step_tick();
+    Error _configure_udp_route(bool p_server, const SuperposUdpRoute &p_route, uint64_t p_session_id,
+        uint64_t p_peer_identity, const PackedByteArray &p_admission_key, const Dictionary &p_transport);
 protected:
     static void _bind_methods();
 public:
@@ -87,6 +91,10 @@ public:
     // retained in a Resource property or exposed by a getter.
     Error configure_udp(bool p_server, const String &p_local_address, uint32_t p_local_port,
         const String &p_remote_address, uint32_t p_remote_port, uint64_t p_session_id,
+        uint64_t p_peer_identity, const PackedByteArray &p_admission_key, const Dictionary &p_transport = Dictionary());
+    // Server-side association on a shared single-port listener, routed by the
+    // client's admitted connection ID; the address is validated by DTLS.
+    Error configure_udp_listener(const Ref<SuperposUdpListener> &p_listener, uint64_t p_connection_id, uint64_t p_session_id,
         uint64_t p_peer_identity, const PackedByteArray &p_admission_key, const Dictionary &p_transport = Dictionary());
     Dictionary enqueue_packet(const PackedByteArray &p_payload, uint32_t p_channel = 0);
     Dictionary read_packet(uint32_t p_channel = 0) const;

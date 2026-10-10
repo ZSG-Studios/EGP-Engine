@@ -16,6 +16,7 @@ void superpos_register_recovery_fixture();
 #include "superpos_simulation_provider.h"
 #include "superpos_uint64.h"
 #include "superpos_world.h"
+#include "superpos_udp_listener.h"
 #include "superpos_replicator.h"
 #include "superpos_spawner.h"
 #include "superpos_lockstep.h"
@@ -48,6 +49,7 @@ void initialize_superpos_module(ModuleInitializationLevel p_level) {
     ClassDB::register_internal_class<superpos_egp::spawning::SuperposSpawnProxy>();
     ClassDB::register_internal_class<superpos_egp::spawning::SuperposSpawnRuntime>();
     ClassDB::register_internal_class<superpos_egp::spawning::SuperposSpawnFactory>();
+    GDREGISTER_CLASS(SuperposUdpListener);
     GDREGISTER_CLASS(SuperposSession);
     GDREGISTER_CLASS(SuperposWorld);
     GDREGISTER_CLASS(SuperposReplicator);
