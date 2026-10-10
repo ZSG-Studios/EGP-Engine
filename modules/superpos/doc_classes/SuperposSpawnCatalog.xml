@@ -7,7 +7,7 @@
 	<methods>
 		<method name="validate" qualifiers="const">
 			<return type="Dictionary" />
-			<description>Returns a Dictionary containing [code]error[/code], [code]entries[/code] (the admitted entry count, or 0 on error) and [code]projection[/code], which is always [code]"sequential"[/code]. Zero, duplicate or out-of-range identifiers, path escapes and malformed field mappings return an [enum Error] code.</description>
+			<description>Returns a Dictionary containing [code]error[/code], [code skip-lint]entries[/code] (the admitted entry count, or 0 on error) and [code]projection[/code], which is always [code]"sequential"[/code]. Zero, duplicate or out-of-range identifiers, path escapes and malformed field mappings return an [enum Error] code.</description>
 		</method>
 	</methods>
 	<members>

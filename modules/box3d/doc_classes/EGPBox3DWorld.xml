@@ -42,7 +42,7 @@
 			<param index="4" name="mask" type="int" default="-1" />
 			<param index="5" name="ignore_entity" type="int" default="0" />
 			<description>
-				Sweeps a sphere, capsule, box or hull along [param translation] and returns the closest hit: [code]hit[/code], [code]fraction[/code], [code]point[/code], [code]normal[/code], [code]entity[/code], [code]shape[/code]. Equal fractions resolve by identity, so every peer gets the same answer.
+				Sweeps a sphere, capsule, box or hull along [param translation] and returns the closest hit: [code]hit[/code], [code]fraction[/code], [code]point[/code], [code]normal[/code], [code]entity[/code], [code skip-lint]shape[/code]. Equal fractions resolve by identity, so every peer gets the same answer.
 			</description>
 		</method>
 		<method name="clear_pending_commands">
@@ -175,7 +175,7 @@
 			<param index="2" name="radius" type="float" />
 			<param index="3" name="translation" type="Vector3" />
 			<param index="4" name="ignore_entity" type="int" default="0" />
-			<description>Moves a vertical capsule (centred on [param position]) by [param translation] through the Box3D world with Box3D's character mover: contact planes from [code]b3World_CollideMover[/code], [code]b3SolvePlanes[/code], a sweep with [code]b3World_CastMover[/code], repeated until it settles. The body [param ignore_entity] (usually the character's own capsule) is ignored. Returns [code]position[/code] (where the capsule ends) and [code]clipped[/code] (the translation clipped by the contact planes, for the next velocity). The world is not modified.</description>
+			<description>Moves a vertical capsule (centred on [param position]) by [param translation] through the Box3D world with Box3D's character mover: contact planes from [code]b3World_CollideMover[/code], [code]b3SolvePlanes[/code], a sweep with [code]b3World_CastMover[/code], repeated until it settles. The body [param ignore_entity] (usually the character's own capsule) is ignored. Returns [code skip-lint]position[/code] (where the capsule ends) and [code]clipped[/code] (the translation clipped by the contact planes, for the next velocity). The world is not modified.</description>
 		</method>
 		<method name="overlap_aabb" qualifiers="const">
 			<return type="PackedInt64Array" />

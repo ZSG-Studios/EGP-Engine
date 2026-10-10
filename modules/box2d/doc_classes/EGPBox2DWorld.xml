@@ -40,7 +40,7 @@
 			<param index="4" name="mask" type="int" default="-1" />
 			<param index="5" name="ignore_entity" type="int" default="0" />
 			<description>
-				Sweeps a circle, capsule, box, polygon or segment along [param translation] and returns the closest hit ([code]hit[/code], [code]fraction[/code], [code]point[/code], [code]normal[/code], [code]entity[/code], [code]shape[/code]); equal fractions resolve by identity.
+				Sweeps a circle, capsule, box, polygon or segment along [param translation] and returns the closest hit ([code]hit[/code], [code]fraction[/code], [code]point[/code], [code]normal[/code], [code]entity[/code], [code skip-lint]shape[/code]); equal fractions resolve by identity.
 			</description>
 		</method>
 		<method name="clear_pending_commands">
@@ -158,7 +158,7 @@
 			<param index="4" name="translation" type="Vector2" />
 			<param index="5" name="mask" type="int" default="-1" />
 			<description>
-				Box2D character mover: collides, solves planes and sweeps a capsule ([param point_a] to [param point_b] around [param position]) through shapes matching [param mask]. Returns [code]position[/code] and [code]clipped[/code] (the translation clipped by the contact planes). Give the character's own body a category outside [param mask].
+				Box2D character mover: collides, solves planes and sweeps a capsule ([param point_a] to [param point_b] around [param position]) through shapes matching [param mask]. Returns [code skip-lint]position[/code] and [code]clipped[/code] (the translation clipped by the contact planes). Give the character's own body a category outside [param mask].
 			</description>
 		</method>
 		<method name="overlap_aabb" qualifiers="const">
