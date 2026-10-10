@@ -16,6 +16,12 @@ function main()
     check(path.filename(android.editor) == "libgodot.android.template_debug.arm64.so", "Android shared library product")
     check(android.platform == "android" and android.target == "template_debug" and android.arch == "arm64" and not android.mono)
     check(path.directory(android.editor) == path.join(os.projectdir(), "bin"), "Products stay in the canonical bin directory")
+    -- Clang is the default and only Linux toolchain: canonical Linux names carry no .llvm marker.
+    local linux, linux_graph = result({platform="linuxbsd", arch="x86_64", target="editor", module_mono_enabled="0", dev_build="1"})
+    check(linux_graph.options.use_llvm == true, "Linux defaults to the Clang toolchain")
+    check(path.filename(linux.editor) == "godot.linuxbsd.editor.dev.x86_64", "Linux editor name has no .llvm suffix")
+    local clang_windows = result({platform="windows", arch="x86_64", target="editor", module_mono_enabled="0", dev_build="1", use_llvm="1"})
+    check(path.filename(clang_windows.editor) == "godot.windows.editor.dev.x86_64.llvm.exe", "Windows clang-cl products keep their .llvm marker")
     local valid = launcher.valid_program_filename
     check(valid({kind="binary", filename="godot.linuxbsd.editor.dev.x86_64"}))
     check(valid({kind="shared", filename="libgodot.linuxbsd.template_release.x86_64.so"}))

@@ -13,7 +13,7 @@ function normalize(options)
     local arch = options.arch or options.egp_arch or ((godot == "android" or godot == "ios" or godot == "visionos") and "arm64" or (godot == "web" and "wasm32" or "x86_64"))
     arch = ({x64="x86_64",amd64="x86_64",x86="x86_32",i386="x86_32",aarch64="arm64",riscv64="rv64"})[arch] or arch
     local toolchain = godot == "windows" and (enabled(options.use_mingw) and "mingw" or (enabled(options.use_llvm) and "clang-cl" or "msvc"))
-        or (godot == "linuxbsd" and (enabled(options.use_llvm) and "clang" or "gcc"))
+        or (godot == "linuxbsd" and (enabled(options.use_llvm, true) and "clang" or "gcc"))
         or ((godot == "macos" or godot == "ios") and "xcode")
         or (godot == "android" and "ndk") or (godot == "web" and "emcc") or "egp-visionos"
     local native = godot == "linuxbsd" and os.host() == "bsd" and "bsd" or platforms[godot]

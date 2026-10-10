@@ -3,7 +3,7 @@ function main(compressor, zipper)
     assert(os.isfile(compressor) and os.isfile(zipper),'Native code-generation tools are required')
     local root=os.curdir()
     local directory=path.join(root,'.build/xmake-contract')
-    local hostcompiler=assert(({windows='msvc',linux='gcc',macosx='xcode',bsd='clang'})[os.host()])
+    local hostcompiler=assert(({windows='msvc',linux='clang',macosx='xcode',bsd='clang'})[os.host()])
     os.mkdir(directory)
     local tests={
         {'common','tests/build/test_xmake_common.lua'},

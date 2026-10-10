@@ -7,14 +7,13 @@ function select(options, host, arch, available)
         if enabled(options.use_mingw) then return {plat='mingw',arch=arch,toolchain='mingw',clang=enabled(options.use_llvm)} end
         return {plat=host,arch=arch,toolchain=enabled(options.use_llvm) and 'clang-cl' or 'msvc'}
     end
-    if native then return {plat=host,arch=arch,toolchain=enabled(options.use_llvm) and 'clang' or host=='bsd' and 'clang' or 'gcc'} end
+    if native then return {plat=host,arch=arch,toolchain=(enabled(options.use_llvm,host=='linux') or host=='bsd') and 'clang' or 'gcc'} end
     if not available then
         import('lib.detect.find_tool')
         available=function(name) return find_tool(name)~=nil end
     end
     if host=='windows' and available('g++') then return {plat='mingw',arch=arch,toolchain='mingw'} end
-    if host=='linux' and not available('g++') and available('clang++') then return {plat=host,arch=arch,toolchain='clang'} end
-    return {plat=host,arch=arch,toolchain=assert(({windows='msvc',linux='gcc',macosx='xcode',bsd='clang'})[host],'Unsupported native code-generation host')}
+    return {plat=host,arch=arch,toolchain=assert(({windows='msvc',linux='clang',macosx='xcode',bsd='clang'})[host],'Unsupported native code-generation host')}
 end
 
 -- These standalone generators must not load an unrelated Git/MSYS runtime from PATH.

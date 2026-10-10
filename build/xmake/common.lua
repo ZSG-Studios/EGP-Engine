@@ -96,7 +96,8 @@ function configure(env, options, explicit)
     table.sort(env.platform_exporters); table.sort(env.platform_apis)
     env.extra_suffix = options.extra_suffix ~= "" and "." .. options.extra_suffix or ""
     if table.contains({"ios", "visionos"}, platform) and enabled(options.simulator) then env.extra_suffix = ".simulator" .. env.extra_suffix end
-    if table.contains({"windows", "linuxbsd"}, platform) and options.use_llvm then env.extra_suffix = ".llvm" .. env.extra_suffix end
+    -- Clang is the only Linux toolchain, so only Windows marks its clang-cl products.
+    if platform == "windows" and options.use_llvm then env.extra_suffix = ".llvm" .. env.extra_suffix end
     if platform == "web" and enabled(options.dlink_enabled) then env.extra_suffix = ".dlink" .. env.extra_suffix end
     for _, name in ipairs({"asan", "ubsan", "tsan", "lsan", "msan"}) do if options["use_" .. name] then env.extra_suffix = env.extra_suffix .. ".san"; break end end
     env.CC = options.compiler_cc or (env.msvc and (options.use_llvm and "clang-cl" or "cl") or (platform == "web" and "emcc" or (options.use_llvm or table.contains({"macos", "ios", "visionos", "android"}, platform)) and "clang" or "gcc"))

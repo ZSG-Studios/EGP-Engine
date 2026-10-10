@@ -4,7 +4,7 @@ function main()
     local project=path.join(root,'build/xmake/tests/compile_variants')
     local directory=path.join(root,'.build/xmake-compile-variants')
     local envs={XMAKE_CONFIGDIR=path.join(directory,'config'),XMAKE_GLOBALDIR=path.join(root,'.build/xmake-global/contract-compile-variants')}
-    local compiler=assert(({windows='msvc',linux='gcc',macosx='xcode',bsd='clang'})[os.host()])
+    local compiler=assert(({windows='msvc',linux='clang',macosx='xcode',bsd='clang'})[os.host()])
     local function invoke(name,args)
         local stdout,stderr=os.iorunv(os.programfile(),args,{curdir=project,envs=envs,timeout=120000})
         os.mkdir(directory); io.writefile(path.join(directory,name .. '.log'),stdout .. (stderr or ''))
