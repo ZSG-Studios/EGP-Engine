@@ -174,10 +174,11 @@ Error Box2DLocalReplay::measure(Box2DPhysicsServer2D *server, RID rid, Requireme
 	if (counters.jointCount != 0) {
 		return ERR_UNAVAILABLE;
 	}
-	if (counters.bodyCount != native_bodies || counters.shapeCount != next.native_shapes) {
+	if (counters.bodyCount < 0 || counters.shapeCount < 0 || static_cast<uint32_t>(counters.bodyCount) != native_bodies ||
+			static_cast<uint32_t>(counters.shapeCount) != next.native_shapes) {
 		return ERR_INVALID_DATA;
 	}
-	if (next.bodies > (SIZE_MAX - sizeof(SpaceRecord)) / sizeof(BodyRecord)) {
+	if (static_cast<uint64_t>(next.bodies) > (SIZE_MAX - sizeof(SpaceRecord)) / sizeof(BodyRecord)) {
 		return ERR_OUT_OF_MEMORY;
 	}
 	next.wrapper_bytes = sizeof(SpaceRecord) + next.bodies * sizeof(BodyRecord);
@@ -377,9 +378,19 @@ Error Box2DLocalReplay::prepare_restore(Box2DPhysicsServer2D *server, const Spac
 	if (!Thread::is_main_thread()) {
 		return ERR_BUSY;
 	}
-	if (prepared.owner_lock.owns_lock()) return ERR_BUSY;
+	if (prepared.owner_lock.owns_lock()) {
+		return ERR_BUSY;
+	}
 	prepared.owner_lock = std::unique_lock<std::recursive_mutex>(egp::box2d::get_simulation_mutex());
-	struct FailureCleanup { PreparedRestore &value; bool success = false; ~FailureCleanup() { if (!success) Box2DLocalReplay::abort_restore(value); } } cleanup{prepared};
+	struct FailureCleanup {
+		PreparedRestore &value;
+		bool success = false;
+		~FailureCleanup() {
+			if (!success) {
+				Box2DLocalReplay::abort_restore(value);
+			}
+		}
+	} cleanup{ prepared };
 	Requirements required;
 	Error error = measure(server, checkpoint.rid, required);
 	if (error != OK) {
@@ -426,7 +437,9 @@ Error Box2DLocalReplay::prepare_restore(Box2DPhysicsServer2D *server, const Spac
 	if (!lease) {
 		return ERR_OUT_OF_MEMORY;
 	}
-	if (lease->prepared) return ERR_BUSY;
+	if (lease->prepared) {
+		return ERR_BUSY;
+	}
 	// Fixed stack metadata is bounded before any candidate allocation. All
 	// pointer owners remain live under the physics server mutex.
 	spB2LocalBinding bindings[SP_B2_LOCAL_BINDING_LIMIT];
@@ -555,7 +568,8 @@ Error Box2DLocalReplay::prepare_restore(Box2DPhysicsServer2D *server, const Spac
 	auto &candidate = prepared.candidate;
 	auto status = spB2CreateChargedCandidate(space->world_id, static_cast<const uint8_t *>(image), bytes, budget, allocator, &candidate);
 	if (status != spB2ReserveOk) {
-		return status == spB2ReserveBusy ? ERR_BUSY : status == spB2ReserveInvalid ? ERR_INVALID_DATA : ERR_OUT_OF_MEMORY;
+		return status == spB2ReserveBusy ? ERR_BUSY : status == spB2ReserveInvalid ? ERR_INVALID_DATA
+																				   : ERR_OUT_OF_MEMORY;
 	}
 	if (!spB2ParticipantSameTopology(space->world_id, candidate.world)) {
 		return ERR_INVALID_DATA;
@@ -659,21 +673,31 @@ void Box2DLocalReplay::commit_restore(PreparedRestore &prepared) noexcept {
 	lease->prepared = nullptr;
 }
 
-Box2DLocalReplay::PreparedRestore::~PreparedRestore() { Box2DLocalReplay::abort_restore(*this); }
+Box2DLocalReplay::PreparedRestore::~PreparedRestore() {
+	Box2DLocalReplay::abort_restore(*this);
+}
 void Box2DLocalReplay::abort_restore(PreparedRestore &prepared) noexcept {
-	if (!prepared.owner_lock.owns_lock()) return;
+	if (!prepared.owner_lock.owns_lock()) {
+		return;
+	}
 	CRASH_COND(!Thread::is_main_thread());
 	// Never reclaim the published candidate. Its allocator owner travels with
 	// the Space lease; only uncommitted or superseded worlds retire here.
-	if (prepared.candidate.world.index1) CRASH_COND(!spB2DestroyReservedCandidate(&prepared.candidate));
+	if (prepared.candidate.world.index1) {
+		CRASH_COND(!spB2DestroyReservedCandidate(&prepared.candidate));
+	}
 	if (prepared.retired_world.index1) {
 		b2DestroyWorld(prepared.retired_world);
-		if (prepared.retired_candidate.world.index1) CRASH_COND(!spB2ReleaseDestroyedCandidate(&prepared.retired_candidate));
+		if (prepared.retired_candidate.world.index1) {
+			CRASH_COND(!spB2ReleaseDestroyedCandidate(&prepared.retired_candidate));
+		}
 	}
 	auto *lease = static_cast<SpaceLease *>(prepared.lease);
 	if (lease && lease->prepared == &prepared) {
 		lease->prepared = nullptr;
-		if (!lease->candidate.world.index1) lease->space = nullptr;
+		if (!lease->candidate.world.index1) {
+			lease->space = nullptr;
+		}
 	}
 	prepared.server = nullptr;
 	prepared.space = nullptr;
@@ -692,7 +716,9 @@ Error Box2DLocalReplay::restore(Box2DPhysicsServer2D *server, const SpaceRecord 
 		const void *image, size_t bytes, size_t budget, const ContactRecord *contacts, uint32_t contact_count) {
 	PreparedRestore prepared;
 	const Error result = prepare_restore(server, checkpoint, bodies, body_count, shapes, shape_count, image, bytes, budget, prepared, {}, contacts, contact_count);
-	if (result != OK) return result;
+	if (result != OK) {
+		return result;
+	}
 	commit_restore(prepared);
 	// Legacy one-participant call retains its behavior, with teardown explicitly
 	// following the publication barrier rather than inside commit_restore.
