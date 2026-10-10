@@ -70,10 +70,27 @@ def main():
     try:
         verify_excluded_files(vendor, manifest)
         actual = {path.relative_to(vendor).as_posix() for path in vendor.rglob("*") if path.is_file()}
-        if actual != set(manifest["sha256_lf"]) | {"UPSTREAM.json"}:
+        # EGP-authored sources that compile against Box2D internals live beside the vendor
+        # tree; they are pinned separately so the upstream pin stays the upstream commit.
+        additions = manifest.get("egp_additions", {}).get("sha256_lf", {})
+        if set(additions) & set(manifest["sha256_lf"]):
+            raise RuntimeError("EGP additions overlap the upstream Box2D pin")
+        if actual != set(manifest["sha256_lf"]) | set(additions) | {"UPSTREAM.json"}:
             raise RuntimeError("Vendored Box2D file set differs from the active source pin")
+        # Explicit EGP patches over upstream files: the patch itself is pinned, its baseline
+        # must be the upstream pin, and the patched file must match the recorded result.
+        patched = {}
+        for entry in manifest.get("egp_patches", []):
+            patch_path = ROOT / entry["path"]
+            if not patch_path.is_file() or hashlib.sha256(patch_path.read_bytes().replace(b"\r\n", b"\n")).hexdigest() != entry["sha256"]:
+                raise RuntimeError("EGP patch manifest mismatch: " + entry["name"])
+            for relative, hashes in entry["files"].items():
+                if hashes["upstream_sha256"] != manifest["sha256_lf"].get(relative) or relative in patched:
+                    raise RuntimeError("Invalid EGP patch baseline: " + relative)
+                patched[relative] = hashes["patched_sha256"]
+        receipt["egp_patches"] = manifest.get("egp_patches", [])
         mismatches = []
-        for relative, expected in manifest["sha256_lf"].items():
+        for relative, expected in {**manifest["sha256_lf"], **patched, **additions}.items():
             path = vendor / relative
             if not path.is_file() or hashlib.sha256(path.read_bytes().replace(b"\r\n", b"\n")).hexdigest() != expected:
                 mismatches.append(relative)

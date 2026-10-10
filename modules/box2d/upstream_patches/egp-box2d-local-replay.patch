@@ -1,0 +1,164 @@
+diff --git a/src/core.c b/src/core.c
+index c670b14af3..e10301769f 100644
+--- a/src/core.c
++++ b/src/core.c
+@@ -1,3 +1,4 @@
++#include "local_replay/reservation.h"
+ // SPDX-FileCopyrightText: 2023 Erin Catto
+ // SPDX-License-Identifier: MIT
+ 
+@@ -144,6 +145,8 @@ void* b2Alloc( size_t size )
+ 	// https://en.cppreference.com/w/c/memory/aligned_alloc
+ 	size_t size32 = ( ( size - 1 ) | 0x1F ) + 1;
+ 
++	void* reserved = spB2TryAllocateReserved(size32);
++	if (reserved) { b2TracyCAlloc(reserved, size); return reserved; }
+ 	if ( b2_allocFcn != NULL )
+ 	{
+ 		void* ptr = b2_allocFcn( size32, B2_ALIGNMENT );
+@@ -192,6 +195,7 @@ void b2Free( void* mem, size_t size )
+ 
+ 	b2TracyCFree( mem );
+ 
++	if (spB2TryFreeReserved(mem, size)) { b2AtomicFetchAddI64(&b2_byteCount, -(int64_t)size); return; }
+ 	if ( b2_freeFcn != NULL )
+ 	{
+ 		b2_freeFcn( mem, size );
+diff --git a/src/recording.c b/src/recording.c
+index 477f8606e7..5fcfec0980 100644
+--- a/src/recording.c
++++ b/src/recording.c
+@@ -20,8 +20,16 @@
+ 
+ void b2RecBufAppend( b2RecBuffer* buf, const void* data, int size )
+ {
+-	if ( size <= 0 )
++	if ( buf->failed ) return;
++	if ( size < 0 || buf->size < 0 || size > INT_MAX - buf->size )
+ 	{
++		buf->failed = true;
++		return;
++	}
++	if ( size == 0 ) return;
++	if ( buf->fixedCapacity && size > buf->capacity - buf->size )
++	{
++		buf->failed = true;
+ 		return;
+ 	}
+ 
+diff --git a/src/recording.h b/src/recording.h
+index 3a1594468d..51f5e02e3a 100644
+--- a/src/recording.h
++++ b/src/recording.h
+@@ -73,6 +73,8 @@ typedef struct b2RecBuffer
+ 	int capacity;
+ 	int size;
+ 	bool countOnly;
++	bool fixedCapacity; // private caller-owned checkpoint storage
++	bool failed;
+ } b2RecBuffer;
+ 
+ // User-owned recording buffer. The world appends into it while recording; the user saves and
+diff --git a/src/world_snapshot.c b/src/world_snapshot.c
+index e3932ba355..09ce381b3e 100644
+--- a/src/world_snapshot.c
++++ b/src/world_snapshot.c
+@@ -25,6 +25,7 @@
+ #include "box2d/types.h"
+ 
+ #include <string.h>
++#include <limits.h>
+ 
+ // Snapshot image magic and version
+ #define B2_SNAP_MAGIC 0x32534E42u // 'BNS2'
+@@ -147,9 +148,10 @@ static void b2SnapW_U32( b2RecBuffer* buf, uint32_t v )
+ 	b2RecBufAppend( buf, &v, 4 );
+ }
+ 
+-static void b2SnapW_Bytes( b2RecBuffer* buf, const void* src, int n )
++static void b2SnapW_Bytes( b2RecBuffer* buf, const void* src, int64_t n )
+ {
+-	b2RecBufAppend( buf, src, n );
++	if ( n < 0 || n > INT_MAX ) { buf->failed = true; return; }
++	b2RecBufAppend( buf, src, (int)n );
+ }
+ 
+ // Reject a count read from the image before it reaches an allocation or memset. count must be non
+@@ -176,7 +178,7 @@ static bool b2SnapCheckCount( const b2SnapReader* r, int count, int memSize, int
+ 		b2SnapW_I32( buf, ( arr ).count );                                                                                       \
+ 		if ( ( arr ).count > 0 )                                                                                                 \
+ 		{                                                                                                                        \
+-			b2SnapW_Bytes( buf, ( arr ).data, ( arr ).count * (int)sizeof( *( arr ).data ) );                                    \
++			b2SnapW_Bytes( buf, ( arr ).data, ( arr ).count * (int64_t)sizeof( *( arr ).data ) );                                    \
+ 		}                                                                                                                        \
+ 	}                                                                                                                            \
+ 	while ( 0 )
+@@ -238,7 +240,7 @@ static void b2SerBitSet( b2RecBuffer* buf, const b2BitSet* bs )
+ 	b2SnapW_U32( buf, bs->blockCount );
+ 	if ( bs->blockCount > 0 )
+ 	{
+-		b2SnapW_Bytes( buf, bs->bits, (int)( bs->blockCount * sizeof( uint64_t ) ) );
++		b2SnapW_Bytes( buf, bs->bits, (int64_t)bs->blockCount * sizeof( uint64_t ) );
+ 	}
+ }
+ 
+@@ -275,7 +277,7 @@ static void b2SerHashSet( b2RecBuffer* buf, const b2HashSet* hs )
+ 	b2SnapW_U32( buf, hs->count );
+ 	if ( hs->capacity > 0 )
+ 	{
+-		b2SnapW_Bytes( buf, hs->items, (int)( hs->capacity * sizeof( b2SetItem ) ) );
++		b2SnapW_Bytes( buf, hs->items, (int64_t)hs->capacity * sizeof( b2SetItem ) );
+ 	}
+ }
+ 
+@@ -322,7 +324,7 @@ static void b2SerTree( b2RecBuffer* buf, const b2DynamicTree* tree )
+ 	b2SnapW_I32( buf, tree->proxyCount );
+ 	if ( tree->nodeCapacity > 0 )
+ 	{
+-		b2SnapW_Bytes( buf, tree->nodes, tree->nodeCapacity * (int)sizeof( b2TreeNode ) );
++		b2SnapW_Bytes( buf, tree->nodes, tree->nodeCapacity * (int64_t)sizeof( b2TreeNode ) );
+ 	}
+ }
+ 
+@@ -531,8 +533,8 @@ void b2SerializeWorld( b2World* world, b2RecBuffer* buf )
+ 		if ( chain->id != B2_NULL_INDEX )
+ 		{
+ 			// Live slot: write the two heap arrays
+-			b2SnapW_Bytes( buf, chain->shapeIndices, chain->count * (int)sizeof( int ) );
+-			b2SnapW_Bytes( buf, chain->materials, chain->materialCount * (int)sizeof( b2SurfaceMaterial ) );
++			b2SnapW_Bytes( buf, chain->shapeIndices, chain->count * (int64_t)sizeof( int ) );
++			b2SnapW_Bytes( buf, chain->materials, chain->materialCount * (int64_t)sizeof( b2SurfaceMaterial ) );
+ 		}
+ 	}
+ 
+@@ -1157,3 +1159,30 @@ uint64_t b2HashWorldStateDeep( b2World* world )
+ 
+ 	return hash;
+ }
++
++#if defined(SP_B2_IMAGE_TEST_HOOKS)
++bool spB2TestBitSetSizing(uint32_t count, int* written)
++{
++    b2RecBuffer buffer = {0};
++    buffer.countOnly = true;
++    b2BitSet bits = {0};
++    bits.blockCount = count;
++    b2SerBitSet(&buffer, &bits);
++    *written = buffer.size;
++    return buffer.failed;
++}
++bool spB2TestHashSetSizing(uint32_t count, int* written)
++{
++    b2RecBuffer buffer = {0};
++    buffer.countOnly = true;
++    b2HashSet set = {0};
++    set.capacity = count;
++    b2SerHashSet(&buffer, &set);
++    *written = buffer.size;
++    return buffer.failed;
++}
++#endif
++
++#include "local_replay/solver_preflight.inc"
++
++#include "local_replay/reservation_requirements.inc"
