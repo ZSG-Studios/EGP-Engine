@@ -27,7 +27,8 @@
     "superpos_replication_server.cpp",
     "private/replication/link_authority.cpp",
     "private/replication/rpc_endpoint.cpp",
-    "superpos_lockstep.cpp"
+    "superpos_lockstep.cpp",
+    "superpos_snapshot_interpolator.cpp"
   ],
   "core_manifest": "core/source_manifest.json",
   "required_engine_modules": [
@@ -54,7 +55,9 @@
     "SuperposSpawner",
     "SuperposReplicationServer",
     "SuperposLockstepClient",
-    "SuperposLockstepServer"
+    "SuperposLockstepServer",
+    "SuperposSnapshotInterpolator",
+    "SuperposStateHistory"
   ],
   "tools_only": [
     "superpos_uint64_editor.cpp"
@@ -152,16 +155,16 @@
       "projection": "sequential_scene_after_atomic_canonical",
       "spawn_readiness_timeout_ms": 15000,
       "files": {
-        "superpos_spawn_catalog.h": "9907dfc0cfbcf6a202e688d4bfbda12a60a75497412c899d03edb2171883dd25",
-        "superpos_spawn_catalog.cpp": "bb99ae9c6f203a53ac4944c13768afe4c46ec3f7023bf06626e093cf4c61a675",
+        "superpos_spawn_catalog.h": "05daeab7049eb8f9541c97bd674388ffbda4efae27cdf7bb0b9f126eb16112db",
+        "superpos_spawn_catalog.cpp": "4f6bb2acdc775010f47c32c94c25c22e4c4df95d685f66a5ae6d1610614d9095",
         "superpos_replica_view.h": "64e4d47e5c6d1f6206bad7b8fdfca9b1fba6c69835b9b71ed56bb247c6addd06",
         "superpos_replica_view.cpp": "983f7067e41659dce9c8901269d711bdd72749438615e45689305c9982e7acdc",
         "superpos_spawner.h": "b8c9ac286ee1e5cb0104a74bae45ee4be9e0427fbbf15e5def9428a485d300ed",
         "superpos_spawner.cpp": "82a4ba22c098d363878aee79ac70bd04ba82121519bcc6addf575eaeaba63a45",
         "private/spawning/spawn_runtime.hpp": "070a8a7d650c56be071cfa17904a2bc1b530ebd29a8c355cedd99a290ef1a785",
-        "private/spawning/spawn_runtime.cpp": "ca67e3a5a054ca9b82fc7f37e35f9780430a6a7b11df3bb635949052a933d769",
-        "private/spawning/receiver_public_access.hpp": "2949d20c50a03ec238b4a91c4f07383a69f1b9753416271ad09fcde1fcbdc14c",
-        "private/spawning/session_public.inc": "bb78318d7933d55af918e484f24ec3302a7a0209ba2d86eb9ad55e3a217ad5ab",
+        "private/spawning/spawn_runtime.cpp": "0b05943efefb7d8a72b225571813f7d64f17669ac154ded5f5c6f0565ed6c4ca",
+        "private/spawning/receiver_public_access.hpp": "5e0b49e19c62c83dd873993e901db15f01d55a3af698a1b6f4b908a7d995816d",
+        "private/spawning/session_public.inc": "7293a050c94fcd251e7f39f80d92bbbc0b8f6ec76cde6dc296eeecf896487fc1",
         "private/spawning/projection_queue.hpp": "a63c3af6f55dca3481afede235b95f6fc512ca26fbaa7a887ca476726f9775b6",
         "private/spawning/public_fixture.inc": "a5de93bcad29b49122d47efe4d733e1d52c6db5d2016a3e6e7c82d0dbdd2c64d"
       }

@@ -22,7 +22,7 @@
 		<method name="read_fields" qualifiers="const">
 			<return type="Dictionary" />
 			<param index="0" name="fields" type="PackedInt64Array" />
-			<description>Decodes the listed registered field IDs from the current canonical image. On success the Dictionary contains [code]error[/code], [code]values[/code] keyed by field ID, [code]revision[/code], [code]owner[/code], [code]ownership_revision[/code], [code]canonical_ready[/code], [code]binding_generation[/code] and [code]handle[/code]. Unknown or duplicate IDs return [constant ERR_INVALID_PARAMETER]. A stale view returns another [enum Error] code.</description>
+			<description>Decodes the listed registered field IDs from the current canonical image. On success the Dictionary contains [code]error[/code], [code]values[/code] keyed by field ID, [code]revision[/code], [code]owner[/code], [code]ownership_revision[/code], [code]canonical_ready[/code], [code]binding_generation[/code], [code]handle[/code] and [code]tick[/code] (the authoritative publication tick of this image). Unknown or duplicate IDs return [constant ERR_INVALID_PARAMETER]. A stale view returns another [enum Error] code.</description>
 		</method>
 		<method name="read_status" qualifiers="const">
 			<return type="Dictionary" />

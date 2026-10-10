@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposSnapshotInterpolator" inherits="RefCounted" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>Presentation-only interpolation of authoritative poses.</brief_description>
+	<description>Buffers authoritative [Transform3D] poses with linear and angular velocity per entity and samples them a short delay behind the newest authoritative tick. It never changes canonical, predicted or physics state.
+		Each entity has a bounded native ring (core snapshot history): older arrivals are rejected, a sample at the newest tick replaces it, and the oldest sample is evicted at capacity. Entity identities and ticks keep all 64 bits. The render clock is an integer tick plus a fraction, so ticks above 2^53 interpolate exactly.
+		The clock trails the newest received tick by the configured delay. With adaptive buffering the delay grows with the observed authoritative sample spacing and decays back. The playback rate is corrected by at most 10 percent, never runs past the newest tick, and resynchronizes when authority time jumps far ahead. Past the newest sample the pose is extrapolated with its velocities for at most the configured time, then held. A bracket wider than the maximum gap holds the earlier sample. A pose correction caused by fresh data after extrapolation is applied as a decaying presentation offset, so a body never snaps backward. A larger discontinuity epoch in [method submit] or a jump beyond the teleport distance starts a fresh history.
+		All methods are owner-thread only. GDScript, C# and C++ call the same native implementation.
+		[codeblock]
+		var smoothing := SuperposSnapshotInterpolator.new()
+		smoothing.configure({"tick_rate": 60, "delay_seconds": 0.1})
+		smoothing.submit(handle, tick, pose, velocity)
+		# Every rendered frame:
+		smoothing.advance(delta)
+		var sampled := smoothing.sample(handle, delta)
+		if sampled.error == OK:
+		    node.global_transform = sampled.pose
+		[/codeblock]</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="advance">
+			<return type="int" enum="Error" />
+			<param index="0" name="delta" type="float" />
+			<description>Advances the render clock by [param delta] seconds (at most 0.25 per call) with bounded rate correction. Returns [constant ERR_INVALID_PARAMETER] for a negative or non-finite delta. Does nothing before the first sample.</description>
+		</method>
+		<method name="clear">
+			<return type="int" enum="Error" />
+			<description>Removes every entity and resets the clock and statistics, keeping the configuration.</description>
+		</method>
+		<method name="configure">
+			<return type="int" enum="Error" />
+			<param index="0" name="configuration" type="Dictionary" default="{}" />
+			<description>Replaces any previous configuration and clears every entity. Accepted numeric keys: [code]tick_rate[/code] (1 through 1000, default 60), [code]delay_seconds[/code] (0 through 2, default 0.1), [code]max_extrapolation_seconds[/code] (0 through 0.5, default 0.1), [code]max_adaptive_delay_seconds[/code] (0 disables adaptive buffering; otherwise from the delay up to 2), [code]teleport_distance[/code] (meters, 0 disables, default 8), [code]capacity[/code] (samples per entity, 2 through 256, default 32), [code]maximum_entities[/code] (1 through 4096, default 1024), [code]maximum_gap_seconds[/code] (widest interpolated bracket, default 1) and [code]correction_decay[/code] (per second, 0 through 100, default 12). Storage for the index and every entity is charged to a native quota of at most 256 MiB; a larger plan returns [constant ERR_PARAMETER_RANGE_ERROR]. Unknown keys return [constant ERR_INVALID_PARAMETER].</description>
+		</method>
+		<method name="read_clock" qualifiers="const">
+			<return type="Dictionary" />
+			<description>Returns [code]error[/code] and, on success, [code]started[/code], [code]tick[/code], [code]fraction[/code], [code]newest_tick[/code], [code]buffer_ticks[/code] and [code]target_delay_seconds[/code]. Ticks preserve unsigned 64-bit bit patterns.</description>
+		</method>
+		<method name="read_entity" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="entity" type="int" />
+			<description>Returns [code]error[/code] and, for a tracked entity, its buffered [code]ticks[/code], [code]discontinuity_epoch[/code], per-mode sample counters, corrections, resets, teleports, rejected arrivals and the current correction offset.</description>
+		</method>
+		<method name="read_statistics" qualifiers="const">
+			<return type="Dictionary" />
+			<description>Returns [code]error[/code] and aggregate counters: interpolated, extrapolated, held, priming and gap-hold samples, corrections, teleports, epoch resets, rejected epochs and stale arrivals, clock holds and resynchronizations, the largest corrections, the render clock and [code]charged_bytes[/code].</description>
+		</method>
+		<method name="remove">
+			<return type="int" enum="Error" />
+			<param index="0" name="entity" type="int" />
+			<description>Forgets one entity and releases its storage. Returns [constant ERR_DOES_NOT_EXIST] when it is not tracked.</description>
+		</method>
+		<method name="sample">
+			<return type="Dictionary" />
+			<param index="0" name="entity" type="int" />
+			<param index="1" name="delta" type="float" default="0.0" />
+			<description>Samples [param entity] at the render clock and decays its presentation correction by [param delta] seconds. Returns [code]error[/code] and, on success, [code]pose[/code], [code]velocity[/code], [code]angular_velocity[/code] and [code]mode[/code] ([code]interpolated[/code], [code]extrapolated[/code], [code]held[/code], [code]priming[/code] or [code]gap_hold[/code]).</description>
+		</method>
+		<method name="sample_at" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="entity" type="int" />
+			<param index="1" name="tick" type="int" />
+			<param index="2" name="fraction" type="float" default="0.0" />
+			<description>Evaluates [param entity] at an explicit time ([param tick] plus [param fraction], which must be from 0 up to but excluding 1) without changing the clock, counters or correction, and without applying the correction. The result has the same keys as [method sample].</description>
+		</method>
+		<method name="submit">
+			<return type="int" enum="Error" />
+			<param index="0" name="entity" type="int" />
+			<param index="1" name="tick" type="int" />
+			<param index="2" name="pose" type="Transform3D" />
+			<param index="3" name="velocity" type="Vector3" default="Vector3(0, 0, 0)" />
+			<param index="4" name="angular_velocity" type="Vector3" default="Vector3(0, 0, 0)" />
+			<param index="5" name="discontinuity_epoch" type="int" default="0" />
+			<description>Adds one authoritative sample. [param entity] must be nonzero, the pose finite and invertible and the angular velocity at most 1000 radians per second. A tick older than the entity's newest sample, or an epoch older than its current epoch, returns [constant ERR_INVALID_DATA] and is counted. Returns [constant ERR_PARAMETER_RANGE_ERROR] when [code skip-lint]maximum_entities[/code] are already tracked and [constant ERR_OUT_OF_MEMORY] when the quota is exhausted. Angular velocity is world-space radians per second.</description>
+		</method>
+	</methods>
+</class>

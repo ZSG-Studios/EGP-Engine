@@ -42,6 +42,7 @@ Dictionary SuperposReceiverPublicAccess::read(SuperposSession &owner,
     result["revision"] = superpos_egp::signed_bits(image->revision);
     result["owner"] = superpos_egp::signed_bits(image->owner);
     result["ownership_revision"] = superpos_egp::signed_bits(image->ownership_revision);
+    result["tick"] = superpos_egp::signed_bits(image->tick);
     return result;
 }
 

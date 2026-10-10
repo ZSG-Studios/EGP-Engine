@@ -19,6 +19,8 @@ void superpos_register_recovery_fixture();
 #include "superpos_udp_listener.h"
 #include "superpos_replication_server.h"
 #include "superpos_replicator.h"
+#include "superpos_snapshot_interpolator.h"
+#include "superpos_state_history.h"
 #include "superpos_spawner.h"
 #include "superpos_lockstep.h"
 #include "private/spawning/spawn_runtime.hpp"
@@ -55,6 +57,8 @@ void initialize_superpos_module(ModuleInitializationLevel p_level) {
     GDREGISTER_CLASS(SuperposSession);
     GDREGISTER_CLASS(SuperposWorld);
     GDREGISTER_CLASS(SuperposReplicator);
+    GDREGISTER_CLASS(SuperposSnapshotInterpolator);
+    GDREGISTER_CLASS(SuperposStateHistory);
     GDREGISTER_CLASS(SuperposSpawner);
     GDREGISTER_CLASS(SuperposReplicationServer);
     GDREGISTER_CLASS(SuperposLockstepClient);

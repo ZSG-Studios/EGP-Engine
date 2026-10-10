@@ -175,3 +175,39 @@ Error SuperposSession::publish_fields(uint64_t p_handle, uint64_t p_expected_rev
     // arbitrary callbacks, close this world, or dispose a managed wrapper.
     return publish_packed(envelope);
 }
+
+Dictionary SuperposSession::read_field_changes(uint64_t p_handle, const Dictionary &p_values) const {
+    Dictionary result;
+    result["error"] = ERR_UNCONFIGURED;
+    if (Thread::get_caller_id() != owner_thread) { result["error"] = ERR_BUSY; return result; }
+    if (owner_retired || !impl || !impl->world) return result;
+    if (managed_reload_paused || closing || simulation_in_flight) { result["error"] = ERR_BUSY; return result; }
+    if (p_values.is_empty() || p_values.size() > int(superpos::Schema::maximum_fields)) {
+        result["error"] = ERR_INVALID_PARAMETER; return result;
+    }
+    const auto object = impl->world->world().view({p_handle});
+    if (!object) { result["error"] = translate(object.error()); return result; }
+    // The same encoder as publication, into charged staging; nothing is
+    // published and no callback runs. Comparing encoded bytes means a
+    // quantized field changes only when its quantized level changes.
+    superpos::Buffer staging{impl->allocator, superpos::MemoryDomain::Session};
+    const auto reserved = staging.resize(object->canonical.size());
+    if (!reserved) { result["error"] = translate(reserved.error()); return result; }
+    memcpy(staging.bytes().data(), object->canonical.data(), staging.size());
+    PackedInt64Array changed;
+    for (int i = 0; i < p_values.size(); ++i) {
+        const Variant key = p_values.get_key_at_index(i);
+        if (key.get_type() != Variant::INT) { result["error"] = ERR_INVALID_PARAMETER; return result; }
+        const auto *field = object->schema->field(uint64_t(int64_t(key)));
+        if (!field) { result["error"] = ERR_INVALID_PARAMETER; return result; }
+        const auto encoded = encode_engine_field(*object->schema, *field, staging.bytes(), p_values.get_value_at_index(i));
+        if (!encoded) { result["error"] = translate(encoded.error()); return result; }
+        if (memcmp(staging.bytes().data() + field->offset, object->canonical.data() + field->offset, field->size) != 0) {
+            changed.push_back(int64_t(key));
+        }
+    }
+    result["error"] = OK;
+    result["changed"] = changed;
+    result["revision"] = superpos_egp::signed_bits(object->revision);
+    return result;
+}

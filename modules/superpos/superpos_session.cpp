@@ -360,6 +360,9 @@ struct SuperposUdpRoute {
 #else
 struct SuperposUdpRoute {};
 #endif
+// Charged rows sit at namespace scope: a nested type with default member
+// initializers is not yet nothrow-constructible inside the incomplete Impl.
+struct SuperposPredictedKey { std::array<uint64_t, 6> identity{}; uint64_t binding = 0; };
 struct SuperposSession::Impl {
     superpos::BudgetAllocator* metadata_parent;
     superpos::QuotaAllocator allocator;
@@ -381,6 +384,11 @@ struct SuperposSession::Impl {
     superpos_egp::NativePredictionOwner prediction;
     superpos::Fingerprint prediction_fingerprint{};
     uint32_t prediction_history_ticks = 0, prediction_required_history_ticks = 0;
+    // Client predicted spawns: fixed rows, then the core table that borrows them.
+    superpos_egp::ChargedArray<superpos::PredictedSpawnRecord> predicted_records{allocator, superpos::MemoryDomain::Session};
+    superpos_egp::ChargedArray<SuperposPredictedKey> predicted_keys{allocator, superpos::MemoryDomain::Session};
+    std::optional<superpos::PredictedSpawns> predicted;
+    uint64_t predicted_epoch = 0, predicted_peer = 0;
     uint64_t tick = 0, binding_generation = 0, publications = 0;
     uint32_t capacity = 0;
     uint64_t object_generation_floor = 1;
@@ -575,6 +583,10 @@ Error SuperposSession::close_checked() {
     impl->network.reset();
 #endif
     impl->prediction.reset();
+    impl->predicted.reset();
+    impl->predicted_keys.clear();
+    impl->predicted_records.clear();
+    impl->predicted_epoch = impl->predicted_peer = 0;
     if (owner_retired) { return ERR_UNCONFIGURED; }
     impl->prediction_fingerprint = {};
     impl->prediction_history_ticks = impl->prediction_required_history_ticks = 0;
@@ -1174,6 +1186,7 @@ Array SuperposReceiverPublicAccess::take_rpcs(SuperposSession &, uint32_t) { ret
 Dictionary SuperposReceiverPublicAccess::rpc_status(SuperposSession &) { Dictionary r; r["error"] = ERR_UNAVAILABLE; return r; }
 #endif
 #include "private/replication/session_replication.inc"
+#include "private/gameplay/session_gameplay.inc"
 Error SuperposSession::attach_receiver(SuperposSpawner *spawner, const Dictionary &configuration) { return spawner ? SuperposReceiverPublicAccess::attach(*this, *spawner, configuration) : ERR_INVALID_PARAMETER; }
 Error SuperposSession::detach_receiver() { return SuperposReceiverPublicAccess::detach(*this); }
 Dictionary SuperposSession::read_receiver_status() const {
@@ -1418,6 +1431,13 @@ void SuperposSession::_bind_methods() {
     ClassDB::bind_method(D_METHOD("read_object", "handle"), &SuperposSession::read_object);
     ClassDB::bind_method(D_METHOD("read_fields", "handle", "fields"), &SuperposSession::read_fields);
     ClassDB::bind_method(D_METHOD("publish_fields", "handle", "expected_revision", "values"), &SuperposSession::publish_fields);
+    ClassDB::bind_method(D_METHOD("read_field_changes", "handle", "values"), &SuperposSession::read_field_changes);
+    ClassDB::bind_method(D_METHOD("configure_predicted_spawns", "capacity"), &SuperposSession::configure_predicted_spawns, DEFVAL(16));
+    ClassDB::bind_method(D_METHOD("begin_predicted_spawn"), &SuperposSession::begin_predicted_spawn);
+    ClassDB::bind_method(D_METHOD("confirm_predicted_spawn", "sequence", "replica"), &SuperposSession::confirm_predicted_spawn);
+    ClassDB::bind_method(D_METHOD("reject_predicted_spawn", "sequence"), &SuperposSession::reject_predicted_spawn);
+    ClassDB::bind_method(D_METHOD("release_predicted_spawn", "sequence"), &SuperposSession::release_predicted_spawn);
+    ClassDB::bind_method(D_METHOD("read_predicted_spawn", "sequence"), &SuperposSession::read_predicted_spawn);
     ClassDB::bind_method(D_METHOD("publish_packed", "operations"), &SuperposSession::publish_packed);
     ClassDB::bind_method(D_METHOD("transfer_ownership", "handle", "owner", "expected_revision"), &SuperposSession::transfer_ownership);
     ClassDB::bind_method(D_METHOD("get_statistics"), &SuperposSession::get_statistics);
@@ -1463,6 +1483,10 @@ void SuperposSession::_finish_retirement() {
     impl->network.reset();
 #endif
     impl->prediction.reset();
+    impl->predicted.reset();
+    impl->predicted_keys.clear();
+    impl->predicted_records.clear();
+    impl->predicted_epoch = impl->predicted_peer = 0;
     impl->prediction_fingerprint = {};
     impl->prediction_history_ticks = impl->prediction_required_history_ticks = 0;
     impl->world.reset();

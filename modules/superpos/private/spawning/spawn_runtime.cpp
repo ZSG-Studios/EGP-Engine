@@ -195,7 +195,7 @@ Error SuperposSpawnRuntime::project_one(const Projection &job) {
         if (!target) return ERR_DOES_NOT_EXIST;
         const ObjectID target_id = target->get_instance_id();
         int64_t field_bits; std::memcpy(&field_bits, &field.id, sizeof(field_bits));
-        bool valid = false; target->set(field.property, values[field_bits], &valid);
+        bool valid = false; target->set_indexed(field.path, values[field_bits], &valid);
         if (valid) ++completed;
         if (!live(job) || !ObjectDB::get_instance(root_id) || !ObjectDB::get_instance(target_id)) return ERR_BUSY;
         if (!valid) return ERR_INVALID_DATA;

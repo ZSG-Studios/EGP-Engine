@@ -51,7 +51,7 @@
 			<param index="6" name="peer_identity" type="int" />
 			<param index="7" name="admission_key" type="PackedByteArray" />
 			<param index="8" name="transport" type="Dictionary" default="{}" />
-			<description>Attaches one pre-provisioned native UDP server or client association with local/remote endpoints, session ID, peer identity and admission key. Check [method get_admission_state] for authenticated readiness. Old Yojimbo tokens are incompatible; never log the admission key.
+			<description>Attaches one pre-provisioned native UDP server or client association with local/remote endpoints, session ID, peer identity and admission key. Check [method get_admission_state] for authenticated readiness. The admission key is a raw provisioned secret, not a connect token; never log it.
 				The optional [param transport] profile accepts [code]bundle_frames[/code] (default [code]true[/code]: messages, delivery receipts, probes and a piggybacked acknowledgement share each datagram), [code]burst_datagrams[/code] (1-16, default 4 paced datagrams per pump), [code]receive_frames[/code] (1-64, default 64), [code]minimum_rate[/code] (bytes per second, default 0: a real-time budget floor under the congestion window, so random loss on a wireless link cannot starve the stream below it) and [code]channel_modes[/code], an [Array] of up to 32 delivery modes indexed by channel: [code]0[/code] reliable ordered (default), [code]1[/code] reliable unordered, [code]2[/code] unreliable latest (newer messages supersede older ones on the channel) and [code]3[/code] unreliable. [code]channel_purposes[/code] is an [Array] of up to 32 channel purposes: [code]0[/code] application (default) or [code]1[/code] control, a reliable ordered route with a 4 KiB record ceiling and its own reserve. Replication with [SuperposSpawner] and [SuperposReplicationServer] needs channel 0 to be a control channel and channels 1 and 2 to be reliable unordered application channels: [code]channel_modes[/code] 0, 1 and 1 with [code]channel_purposes[/code] 1 for channel 0. Both peers must declare identical channel modes and purposes; admission rejects a mismatch. A client of a single-port server ([SuperposUdpListener]) also passes [code]connection_id[/code], the nonzero connection ID it was admitted with; its datagrams then carry a 9-byte routing prefix, the DTLS payload ceiling shrinks by those 9 bytes so complete datagrams stay within 1,200 bytes, and both ends validate a changed address with an encrypted challenge. [code]connection_id[/code] is rejected for a server; a server uses [method configure_udp_listener]. Unknown keys return [constant ERR_INVALID_PARAMETER].
 				For example, a client that sends reliable controls on channel 0 and latest-state snapshots on channel 1 passes [code]channel_modes[/code] with the values 0 and then 2 (unreliable latest) and [code]burst_datagrams[/code] 4.</description>
 		</method>
@@ -205,6 +205,42 @@
 			<param index="1" name="expected_revision" type="int" />
 			<param index="2" name="values" type="Dictionary" />
 			<description>Publishes typed field values keyed by exact field IDs. Checks the expected canonical object revision and every field before publishing a complete replacement. Boolean, integer, floating-point and packed-byte types are checked against the frozen schema. Unsigned values preserve integer bit patterns. Unmentioned fields retain their canonical values. A successful canonical publication does not imply scene projection or remote delivery.</description>
+		</method>
+		<method name="begin_predicted_spawn">
+			<return type="Dictionary" />
+			<description>Allocates a temporary predicted-spawn identity after [method configure_predicted_spawns]. Returns [code]error[/code] and, on success, [code]sequence[/code], [code]epoch[/code] and [code]peer[/code]. Sequences never repeat in an epoch and never alias a World handle; send the sequence to the authority (for example in a typed RPC) and have it echo the sequence in a field of the object it spawns. Returns [constant ERR_OUT_OF_MEMORY] when every row is in use.</description>
+		</method>
+		<method name="configure_predicted_spawns">
+			<return type="int" enum="Error" />
+			<param index="0" name="capacity" type="int" default="16" />
+			<description>Reserves [param capacity] predicted-spawn rows (1 through 256) on a client Session with a native network association, bound to its authority epoch and local peer. Configure once; a second call returns [constant ERR_ALREADY_IN_USE]. Without a network returns [constant ERR_UNCONFIGURED].</description>
+		</method>
+		<method name="confirm_predicted_spawn">
+			<return type="int" enum="Error" />
+			<param index="0" name="sequence" type="int" />
+			<param index="1" name="replica" type="SuperposReplicaView" />
+			<description>Confirms a pending prediction with the authoritative object it became. [param replica] must be a Ready replica received by this Session and owned by the local peer, otherwise [constant ERR_UNAUTHORIZED] (another owner), [constant ERR_BUSY] (still pending) or [constant ERR_INVALID_PARAMETER] (another Session). Confirming the same object again succeeds; confirming one object for two predictions, or a different object for a confirmed one, returns [constant ERR_INVALID_DATA].</description>
+		</method>
+		<method name="read_field_changes" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="handle" type="int" />
+			<param index="1" name="values" type="Dictionary" />
+			<description>Encodes [param values] (keyed by field ID) with the frozen schema against the object's current canonical image without publishing. Returns [code]error[/code] and, on success, [code]changed[/code] (the field IDs whose encoded bytes differ) and [code]revision[/code] (the compared revision). A quantized field changes only when its quantized level changes. Values are type checked exactly as in [method publish_fields].</description>
+		</method>
+		<method name="read_predicted_spawn">
+			<return type="Dictionary" />
+			<param index="0" name="sequence" type="int" />
+			<description>Returns [code]error[/code] and, for a live row, [code]phase[/code] ([code]pending[/code], [code]confirmed[/code], [code]rejected[/code] or [code]retired[/code]), [code skip-lint]sequence[/code], [code]handle[/code] and [code]ownership_revision[/code]. A confirmed prediction whose replica left this receiver (destroyed, out of interest, ownership reset or rebind) is retired here.</description>
+		</method>
+		<method name="reject_predicted_spawn">
+			<return type="int" enum="Error" />
+			<param index="0" name="sequence" type="int" />
+			<description>Marks a pending prediction rejected, for example after the authority refused it. Rejecting again succeeds; a confirmed prediction returns [constant ERR_UNCONFIGURED].</description>
+		</method>
+		<method name="release_predicted_spawn">
+			<return type="int" enum="Error" />
+			<param index="0" name="sequence" type="int" />
+			<description>Releases a resolved (confirmed, rejected or retired) prediction row. A pending prediction returns [constant ERR_BUSY]: it must be confirmed or rejected first.</description>
 		</method>
 	</methods>
 	<signals>

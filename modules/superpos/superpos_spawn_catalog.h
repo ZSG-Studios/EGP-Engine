@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #pragma once
 #include "core/io/resource.h"
+#include "core/templates/vector.h"
 #include "core/variant/dictionary.h"
 #include "core/variant/typed_array.h"
 #include "scene/resources/packed_scene.h"
@@ -38,6 +39,8 @@ public:
         uint64_t id = 0;
         NodePath node;
         StringName property;
+        // Parsed "name[:sub...]" property path (indexed projection).
+        Vector<StringName> path;
     };
     struct Entry {
         uint64_t resource = 0, schema = 0;

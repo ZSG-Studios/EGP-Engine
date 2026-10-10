@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposReplicator" inherits="Node" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>Binds scene properties of one node to the canonical fields of one World object.</brief_description>
+	<description>On the authority, captures bound properties of a target node into canonical publications of one World object; it can also project the current canonical image back onto the node. Bindings map field IDs to property paths: a property name or an indexed path such as [code]position:x[/code] (at most four names). Paths never come from the network.
+		[method capture_dirty] publishes only fields marked with [method mark_dirty]. [method capture_changes] is automatic dirty tracking: it reads every bound property once, encodes the values with the frozen schema, including quantization, and publishes only the fields whose encoded bytes changed, in one canonical publication. A change smaller than a quantized field's step therefore publishes nothing. With [member automatic_capture] enabled the node runs [method capture_changes] every [member capture_interval] physics frames while it is inside the tree. Capture runs once per object, never once per interested peer; [SuperposReplicationServer] fans the publication out.
+		Getters and setters may free the node, its target or the Session: every step revalidates the binding and reports an interrupted capture or projection instead of touching freed state. Projection is sequential, not atomic. Leaving the tree clears the binding.
+		[codeblock]
+		var replicator := SuperposReplicator.new()
+		body.add_child(replicator)
+		replicator.bind_schema(world, body, handle, schema) # field names are property paths
+		replicator.automatic_capture = true
+		[/codeblock]</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="bind_fields">
+			<return type="int" enum="Error" />
+			<param index="0" name="session" type="SuperposSession" />
+			<param index="1" name="target" type="Node" />
+			<param index="2" name="handle" type="int" />
+			<param index="3" name="mapping" type="Dictionary" />
+			<description>Binds up to 64 field IDs (keys) to property paths of [param target] (values). Every field must exist in the object's frozen schema, and no path may equal or contain another. No getter, setter or script runs while binding. Returns [constant ERR_ALREADY_IN_USE] while bound.</description>
+		</method>
+		<method name="bind_schema">
+			<return type="int" enum="Error" />
+			<param index="0" name="session" type="SuperposSession" />
+			<param index="1" name="target" type="Node" />
+			<param index="2" name="handle" type="int" />
+			<param index="3" name="schema" type="SuperposSchema" />
+			<description>Declarative binding: maps every field of [param schema] to the property path in its [member SuperposField.field_name]. [param schema] must be the registered schema of the object (same schema ID), otherwise returns [constant ERR_INVALID_PARAMETER].</description>
+		</method>
+		<method name="capture_changes">
+			<return type="Dictionary" />
+			<description>Reads every bound property and publishes the fields whose encoded value changed. Returns [code]error[/code], [code]status[/code] ([code]completed[/code], [code]interrupted[/code] or [code]failed[/code]), [code]completed_fields[/code], [code]changed_fields[/code] and [code]source_revision[/code]. Nothing is published when nothing changed. A value of the wrong type or outside a quantized field's range fails without publishing.</description>
+		</method>
+		<method name="capture_dirty">
+			<return type="Dictionary" />
+			<description>Publishes the fields marked with [method mark_dirty] in one canonical publication. Marks raised during the capture survive it; a failed capture restores the marks.</description>
+		</method>
+		<method name="clear_binding">
+			<return type="int" enum="Error" />
+			<description>Ends the binding immediately, even inside a getter or setter. Later work of the old binding is rejected.</description>
+		</method>
+		<method name="mark_all_dirty">
+			<return type="int" enum="Error" />
+			<description>Marks every bound field for the next [method capture_dirty].</description>
+		</method>
+		<method name="mark_dirty">
+			<return type="int" enum="Error" />
+			<param index="0" name="field" type="int" />
+			<description>Marks one bound field for the next [method capture_dirty]. Returns [constant ERR_DOES_NOT_EXIST] for an unbound field.</description>
+		</method>
+		<method name="project_current">
+			<return type="Dictionary" />
+			<description>Applies the object's current canonical image to the bound properties through ordinary setters, in field order, and reports the exact applied prefix when interrupted.</description>
+		</method>
+		<method name="read_binding" qualifiers="const">
+			<return type="Dictionary" />
+			<description>Returns [code]error[/code] and, while bound, [code]handle[/code], [code]binding_generation[/code], [code]incarnation[/code], [code]field_count[/code] and [code]dirty_mask[/code]. Always includes the capture settings and counters: [code skip-lint]automatic_capture[/code], [code skip-lint]capture_interval[/code], [code]captures[/code], [code]published_captures[/code], [code]unchanged_captures[/code], [code]failed_captures[/code] and [code]last_capture_error[/code].</description>
+		</method>
+	</methods>
+	<members>
+		<member name="automatic_capture" type="bool" setter="set_automatic_capture" getter="is_automatic_capture" default="false">When enabled, [method capture_changes] runs every [member capture_interval] physics frames while the node is inside the tree and bound.</member>
+		<member name="capture_interval" type="int" setter="set_capture_interval" getter="get_capture_interval" default="1">Physics frames between automatic captures, from 1 to 600.</member>
+	</members>
+</class>

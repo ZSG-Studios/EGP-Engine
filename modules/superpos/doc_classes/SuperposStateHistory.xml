@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<class xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" name="SuperposStateHistory" inherits="RefCounted" api_type="core" xsi:noNamespaceSchemaLocation="../../../doc/class.xsd" is_experimental="true">
+	<brief_description>Immutable canonical history of objects of one schema, for lag-compensation queries and smoothing.</brief_description>
+	<description>Records exact canonical images of objects of one registered schema in bounded per-object native rings (core snapshot history). On the authority, [method record_object] records World objects at their publication tick, so hit checks can query where an object was without rewinding the live World or scene. On a client, [method record_replica] records received replicas at their authoritative publication tick for presentation smoothing.
+		[method read_exact] returns a recorded image; [method sample] interpolates between the two samples that bracket a tick plus fraction: F32, F64 and QuantizedF32 fields interpolate linearly (quantized values stay inside their declared range and are requantized), every other field (integers, booleans, bytes and object references) steps from the earlier sample. There is no extrapolation: a time before the oldest or after the newest sample returns [constant ERR_DOES_NOT_EXIST]. The default window is 30 ticks, 500 milliseconds at 60 ticks per second; older samples are evicted at capacity.
+		Older arrivals and a changed image at an already recorded revision are rejected. A replica that is rebound, reincarnated or reset for ownership starts a fresh history. Reconfiguring the Session invalidates the history. All methods are owner-thread only.
+		[codeblock]
+		var history := SuperposStateHistory.new()
+		history.configure(world, SCHEMA_ID) # 30 ticks by default
+		history.record_object(handle)        # after each canonical write
+		var past := history.sample(handle, shot_tick, 0.5)
+		[/codeblock]</description>
+	<tutorials>
+	</tutorials>
+	<methods>
+		<method name="clear">
+			<return type="int" enum="Error" />
+			<description>Forgets every object history, keeping the configuration.</description>
+		</method>
+		<method name="configure">
+			<return type="int" enum="Error" />
+			<param index="0" name="session" type="SuperposSession" />
+			<param index="1" name="schema_id" type="int" />
+			<param index="2" name="configuration" type="Dictionary" default="{}" />
+			<description>Copies the frozen descriptors of [param schema_id] from [param session] and reserves the index. Accepted keys: [code]capacity[/code] (samples per object, 2 through 4096, default 30), [code]maximum_objects[/code] (1 through 1024, default 64), [code]maximum_bracket_ticks[/code] (widest interpolated bracket, default the capacity) and [code]interpolate_fields[/code] (a [PackedInt64Array] of F32, F64 or QuantizedF32 field IDs; by default every such field). Storage is charged to a native quota of at most 256 MiB; a larger plan returns [constant ERR_PARAMETER_RANGE_ERROR]. Returns [constant ERR_DOES_NOT_EXIST] when the schema is not registered.</description>
+		</method>
+		<method name="forget">
+			<return type="int" enum="Error" />
+			<param index="0" name="handle" type="int" />
+			<description>Releases the history of one object. Returns [constant ERR_DOES_NOT_EXIST] when none is recorded.</description>
+		</method>
+		<method name="read_exact">
+			<return type="Dictionary" />
+			<param index="0" name="handle" type="int" />
+			<param index="1" name="tick" type="int" />
+			<param index="2" name="fields" type="PackedInt64Array" default="PackedInt64Array()" />
+			<description>Returns [code]error[/code] and, when an image was recorded at exactly [param tick], [code]values[/code] keyed by field ID (all fields when [param fields] is empty) and [code skip-lint]tick[/code].</description>
+		</method>
+		<method name="read_object_history" qualifiers="const">
+			<return type="Dictionary" />
+			<param index="0" name="handle" type="int" />
+			<description>Returns [code]error[/code] and, for a recorded object, its retained [code]ticks[/code] (oldest first), [code]samples[/code] and [code]history_epoch[/code].</description>
+		</method>
+		<method name="read_status" qualifiers="const">
+			<return type="Dictionary" />
+			<description>Returns [code]error[/code] and the configuration and counters: [code]objects[/code], [code]recorded[/code], [code]duplicates[/code] (same tick again, unchanged or replaced by a newer revision), [code]rejected[/code], [code]history_resets[/code] and [code]charged_bytes[/code].</description>
+		</method>
+		<method name="record_object">
+			<return type="int" enum="Error" />
+			<param index="0" name="handle" type="int" />
+			<description>Records the current canonical image of a World object of the configured Session at its publication tick. Recording the same revision again is a no-op. Returns [constant ERR_INVALID_PARAMETER] for an object of another schema and [constant ERR_PARAMETER_RANGE_ERROR] when [code skip-lint]maximum_objects[/code] are already recorded.</description>
+		</method>
+		<method name="record_replica">
+			<return type="int" enum="Error" />
+			<param index="0" name="replica" type="SuperposReplicaView" />
+			<description>Records the current canonical image of a Ready replica received by the configured Session at its authoritative publication tick. A pending replica returns [constant ERR_BUSY]; a replica of another Session or schema returns [constant ERR_INVALID_PARAMETER].</description>
+		</method>
+		<method name="sample">
+			<return type="Dictionary" />
+			<param index="0" name="handle" type="int" />
+			<param index="1" name="tick" type="int" />
+			<param index="2" name="fraction" type="float" />
+			<param index="3" name="fields" type="PackedInt64Array" default="PackedInt64Array()" />
+			<description>Interpolates the object's history at [param tick] plus [param fraction] (from 0 up to but excluding 1). Returns [code]error[/code] and, on success, [code]values[/code], [code skip-lint]tick[/code] and [code skip-lint]fraction[/code]. A bracket wider than the configured maximum, or a time outside the retained window, returns [constant ERR_DOES_NOT_EXIST].</description>
+		</method>
+	</methods>
+</class>

@@ -30,9 +30,12 @@ Dictionary SuperposSchema::bake() const {
         if (!field || !field->get_field_id() || !field->get_codec_id() || field->get_codec_id() > 10 || field->get_audience() > 2 || !field->get_max_bytes() || field->get_max_bytes() > superpos::Schema::maximum_state_bytes) { return result; }
         String name = field->get_field_name();
         if (name.is_empty() || name.length() > 64) { return result; }
+        // An identifier, or an indexed property path such as "position:x".
         for (int c = 0; c < name.length(); ++c) {
-            if (!(name[c] >= 'a' && name[c] <= 'z') && !(name[c] >= 'A' && name[c] <= 'Z') && !(name[c] >= '0' && name[c] <= '9') && name[c] != '_') { return result; }
+            const bool separator = name[c] == ':' && c && c + 1 < name.length() && name[c - 1] != ':';
+            if (!(name[c] >= 'a' && name[c] <= 'z') && !(name[c] >= 'A' && name[c] <= 'Z') && !(name[c] >= '0' && name[c] <= '9') && name[c] != '_' && !separator) { return result; }
         }
+        if (name.count(":") > 3) { return result; }
         manifest_size += 44 + size_t(name.length());
         sorted[i] = field;
     }

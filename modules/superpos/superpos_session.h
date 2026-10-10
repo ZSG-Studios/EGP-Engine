@@ -6,6 +6,7 @@
 #include "superpos_schema.h"
 #include "superpos_simulation_provider.h"
 #include "superpos_managed_reload.h"
+#include "superpos_replica_view.h"
 
 class SuperposSpawner;
 class SuperposUdpListener;
@@ -38,6 +39,7 @@ class SuperposSession : public RefCounted {
     bool simulation_tick_phase = false;
     Error _simulation_preflight(uint64_t binding, uint64_t epoch, bool registered) const;
     bool _simulation_gate_ready(uint64_t binding, uint64_t epoch) const;
+    Error _predicted_preflight() const;
     // Irreversible native retirement is separate from managed wrapper disposal.
     bool owner_retired = false, retirement_finished = false;
     void _retire_world_owner(uint64_t p_owner);
@@ -113,6 +115,18 @@ public:
     // no property getters, resource hooks or gameplay methods execute here.
     Dictionary read_fields(uint64_t p_handle, const PackedInt64Array &p_fields) const;
     Error publish_fields(uint64_t p_handle, uint64_t p_expected_revision, const Dictionary &p_values);
+    // Encodes candidate values against the current canonical image without
+    // publishing. Reports the field IDs whose encoded bytes differ (after
+    // quantization) and the revision they were compared against.
+    Dictionary read_field_changes(uint64_t p_handle, const Dictionary &p_values) const;
+    // Client predicted spawns (core PredictedSpawns): temporary identities that
+    // never alias World handles, with explicit confirmation or rejection.
+    Error configure_predicted_spawns(uint32_t p_capacity = 16);
+    Dictionary begin_predicted_spawn();
+    Error confirm_predicted_spawn(uint64_t p_sequence, const Ref<SuperposReplicaView> &p_replica);
+    Error reject_predicted_spawn(uint64_t p_sequence);
+    Error release_predicted_spawn(uint64_t p_sequence);
+    Dictionary read_predicted_spawn(uint64_t p_sequence);
     Error publish_packed(const PackedByteArray &p_operations);
     Error transfer_ownership(uint64_t p_handle, uint64_t p_owner, uint64_t p_expected_revision);
     Dictionary get_statistics() const;

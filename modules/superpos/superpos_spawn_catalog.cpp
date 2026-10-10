@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: MIT
 #include "superpos_spawn_catalog.h"
 #include "core/object/class_db.h"
+#include "private/property_path.hpp"
 #include <algorithm>
 #include <cstring>
 
@@ -51,11 +52,12 @@ Error SuperposSpawnCatalog::snapshot(Snapshot &r_result) const {
             field.id = unsigned_bits(int64_t(keys[f])); field.node = mapping["node"]; field.property = mapping["property"];
             // Paths remain inside the instantiated scene. Root is the empty
             // path; parent traversal and absolute paths cannot escape custody.
-            if (!field.id || field.property == StringName() || String(field.property).length() > 64 || field.node.is_absolute() || field.node.get_subname_count() || field.node.get_name_count() > 32) { return ERR_INVALID_PARAMETER; }
+            if (!field.id || field.node.is_absolute() || field.node.get_subname_count() || field.node.get_name_count() > 32) { return ERR_INVALID_PARAMETER; }
+            if (superpos_egp::parse_property_path(String(field.property), field.path) != OK) { return ERR_INVALID_PARAMETER; }
             for (int n = 0; n < field.node.get_name_count(); ++n) { if (field.node.get_name(n) == ".." || String(field.node.get_name(n)).length() > 64) { return ERR_INVALID_PARAMETER; } }
             for (int j = 0; j < f; ++j) {
                 const auto &previous = entry.fields[j];
-                if (previous.id == field.id || (previous.node == field.node && previous.property == field.property)) { return ERR_ALREADY_EXISTS; }
+                if (previous.id == field.id || (previous.node == field.node && superpos_egp::property_paths_overlap(previous.path, field.path))) { return ERR_ALREADY_EXISTS; }
             }
         }
         entry.field_count = uint32_t(keys.size());
