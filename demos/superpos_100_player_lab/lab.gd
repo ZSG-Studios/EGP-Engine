@@ -285,7 +285,11 @@ func _open(c: Dictionary) -> void:
 	var transport := {}
 	if deterministic:
 		# Real-time floor: the lockstep stream needs ~15 kB/s; wireless loss must not starve it.
-		transport = {"channel_modes":DETERMINISTIC_MODES,"minimum_rate":int(_tuning("minimum_rate",16384))}
+		# The floor follows the stream: every client receives all players' commands,
+		# about 2.4 B per player per tick with framing and redundancy (measured
+		# 420-590 B/tick per client at 256 players), clamped to 16-64 KiB/s.
+		var stream_floor := clampi(int(config.total)*2*60*6/5,16384,65536)
+		transport = {"channel_modes":DETERMINISTIC_MODES,"minimum_rate":int(_tuning("minimum_rate",stream_floor))}
 	var connection_id := _connection_id(key,c.generation)
 	# Port plan (all below the OS ephemeral range, which starts at 49152): server
 	# port_base, clients port_base-3000+id, packet proxy front -2000+id, back -1000+id.
