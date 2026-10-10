@@ -5,10 +5,9 @@ core is embedded in `modules/superpos`; the native adapter exposes the same
 ClassDB implementation to GDScript, generated C# and generated godot-cpp.
 Public engine and extension headers remain C++17-compatible.
 
-The default desktop build selects Superpos and its authenticated UDP/DTLS
-foundation. The previous Yojimbo `egp_net` module is not part of the default
-build; it is preserved only as an opt-in old-network-only migration profile until
-the Superpos cutover gates pass (see the [migration guide](egp_superpos_migration.md)).
+Superpos, with its authenticated UDP/DTLS foundation, is EGP's only networking
+stack. The former Yojimbo `egp_net` module was removed (see the
+[migration guide](egp_superpos_migration.md)).
 Superpos is a different implementation and API from the retired **Superposition** nodes.
 Changing names in an existing project does not migrate its protocol or scenes.
 
@@ -108,10 +107,10 @@ used with Superpos. Box2D/Box3D local snapshots remain independent physics APIs.
 ## Build and qualification
 
 Desktop native xmake builds select `module_superpos_enabled=yes`. The old
-network module option and archive target have been removed. The module's `superpos_dtls` option defaults to
-true and borrows EGP's existing MbedTLS/PSA runtime. In the maintained workspace,
-all build stages, including .NET, execute on the remote build PC as required by
-the workspace's temporary build policy. Mobile/web adapter capability and full
+network module, its option and archive target, Yojimbo and their validators were
+removed. The module's `superpos_dtls` option defaults to true and borrows EGP's
+existing MbedTLS/PSA runtime. Builds and tests run on the local and remote build
+PCs and the EGP self-hosted CI runners. Mobile/web adapter capability and full
 platform qualification remain pending.
 
 The separate Superpos-EGP `docs/consumer-migration.json` and `compatibility.json`
@@ -119,7 +118,6 @@ record isolated API, unsigned metadata, lifecycle, UDP and C++17/managed
 evidence. Those historical editor receipts do not qualify the current full
 engine, export templates, physics or rendered Inspector. The engine's fixed
 `.build/diagnostics/superpos-cutover.json` records current cutover verification.
-Legacy sources and their build target are removed and do not belong to the
-active engine API. Historical receipts must retain their original scope.
+Historical receipts must retain their original scope.
 
 See [migration](egp_superpos_migration.md) before porting an existing game.

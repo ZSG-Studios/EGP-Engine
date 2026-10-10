@@ -20,22 +20,11 @@ ownership, lifecycle and presentation together. Test local canonical behavior,
 authenticated separate-process communication, reconnect/recovery, exports and
 application gameplay independently.
 
-The default build contains only Superpos. Until every cutover gate in the
-Superpos plan passes (native editor/templates, generated API/SDKs, exports,
-managed reload, old-network-only/new-network-only profiles, dependency rebuilds,
-packages and required platform receipts), the previous `modules/egp_net` module,
-its build recipe, Yojimbo vendor sources and dedicated validators are preserved as
-an explicit old-network-only profile. Select it only for migration comparison:
-
-```
-xmake f ... --module_egp_net_enabled=y --module_superpos_enabled=n
-python misc/scripts/validate_egp_net.py --engine <that editor>
-```
-
-The build rejects enabling both stacks. Legacy results never qualify Superpos.
-Its language helpers live under `modules/egp_net/{gdscript,csharp,cpp}`; the
-helper installer, legacy demos and old network lab were replaced and removed.
-Historical integration receipts remain evidence for their recorded revisions only.
+EGP contains only Superpos. The previous `modules/egp_net` module, its build
+option and recipe, the Yojimbo vendor sources, language helpers and dedicated
+validators were removed on 2026-10-10. To compare against the old stack, check out
+an engine revision from before that removal. Historical integration receipts remain
+evidence for their recorded revisions only.
 
 Use the [current network lab guide](egp_network_lab.md) for Superpos fixtures
 and application demos. The examples project canonical state explicitly and

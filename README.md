@@ -66,16 +66,11 @@ bounded schemas; `SuperposSession` owns canonical state and packet delivery,
 and `SuperposWorld` supplies scene ownership and optional physics-phase ticks.
 GDScript, generated C# and generated C++ call the same native implementation.
 
-This replaces the previous Yojimbo transport and its Superposition layer.
-`EGPNetSession`, old language helpers, property components, RPC and spawner
-nodes require application migration. Automatic scene replication, solver
-prediction/recovery, old arena results and production/WAN behavior are not
-qualified by the replacement. The previous `modules/egp_net` module and its
-Yojimbo vendor sources are preserved only as an opt-in old-network-only
-migration profile (`module_egp_net_enabled=y module_superpos_enabled=n`); they
-are never part of the default build. They will be removed after the Superpos
-cutover gates pass. Its legacy demos, network lab and language-helper installer
-were replaced and removed.
+Superpos is the only networking stack. The former Yojimbo transport, its
+Superposition layer and `EGPNetSession` were removed; see the
+[migration guide](doc/egp_superpos_migration.md) for the replacement APIs.
+Automatic scene replication, solver prediction/recovery and production/WAN
+behavior are not yet qualified.
 
 Current application examples are the [physics showcase](demos/physics_superpos_showcase/README.md)
 and [remote courier arena](demos/superpos_100_player_lab/README.md). Each documents

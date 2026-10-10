@@ -1285,17 +1285,6 @@ Files extracted from upstream source:
 - `LICENSE`
 
 
-## yojimbo
-
-- Upstream: https://github.com/mas-bandwidth/yojimbo
-- Version: 1.13.5 (272153a10f32135bb44bb60e7467072baf48f762)
-- License: BSD-3-Clause
-
-Bundled netcode, reliable, serialize and TLSF notices and the ISC libsodium notice are retained.
-The ephemeral bind-port integration patch and the networking validator's raw/LF pins are
-recorded in `EGP-UPSTREAM.json`.
-
-
 ## zlib
 
 - Upstream: https://github.com/madler/zlib

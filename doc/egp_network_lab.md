@@ -1,8 +1,6 @@
 # Superpos fixtures and application demos
 
-Use native Superpos sessions and matching generated bindings. The retired
-Yojimbo network lab, Superposition helpers and earlier arena receipts target
-a different protocol and do not qualify these examples.
+Use native Superpos sessions and matching generated bindings.
 
 ## Native contract fixture
 
