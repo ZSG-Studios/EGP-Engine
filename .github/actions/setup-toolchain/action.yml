@@ -16,16 +16,18 @@ inputs:
 runs:
   using: composite
   steps:
-    # On Windows hosts `bash` on the default PATH is the WSL launcher; put Git Bash first so
-    # `shell: bash` steps run natively against the Windows toolchain.
+    # On Windows hosts `bash` on the default PATH is the WSL launcher, and C:\EGPTools\git is
+    # MinGit (no bash). Put full Git for Windows first so `shell: bash` steps run natively.
+    # Provisioning: .local/dev-env/gitbash-win.ps1.
     - name: Select Git Bash
       if: runner.os == 'Windows'
       shell: powershell
       run: |
-        $git = (Get-Command git -ErrorAction Stop).Source
-        $bin = Join-Path (Split-Path (Split-Path $git)) 'bin'
-        if (-not (Test-Path (Join-Path $bin 'bash.exe'))) { throw "Git Bash not found beside $git" }
-        $bin | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+        $candidates = @('C:\EGPTools\git-for-windows', 'C:\Program Files\Git')
+        $root = $candidates | Where-Object { Test-Path (Join-Path $_ 'bin\bash.exe') } | Select-Object -First 1
+        if (-not $root) { throw "Git Bash not found in $($candidates -join ', '); run .local/dev-env/gitbash-win.ps1" }
+        # Only bin\ (bash, sh, git): usr\bin would shadow MSVC's link.exe with coreutils link.
+        Join-Path $root 'bin' | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
 
     # Runner services on the Mac host start without the interactive shell PATH.
     - name: Select Homebrew tools
