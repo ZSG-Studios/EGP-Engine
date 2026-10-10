@@ -35,6 +35,7 @@ int truncate(sqlite3_file* f,sqlite3_int64 size) {
 }
 int sync(sqlite3_file* f,int flags) {
     if(file(f)->fault_injector && file(f)->fault_injector->reject(StorageIo::Sync,file(f)->wal)) return SQLITE_IOERR_FSYNC;
+    if(file(f)->fault_injector && file(f)->fault_injector->elide_sync(file(f)->wal)) return SQLITE_OK;
     return methods(f)->xSync(inner(f),flags);
 }
 int size(sqlite3_file* f,sqlite3_int64* size) { return methods(f)->xFileSize(inner(f),size); }

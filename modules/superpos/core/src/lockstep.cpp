@@ -235,7 +235,7 @@ Status CommandEncoder::end() noexcept {
     // Encode the tick once: count, then bit-packed slot gaps, masks and deltas.
     std::array<std::byte,max_tick_bytes> scratch{};
     Writer count_writer(scratch);if(!count_writer.varuint(changed))return fail(Error::Truncated);
-    BitWriter bits(std::span(scratch).subspan(count_writer.size()));
+    BitWriter bits{std::span(scratch).subspan(count_writer.size())};
     std::size_t previous=0,changed_bytes=0;bool any=false;
     for(std::size_t slot=0;slot<config_.slots;++slot) {
         std::uint32_t mask=0;

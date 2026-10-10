@@ -31,6 +31,7 @@
       "sources": [
         "src/dtls.cpp",
         "src/udp.cpp",
+        "src/udp_mux.cpp",
         "src/crypto_digest.cpp",
         "src/crypto_nonce.cpp",
         "src/relay_wire.cpp",
@@ -50,11 +51,13 @@
         "services/src/journal_executor.cpp",
         "services/src/journal_envelope.cpp",
         "services/src/checkpoint_service_view.cpp",
+        "services/src/checkpoint_cadence.cpp",
         "services/src/host_restore.cpp",
         "services/src/canonical_state.cpp",
         "services/src/canonical_restore.cpp",
         "services/src/coordinator_bootstrap.cpp",
         "services/src/storage_worker.cpp",
+        "services/src/authority_coordinator_candidates.cpp",
         "services/src/authority_coordinator.cpp",
         "services/src/coordinator_timing.cpp",
         "services/src/coordinator_supervisor.cpp",
@@ -190,5 +193,5 @@
     }
   },
   "protocol_version": 1,
-  "session_hello_version": 3
+  "session_hello_version": 4
 }

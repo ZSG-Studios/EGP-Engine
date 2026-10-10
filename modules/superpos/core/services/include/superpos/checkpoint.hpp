@@ -66,8 +66,9 @@ struct CheckpointServiceProgress {
     Fingerprint commitment{};
 };
 // Validated host checkpoint within the retained coordinator ordering domain.
-// This is not a standalone SQLite backup: historical append identities/journal
-// remain in that domain, and this implementation never enables compaction.
+// This is not a standalone SQLite backup: append identities and the journal
+// remain in that domain. Compaction (SqliteJournal::compact_journal) prunes
+// only behind the oldest of two such bases and keeps compacted identities.
 struct CheckpointServiceOrigin {
     // Historical seed binding only. It never establishes a current boot/lease.
     std::uint64_t boot_term{};

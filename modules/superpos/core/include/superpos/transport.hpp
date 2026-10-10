@@ -17,6 +17,12 @@ struct TransportCapabilities {
  // Zero means unknown, and cannot establish native packet byte accounting.
  std::uint16_t encrypted_overhead_bytes{};
  bool split_carriers{};
+ // The provider coalesces frames accepted during a pump into shared datagrams
+ // and transmits them at flush(). Session offers such a provider up to 32 frames
+ // per pump; any other provider receives at most four, because an accepting
+ // carrier (for example a browser data channel) may only queue them, and its
+ // receiver drains a bounded ring per quantum.
+ bool coalescing{};
 };
 class Clock { public: virtual ~Clock()=default; virtual std::uint64_t now_ms() noexcept=0; };
 class AuthProvider {
@@ -25,11 +31,30 @@ public:
  // Return a peer-specific admission key through trusted provisioning. No key goes on wire.
  virtual Status admission_key(PeerId,std::span<std::byte,32>) noexcept=0;
 };
+// Path of the datagram most recently returned by DatagramIO::receive. The
+// current path is the validated (or handshake) address; a candidate is one
+// newer source address, named by a generation that is never reused.
+struct DatagramPath { std::uint64_t generation{}; bool candidate{}; };
 class DatagramIO {
 public:
  virtual ~DatagramIO()=default;
  virtual Result<std::size_t> send(std::span<const std::byte>) noexcept=0;
  virtual Result<std::size_t> receive(std::span<std::byte>) noexcept=0;
+ // Path-aware IO (a single-port server's per-association port). The defaults
+ // describe a fixed, connected path: one remote address, nothing to validate.
+ virtual bool path_aware() const noexcept { return false; }
+ virtual DatagramPath received_path() const noexcept { return {}; }
+ // Canonical bytes of the current remote address; empty when unknown or fixed.
+ virtual std::span<const std::byte> path_identity() const noexcept { return {}; }
+ // Send to a candidate path. CapacityExceeded: refused (amplification limit).
+ virtual Result<std::size_t> send_candidate(std::uint64_t,std::span<const std::byte>) noexcept { return fail(Error::Unsupported); }
+ // The candidate answered an authenticated challenge: it becomes current.
+ virtual Status promote_candidate(std::uint64_t) noexcept { return fail(Error::Unsupported); }
+ // The peer authenticated over the current path (handshake complete).
+ virtual void path_authenticated() noexcept {}
+ // Refresh queued input without consuming it, so path_identity() reflects a
+ // datagram that has arrived but has not been read (shared-socket polling).
+ virtual Status poll() noexcept { return {}; }
 };
 class TransportProvider {
 public:

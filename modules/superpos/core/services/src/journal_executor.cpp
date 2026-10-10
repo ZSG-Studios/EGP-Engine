@@ -197,6 +197,14 @@ Result<JournalJobTicket> JournalExecutor::restore_evidence(const CanonicalRestor
     job.restore_scope=scope;
     return submit(JournalJobKind::RestoreEvidence,0,0,0,{});
 }
+Result<JournalJobTicket> JournalExecutor::compact_journal(Epoch expected,std::uint32_t maximum) noexcept {
+    if(!expected||!maximum||maximum>4096)return fail(Error::InvalidArgument);
+    return submit(JournalJobKind::Compact,expected,maximum,0,{});
+}
+Result<JournalJobTicket> JournalExecutor::query_receipt(std::uint64_t id) noexcept {
+    if(!id)return fail(Error::InvalidArgument);
+    return submit(JournalJobKind::QueryReceipt,0,id,0,{});
+}
 Result<JournalJobTicket> JournalExecutor::submit_operation(JournalJobKind kind,Epoch authority,DurableOperationId operation,PeerId peer,std::span<const std::byte> request) noexcept {
     if(!impl_)return fail(Error::NotReady);
     if(std::this_thread::get_id()!=impl_->owner)return fail(Error::PermissionDenied);
@@ -314,6 +322,8 @@ Result<bool> JournalExecutor::worker_step(SqliteJournal& journal) noexcept {
     case JournalJobKind::CheckpointServiceRead:{auto r=journal.read_checkpoint_service_page(job.checkpoint_ticket,static_cast<std::uint32_t>(job.id),payload);if(r)completed.output_bytes=static_cast<std::uint32_t>(*r);else completed.error=r.error();break;}
 
     case JournalJobKind::RestoreEvidence:{if(!job.restore_scope){completed.error=Error::ProtocolViolation;break;}auto r=journal.canonical_restore_evidence(*job.restore_scope);if(r)completed.restore=*r;else completed.error=r.error();break;}
+    case JournalJobKind::Compact:{auto r=journal.compact_journal(job.epoch,static_cast<std::uint32_t>(job.id));if(r)completed.compaction=*r;else completed.error=r.error();break;}
+    case JournalJobKind::QueryReceipt:{auto r=journal.query_receipt(job.id);if(r)completed.receipt=*r;else completed.error=r.error();break;}
     case JournalJobKind::Prefix:{auto r=journal.prefix();if(r)completed.prefix=*r;else completed.error=r.error();break;}
     case JournalJobKind::QueryMatch:{auto r=journal.match_identity();if(r)completed.match=*r;else completed.error=r.error();break;}
     case JournalJobKind::QueryAuthority:{auto r=journal.authority_grant();if(r)completed.authority=*r;else completed.error=r.error();break;}

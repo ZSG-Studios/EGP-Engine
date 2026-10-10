@@ -51,7 +51,7 @@ std::array<std::byte,120> cookie_message(const Header& h,const Address& address,
 }
 }
 struct RelayServer::Route {
-    struct Side {ReplayWindow receive;std::uint64_t next{1},revision{};IpEndpoint endpoint{};Address address{};bool bound{};};
+    struct Side {ReplayWindow receive;std::uint64_t next{1},revision{};IpEndpoint endpoint{};Address address{};std::uint32_t queued{};bool bound{};};
     RoutePermit permit{};std::array<Side,2> sides{};std::uint64_t highwater{},window_us{};std::uint32_t bytes{},packets{},handshakes{};bool active{};
 };
 struct RelayServer::Frame {
@@ -86,9 +86,22 @@ Status RelayServer::reserve() noexcept {
     auto generated=crypto_.random(cookie_key_);if(!generated||!nonzero(cookie_key_))return generated?Status(fail(Error::AuthenticationFailed)):generated;
     statistics_.owned_bytes=sizeof(Route)*limits_.routes+sizeof(Frame)*limits_.queued_datagrams;ready_=true;return {};
 }
+void RelayServer::drop(std::size_t i) noexcept {
+    auto& frame=frames_[i];if(!frame.used)return;auto& route=routes_[frame.route];
+    if(route.active&&route.permit.generation==frame.generation&&route.sides[frame.side].queued)--route.sides[frame.side].queued;
+    statistics_.queued_bytes-=frame.size;--queued_frames_;wipe(&frame,sizeof(frame));
+}
+void RelayServer::expire(const ClockObservation& now) noexcept {
+    // alive() fails exactly when now+uncertainty reaches the expiry.
+    const auto horizon=now.now_us>UINT64_MAX-now.uncertainty_us?UINT64_MAX:now.now_us+now.uncertainty_us;
+    if(horizon<earliest_expiry_)return;
+    std::uint64_t earliest=UINT64_MAX;
+    for(std::size_t i=0;i<limits_.routes;++i)if(routes_[i].active){if(!alive(now,routes_[i].permit.expires_us))retire(i,true);else earliest=std::min(earliest,routes_[i].permit.expires_us);}
+    earliest_expiry_=earliest;
+}
 void RelayServer::retire(std::size_t index,bool expired) noexcept {
     auto& route=routes_[index];auto highwater=route.highwater;
-    for(std::size_t i=0;i<limits_.queued_datagrams;++i)if(frames_[i].used&&frames_[i].route==index){statistics_.queued_bytes-=frames_[i].size;wipe(frames_+i,sizeof(Frame));}
+    for(std::size_t i=0;i<limits_.queued_datagrams;++i)if(frames_[i].used&&frames_[i].route==index)drop(i);
     wipe(&route,sizeof(route));std::construct_at(&route);route.highwater=highwater;
     if(expired)increment(statistics_.expired);else increment(statistics_.revoked);
 }
@@ -103,17 +116,18 @@ Status RelayServer::install(std::size_t index,const RoutePermit& borrowed) noexc
     for(unsigned a=0;a<4;++a)for(unsigned b=a+1;b<4;++b)if(*keys[a]==*keys[b])return fail(Error::InvalidArgument);
     for(std::size_t i=0;i<limits_.routes;++i)if(i!=index&&routes_[i].active&&routes_[i].permit.id==permit.id)return fail(Error::Busy);
     auto now=clock_.now();if(!now)return fail(now.error());if(!alive(*now,permit.expires_us))return fail(Error::Timeout);
-    if(routes_[index].active)retire(index,false);auto& route=routes_[index];route.permit=permit;route.highwater=permit.generation;route.active=true;return {};
+    if(routes_[index].active)retire(index,false);auto& route=routes_[index];route.permit=permit;route.highwater=permit.generation;route.active=true;earliest_expiry_=std::min(earliest_expiry_,permit.expires_us);return {};
 }
 Status RelayServer::revoke(std::size_t index,std::uint64_t generation) noexcept {
     if(auto e=entry();!e)return e;Busy guard(busy_);if(!ready_)return fail(Error::NotReady);
     if(index>=limits_.routes)return fail(Error::InvalidArgument);if(!routes_[index].active||routes_[index].permit.generation!=generation)return fail(Error::StaleGeneration);retire(index,false);return {};
 }
 Status RelayServer::enqueue(std::size_t index,std::uint8_t side,Kind kind,std::span<const std::byte> payload,const IpEndpoint& target,std::uint64_t revision,std::uint64_t now) noexcept {
-    auto& route=routes_[index];std::size_t free=limits_.queued_datagrams,count=0;
-    for(std::size_t i=0;i<limits_.queued_datagrams;++i){if(!frames_[i].used&&free==limits_.queued_datagrams)free=i;if(frames_[i].used&&frames_[i].route==index&&frames_[i].side==side)++count;}
-    const auto bytes=header_bytes+payload.size()+tag_bytes;
-    if(free==limits_.queued_datagrams||count>=limits_.per_side_queue||bytes>route.permit.bytes_per_second-route.bytes||bytes>limits_.global_bytes_per_second-window_bytes_)return fail(Error::CapacityExceeded);
+    auto& route=routes_[index];const auto bytes=header_bytes+payload.size()+tag_bytes;
+    if(queued_frames_>=limits_.queued_datagrams||route.sides[side].queued>=limits_.per_side_queue||bytes>route.permit.bytes_per_second-route.bytes||bytes>limits_.global_bytes_per_second-window_bytes_)return fail(Error::CapacityExceeded);
+    std::size_t free=limits_.queued_datagrams;
+    for(std::size_t k=0;k<limits_.queued_datagrams;++k){const auto i=(free_hint_+k)%limits_.queued_datagrams;if(!frames_[i].used){free=i;break;}}
+    if(free==limits_.queued_datagrams)return fail(Error::CapacityExceeded);
     std::uint64_t sequence;if(!reserve_sequence(route.sides[side].next,sequence)){retire(index,true);return fail(Error::CounterExhausted);}
     auto& frame=frames_[free];auto encoded=encode({kind,side,route.permit.id,route.permit.generation,sequence,route.permit.slot},payload,frame.bytes);if(!encoded)return fail(encoded.error());
     auto signed_tag=crypto_.sign(route.permit.sides[side].downstream,std::span(frame.bytes).first(*encoded-tag_bytes),std::span<std::byte,32>(frame.bytes.data()+*encoded-tag_bytes,tag_bytes));
@@ -125,6 +139,7 @@ Status RelayServer::enqueue(std::size_t index,std::uint8_t side,Kind kind,std::s
     if(fresh->now_us-window_us_>=1000000){window_us_=fresh->now_us;window_bytes_=window_handshakes_=0;}
     if(bytes>route.permit.bytes_per_second-route.bytes||bytes>limits_.global_bytes_per_second-window_bytes_){wipe(&frame,sizeof(frame));return fail(Error::CapacityExceeded);}
     frame.size=*encoded;frame.route=index;frame.generation=route.permit.generation;frame.side=side;frame.revision=revision;frame.target=target;frame.used=true;
+    ++route.sides[side].queued;++queued_frames_;free_hint_=(free+1)%limits_.queued_datagrams;
     route.bytes+=static_cast<std::uint32_t>(bytes);window_bytes_+=static_cast<std::uint32_t>(bytes);statistics_.queued_bytes+=bytes;(void)now;return {};
 }
 Status RelayServer::process(const ReceivedDatagram& received,std::span<const std::byte> bytes,const ClockObservation& observed) noexcept {
@@ -174,16 +189,16 @@ Status RelayServer::advance() noexcept {
     auto refresh=[&]() noexcept -> Status {
         now=clock_.now();if(!now){for(std::size_t i=0;i<limits_.routes;++i)if(routes_[i].active)retire(i,true);return fail(now.error());}
         if(now->now_us-window_us_>=1000000){window_us_=now->now_us;window_bytes_=window_handshakes_=0;}
-        for(std::size_t i=0;i<limits_.routes;++i)if(routes_[i].active&&!alive(*now,routes_[i].permit.expires_us))retire(i,true);return {};
+        expire(*now);return {};
     };
     if(auto current=refresh();!current)return current;
     Scratch<maximum_datagram> input;
     for(std::uint32_t i=0;i<limits_.packets_per_advance;++i){auto received=socket_.receive_from(input.bytes);if(auto current=refresh();!current)return current;if(!received){if(received.error()==Error::Busy)break;if(received.error()==Error::CapacityExceeded){increment(statistics_.refused);continue;}return fail(received.error());}
         auto result=process(*received,std::span(input.bytes).first(received->bytes),*now);if(!result){increment(statistics_.refused);if(operational(result.error()))return result;}}
-    for(std::size_t i=0;i<limits_.queued_datagrams;++i){auto& frame=frames_[i];if(!frame.used)continue;if(auto current=refresh();!current)return current;if(!frame.used)continue;auto& route=routes_[frame.route];
-        if(!route.active||route.permit.generation!=frame.generation||(frame.revision&&(!route.sides[frame.side].bound||route.sides[frame.side].revision!=frame.revision))){statistics_.queued_bytes-=frame.size;wipe(&frame,sizeof(frame));continue;}
+    for(std::size_t i=0;i<limits_.queued_datagrams&&queued_frames_;++i){auto& frame=frames_[i];if(!frame.used)continue;if(auto current=refresh();!current)return current;if(!frame.used)continue;auto& route=routes_[frame.route];
+        if(!route.active||route.permit.generation!=frame.generation||(frame.revision&&(!route.sides[frame.side].bound||route.sides[frame.side].revision!=frame.revision))){drop(i);continue;}
         auto sent=socket_.send_to(frame.target,std::span(frame.bytes).first(frame.size));if(!sent&&sent.error()==Error::Busy)break;
-        if(sent&&*sent==frame.size)increment(statistics_.forwarded);else increment(statistics_.refused);statistics_.queued_bytes-=frame.size;wipe(&frame,sizeof(frame));if(!sent)return fail(sent.error());}
+        if(sent&&*sent==frame.size)increment(statistics_.forwarded);else increment(statistics_.refused);drop(i);if(!sent)return fail(sent.error());}
     return {};
 }
 Result<Statistics> RelayServer::statistics() const noexcept {if(auto e=entry();!e)return fail(e.error());if(!ready_)return fail(Error::NotReady);return statistics_;}

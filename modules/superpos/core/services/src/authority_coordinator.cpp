@@ -59,7 +59,28 @@ Status AuthorityCoordinator::validate(const AuthorityEligibility& binding,const 
         !known_fingerprint(binding.membership_set)||!known_fingerprint(binding.schemas)||!known_fingerprint(binding.simulation))return fail(Error::InvalidArgument);
     if(!binding.hidden_state_authorized||!binding.all_members_routable||!binding.complete_codec||!binding.ready)return fail(Error::PermissionDenied);
     if(!binding.complete_state_bytes||binding.reserved_capacity_bytes<binding.complete_state_bytes)return fail(Error::CapacityExceeded);
+    if(requirements_){
+        // Compare the binding with the authority's own measured profile and
+        // complete world, never only with the candidate's self-description.
+        const auto& r=*requirements_;
+        if(binding.schemas!=r.schemas||binding.simulation!=r.simulation||binding.codec!=r.codec)return fail(Error::IncompatibleSchema);
+        if(binding.complete_state_bytes<r.complete_world_bytes||
+            binding.reserved_capacity_bytes<r.complete_world_bytes+r.restore_staging_bytes)return fail(Error::CapacityExceeded);
+    }
+    if(candidates_&&request.intent==GrantIntent::Takeover&&!candidates_->ready(request.peer,request.membership_generation))return fail(Error::PermissionDenied);
     return {};
+}
+Status AuthorityCoordinator::require(const AuthorityRecoveryRequirements& value) noexcept {
+    auto owned=own();if(!owned)return owned;
+    if(ticket_||proposal_)return fail(Error::Busy);
+    if(!known_fingerprint(value.schemas)||!known_fingerprint(value.simulation)||!known_fingerprint(value.codec)||
+        !value.complete_world_bytes||value.restore_staging_bytes>UINT64_MAX-value.complete_world_bytes)return fail(Error::InvalidArgument);
+    requirements_=value;return {};
+}
+Status AuthorityCoordinator::bind_candidates(const WarmCandidateSet* set) noexcept {
+    auto owned=own();if(!owned)return owned;
+    if(ticket_||proposal_)return fail(Error::Busy);
+    candidates_=set;return {};
 }
 Status AuthorityCoordinator::submit_commit(DurableAuthorityProposal proposal) noexcept {
     auto queued=queue_->commit_authority(proposal);if(!queued)return queued.error()==Error::CounterExhausted?suspend(queued.error()):Status(fail(queued.error()));

@@ -56,6 +56,20 @@ struct Session::Impl {
     // The eight Control rows are unavailable to application ACK backlogs.
     // Prefix placement also emits Control receipts before application rows.
     std::array<Receipt,72> receipts{};
+    static constexpr unsigned segment_kind=6,maximum_segments=16;
+    // Kind, u64 segment ID, index, count, u16 total frame bytes.
+    static constexpr std::size_t segment_header_bytes=13;
+    struct Outgoing {
+        bool active{};std::uint64_t id{};std::uint16_t size{},segment{};std::uint8_t next{},count{};
+        CarrierLane lane{CarrierLane::Single};std::array<std::byte,960> bytes{};
+    } outgoing{};
+    struct Reassembly {
+        bool active{};std::uint64_t id{};std::uint8_t count{};std::uint16_t total{},received{};
+        CarrierLane lane{CarrierLane::Single};Tick started{};std::array<std::byte,960> bytes{};
+    };
+    std::array<Reassembly,4> reassembly{};
+    std::uint64_t next_segment{1};
+    SessionSegmentStatistics segments{};
     Impl(Allocator& a,TransportProvider& t,SessionConfig c) noexcept:
         transport(&t),config(c),owner(std::this_thread::get_id()),tx(a),rx(a),control_tx(a),control_rx(a) {}
     bool owned() const noexcept { return owner==std::this_thread::get_id(); }
@@ -94,6 +108,132 @@ struct Session::Impl {
             auto queued=receipt(channel,message,*stage); if(!queued && queued.error()!=Error::CapacityExceeded)return queued;
         } return {};
     }
+    bool admission_complete() const noexcept { return !failed && transport->ready() && hello_received && hello_acknowledged; }
+    // One complete session frame: received directly, or reassembled from
+    // segments (nested segments are a violation, so recursion depth is one).
+    Status consume(std::span<const std::byte> bytes,CarrierLane lane,Tick now,bool nested=false) noexcept {
+        auto kind=std::to_integer<unsigned>(bytes[0]); auto payload=bytes.subspan(1); Status received;
+        if(split_carriers && kind!=0 && lane!=CarrierLane::Control)received=fail(Error::ProtocolViolation);
+        else if(kind==1 || kind==2)received=hello(payload,kind==2);
+        else if(kind==0 && admission_complete()) {
+            auto fragment=decode_fragment(payload,config.limits.fragment_payload_bytes);
+            if(!fragment)received=fail(fragment.error());
+            else if(fragment->channel>=config.logical_channels)received=fail(Error::ProtocolViolation);
+            else if(split_carriers&&lane!=config.channel_carriers[fragment->channel])received=fail(Error::ProtocolViolation);
+            else if(fragment->total_bytes>config.channel_message_bytes[fragment->channel])received=fail(Error::ProtocolViolation);
+            else {
+                auto& receiver=*receivers[fragment->channel]; auto admitted=receiver.receive(*fragment,now);
+                // Shared resource pressure drops this frame; reliable logical
+                // retransmission retries after capacity becomes available.
+                if(!admitted) { if(admitted.error()!=Error::CapacityExceeded)received=fail(admitted.error()); }
+                else received=acknowledge(static_cast<std::uint8_t>(fragment->channel),fragment->message);
+            }
+        } else if(kind==3 && admission_complete()) {
+            Reader r(payload); auto epoch=r.u64(),message=r.u64(),channel=r.varuint(),stage=r.varuint();
+            if(!epoch || !message || !channel || !stage || !r.empty() || *epoch!=config.epoch || *channel>=config.logical_channels ||
+                (*stage!=static_cast<unsigned>(DeliveryStage::Received) && *stage!=static_cast<unsigned>(DeliveryStage::Applied)))received=fail(Error::ProtocolViolation);
+            else received=senders[*channel]->receipt(*message,static_cast<DeliveryStage>(*stage),now);
+        } else if(kind==4 && admission_complete()) {
+            auto receipt=decode_fragment_receipt(payload);
+            if(!receipt)received=fail(receipt.error());
+            else if(receipt->channel>=config.logical_channels)received=fail(Error::ProtocolViolation);
+            else received=senders[receipt->channel]->fragment_receipt(*receipt,now);
+        } else if(kind==5 && admission_complete()) {
+            Reader r(payload); auto epoch=r.u64(),message=r.u64(),channel=r.varuint();
+            if(!epoch || !message || !channel || !r.empty() || *epoch!=config.epoch || !*message || *channel>=config.logical_channels)received=fail(Error::ProtocolViolation);
+            else received=acknowledge(static_cast<std::uint8_t>(*channel),*message);
+        // A reordered authenticated data/receipt frame can outrun the final
+        // hello acknowledgement. Drop it; logical retries resume after readiness.
+        } else if(kind==0 || kind==3 || kind==4 || kind==5)received={};
+        else if(kind==segment_kind && !split_carriers && !nested)received=segment(payload,lane,now);
+        else received=fail(Error::ProtocolViolation);
+        return received;
+    }
+    // Carrier segmentation below logical fragments. When the validated path
+    // admits less than a complete session frame, each frame attempt (fragment,
+    // receipt, probe or HELLO) is cut into 2..16 canonical, equal-size segments
+    // under a fresh 64-bit segment ID. The receiver admits the frame only after
+    // every segment arrives, so logical identity, fragment receipts and retry
+    // ownership are unchanged; a lost segment is recovered by the logical retry,
+    // which is resegmented to the size valid at that time.
+    Status emit(std::span<const std::byte> bytes,CarrierLane lane) noexcept {
+        if(outgoing.active)return fail(Error::ProtocolViolation); // Callers drain first.
+        const auto maximum=transport->capabilities().maximum_frame;
+        if(split_carriers || bytes.size()<=maximum)return transport->send_frame(bytes,lane);
+        if(maximum<=segment_header_bytes || bytes.size()>outgoing.bytes.size())return fail(Error::Unsupported);
+        const auto room=maximum-segment_header_bytes,count=(bytes.size()+room-1)/room;
+        if(count>maximum_segments)return fail(Error::Unsupported);
+        if(next_segment==UINT64_MAX)return fail(Error::CounterExhausted);
+        std::memcpy(outgoing.bytes.data(),bytes.data(),bytes.size());
+        outgoing.active=true;outgoing.id=next_segment++;outgoing.size=static_cast<std::uint16_t>(bytes.size());
+        outgoing.count=static_cast<std::uint8_t>(count);outgoing.next=0;outgoing.lane=lane;
+        outgoing.segment=static_cast<std::uint16_t>((bytes.size()+count-1)/count);++segments.segmented_frames;
+        return drain();
+    }
+    // Busy: the carrier owns the last segment written; the rest stay owned here.
+    Status drain() noexcept {
+        while(outgoing.active) {
+            const std::size_t index=outgoing.next,offset=index*outgoing.segment;
+            const std::size_t length=index+1<outgoing.count?outgoing.segment:outgoing.size-offset;
+            if(segment_header_bytes+length>transport->capabilities().maximum_frame) {
+                // The path shrank under a queued frame: abandon it to the logical retry.
+                outgoing.active=false;++segments.abandoned_frames;return {};
+            }
+            std::array<std::byte,segment_header_bytes+960> wire{};
+            wire[0]=std::byte{segment_kind};Writer w(std::span<std::byte>(wire).subspan(1,8));if(!w.u64(outgoing.id))return fail(Error::ProtocolViolation);
+            wire[9]=std::byte(index);wire[10]=std::byte(outgoing.count);wire[11]=std::byte(outgoing.size>>8);wire[12]=std::byte(outgoing.size&0xff);
+            std::memcpy(wire.data()+segment_header_bytes,outgoing.bytes.data()+offset,length);
+            auto sent=transport->send_frame({wire.data(),segment_header_bytes+length},outgoing.lane);
+            if(!sent && sent.error()!=Error::Busy)return sent;
+            ++outgoing.next;++segments.segments_sent;
+            if(outgoing.next==outgoing.count)outgoing.active=false;
+            if(!sent)return sent;
+        }
+        return {};
+    }
+    Status segment(std::span<const std::byte> payload,CarrierLane lane,Tick now) noexcept {
+        if(payload.size()<segment_header_bytes)return fail(Error::NonCanonical);
+        Reader r(payload.first(8));auto id=r.u64();if(!id||!*id)return fail(Error::NonCanonical);
+        const unsigned index=std::to_integer<unsigned>(payload[8]),count=std::to_integer<unsigned>(payload[9]);
+        const std::size_t total=(std::to_integer<std::size_t>(payload[10])<<8)|std::to_integer<std::size_t>(payload[11]);
+        if(count<2 || count>maximum_segments || index>=count || total<count || total>reassembly[0].bytes.size())return fail(Error::NonCanonical);
+        const std::size_t size=(total+count-1)/count;
+        if(size*(count-1)>=total)return fail(Error::NonCanonical);
+        const std::size_t length=index+1<count?size:total-size*(count-1);
+        const auto bytes=payload.subspan(segment_header_bytes-1);
+        if(bytes.size()!=length)return fail(Error::NonCanonical);
+        Reassembly* slot=nullptr;
+        for(auto& candidate:reassembly)if(candidate.active && candidate.id==*id) { slot=&candidate;break; }
+        if(slot) {
+            if(slot->count!=count || slot->total!=total || slot->lane!=lane)return fail(Error::ProtocolViolation);
+        } else {
+            for(auto& candidate:reassembly)if(!candidate.active) { slot=&candidate;break; }
+            if(!slot) {
+                // Bounded storage: the oldest incomplete frame yields; its logical
+                // retry is resegmented under a fresh ID.
+                slot=&reassembly[0];for(auto& candidate:reassembly)if(candidate.started<slot->started)slot=&candidate;
+                ++segments.evicted_frames;
+            }
+            slot->active=true;slot->id=*id;slot->count=static_cast<std::uint8_t>(count);slot->total=static_cast<std::uint16_t>(total);
+            slot->lane=lane;slot->started=now;slot->received=0;
+        }
+        ++segments.segments_received;
+        const std::uint16_t bit=static_cast<std::uint16_t>(1U<<index);
+        auto* destination=slot->bytes.data()+index*size;
+        if(slot->received&bit) {
+            // An identical duplicate is harmless; a conflicting overlap is not.
+            if(std::memcmp(destination,bytes.data(),length)!=0)return fail(Error::ProtocolViolation);
+            return {};
+        }
+        std::memcpy(destination,bytes.data(),length);slot->received|=bit;
+        if(slot->received!=static_cast<std::uint16_t>((1U<<count)-1U))return {};
+        slot->active=false;++segments.reassembled_frames;
+        std::array<std::byte,960> complete{};std::memcpy(complete.data(),slot->bytes.data(),total);
+        return consume(std::span<const std::byte>(complete.data(),total),lane,now,true);
+    }
+    void expire_segments(Tick now) noexcept {
+        for(auto& slot:reassembly)if(slot.active && now-slot.started>=config.limits.progress_timeout_ticks) { slot.active=false;++segments.expired_frames; }
+    }
     Status hello(std::span<const std::byte> bytes,bool ack) noexcept {
         Reader r(bytes);auto version=r.varuint();if(!version||*version!=Session::hello_wire_version)return fail(Error::Unsupported);
         auto session=r.u64(),epoch=r.u64(),peer=r.u64(); auto fingerprint=r.raw(32); auto channels=r.varuint();
@@ -122,7 +262,7 @@ struct Session::Impl {
         if(ack)hello_acknowledged=true; else { hello_received=true; ack_hello=true; } return {};
     }
     Status send_hello(bool ack) noexcept {
-        std::array<std::byte,512> bytes{}; bytes[0]=std::byte(ack?2:1); Writer w(std::span(bytes).subspan(1));
+        std::array<std::byte,512> bytes{}; bytes[0]=std::byte(ack?2:1); Writer w(std::span<std::byte>(bytes).subspan(1));
         if(!w.varuint(Session::hello_wire_version) || !w.u64(config.session_id) || !w.u64(config.epoch) || !w.u64(config.local_peer) || !w.raw(config.schema_fingerprint) || !w.varuint(config.logical_channels))return fail(Error::ProtocolViolation);
         for(unsigned i=0;i<config.logical_channels;++i) { std::byte mode=std::byte(static_cast<unsigned>(config.channel_modes[i])); if(!w.raw({&mode,1}))return fail(Error::ProtocolViolation); }
         for(unsigned i=0;i<config.logical_channels;++i){std::byte purpose=std::byte(static_cast<unsigned>(config.channel_purposes[i]));if(!w.raw({&purpose,1}))return fail(Error::ProtocolViolation);}
@@ -130,7 +270,7 @@ struct Session::Impl {
         for(unsigned i=0;i<config.logical_channels;++i)if(!w.varuint(config.channel_message_bytes[i]))return fail(Error::ProtocolViolation);
         if(!w.varuint(config.limits.max_message_bytes) || !w.varuint(config.limits.fragment_payload_bytes) || !w.varuint(config.limits.max_messages))return fail(Error::ProtocolViolation);
         if(auto encoded=write_manifest(w,config.capabilities);!encoded)return encoded;
-        return transport->send_frame({bytes.data(),w.size()+1},CarrierLane::Control);
+        return emit({bytes.data(),w.size()+1},CarrierLane::Control);
     }
 };
 Session::~Session() { if(impl_) { impl_->~Impl(); allocator_->deallocate(impl_); } }
@@ -167,7 +307,11 @@ Result<Session> Session::create(Allocator& allocator,TransportProvider& transpor
     } return result;
 }
 bool Session::ready() const noexcept {
-    return impl_ && impl_->owned() && !impl_->failed && impl_->transport->ready() && impl_->hello_received && impl_->hello_acknowledged;
+    return impl_ && impl_->owned() && impl_->admission_complete();
+}
+Result<SessionSegmentStatistics> Session::segment_statistics() const noexcept {
+    if(!impl_)return fail(Error::NotReady); if(!impl_->owned())return fail(Error::PermissionDenied);
+    auto stats=impl_->segments;stats.queued_segments=impl_->outgoing.active?impl_->outgoing.count-impl_->outgoing.next:0U;return stats;
 }
 Result<std::uint64_t> Session::instance_identity() const noexcept {
     if(!impl_)return fail(Error::NotReady);if(!impl_->owned())return fail(Error::PermissionDenied);return impl_->instance;
@@ -204,47 +348,19 @@ Status Session::pump_frames(Tick now) noexcept {
     for(unsigned work=0;work<64;++work) {
         auto n=s.transport->receive_frame(frame); if(!n) { if(n.error()==Error::Busy)break; s.failed=true; return fail(n.error()); }
         if(!n->bytes || n->bytes>frame.size() || (s.split_carriers?(n->lane!=CarrierLane::Control&&n->lane!=CarrierLane::State):n->lane!=CarrierLane::Single)) { s.failed=true; return fail(Error::ProtocolViolation); }
-        auto bytes=std::span<const std::byte>(frame.data(),n->bytes); auto kind=std::to_integer<unsigned>(bytes[0]); auto payload=bytes.subspan(1); Status received;
-        if(s.split_carriers && kind!=0 && n->lane!=CarrierLane::Control)received=fail(Error::ProtocolViolation);
-        else if(kind==1 || kind==2)received=s.hello(payload,kind==2);
-        else if(kind==0 && ready()) {
-            auto fragment=decode_fragment(payload,s.config.limits.fragment_payload_bytes);
-            if(!fragment)received=fail(fragment.error());
-            else if(fragment->channel>=s.config.logical_channels)received=fail(Error::ProtocolViolation);
-            else if(s.split_carriers&&n->lane!=s.config.channel_carriers[fragment->channel])received=fail(Error::ProtocolViolation);
-            else if(fragment->total_bytes>s.config.channel_message_bytes[fragment->channel])received=fail(Error::ProtocolViolation);
-            else {
-                auto& receiver=*s.receivers[fragment->channel]; auto admitted=receiver.receive(*fragment,now);
-                // Shared resource pressure drops this frame; reliable logical
-                // retransmission retries after capacity becomes available.
-                if(!admitted) { if(admitted.error()!=Error::CapacityExceeded)received=fail(admitted.error()); }
-                else received=s.acknowledge(static_cast<std::uint8_t>(fragment->channel),fragment->message);
-            }
-        } else if(kind==3 && ready()) {
-            Reader r(payload); auto epoch=r.u64(),message=r.u64(),channel=r.varuint(),stage=r.varuint();
-            if(!epoch || !message || !channel || !stage || !r.empty() || *epoch!=s.config.epoch || *channel>=s.config.logical_channels ||
-                (*stage!=static_cast<unsigned>(DeliveryStage::Received) && *stage!=static_cast<unsigned>(DeliveryStage::Applied)))received=fail(Error::ProtocolViolation);
-            else received=s.senders[*channel]->receipt(*message,static_cast<DeliveryStage>(*stage),now);
-        } else if(kind==4 && ready()) {
-            auto receipt=decode_fragment_receipt(payload);
-            if(!receipt)received=fail(receipt.error());
-            else if(receipt->channel>=s.config.logical_channels)received=fail(Error::ProtocolViolation);
-            else received=s.senders[receipt->channel]->fragment_receipt(*receipt,now);
-        } else if(kind==5 && ready()) {
-            Reader r(payload); auto epoch=r.u64(),message=r.u64(),channel=r.varuint();
-            if(!epoch || !message || !channel || !r.empty() || *epoch!=s.config.epoch || !*message || *channel>=s.config.logical_channels)received=fail(Error::ProtocolViolation);
-            else received=s.acknowledge(static_cast<std::uint8_t>(*channel),*message);
-        // A reordered authenticated data/receipt frame can outrun the final
-        // hello acknowledgement. Drop it; logical retries resume after readiness.
-        } else if(kind==0 || kind==3 || kind==4 || kind==5)received={};
-        else received=fail(Error::ProtocolViolation);
+        auto received=s.consume(std::span<const std::byte>(frame.data(),n->bytes),n->lane,now);
         if(!received) { s.failed=true; return received; }
     }
     for(unsigned channel=0;channel<s.config.logical_channels;++channel) {
         auto a=s.senders[channel]->expire(now),b=s.receivers[channel]->expire(now);
         if(!a || !b) { s.failed=true; return !a?a:b; }
     }
+    s.expire_segments(now);
     if(!progressed)return fail(Error::Busy);
+    if(s.outgoing.active) {
+        auto drained=s.drain(); if(!drained && drained.error()!=Error::Busy) { s.failed=true; return drained; }
+        if(!drained || s.outgoing.active)return fail(Error::Busy);
+    }
     bool control_writable=progressed->control_writable,state_writable=progressed->state_writable,blocked=false;
     if(s.ack_hello && control_writable) {
         auto sent=s.send_hello(true); if(!sent && sent.error()!=Error::Busy) { s.failed=true; return sent; }
@@ -257,15 +373,15 @@ Status Session::pump_frames(Tick now) noexcept {
     if(!ready())return fail(Error::Busy);
     for(auto& receipt:s.receipts) if(receipt.active && control_writable) {
         if(receipt.have_stage) {
-            frame[0]=std::byte{3}; Writer w(std::span(frame).subspan(1));
+            frame[0]=std::byte{3}; Writer w(std::span<std::byte>(frame).subspan(1));
             if(!w.u64(s.config.epoch) || !w.u64(receipt.message) || !w.varuint(receipt.channel) || !w.varuint(static_cast<unsigned>(receipt.stage)))return fail(Error::ProtocolViolation);
-            auto sent=s.transport->send_frame({frame.data(),w.size()+1},CarrierLane::Control);
+            auto sent=s.emit({frame.data(),w.size()+1},CarrierLane::Control);
             if(!sent && sent.error()!=Error::Busy) { s.failed=true; return sent; }
             receipt.have_stage=false; if(!receipt.have_fragments)receipt.active=false; if(!sent){if(!s.split_carriers)return sent;control_writable=false;blocked=true;continue;}
         }
         if(receipt.have_fragments) {
             frame[0]=std::byte{4}; auto encoded=encode_fragment_receipt(receipt.fragments,std::span(frame).subspan(1));
-            if(!encoded)return fail(encoded.error()); auto sent=s.transport->send_frame({frame.data(),*encoded+1},CarrierLane::Control);
+            if(!encoded)return fail(encoded.error()); auto sent=s.emit({frame.data(),*encoded+1},CarrierLane::Control);
             if(!sent && sent.error()!=Error::Busy) { s.failed=true; return sent; }
             receipt.have_fragments=false; receipt.active=false; if(!sent){if(!s.split_carriers)return sent;control_writable=false;blocked=true;}
         }
@@ -273,8 +389,12 @@ Status Session::pump_frames(Tick now) noexcept {
     // Rotate across channels for each frame, including across pump boundaries.
     // A continuously active bulk channel cannot consume another channel's turn.
     unsigned frames=0,scanned=0;
-    // Coalescing carriers accept many frames per pump; others stop on Busy.
-    while(frames<32 && scanned<s.config.logical_channels) {
+    // Coalescing carriers accept many frames per pump. Others receive the
+    // original four: a carrier that accepts writes without backpressure (a
+    // browser data channel buffers up to 8 KiB) would otherwise let one pump
+    // outrun its peer's bounded receive ring.
+    const unsigned frame_budget=s.transport->capabilities().coalescing?32U:4U;
+    while(frames<frame_budget && scanned<s.config.logical_channels) {
         auto channel=s.next_channel; s.next_channel=static_cast<std::uint8_t>((channel+1)%s.config.logical_channels); ++scanned;
         auto& sender=*s.senders[channel]; auto attempt=sender.next(now);
         if(!attempt) { if(attempt.error()==Error::NotReady || attempt.error()==Error::Busy)continue; s.failed=true; return fail(attempt.error()); }
@@ -284,12 +404,12 @@ Status Session::pump_frames(Tick now) noexcept {
         frame[0]=std::byte(attempt->receipt_probe?5:0);
         Result<std::size_t> encoded;
         if(attempt->receipt_probe) {
-            Writer w(std::span(frame).subspan(1));
+            Writer w(std::span<std::byte>(frame).subspan(1));
             if(!w.u64(attempt->fragment.epoch) || !w.u64(attempt->fragment.message) || !w.varuint(attempt->fragment.channel))encoded=fail(Error::ProtocolViolation);
             else encoded=w.size();
         } else encoded=encode_fragment(attempt->fragment,std::span(frame).subspan(1),s.config.limits.fragment_payload_bytes);
         if(!encoded) { s.failed=true; return fail(encoded.error()); }
-        auto sent=s.transport->send_frame({frame.data(),*encoded+1},attempt->receipt_probe?CarrierLane::Control:s.config.channel_carriers[channel]); const bool accepted=sent.has_value() || sent.error()==Error::Busy;
+        auto sent=s.emit({frame.data(),*encoded+1},attempt->receipt_probe?CarrierLane::Control:s.config.channel_carriers[channel]); const bool accepted=sent.has_value() || sent.error()==Error::Busy;
         auto recorded=sender.carrier_result(attempt->attempt,accepted,now); if(!recorded) { s.failed=true; return recorded; }
         ++frames; scanned=0;
         if(!sent) {if(sent.error()!=Error::Busy){s.failed=true;return sent;}if(!s.split_carriers)return sent;writable=false;blocked=true;}

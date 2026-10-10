@@ -11,6 +11,29 @@ bool same_restore_authority(const DurableAuthorityReceipt& stored,const DurableA
 bool same_profile(const CanonicalStateHeader& a,const CanonicalStateHeader& b) noexcept {
     return a.schemas==b.schemas&&a.simulation==b.simulation&&a.participants==b.participants&&a.codec==b.codec;
 }
+// The anchor of one stored image, derived from storage only. Its hash-checked
+// first content chunk must begin exactly one canonical checkpoint envelope that
+// matches the manifest position and profile, and the committed journal record
+// at that sequence must report the same profile and complete-state digest.
+template<class Store> Result<CanonicalStateHeader> bound_checkpoint_anchor(Store& s,const CheckpointContentReceipt& image) noexcept {
+    const auto& m=image.manifest;
+    std::array<std::byte,checkpoint_chunk_bytes> first{};Result<std::size_t> read=fail(Error::NotReady);
+    {CheckpointCallbackGuard guard(s.checkpoint_callback);read=checkpoint_read_data(s,image,0,first);}
+    if(!read)return fail(read.error());
+    auto anchor=decode_canonical_state_header(std::span(first).first(*read),m.bytes);if(!anchor)return fail(Error::RecoveryUnavailable);
+    if(anchor->kind!=CanonicalStateKind::Checkpoint||anchor->position!=CanonicalStatePosition{m.match,m.epoch,m.sequence,m.tick}||
+        anchor->schemas!=m.schemas||anchor->simulation!=m.simulation||anchor->participants!=m.participants)return fail(Error::RecoveryUnavailable);
+    Statement at;if(auto r=at.prepare(s.database,"SELECT epoch,tick,data FROM records WHERE match=?1 AND seq=?2");!r)return fail(r.error());
+    if(auto r=at.number(1,s.config.match);!r)return fail(r.error());if(auto r=at.number(2,m.sequence);!r)return fail(r.error());
+    const auto code=sqlite3_step(at.value);if(code!=SQLITE_ROW)return fail(code==SQLITE_DONE?Error::RecoveryUnavailable:sql_error(code));
+    auto epoch=at.number(0),tick=at.number(1);if(!epoch||!tick||*tick!=m.tick||*epoch>m.epoch)return fail(Error::RecoveryUnavailable);
+    auto bytes=sqlite_blob(at.value,2,0,s.config.maximum_record_bytes);if(!bytes)return fail(bytes.error());
+    auto record=decode_canonical_state(*bytes);
+    if(!record||record->header.position!=CanonicalStatePosition{s.config.match,*epoch,m.sequence,*tick}||
+        (record->header.kind!=CanonicalStateKind::FullRecord&&record->header.kind!=CanonicalStateKind::DeltaRecord)||
+        !same_profile(record->header,*anchor)||record->header.result!=anchor->result)return fail(Error::RecoveryUnavailable);
+    return *anchor;
+}
 }
 Result<CanonicalRestoreEvidence> SqliteJournal::canonical_restore_evidence(const CanonicalRestoreScope& scope) noexcept {
     if(!impl_)return fail(Error::NotReady);
@@ -36,28 +59,9 @@ Result<CanonicalRestoreEvidence> SqliteJournal::canonical_restore_evidence(const
     if(image->state!=CheckpointContentState::RecoveryVerified)return fail(Error::NotReady);
     auto capture=service_capture_row(s,scope.checkpoint);if(!capture)return fail(capture.error());
     if(!capture->progress.complete)return fail(Error::RecoveryUnavailable);
-    const auto& m=image->manifest;
-    // The anchor comes from the stored, hash-checked first content chunk. The
-    // complete content must be exactly one canonical checkpoint envelope.
-    std::array<std::byte,checkpoint_chunk_bytes> first{};Result<std::size_t> read=fail(Error::NotReady);
-    {CheckpointCallbackGuard guard(s.checkpoint_callback);read=checkpoint_read_data(s,*image,0,first);}
-    if(!read)return fail(read.error());
-    auto anchor=decode_canonical_state_header(std::span(first).first(*read),m.bytes);if(!anchor)return fail(Error::RecoveryUnavailable);
-    if(anchor->kind!=CanonicalStateKind::Checkpoint||anchor->position!=CanonicalStatePosition{m.match,m.epoch,m.sequence,m.tick}||
-        anchor->schemas!=m.schemas||anchor->simulation!=m.simulation||anchor->participants!=m.participants)return fail(Error::RecoveryUnavailable);
-    // The committed journal record at the checkpoint sequence must report the
-    // same complete-state digest and profile, binding checkpoint to journal.
-    {
-        Statement at;if(auto r=at.prepare(s.database,"SELECT epoch,tick,data FROM records WHERE match=?1 AND seq=?2");!r)return fail(r.error());
-        if(auto r=at.number(1,s.config.match);!r)return fail(r.error());if(auto r=at.number(2,m.sequence);!r)return fail(r.error());
-        const auto code=sqlite3_step(at.value);if(code!=SQLITE_ROW)return fail(code==SQLITE_DONE?Error::RecoveryUnavailable:sql_error(code));
-        auto epoch=at.number(0),tick=at.number(1);if(!epoch||!tick||*tick!=m.tick||*epoch>m.epoch)return fail(Error::RecoveryUnavailable);
-        auto bytes=sqlite_blob(at.value,2,0,s.config.maximum_record_bytes);if(!bytes)return fail(bytes.error());
-        auto record=decode_canonical_state(*bytes);
-        if(!record||record->header.position!=CanonicalStatePosition{s.config.match,*epoch,m.sequence,*tick}||
-            (record->header.kind!=CanonicalStateKind::FullRecord&&record->header.kind!=CanonicalStateKind::DeltaRecord)||
-            !same_profile(record->header,*anchor)||record->header.result!=anchor->result)return fail(Error::RecoveryUnavailable);
-    }
+    // The anchor comes from the stored, hash-checked first content chunk and
+    // is bound to the committed journal record at the checkpoint sequence.
+    auto anchor=bound_checkpoint_anchor(s,*image);if(!anchor)return fail(anchor.error());
     std::uint64_t count=0;auto final_state=canonical_chain(s,grant.epoch,*prefix,*anchor,scope.maximum_records,count);
     if(!final_state)return fail(final_state.error()==Error::InvalidArgument?Error::RecoveryUnavailable:final_state.error());
     // Restoration is only for a fenced successor epoch beyond the final record.

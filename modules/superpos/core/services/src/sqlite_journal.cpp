@@ -175,6 +175,18 @@ struct SqliteJournal::Impl {
     bool control_paused{};
     CryptographicDigest* checkpoint_digest{};
     bool checkpoint_callback{};
+    // Effective application high-water marks (limit minus headroom).
+    std::uint64_t retention_high_water{},wal_high_water{};
+    // Compacted append identities (journal_compaction.inc). A tombstone keeps
+    // the original position and a digest of the exact stored bytes.
+    struct RetiredAppend { JournalReceipt receipt{}; Fingerprint digest{}; };
+    struct CompactionState { std::uint64_t floor{1},retired{}; std::optional<std::uint64_t> forgotten{}; };
+    Result<std::optional<RetiredAppend>> retired_append(std::uint64_t id) noexcept;
+    Result<Fingerprint> retired_digest(std::uint64_t id,Epoch,std::uint64_t sequence,Tick,
+        std::span<const std::byte> data,std::span<const std::byte> envelope) noexcept;
+    Result<CompactionState> compaction_state() noexcept;
+    Result<bool> recovery_runway(Epoch) noexcept;
+    Result<std::uint64_t> wal_bytes() noexcept;
     Status control_observe(bool restore=false) noexcept;
     Status control_validate(const service::control::ExecutionPermit&) noexcept;
     Result<std::optional<service::control::PolicyReceipt>> control_policy(std::uint64_t,std::uint64_t) noexcept;
@@ -380,9 +392,14 @@ Result<SqliteJournal> SqliteJournal::open(Allocator& allocator,const char* file,
         return fail(Error::InvalidArgument);
     const auto& limits=config.operations;
     if(!limits.maximum_actors||limits.maximum_actors>16384||!limits.maximum_pending||limits.maximum_pending>16384||limits.pending_bytes<256||limits.pending_bytes>64*1024*1024||!limits.peer_request_bytes||limits.peer_request_bytes>64*1024||limits.result_cache_bytes<256||limits.result_cache_bytes>8*1024*1024||!limits.maximum_effects||limits.maximum_effects>2048||limits.outbox_bytes<256||limits.outbox_bytes>10*1024*1024)return fail(Error::InvalidArgument);
+    const auto retention_headroom=config.retention_headroom_bytes?config.retention_headroom_bytes:config.retention_bytes/16;
+    const auto wal_headroom=config.wal_headroom_bytes?config.wal_headroom_bytes:config.wal_high_water_bytes/8;
+    if(retention_headroom>config.retention_bytes/2||wal_headroom>config.wal_high_water_bytes/2||
+        !config.maximum_retired_appends||config.maximum_retired_appends>16*1024*1024)return fail(Error::InvalidArgument);
     auto* memory=allocator.allocate(sizeof(Impl),alignof(Impl),MemoryDomain::Recovery);
     if (!memory) return fail(Error::OutOfMemory);
     auto* impl=new(memory) Impl; impl->allocator=&allocator; impl->config=config;
+    impl->retention_high_water=config.retention_bytes-retention_headroom;impl->wal_high_water=config.wal_high_water_bytes-wal_headroom;
     impl->vfs.fault_injector=config.fault_injector;
     SqliteJournal result(impl);
     if (auto r=impl->vfs.initialize(config.wal_high_water_bytes);!r) return fail(r.error());
@@ -597,10 +614,14 @@ Result<JournalReceipt> SqliteJournal::Impl::append_transaction(Epoch epoch,std::
         // cannot change the identity assigned to an already committed operation.
         Statement old_statement;auto old=lookup_view(id,old_statement);
         if(!old&&old.error()!=Error::NotReady)return fail(old.error());
+        // A compacted retry keeps its original sequence through its tombstone.
+        std::optional<RetiredAppend> compacted;
+        if(!old){auto retired=retired_append(id);if(!retired)return fail(retired.error());compacted=*retired;}
         CanonicalStateHeader header{claim->kind,{config.match,epoch,0,tick},
             claim->schemas,claim->simulation,claim->participants,claim->codec,
             true,claim->predecessor,claim->result};
         if(old){header.position.sequence=old->receipt.sequence;}
+        else if(compacted){header.position.sequence=compacted->receipt.sequence;}
         else{
             auto head=prefix();if(!head)return fail(head.error());
             if(head->epoch!=epoch)return fail(Error::StaleEpoch);
@@ -629,7 +650,32 @@ Result<JournalReceipt> SqliteJournal::Impl::append_transaction(Epoch epoch,std::
         auto encoded=encode_canonical_state(header,data,canonical.bytes());if(!encoded)return fail(encoded.error());
         data=canonical.bytes();
     }
+    // Durably reconfirm an exact duplicate before reporting its original receipt.
+    auto confirm_duplicate=[&]()->Status{
+        if(permit){
+            if(auto r=control_reconfirm(database,config.match,id,*permit,false);!r)return r;
+            if(auto r=control_validate(*permit);!r)return r;
+            return tx.commit(config.match);
+        }
+        if(auto r=reconfirm();!r)return r;
+        if(auto r=check_boot();!r)return r;
+        return tx.commit(config.match);
+    };
     auto previous=lookup(id,data);
+    if(!previous&&previous.error()==Error::NotReady){
+        // Compaction removed the bytes but kept the identity: an exact retry
+        // (same epoch, tick, bytes and envelope) is still a duplicate, never a
+        // second execution; anything else reusing the ID is rejected.
+        auto retired=retired_append(id);if(!retired)return fail(retired.error());
+        if(*retired){
+            const auto original=(**retired).receipt;
+            if(original.epoch!=epoch||original.tick!=tick||original.bytes!=data.size())return fail(Error::ProtocolViolation);
+            auto digest=retired_digest(id,epoch,original.sequence,tick,data,envelope);if(!digest)return fail(digest.error());
+            if(*digest!=(**retired).digest)return fail(Error::ProtocolViolation);
+            if(auto r=confirm_duplicate();!r)return fail(r.error());
+            return original;
+        }
+    }
     if (previous) {
         // Retry is immutable, including source epoch and tick. A lost reply can
         // be queried after fencing without giving the old writer fresh authority.
@@ -645,15 +691,7 @@ Result<JournalReceipt> SqliteJournal::Impl::append_transaction(Epoch epoch,std::
             if(envelope.size()!=stored->size()||(!envelope.empty()&&std::memcmp(envelope.data(),stored->data(),envelope.size())))return fail(Error::ProtocolViolation);
         }
         else return fail(sql_error(code));
-        if(permit){
-            if(auto r=control_reconfirm(database,config.match,id,*permit,false);!r)return fail(r.error());
-            if(auto r=control_validate(*permit);!r)return fail(r.error());
-            if(auto r=tx.commit(config.match);!r)return fail(r.error());
-        }else{
-            if(auto r=reconfirm();!r)return fail(r.error());
-            if(auto r=check_boot();!r)return fail(r.error());
-            if(auto r=tx.commit(config.match);!r)return fail(r.error());
-        }
+        if(auto r=confirm_duplicate();!r)return fail(r.error());
         return previous;
     }
     if (previous.error()!=Error::NotReady) return fail(previous.error());
@@ -663,6 +701,14 @@ Result<JournalReceipt> SqliteJournal::Impl::append_transaction(Epoch epoch,std::
     if (current->sequence && (claim ? tick<current->tick : (current->tick==std::numeric_limits<std::uint64_t>::max() || tick!=current->tick+1))) return fail(Error::InvalidArgument);
     const auto charge=data.size()+envelope.size()+128ULL+(permit?512ULL:0ULL);
     if (charge>config.retention_bytes-current->retained_bytes) return fail(Error::CapacityExceeded);
+    // Backpressure before exhaustion. Only an epoch newer than every verified
+    // base may spend the retention headroom, to install its own base; the WAL
+    // headroom is reserved for fencing, authority, checkpoint and compaction.
+    if(charge>retention_high_water-std::min(retention_high_water,current->retained_bytes)){
+        auto runway=recovery_runway(epoch);if(!runway)return fail(runway.error());
+        if(!*runway)return fail(Error::Busy);
+    }
+    {auto wal=wal_bytes();if(!wal)return fail(wal.error());if(*wal>=wal_high_water)return fail(Error::Busy);}
     auto outbox=totals("SELECT COUNT(*),COALESCE(SUM(length(data)+256),0) FROM effect_outbox");if(!outbox)return fail(outbox.error());
     std::uint64_t effect_bytes=0;for(const auto& effect:effects)effect_bytes+=effect.payload.size()+256;
     if((*outbox)[0]>config.operations.maximum_effects||effects.size()>config.operations.maximum_effects-(*outbox)[0]||(*outbox)[1]>config.operations.outbox_bytes||effect_bytes>config.operations.outbox_bytes-(*outbox)[1])return fail(Error::CapacityExceeded);
@@ -708,12 +754,40 @@ Result<JournalReceipt> SqliteJournal::Impl::append_transaction(Epoch epoch,std::
 Result<JournalReceipt> SqliteJournal::query(std::uint64_t id,std::span<std::byte> output) noexcept {
     if (!impl_||!impl_->own_thread()||!id) return fail(Error::InvalidArgument);
     Transaction tx{impl_->database};if(auto r=tx.begin();!r)return fail(r.error());
-    Statement stmt;auto view=impl_->lookup_view(id,stmt);if(!view)return fail(view.error());
+    Statement stmt;auto view=impl_->lookup_view(id,stmt);
+    if(!view){
+        if(view.error()!=Error::NotReady)return fail(view.error());
+        auto retired=impl_->retired_append(id);if(!retired)return fail(retired.error());
+        if(*retired)return fail(Error::StaleGeneration);
+        auto state=impl_->compaction_state();if(!state)return fail(state.error());
+        return fail(state->forgotten?Error::UnknownOutcome:Error::NotReady);
+    }
     if(output.size()<view->receipt.bytes)return fail(Error::Truncated);
     if(auto r=impl_->reconfirm();!r)return fail(r.error());
     if(auto r=tx.commit();!r)return fail(r.error());
     if(view->receipt.bytes)std::memcpy(output.data(),view->data,view->receipt.bytes);
     return view->receipt;
+}
+Result<JournalReceipt> SqliteJournal::query_receipt(std::uint64_t id) noexcept {
+    if(!impl_||!impl_->own_thread()||!id)return fail(Error::InvalidArgument);
+    Transaction tx{impl_->database};if(auto r=tx.begin();!r)return fail(r.error());
+    JournalReceipt receipt{};
+    {
+        Statement stmt;auto view=impl_->lookup_view(id,stmt);
+        if(view)receipt=view->receipt;
+        else if(view.error()!=Error::NotReady)return fail(view.error());
+        else{
+            auto retired=impl_->retired_append(id);if(!retired)return fail(retired.error());
+            if(!*retired){
+                auto state=impl_->compaction_state();if(!state)return fail(state.error());
+                return fail(state->forgotten?Error::UnknownOutcome:Error::NotReady);
+            }
+            receipt=(**retired).receipt;
+        }
+    }
+    if(auto r=impl_->reconfirm();!r)return fail(r.error());
+    if(auto r=tx.commit();!r)return fail(r.error());
+    return receipt;
 }
 Result<CommittedJournalRecord> SqliteJournal::read_committed(Epoch expected,std::uint64_t sequence,
     std::span<std::byte> canonical,std::span<std::byte> envelope) noexcept {
@@ -729,6 +803,7 @@ Result<CommittedJournalRecord> SqliteJournal::read_committed(Epoch expected,std:
     auto prefix=self.prefix();if(!prefix)return fail(prefix.error());
     if(prefix->epoch!=expected)return fail(Error::StaleEpoch);
     if(sequence>prefix->sequence)return fail(Error::NotReady);
+    {auto compacted=self.compaction_state();if(!compacted)return fail(compacted.error());if(sequence<compacted->floor)return fail(Error::StaleGeneration);}
     Statement stmt;
     if(auto r=stmt.prepare(self.database,"SELECT r.append_id,r.epoch,r.seq,r.tick,r.data,e.envelope FROM records r LEFT JOIN commit_envelopes e ON e.match=r.match AND e.append_id=r.append_id WHERE r.match=?1 AND r.seq=?2");!r)return fail(r.error());
     if(auto r=stmt.number(1,self.config.match);!r)return fail(r.error());if(auto r=stmt.number(2,sequence);!r)return fail(r.error());
@@ -1014,4 +1089,5 @@ Status SqliteJournal::checkpoint() noexcept {
 #include "detail/checkpoint_service.inc"
 #include "detail/checkpoint_replacement.inc"
 #include "detail/canonical_restore.inc"
+#include "detail/journal_compaction.inc"
 }

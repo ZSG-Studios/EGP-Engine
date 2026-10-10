@@ -17,6 +17,10 @@ public:
     // Trusted fixture instrumentation only; no network input selects a hook.
     // It must outlive the journal, remain nonblocking and never throw.
     virtual bool reject(StorageIo, bool wal) noexcept=0;
+    // Fixture-only: true reports a sync barrier complete without issuing it,
+    // so durability against power loss is NOT provided. Production never
+    // installs an injector; the default keeps every sync real.
+    virtual bool elide_sync(bool wal) noexcept { static_cast<void>(wal); return false; }
 };
 struct JournalConfig {
     std::uint64_t match{};
@@ -31,6 +35,23 @@ struct JournalConfig {
         std::uint32_t maximum_effects{2048},outbox_bytes{10*1024*1024};
         bool operator==(const OperationLimits&) const noexcept=default;
     } operations{};
+    // Application-enforced high-water marks below the hard limits above.
+    // Ordinary appends that would cross retention-headroom, or that start
+    // while the active WAL already reaches wal_high_water-headroom, fail with
+    // Busy: compact behind a verified checkpoint or run WAL maintenance, then
+    // retry. Fencing, authority, checkpoint and compaction work may use the
+    // headroom. An epoch newer than every recovery-verified base may also
+    // use the retention headroom until it installs its own base. Zero selects
+    // retention/16 and WAL/8; explicit values are at most half the limit.
+    std::uint64_t retention_headroom_bytes{},wal_headroom_bytes{};
+    // Compacted append identities keep a 128-byte retained tombstone so an
+    // exact retry stays a duplicate. Above this count only tombstones from
+    // fenced older epochs are forgotten; current-epoch ones backpressure.
+    std::uint32_t maximum_retired_appends{1024*1024};
+    // Contiguous journal coverage kept by compaction (plan: five seconds,
+    // 300 ticks at 60 Hz): records with tick >= C.tick-coverage are never
+    // pruned. Zero keeps only what the retained bases need.
+    std::uint32_t minimum_coverage_ticks{300};
 };
 enum class OperationActorKind : std::uint8_t { Player,Authority,Service };
 struct DurableOperationId {
@@ -90,6 +111,17 @@ struct CanonicalJournalProof {
     JournalPrefix snapshot{};
     CanonicalStateHeader final_state{};
     std::uint64_t records{};
+};
+// One bounded compaction step behind the oldest retained recovery base.
+// floor is the lowest retained committed sequence; target is where the floor
+// converges: the oldest base's own sequence, or an earlier sequence holding
+// an unacknowledged outbox effect. released_bytes is net of tombstones.
+struct JournalCompactionReceipt {
+    JournalPrefix snapshot{};
+    CheckpointTicket base{};
+    std::uint64_t floor{},target{};
+    std::uint64_t pruned{},released_bytes{},retired_appends{},forgotten{};
+    bool complete{};
 };
 // Storage proposal from the trusted coordinator, after authenticated eligibility
 // and lease/takeover checks. This storage type is never a network admission proof.
@@ -209,13 +241,18 @@ public:
     // call this. Delivery remains at least once while acknowledgement is absent.
     Status acknowledge_effect(std::uint64_t append_id,std::uint32_t ordinal,
         std::uint64_t expected_recipient) noexcept;
+    // A compacted append's bytes are gone: query reports StaleGeneration and
+    // query_receipt still returns its original committed position. Once older
+    // epoch tombstones have been forgotten, an absent ID is UnknownOutcome.
     Result<JournalReceipt> query(std::uint64_t append_id, std::span<std::byte> output) noexcept;
+    Result<JournalReceipt> query_receipt(std::uint64_t append_id) noexcept;
     // Read exact lossless post-state and decision/outbox envelope by committed
     // sequence in one fence-checked database snapshot. Source epochs may precede
     // the current fence. Neither output changes on failure; outputs cannot overlap.
     // This is storage readback, not authentication, recovery validation or a lease
     // permit. The restored host must validate the full journal and reauthorize
-    // before publishing. Missing committed coverage is RecoveryUnavailable.
+    // before publishing. Missing committed coverage is RecoveryUnavailable;
+    // a sequence compacted behind a verified checkpoint is StaleGeneration.
     Result<CommittedJournalRecord> read_committed(Epoch expected_fence,
         std::uint64_t sequence,std::span<std::byte> canonical,
         std::span<std::byte> decision_envelope) noexcept;
@@ -248,7 +285,8 @@ public:
     Result<JournalReceipt> append_control(const service::control::ExecutionPermit&,std::uint64_t append_id,Tick,std::span<const std::byte>) noexcept;
     Status control_heartbeat() noexcept;
     // Additive content staging; never removes journal records or changes append
-    // identity admission. One staging/content-verified candidate and two
+    // identity admission (compact_journal does that separately, behind the
+    // oldest verified base). One staging/content-verified candidate and two
     // recovery-verified bases, <=48 MiB
     // each, 64 KiB chunks. Only explicit validated replacement retires a base.
     // Bind a trusted nonreentrant digest on the storage owner before these calls.
@@ -274,7 +312,9 @@ public:
     Result<CheckpointRecoveryReceipt> verify_checkpoint_recovery(CheckpointTicket,CheckpointParticipantVerifier&) noexcept;
     Result<CheckpointParticipantReceipt> verify_checkpoint_participants(
         CheckpointTicket,CheckpointParticipantVerifier&) noexcept;
-    // Same-epoch replacement only. One bounded coverage page per call, at most
+    // The candidate may be in the same or a newer authority epoch than both
+    // bases; covered record epochs must be nondecreasing within that range.
+    // One bounded coverage page per call, at most
     // 64 records and 1MiB+56 bytes including metadata and complete envelopes. Replacement
     // identities use a fixed epoch, contiguous sequences, a durable retirement
     // watermark and 64 recent results. Expired IDs return Retired without reuse.
@@ -283,6 +323,17 @@ public:
     Result<CheckpointReplacementProgress> query_checkpoint_replacement(const CheckpointReplacementRequest&) noexcept;
     Result<CheckpointReplacementProgress> cancel_checkpoint_replacement(const CheckpointReplacementRequest&) noexcept;
     Result<CheckpointReplacementProgress> replace_checkpoint(const CheckpointReplacementRequest&,CheckpointParticipantVerifier&) noexcept;
+    // Canonical journal compaction. Requires the bound boot and digest, the
+    // current fence, and two RecoveryVerified bases (a verified replacement
+    // exists) whose stored anchors bind to their own committed records, plus
+    // an intact canonical chain from the oldest base through C. Only rows
+    // strictly below the oldest base, below any unacknowledged outbox effect
+    // and older than the minimum coverage window are pruned, at most
+    // maximum_records (1..4096) per call. Each
+    // pruned append ID keeps a digest tombstone; checkpoints, decisions,
+    // retirement watermarks, result caches and the outbox are untouched.
+    Result<JournalCompactionReceipt> compact_journal(Epoch expected_fence,
+        std::uint32_t maximum_records) noexcept;
     // SQLite WAL maintenance only; not canonical recovery compaction.
     Status checkpoint() noexcept;
 };

@@ -40,11 +40,18 @@ struct SessionConfig {
 // there is no unregistered/manual-handshake bypass. Manifests are immutable for
 // both HELLO directions and retries. Only ready sessions expose common bounds.
 // A terminal delivery/transport error currently terminates this whole Session.
+// Carrier segmentation counters (path MTU below a complete session frame).
+struct SessionSegmentStatistics {
+ std::uint64_t segmented_frames{},segments_sent{},segments_received{},reassembled_frames{};
+ std::uint64_t evicted_frames{},expired_frames{},abandoned_frames{};
+ unsigned queued_segments{};
+};
 class Session {
  struct Impl;Impl* impl_{};Allocator* allocator_{};
  Status pump_frames(Tick) noexcept;
 public:
- static constexpr std::uint64_t hello_wire_version=3;
+ // Version 4 adds carrier segment frames below logical fragments.
+ static constexpr std::uint64_t hello_wire_version=4;
  Session() noexcept=default;~Session();
  Session(const Session&)=delete;Session&operator=(const Session&)=delete;
  Session(Session&&) noexcept;Session&operator=(Session&&) noexcept;
@@ -69,6 +76,7 @@ public:
     // send/receive pools. Provider-owned memory remains a caller lifetime duty.
     Result<bool> storage_overlaps(std::span<const std::byte>) const noexcept;
  Result<AdmittedCapabilities> capabilities() const noexcept;
+ Result<SessionSegmentStatistics> segment_statistics() const noexcept;
  Result<DeliveryTicket> send(std::span<const std::byte>,Tick,std::uint8_t channel=0) noexcept;
  Result<DeliveryView> receive(std::uint8_t channel=0) const noexcept;
  Status applied(std::uint64_t message,std::uint8_t channel=0) noexcept;

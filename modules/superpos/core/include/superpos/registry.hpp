@@ -79,6 +79,22 @@ public:
     Result<std::uint64_t> transfer_ownership(ObjectHandle handle,PeerId owner,std::uint64_t revision,Tick tick,Epoch epoch) noexcept {
         if(!frozen_.size())return fail(Error::NotReady); return world_.transfer_ownership(handle,owner,revision,tick,epoch);
     }
+    // Exact pass-throughs of World::capture_bytes/capture/restore (same
+    // snapshot format, validation, rollback and barrier semantics), so a
+    // recovery participant restores the registered World without a const
+    // accessor. A moved-from RegisteredWorld is NotReady.
+    Result<std::size_t> capture_bytes() const noexcept {
+        if(!frozen_.size())return fail(Error::NotReady); return world_.capture_bytes();
+    }
+    Result<std::size_t> capture(std::span<std::byte> output) const noexcept {
+        if(!frozen_.size())return fail(Error::NotReady); return world_.capture(output);
+    }
+    Result<std::size_t> restore(std::span<const std::byte> snapshot,Epoch successor_epoch) noexcept {
+        if(!frozen_.size())return fail(Error::NotReady); return world_.restore(snapshot,successor_epoch);
+    }
+    Result<std::size_t> restore(std::span<const std::byte> snapshot,Epoch successor_epoch,CanonicalAuthorityBarrier& barrier) noexcept {
+        if(!frozen_.size())return fail(Error::NotReady); return world_.restore(snapshot,successor_epoch,barrier);
+    }
     const Fingerprint& fingerprint() const noexcept { return frozen_.fingerprint(); }
 private:
     friend class WorldAuthorityBinding;

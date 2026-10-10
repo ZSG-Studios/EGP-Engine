@@ -30,8 +30,13 @@ class RelayServer final {
     Limits limits_;Route* routes_{};Frame* frames_{};Key cookie_key_{};
     Statistics statistics_{};bool busy_{},ready_{};
     std::uint64_t window_us_{};std::uint32_t window_bytes_{},window_handshakes_{};
+    // Lower bound of active route expiries: routes are rescanned only once the
+    // guarded clock reaches it. Queue occupancy is counted, never rescanned.
+    std::uint64_t earliest_expiry_{UINT64_MAX};std::size_t queued_frames_{},free_hint_{};
     Status entry() const noexcept;
     bool aliases(const void*,std::size_t) const noexcept;
+    void drop(std::size_t) noexcept;
+    void expire(const ClockObservation&) noexcept;
     void retire(std::size_t,bool) noexcept;
     Status enqueue(std::size_t,std::uint8_t,Kind,std::span<const std::byte>,const IpEndpoint&,std::uint64_t,std::uint64_t) noexcept;
     Status process(const ReceivedDatagram&,std::span<const std::byte>,const ClockObservation&) noexcept;

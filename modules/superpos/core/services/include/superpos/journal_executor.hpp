@@ -19,7 +19,7 @@ enum class JournalJobKind : std::uint8_t { Append, Decisions, Query, Fence, Chec
     QueryBoot,BeginBoot,BindBoot,QueryAuthority,CommitAuthority,QueryMatch,
     BindControlIssuer,CommitControlPolicy,InstallExecutionLease,ReadControl,AppendControl,CheckpointBegin,CheckpointPut,CheckpointSeal,CheckpointQuery,
     CheckpointAbandon,CheckpointRead,CheckpointServiceBegin,CheckpointServicePage,CheckpointServiceQuery,CheckpointServiceRead,
-    RestoreEvidence };
+    RestoreEvidence,Compact,QueryReceipt };
 struct JournalJobCompletion {
     JournalJobKind kind{};
     Error error{Error::None};
@@ -41,6 +41,8 @@ struct JournalJobCompletion {
     std::optional<CheckpointServiceProgress> checkpoint_service{};
     // RestoreEvidence: storage-derived plan/anchor/final claim, never a permit.
     std::optional<CanonicalRestoreEvidence> restore{};
+    // Compact: one bounded storage step; receipt is never a lease or permit.
+    std::optional<JournalCompactionReceipt> compaction{};
     std::uint32_t output_bytes{};
 };
 // One producer/consumer owner, one externally managed serial storage worker.
@@ -109,6 +111,10 @@ public:
     // Scope is copied into fixed slot metadata. Only a coordinator-minted
     // capability should supply it; the worker compares it with stored state.
     Result<JournalJobTicket> restore_evidence(const CanonicalRestoreScope&) noexcept;
+    // One bounded compaction step behind the oldest verified base (1..4096
+    // records). QueryReceipt resolves an append ID whose bytes may be compacted.
+    Result<JournalJobTicket> compact_journal(Epoch expected_fence,std::uint32_t maximum_records) noexcept;
+    Result<JournalJobTicket> query_receipt(std::uint64_t append_id) noexcept;
     Result<JournalJobTicket> register_actor(Epoch authority,OperationActorKind,
         std::uint64_t actor,std::uint64_t actor_epoch,PeerId,std::uint64_t first_sequence=0) noexcept;
     // Trusted service admission only. Execute means a durable reservation was

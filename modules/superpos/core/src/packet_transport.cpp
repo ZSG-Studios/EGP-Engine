@@ -13,6 +13,11 @@
 namespace superpos {
 namespace {
 constexpr std::byte data_tag{0x10}, ack_tag{0x11}, probe_tag{0x12}, bundle_tag{0x13};
+// Path MTU probe: header (sequence in the packet-number slot), u16 frame size,
+// zero padding to exactly that size. ACK: header (echoed sequence), u16 size.
+constexpr std::byte path_probe_tag{0x14}, path_ack_tag{0x15};
+constexpr std::size_t path_history = 4;
+constexpr std::uint64_t path_timeout_floor_us = 100000, path_timeout_ceiling_us = 10000000;
 constexpr std::byte frame_entry{0x01}, ack_entry{0x02};
 // Bundle entries: frame = kind, u16 length, bytes; ACK = kind, largest, bits, delay.
 constexpr std::size_t raw_ceiling = 960, ack_bytes = 33, frame_entry_bytes = 3, ack_entry_bytes = 25;
@@ -54,12 +59,188 @@ struct PacketTransport::Impl {
     std::uint64_t largest{},bits{},largest_received_at{},ack_due{},last_time{};
     bool have_time{},ack_dirty{},carrier_blocked{},probe_due{},failed{},active_call{};
     PacketTransportStats stats{};
+    // Complete UDP payload sizes; frame = size - overhead. All state is bounded
+    // and fixed: one outstanding probe, four remembered probe sequences, and one
+    // pending probe acknowledgement (the newest sequence) on the receiving side.
+    struct PathMtu {
+        PathMtuState state{PathMtuState::Disabled};
+        std::uint16_t ceiling{},base{},current{},low{},high{},target{};
+        std::uint8_t attempts{},large_losses{};
+        bool outstanding{},ceiling_first{},ack_due{};
+        std::uint64_t sequence{},deadline{},timer{},raise_backoff{},next_sequence{1};
+        std::uint64_t ack_sequence{};std::uint16_t ack_frame{};
+        struct Sent { std::uint64_t sequence{};std::uint16_t frame{}; };
+        std::array<Sent,path_history> history{};std::size_t history_next{};
+    } path{};
     Impl(Clock& c,TransportProvider& p,PacketTransportConfig cfg,TransportCapabilities caps) noexcept
         :clock(&c),provider(&p),config(cfg),carrier(caps) {}
     bool owned() const noexcept { return owner==std::this_thread::get_id(); }
+    std::size_t overhead() const noexcept { return std::size_t{carrier.encrypted_overhead_bytes}+config.routing_overhead_bytes; }
+    // Receive ceiling: independent of this direction's validated send path.
+    std::size_t receive_maximum() const noexcept {
+        return std::min<std::size_t>(carrier.maximum_frame,config.congestion.datagram_bytes-overhead())-header_bytes;
+    }
     std::size_t maximum() const noexcept {
-        const auto overhead=carrier.encrypted_overhead_bytes+config.routing_overhead_bytes;
-        return std::min<std::size_t>(carrier.maximum_frame,config.congestion.datagram_bytes-overhead)-header_bytes;
+        if(path.state==PathMtuState::Disabled)return receive_maximum();
+        return std::min<std::size_t>(carrier.maximum_frame,path.current-overhead())-header_bytes;
+    }
+    bool probing() const noexcept { return path.state==PathMtuState::Confirming||path.state==PathMtuState::Searching; }
+    std::uint64_t path_timeout(unsigned attempt) const noexcept {
+        auto timeout=std::max(flow->retransmit_timeout_us(),path_timeout_floor_us);
+        for(unsigned i=0;i<attempt && timeout<path_timeout_ceiling_us;++i)timeout*=2;
+        return std::min(timeout,path_timeout_ceiling_us);
+    }
+    static std::uint64_t later(std::uint64_t now,std::uint64_t interval) noexcept {
+        return interval>std::numeric_limits<std::uint64_t>::max()-now?std::numeric_limits<std::uint64_t>::max():now+interval;
+    }
+    void set_current(std::uint16_t size) noexcept {
+        if(path.current==size)return;
+        path.current=size;path.large_losses=0;++stats.path_mtu_changes;
+    }
+    // Choose the next size to probe, or finish the search and arm its timer.
+    void next_target(std::uint64_t now_us) noexcept {
+        path.attempts=0;
+        if(path.ceiling_first && path.high>path.ceiling) { path.ceiling_first=false;path.target=path.ceiling;return; }
+        path.ceiling_first=false;
+        if(path.high<=path.low || path.high-path.low<=config.path_mtu.search_granularity_bytes) {
+            path.state=PathMtuState::Complete;path.target=0;
+            if(path.current>=path.ceiling) {
+                path.raise_backoff=config.path_mtu.raise_interval_ms*1000;
+                path.timer=later(now_us,config.path_mtu.confirm_interval_ms*1000);
+            } else {
+                path.timer=later(now_us,path.raise_backoff);
+                path.raise_backoff=std::min(path.raise_backoff*2,config.path_mtu.confirm_interval_ms*1000);
+            }
+            return;
+        }
+        path.target=static_cast<std::uint16_t>(path.low+(path.high-path.low)/2);
+    }
+    void path_confirmed(std::uint16_t size,std::uint64_t now_us) noexcept {
+        ++stats.path_mtu_probes_acknowledged;path.outstanding=false;
+        path.low=std::max(path.low,size);
+        if(size>path.current)set_current(size);
+        // A confirmed current size completes; a raise waits for its own timer.
+        if(path.state==PathMtuState::Confirming) { path.high=path.low;path.ceiling_first=false; }
+        next_target(now_us);
+    }
+    void path_failed(std::uint64_t now_us) noexcept {
+        path.outstanding=false;
+        if(path.attempts<config.path_mtu.maximum_probes)return;
+        if(path.state==PathMtuState::Confirming) {
+            // The size in use no longer passes: fall back to the assumed base.
+            path.low=path.base;set_current(path.base);
+            path.state=PathMtuState::Searching;path.raise_backoff=config.path_mtu.raise_interval_ms*1000;
+        }
+        path.high=path.target;
+        next_target(now_us);
+    }
+    void path_suspect() noexcept {
+        if(path.state==PathMtuState::Disabled||path.state==PathMtuState::Confirming||path.current<=path.base)return;
+        if(path.large_losses<config.path_mtu.black_hole_losses)return;
+        ++stats.path_mtu_black_holes;path.large_losses=0;path.outstanding=false;
+        path.state=PathMtuState::Confirming;path.target=path.current;path.attempts=0;path.ceiling_first=false;
+    }
+    void path_timers(std::uint64_t now_us) noexcept {
+        if(path.state==PathMtuState::Disabled)return;
+        path_suspect();
+        if(path.outstanding && now_us>=path.deadline) { ++stats.path_mtu_probes_lost;path_failed(now_us); }
+        if(path.state==PathMtuState::Complete && now_us>=path.timer) {
+            path.attempts=0;
+            if(path.current>=path.ceiling) { path.state=PathMtuState::Confirming;path.target=path.current; }
+            else { path.state=PathMtuState::Searching;path.low=path.current;path.high=static_cast<std::uint16_t>(path.ceiling+1);path.ceiling_first=true;next_target(now_us); }
+        }
+    }
+    // Packet records before a receipt/loss pass, to attribute each retired
+    // record to acknowledgement or loss. Only sizes above the base and within
+    // the current send size count as black-hole evidence.
+    struct Flight { std::uint64_t number{};std::uint32_t bytes{};bool occupied{},acknowledged{}; };
+    void snapshot(std::array<Flight,64>& flights,const PacketAck* ack) const noexcept {
+        for(std::size_t i=0;i<records.size();++i) {
+            const auto& record=records[i];
+            const bool acknowledged=ack && record.occupied && record.number<=ack->largest && ack->largest-record.number<64 &&
+                ((ack->bits>>(ack->largest-record.number))&1);
+            flights[i]={record.number,record.bytes,record.occupied,acknowledged};
+        }
+    }
+    void settle(const std::array<Flight,64>& flights) noexcept {
+        if(path.state==PathMtuState::Disabled)return;
+        for(std::size_t i=0;i<records.size();++i) {
+            const auto& before=flights[i];
+            if(!before.occupied || (records[i].occupied && records[i].number==before.number))continue;
+            if(before.bytes<=path.base || before.bytes>path.current)continue;
+            if(before.acknowledged)path.large_losses=0;
+            else if(path.large_losses<std::numeric_limits<std::uint8_t>::max())++path.large_losses;
+        }
+    }
+    void account(const CongestionReceipt& receipt) noexcept {
+        // Counters saturate (diagnostic only); the estimate stays in [0, 1e6].
+        const auto add=[](std::uint64_t& counter,std::uint64_t value) noexcept {
+            counter=value>std::numeric_limits<std::uint64_t>::max()-counter?std::numeric_limits<std::uint64_t>::max():counter+value;
+        };
+        add(stats.packets_acknowledged,receipt.acknowledged_packets);add(stats.packets_lost,receipt.lost_packets);
+        for(std::size_t i=0;i<receipt.lost_packets;++i)stats.loss_rate_ppm+=(1000000U-stats.loss_rate_ppm)/16U;
+        for(std::size_t i=0;i<receipt.acknowledged_packets;++i)stats.loss_rate_ppm-=stats.loss_rate_ppm/16U;
+    }
+    Result<CongestionReceipt> acknowledge(PacketAck ack,std::uint64_t now_us) noexcept {
+        std::array<Flight,64> flights{};snapshot(flights,&ack);
+        auto progress=flow->acknowledge(ack,now_us);if(progress) { settle(flights);account(*progress); }return progress;
+    }
+    Result<CongestionReceipt> detect_loss(std::uint64_t now_us) noexcept {
+        std::array<Flight,64> flights{};snapshot(flights,nullptr);
+        auto losses=flow->detect_loss(now_us);if(losses) { settle(flights);account(*losses); }return losses;
+    }
+    Status flush_path_ack(std::uint64_t now_us) noexcept {
+        if(!path.ack_due || carrier_blocked || !flow->pacing_allows(now_us))return {};
+        std::array<std::byte,path_mtu_header_bytes> bytes{};
+        if(auto status=header(bytes,path_ack_tag,path.ack_sequence);!status)return status;
+        bytes[17]=std::byte(path.ack_frame>>8);bytes[18]=std::byte(path.ack_frame&0xff);
+        if(auto capacity=can_record_send(charge(bytes.size()),stats.path_mtu_acknowledgements_sent);!capacity)return capacity;
+        auto accepted=provider->send(bytes);
+        if(!accepted && accepted.error()!=Error::Busy)return accepted;
+        if(auto charged=flow->sent_untracked(charge(bytes.size()),now_us);!charged)return charged;
+        stats.charged_wire_bytes+=charge(bytes.size());++stats.path_mtu_acknowledgements_sent;
+        path.ack_due=false;carrier_blocked=!accepted;return {};
+    }
+    Status flush_path_probe(std::uint64_t now_us) noexcept {
+        if(!probing() || path.outstanding || !path.target || carrier_blocked || !flow->pacing_allows(now_us))return {};
+        const auto frame=static_cast<std::size_t>(path.target)-overhead();
+        if(frame<path_mtu_header_bytes || frame>carrier.maximum_frame)return fail(Error::ProtocolViolation);
+        if(path.next_sequence==std::numeric_limits<std::uint64_t>::max())return fail(Error::CounterExhausted);
+        std::array<std::byte,raw_ceiling> bytes{};
+        const auto sequence=path.next_sequence;
+        if(auto status=header(bytes,path_probe_tag,sequence);!status)return status;
+        bytes[17]=std::byte(frame>>8);bytes[18]=std::byte(frame&0xff);
+        if(auto capacity=can_record_send(path.target,stats.path_mtu_probes_sent);!capacity)return capacity;
+        auto accepted=provider->send(std::span<const std::byte>(bytes).first(frame));
+        if(!accepted && accepted.error()!=Error::Busy)return accepted;
+        // Pacing only: probe loss is not congestion evidence and is never retransmitted.
+        if(auto charged=flow->sent_untracked(path.target,now_us);!charged)return charged;
+        stats.charged_wire_bytes+=path.target;++stats.path_mtu_probes_sent;++path.next_sequence;
+        path.history[path.history_next]={sequence,static_cast<std::uint16_t>(frame)};path.history_next=(path.history_next+1)%path.history.size();
+        path.sequence=sequence;path.outstanding=true;path.deadline=later(now_us,path_timeout(path.attempts));++path.attempts;
+        carrier_blocked=!accepted;return {};
+    }
+    Status input_path(std::span<const std::byte> frame,std::uint64_t sequence,std::uint64_t now_us) noexcept {
+        if(frame.size()<path_mtu_header_bytes)return fail(Error::NonCanonical);
+        const auto declared=(std::to_integer<std::size_t>(frame[17])<<8)|std::to_integer<std::size_t>(frame[18]);
+        if(frame[0]==path_probe_tag) {
+            if(declared!=frame.size())return fail(Error::NonCanonical);
+            for(auto byte:frame.subspan(path_mtu_header_bytes))if(byte!=std::byte{})return fail(Error::NonCanonical);
+            // One pending acknowledgement: the newest probe supersedes older ones.
+            if(!path.ack_due || sequence>path.ack_sequence) { path.ack_due=true;path.ack_sequence=sequence;path.ack_frame=static_cast<std::uint16_t>(declared); }
+            return {};
+        }
+        if(frame.size()!=path_mtu_header_bytes || declared<path_mtu_header_bytes || declared>carrier.maximum_frame)return fail(Error::NonCanonical);
+        if(sequence>=path.next_sequence)return fail(Error::ProtocolViolation);
+        for(const auto& sent:path.history) if(sent.sequence==sequence) {
+            if(sent.frame!=declared)return fail(Error::ProtocolViolation);
+            const auto size=static_cast<std::uint16_t>(declared+overhead());
+            // Any attempt for the size under test confirms it, including one that
+            // was answered after its timeout; anything else is stale evidence.
+            if(probing() && size==path.target) { path_confirmed(size,now_us);return {}; }
+            break;
+        }
+        ++stats.path_mtu_stale_acknowledgements;return {};
     }
     std::uint32_t charge(std::size_t plain) const noexcept {
         return static_cast<std::uint32_t>(plain)+carrier.encrypted_overhead_bytes+config.routing_overhead_bytes;
@@ -123,7 +304,7 @@ struct PacketTransport::Impl {
             auto& bundle=sealed[sealed_head];std::size_t size=bundle.size;bool with_ack=false;
             if(ack_dirty) {
                 // Piggyback the current selective receipt; no separate ACK datagram.
-                bundle.bytes[size]=ack_entry;Writer writer(std::span(bundle.bytes).subspan(size+1,ack_entry_bytes-1));
+                bundle.bytes[size]=ack_entry;Writer writer(std::span<std::byte>(bundle.bytes).subspan(size+1,ack_entry_bytes-1));
                 if(!writer.u64(largest)||!writer.u64(bits)||!writer.u64(std::min(now_us-largest_received_at,config.congestion.maximum_ack_delay_us)))return fail(Error::ProtocolViolation);
                 size+=ack_entry_bytes;with_ack=true;
             }
@@ -153,7 +334,7 @@ struct PacketTransport::Impl {
             if(frame[position]==frame_entry) {
                 if(frame.size()-position<frame_entry_bytes)return fail(Error::NonCanonical);
                 const auto size=(std::to_integer<std::size_t>(frame[position+1])<<8)|std::to_integer<std::size_t>(frame[position+2]);
-                if(!size||size>maximum()||frame.size()-position-frame_entry_bytes<size||part_count==parts.size())return fail(Error::NonCanonical);
+                if(!size||size>receive_maximum()||frame.size()-position-frame_entry_bytes<size||part_count==parts.size())return fail(Error::NonCanonical);
                 parts[part_count++]=frame.subspan(position+frame_entry_bytes,size);position+=frame_entry_bytes+size;
             } else if(frame[position]==ack_entry) {
                 if(carried||frame.size()-position<ack_entry_bytes)return fail(Error::NonCanonical);
@@ -168,7 +349,7 @@ struct PacketTransport::Impl {
             mark(id,now_us);return {};
         }
         if(carried) {
-            auto progress=flow->acknowledge(*carried,now_us);
+            auto progress=acknowledge(*carried,now_us);
             if(!progress)return fail(progress.error());
             if(progress->acknowledged_packets)probe_due=false;
         }
@@ -191,7 +372,7 @@ struct PacketTransport::Impl {
         if(carrier_blocked || !flow->pacing_allows(now_us))return fail(Error::Busy);
         std::array<std::byte,ack_bytes> bytes{};
         if(auto status=header(bytes,ack_tag,largest);!status)return status;
-        Writer writer(std::span(bytes).subspan(header_bytes));
+        Writer writer(std::span<std::byte>(bytes).subspan(header_bytes));
         if(!writer.u64(bits)||!writer.u64(std::min(now_us-largest_received_at,config.congestion.maximum_ack_delay_us)))return fail(Error::ProtocolViolation);
         if(auto capacity=can_record_send(charge(bytes.size()),stats.acknowledgements_sent);!capacity)return capacity;
         auto accepted=provider->send(bytes);
@@ -243,16 +424,17 @@ struct PacketTransport::Impl {
         if(*epoch!=config.association_epoch)return fail(Error::StaleEpoch);
         const auto payload=frame.subspan(header_bytes);
         if(frame[0]==bundle_tag)return input_bundle(frame,*id,now_us);
+        if(frame[0]==path_probe_tag||frame[0]==path_ack_tag)return input_path(frame,*id,now_us);
         if(frame[0]==ack_tag) {
             auto ack_bits=reader.u64(),delay=reader.u64();
             if(!ack_bits||!delay||!reader.empty())return fail(Error::NonCanonical);
-            auto progress=flow->acknowledge({*id,*ack_bits,*delay},now_us);
+            auto progress=acknowledge({*id,*ack_bits,*delay},now_us);
             if(!progress)return fail(progress.error());
             if(progress->acknowledged_packets)probe_due=false;
             return {};
         }
         if(frame[0]!=data_tag && frame[0]!=probe_tag)return fail(Error::NonCanonical);
-        if((frame[0]==probe_tag && !payload.empty()) || (frame[0]==data_tag && (payload.empty()||payload.size()>maximum())))return fail(Error::NonCanonical);
+        if((frame[0]==probe_tag && !payload.empty()) || (frame[0]==data_tag && (payload.empty()||payload.size()>receive_maximum())))return fail(Error::NonCanonical);
         if(seen(*id)) {
             if(auto counted=increment(stats.dropped_data);!counted)return counted;
             // Re-send the current receipt for a duplicate, without creating an
@@ -301,13 +483,27 @@ Result<PacketTransport> PacketTransport::create(Allocator& allocator,Clock& cloc
     const auto overhead=static_cast<std::uint64_t>(caps.encrypted_overhead_bytes)+config.routing_overhead_bytes;
     if(!config.association_epoch||!config.receive_frames||config.receive_frames>receive_ceiling||
         caps.maximum_frame<ack_bytes||overhead+ack_bytes>config.congestion.datagram_bytes||config.congestion.maximum_ack_delay_us>25000)return fail(Error::InvalidArgument);
+    const auto& mtu=config.path_mtu;
+    const auto ceiling=std::min<std::uint64_t>(config.congestion.datagram_bytes,caps.maximum_frame+overhead);
+    if(mtu.probing && (mtu.minimum_datagram_bytes<overhead+header_bytes+128 || mtu.minimum_datagram_bytes>ceiling ||
+        !mtu.search_granularity_bytes || mtu.search_granularity_bytes>256 || !mtu.maximum_probes || mtu.maximum_probes>10 ||
+        !mtu.black_hole_losses || mtu.black_hole_losses>64 || mtu.raise_interval_ms<1000 ||
+        mtu.confirm_interval_ms<mtu.raise_interval_ms || mtu.confirm_interval_ms>86400000))return fail(Error::InvalidArgument);
     auto* memory=allocator.allocate(sizeof(Impl),alignof(Impl),MemoryDomain::Backend);if(!memory)return fail(Error::OutOfMemory);
     PacketTransport result;result.allocator_=&allocator;result.impl_=new(memory)Impl(clock,provider,config,caps);
     auto flow=PacketCongestion::create(config.congestion,result.impl_->records);
-    if(!flow)return fail(flow.error());result.impl_->flow.emplace(std::move(*flow));return result;
+    if(!flow)return fail(flow.error());result.impl_->flow.emplace(std::move(*flow));
+    if(mtu.probing) {
+        // Start from the full ceiling (at most 1,200 bytes) and confirm it first.
+        auto& path=result.impl_->path;path.state=PathMtuState::Confirming;
+        path.ceiling=path.current=path.target=path.high=static_cast<std::uint16_t>(ceiling);
+        path.base=path.low=mtu.minimum_datagram_bytes;path.raise_backoff=mtu.raise_interval_ms*1000;
+    }
+    return result;
 }
 TransportCapabilities PacketTransport::capabilities() const noexcept {
-    return impl_?TransportCapabilities{true,true,true,false,impl_->maximum(),0}:TransportCapabilities{};
+    if(!impl_)return {};
+    TransportCapabilities caps{true,true,true,false,impl_->maximum(),0};caps.coalescing=impl_->config.bundle_frames;return caps;
 }
 bool PacketTransport::ready() const noexcept {
     if(!impl_||!impl_->owned()||impl_->failed||impl_->active_call)return false;
@@ -341,7 +537,7 @@ Status PacketTransport::advance() noexcept {
         auto consumed=self.input(std::span<const std::byte>(bytes).first(*received),*now);
         if(!consumed) { self.failed=true;return consumed; }
     }
-    auto loss=self.flow->detect_loss(*now);if(!loss) { self.failed=true;return fail(loss.error()); }
+    auto loss=self.detect_loss(*now);if(!loss) { self.failed=true;return fail(loss.error()); }
     if(self.flow->bytes_in_flight() && !self.probe_due) {
         auto due=self.flow->probe_timeout(*now);
         if(due)self.probe_due=true;
@@ -352,6 +548,10 @@ Status PacketTransport::advance() noexcept {
     }
     auto ack=self.flush_ack(*now);if(!ack) { if(ack.error()!=Error::Busy)self.failed=true;return ack; }
     auto probe=self.flush_probe(*now);if(!probe) { if(probe.error()!=Error::Busy)self.failed=true;return probe; }
+    // Path MTU work never preempts data: it waits for pacing and an idle carrier.
+    self.path_timers(*now);
+    if(auto path_ack=self.flush_path_ack(*now);!path_ack) { self.failed=true;return path_ack; }
+    if(auto path_probe=self.flush_path_probe(*now);!path_probe) { self.failed=true;return path_probe; }
     auto data=self.flush_data(*now);if(!data && data.error()!=Error::Busy)self.failed=true;
     // A write still owned behind pacing (sealed bundles full) keeps the carrier
     // unwritable: the owner must not offer a frame that would be refused.
@@ -404,6 +604,7 @@ Result<PacketTransportStats> PacketTransport::statistics() const noexcept {
     if(!self.owned()||self.active_call)return fail(Error::PermissionDenied);
     auto stats=self.stats;stats.bytes_in_flight=self.flow->bytes_in_flight();stats.congestion_window=self.flow->congestion_window();
     stats.smoothed_rtt_us=self.flow->smoothed_rtt_us();stats.retransmit_timeout_us=self.flow->retransmit_timeout_us();stats.queued_receive_frames=self.count;
+    stats.path_mtu_bytes=self.maximum()+header_bytes+self.overhead();stats.path_mtu_state=self.path.state;
     stats.owns_pending_send=self.pending_size!=0||self.carrier_blocked||self.queued();return stats;
 }
 }

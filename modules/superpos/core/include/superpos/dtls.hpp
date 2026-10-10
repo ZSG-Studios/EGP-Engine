@@ -12,9 +12,26 @@ public:
  CryptoRuntime(const CryptoRuntime&)=delete;
  Status initialize() noexcept;
 };
-struct DtlsConfig { bool server{}; PeerId identity{}; std::uint64_t handshake_timeout_ms{15000}; std::size_t udp_payload_ceiling{1200}; };
-// One authenticated association per peer. Socket routing/address validation is
-// below this provider; this initial profile does not permit address migration.
+struct DtlsStatistics {
+ // Records whose datagram the local path refuses as oversize (EMSGSIZE). They
+ // are consumed like an in-network drop; the association remains usable.
+ std::uint64_t path_oversize_drops{};
+ std::uint64_t path_challenges_sent{},path_responses_sent{},path_promotions{};
+ std::uint64_t path_challenge_failures{},stale_path_responses{};
+};
+// path_validation: both ends reserve 17-byte plaintext records tagged 0x16
+// (challenge) and 0x17 (response) for address validation; the packet layer's
+// frame tags never collide with them. Required for single-port servers.
+struct DtlsConfig { bool server{}; PeerId identity{}; std::uint64_t handshake_timeout_ms{15000}; std::size_t udp_payload_ceiling{1200}; bool path_validation{}; };
+// One authenticated association per peer. Over a fixed (connected) datagram
+// path the address never changes. Over a path-aware IO (UdpMuxPort) a server
+// may be created with an empty address_identity: cookies bind to the source
+// the shared socket observed for the first handshake datagram, and the
+// handshake's completion authenticates that address. Afterwards an
+// authenticated record from a new source address makes it a candidate; with
+// path_validation the server sends it a fresh 16-byte random challenge (three
+// attempts, 500 ms doubling, within the port's amplification limit) and moves
+// outbound traffic only when the encrypted echo arrives from that address.
 class DtlsAssociation final : public TransportProvider {
  struct Impl; Impl* impl_{}; Allocator* allocator_{};
 public:
@@ -33,5 +50,6 @@ public:
  bool ready() const noexcept override;
  Status send(std::span<const std::byte>) noexcept override;
  Result<std::size_t> receive(std::span<std::byte>) noexcept override;
+ Result<DtlsStatistics> statistics() const noexcept;
 };
 }
