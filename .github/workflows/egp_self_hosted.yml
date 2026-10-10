@@ -1,0 +1,76 @@
+name: EGP self-hosted builds
+# Builds and tests on the project's own machines (self-hosted runners), never on
+# GitHub-hosted runners. The runner checks out the pushed commit itself, so no
+# machine ever needs source copied or updated by hand. Pull requests never run
+# here: untrusted code must not execute on these hosts.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+    inputs:
+      clean:
+        description: Delete the persistent build directory first
+        type: boolean
+        default: false
+
+concurrency:
+  group: egp-self-hosted|${{ github.ref_name }}
+  cancel-in-progress: true
+
+jobs:
+  macos-editor:
+    name: macOS editor (arm64, dev)
+    runs-on: [self-hosted, egp-macos]
+    timeout-minutes: 120
+    env:
+      # Persistent outside the checkout, so builds stay incremental across runs.
+      EGP_BUILD_DIR: ${{ github.workspace }}/../egp-build/macos-editor-dev
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Toolchain
+        run: |
+          {
+            echo "/opt/homebrew/bin"
+            echo "/opt/homebrew/opt/python@3.13/libexec/bin"
+            echo "$HOME/.local/bin"
+            echo "$HOME/.dotnet"
+          } >> "$GITHUB_PATH"
+          export PATH="/opt/homebrew/bin:/opt/homebrew/opt/python@3.13/libexec/bin:$HOME/.local/bin:$HOME/.dotnet:$PATH"
+          sw_vers; xcodebuild -version | head -1; xmake --version | head -1; python --version
+          if [ "${{ inputs.clean }}" = "true" ]; then rm -rf "$EGP_BUILD_DIR"; fi
+
+      # 16 GB / 12 cores: one heavy job at a time, shared with other sessions' agents.
+      - name: Take the Mac heavy-build lock
+        run: |
+          for i in $(seq 1 180); do
+            if mkdir "$HOME/.egp-mac-heavy.lock" 2>/dev/null; then
+              printf 'owner=github-actions %s\npurpose=macOS editor build %s\nstart=%s\n' "$GITHUB_REPOSITORY" "$GITHUB_SHA" "$(date -u +%FT%TZ)" > "$HOME/.egp-mac-heavy.lock/owner"
+              exit 0
+            fi
+            sleep 20
+          done
+          echo "::error::Mac heavy-build lock held for 60 minutes"; cat "$HOME/.egp-mac-heavy.lock/owner" || true; exit 1
+
+      - name: Configure
+        run: >-
+          xmake f -y -P . -p macosx -a arm64 -m debug --toolchain=xcode
+          "--builddir=$EGP_BUILD_DIR" --godot_platform=macos --egp_target=editor
+          --dev_build=y --module_mono_enabled=n --module_superpos_enabled=y --accesskit=n
+
+      - name: Build
+        run: xmake -P . -j 12 editor
+
+      - name: Smoke test
+        run: |
+          ls -la bin
+          editor=$(ls bin/godot.macos.editor* | head -1)
+          "$editor" --headless --version
+
+      - name: Release the Mac heavy-build lock
+        if: always()
+        run: |
+          if grep -q "owner=github-actions $GITHUB_REPOSITORY" "$HOME/.egp-mac-heavy.lock/owner" 2>/dev/null; then rm -rf "$HOME/.egp-mac-heavy.lock"; fi
