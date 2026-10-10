@@ -284,13 +284,13 @@ task copyAndRenameBinary(type: Copy) {
 
     String exportFormat = getExportFormat()
 
-    String sourceFilename = ""
-    String sourceFilepath = ""
+    // Output directory and the candidate file names AGP produces there.
+    String sourceDir = ""
+    List<String> sourceNames = []
     if (exportFormat == "aar") {
-        sourceFilename = "fusedDepsLib.aar"
-
         def fusedDepsLibProject = findProject(":fusedDepsLib")
-        sourceFilepath = "${fusedDepsLibProject.layout.buildDirectory.get().asFile}/outputs/aar/$sourceFilename"
+        sourceDir = "${fusedDepsLibProject.layout.buildDirectory.get().asFile}/outputs/aar"
+        sourceNames = ["fusedDepsLib.aar"]
     } else {
         String exportEdition = getExportEdition()
         String exportBuildType = getExportBuildType()
@@ -298,18 +298,22 @@ task copyAndRenameBinary(type: Copy) {
 
         String archivesName = base.archivesName.get()
         File outputsDir = new File(layout.buildDirectory.get().asFile, "outputs")
+        String baseName = "${archivesName}-${exportEdition}-${exportBuildType}"
         if (exportFormat == "aab") {
-            sourceFilename = "${archivesName}-${exportEdition}-${exportBuildType}.aab"
-            sourceFilepath = "$outputsDir/bundle/${exportEdition}${exportBuildTypeCapitalized}/$sourceFilename"
+            sourceDir = "$outputsDir/bundle/${exportEdition}${exportBuildTypeCapitalized}"
+            sourceNames = ["${baseName}.aab"]
         } else {
-            sourceFilename = "${archivesName}-${exportEdition}-${exportBuildType}.apk"
-            sourceFilepath = "$outputsDir/apk/$exportEdition/$exportBuildType/$sourceFilename"
+            // AGP appends '-unsigned' when no signing config applies (perform_signing=false).
+            sourceDir = "$outputsDir/apk/$exportEdition/$exportBuildType"
+            sourceNames = ["${baseName}.apk", "${baseName}-unsigned.apk"]
         }
     }
 
-    from sourceFilepath
+    from(sourceDir) {
+        include(sourceNames)
+    }
     into getExportPath()
-    rename sourceFilename, getExportFilename()
+    rename { getExportFilename() }
 }
 
 /**

@@ -201,7 +201,8 @@ def generateBuildTasks(String flavor = "template", String edition = "standard", 
                         String filenameSuffix = edition == "mono" ? "${edition}${capitalizedTarget}" : target
                         dependsOn ":app:assemble${capitalizedEdition}${capitalizedTarget}"
                         from("app/build/outputs/apk/${edition}/${target}") {
-                            include("android-${edition}-${target}.apk")
+                            // Prebuilt templates are unsigned, so AGP names them '-unsigned'.
+                            include("android-${edition}-${target}.apk", "android-${edition}-${target}-unsigned.apk")
                             rename { "android_${filenameSuffix}.apk" }
                         }
                         into(binDir)

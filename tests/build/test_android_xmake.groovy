@@ -88,7 +88,7 @@ assert !source.contains("findInPath") && !source.toLowerCase().contains("scons")
 String rootBuild = new File(androidRoot, "build.gradle").text
 assert source.contains('archivesName = "godot-lib"') && !source.contains("libraryVariants") && !source.contains("outputFileName")
 assert rootBuild.contains('include("godot-lib-template-${target}.aar")') && rootBuild.count('rename { "godot-lib.template_${targetSuffix}.aar" }') == 2
-assert rootBuild.contains('include("android-${edition}-${target}.apk")') && rootBuild.contains('rename { "android_${filenameSuffix}.apk" }')
+assert rootBuild.contains('include("android-${edition}-${target}.apk", "android-${edition}-${target}-unsigned.apk")') && rootBuild.contains('rename { "android_${filenameSuffix}.apk" }')
 checks += 6
 nativeTasks.each { task ->
     task.execute()
