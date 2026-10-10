@@ -1,7 +1,0 @@
-[configuration]
-entry_symbol = "netinterop_init"
-compatibility_minimum = "4.8"
-
-[libraries]
-windows.debug.x86_64 = "res://extension/bin/netinterop.dll"
-windows.release.x86_64 = "res://extension/bin/netinterop.release.dll"
