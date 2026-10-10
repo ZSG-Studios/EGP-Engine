@@ -61,7 +61,7 @@ function main(platform, target, jobs, cache, flags, dryrun, resultpath, invocati
         if key ~= 'platform' and key ~= 'target' and key ~= 'arch' and key ~= 'mingw' then table.insert(configure,'--' .. key .. '=' .. options[key]) end
     end
     if platform == 'android' then
-        local ndk = os.getenv('ANDROID_NDK_ROOT') or os.getenv('ANDROID_NDK_HOME') or (os.getenv('ANDROID_HOME') and path.join(os.getenv('ANDROID_HOME'),'ndk/29.0.14206865'))
+        local ndk = os.getenv('ANDROID_NDK_ROOT') or os.getenv('ANDROID_NDK_HOME') or (os.getenv('ANDROID_HOME') and path.join(os.getenv('ANDROID_HOME'),'ndk/30.0.16248370'))
         if ndk then table.insert(configure,'--ndk=' .. ndk); table.insert(configure,'--ndk_sdkver=24') end
     elseif platform == 'ios' then
         table.insert(configure,'--appledev=' .. (policy.enabled(options.simulator) and 'simulator' or 'iphone'))

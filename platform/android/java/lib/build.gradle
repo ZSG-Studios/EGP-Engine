@@ -1,6 +1,5 @@
 plugins {
     id 'com.android.library'
-    id 'org.jetbrains.kotlin.android'
 }
 
 ext {
@@ -20,27 +19,33 @@ dependencies {
 
 def pathToRootDir = "../../../../"
 
+// Archives are named 'godot-lib-<flavor>-<buildType>.aar'; the root project's copy tasks rename
+// them to the 'godot-lib.<target>.aar' names Godot expects.
+base {
+    archivesName = "godot-lib"
+}
+
 android {
-    compileSdkVersion versions.compileSdk
-    buildToolsVersion versions.buildTools
+    compileSdk = versions.compileSdk
+    compileSdkMinor = versions.compileSdkMinor
+    buildToolsVersion = versions.buildTools
     ndkVersion = versions.ndkVersion
 
     defaultConfig {
-        minSdkVersion versions.minSdk
-        targetSdkVersion versions.targetSdk
+        minSdk = versions.minSdk
 
         manifestPlaceholders = [godotLibraryVersion: getGodotLibraryVersionName()]
+    }
+
+    testOptions {
+        targetSdk = versions.targetSdk
     }
 
     namespace = "org.godotengine.godot"
 
     compileOptions {
-        sourceCompatibility versions.javaVersion
-        targetCompatibility versions.javaVersion
-    }
-
-    kotlinOptions {
-        jvmTarget = versions.javaVersion
+        sourceCompatibility = versions.javaVersion
+        targetCompatibility = versions.javaVersion
     }
 
     buildFeatures {
@@ -54,14 +59,15 @@ android {
         template {}
     }
 
-    lintOptions {
+    lint {
         abortOnError = false
-        disable 'MissingTranslation', 'UnusedResources'
+        disable += ['MissingTranslation', 'UnusedResources']
     }
 
-    packagingOptions {
-        exclude 'META-INF/LICENSE'
-        exclude 'META-INF/NOTICE'
+    packaging {
+        resources {
+            excludes += ['META-INF/LICENSE', 'META-INF/NOTICE']
+        }
 
         // Debug symbols are kept for development within Android Studio.
         if (shouldNotStrip()) {
@@ -80,60 +86,6 @@ android {
         editorDebug.jniLibs.srcDirs = ['libs/tools/debug']
     }
 
-    libraryVariants.all { variant ->
-        def flavorName = variant.getFlavorName()
-        if (flavorName == null || flavorName == "") {
-            throw new GradleException("Invalid product flavor: $flavorName")
-        }
-
-        def buildType = variant.buildType.name
-        if (buildType == null || buildType == "" || !supportedFlavorsBuildTypes[flavorName].contains(buildType)) {
-            throw new GradleException("Invalid build type: $buildType")
-        }
-
-        def nativeTarget = flavorName
-        if (nativeTarget == "template") {
-            //noinspection GroovyFallthrough
-            switch (buildType) {
-                case "release":
-                    nativeTarget += "_release"
-                    break
-                case "debug":
-                default:
-                    nativeTarget += "_debug"
-                    break
-            }
-        }
-
-        // Update the name of the generated library
-        def outputSuffix = "${nativeTarget}"
-        variant.outputs.all { output ->
-            output.outputFileName = "godot-lib.${outputSuffix}.aar"
-        }
-
-        for (String selectedAbi : selectedAbis) {
-            if (!supportedAbis.contains(selectedAbi)) {
-                throw new GradleException("Invalid selected abi: $selectedAbi")
-            }
-
-            // Creating gradle task to generate the native libraries for the selected abi.
-            String nativeAbi = selectedAbi
-            def taskName = rootProject.getNativeTaskName(flavorName, buildType, nativeAbi)
-            tasks.create(name: taskName, type: Exec) {
-                workingDir file(pathToRootDir)
-                // Resolve the tool only when native compilation is requested. Prebuilt
-                // library packaging must configure without a compiler on PATH.
-                doFirst {
-                    String xmake = project.findProperty("xmakeExecutable") ?: System.getenv("XMAKE") ?: System.getenv("XMAKE_EXE") ?: "xmake"
-                    commandLine rootProject.getGodotNativeBuildCommand(flavorName, buildType, nativeAbi, file(pathToRootDir), xmake)
-                }
-            }
-
-            // Schedule the tasks so the generated libs are present before the aar file is packaged.
-            tasks["merge${flavorName.capitalize()}${buildType.capitalize()}JniLibFolders"].dependsOn taskName
-        }
-    }
-
     publishing {
         singleVariant("templateDebug") {
             withSourcesJar()
@@ -149,3 +101,33 @@ android {
         }
     }
 }
+
+// BEGIN native build tasks
+// One xmake task per product flavor, build type and selected ABI. They are registered from the
+// static flavor/build type table (the old variant API is gone in AGP 9) and wired lazily, by name,
+// into the matching JNI merge task so the generated libraries exist before the AAR is packaged.
+supportedFlavorsBuildTypes.each { String flavorName, List<String> buildTypes ->
+    for (String buildType : buildTypes) {
+        for (String selectedAbi : selectedAbis) {
+            if (!supportedAbis.contains(selectedAbi)) {
+                throw new GradleException("Invalid selected abi: $selectedAbi")
+            }
+
+            String nativeAbi = selectedAbi
+            String taskName = rootProject.getNativeTaskName(flavorName, buildType, nativeAbi)
+            tasks.register(taskName, Exec) {
+                workingDir file(pathToRootDir)
+                // Resolve the tool only when native compilation is requested. Prebuilt
+                // library packaging must configure without a compiler on PATH.
+                doFirst {
+                    String xmake = project.findProperty("xmakeExecutable") ?: System.getenv("XMAKE") ?: System.getenv("XMAKE_EXE") ?: "xmake"
+                    commandLine rootProject.getGodotNativeBuildCommand(flavorName, buildType, nativeAbi, file(pathToRootDir), xmake)
+                }
+            }
+
+            String mergeTaskName = "merge${flavorName.capitalize()}${buildType.capitalize()}JniLibFolders"
+            tasks.named { it == mergeTaskName }.configureEach { dependsOn taskName }
+        }
+    }
+}
+// END native build tasks

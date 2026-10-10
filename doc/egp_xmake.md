@@ -114,7 +114,7 @@ xmake lua misc/scripts/build_egp.lua visionos template_release 8 .build/xmake-ca
 | Windows | windows/MSVC or clang-cl; mingw/MinGW | Windows SDK and selected compiler |
 | Linux/BSD | linux/Clang (pinned LLVM 22.1.3; GCC is not supported) | Clang on PATH (shared install `/opt/egp/llvm-22.1.3/bin` on the WSL build machines), platform headers and enabled driver dependencies |
 | macOS | macosx/Xcode | Xcode macOS SDK; separate x86_64 and arm64 builds |
-| Android | android/NDK | Android SDK and NDK 29.0.14206865, API 24 or newer |
+| Android | android/NDK | Android SDK (platform 37.2, build-tools 37.0.0, JDK 27 to run Gradle) and NDK r30 30.0.16248370, API 24 or newer |
 | iOS | iphoneos/Xcode | Xcode iPhoneOS or iPhoneSimulator SDK |
 | visionOS | cross/egp-visionos | Xcode xros/xrsimulator SDK; arm64 |
 

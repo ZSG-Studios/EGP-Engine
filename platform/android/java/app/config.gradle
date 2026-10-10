@@ -1,23 +1,28 @@
 ext.versions = [
-    androidGradlePlugin: '8.13.2',
-    compileSdk         : 36,
+    androidGradlePlugin: '9.4.0',
+    compileSdk         : 37,
+    // Android 17 minor SDK level (platforms;android-37.2). Also update
+    // 'editor/export/android_sdk_manager.cpp#ANDROID_SDK_PACKAGES[platforms]'.
+    compileSdkMinor    : 2,
     // Also update:
     // - 'editor/export/android_sdk_manager.h#DEFAULT_MIN_SDK_VERSION'
     // - 'build/xmake/platforms/init.lua' Android minimum API
     minSdk             : 24,
     // Also update 'editor/export/android_sdk_manager.h#DEFAULT_TARGET_SDK_VERSION'.
-    targetSdk          : 36,
+    targetSdk          : 37,
     // Also update 'editor/export/android_sdk_manager.cpp#ANDROID_SDK_PACKAGES[build-tools]'.
-    buildTools         : '36.1.0',
-    kotlinVersion      : '2.1.21',
+    buildTools         : '37.0.0',
+    // AGP 9 compiles Kotlin itself (built-in Kotlin); this pins the Kotlin Gradle plugin it uses
+    // through the buildscript classpath in 'build.gradle' and 'app/build.gradle'.
+    kotlinVersion      : '2.4.21',
     fragmentVersion    : '1.8.6',
     nexusPublishVersion: '1.3.0',
     // Also update 'editor/export/android_sdk_manager.h#DEFAULT_JAVA_VERSION'.
     javaVersion        : JavaVersion.VERSION_17,
     // Also update:
     // - 'editor/export/android_sdk_manager.cpp#ANDROID_NDK_PACKAGES[ndk]'
-    // - 'build/xmake/platforms/init.lua' Android NDK revision
-    ndkVersion         : '29.0.14206865',
+    // - 'build/xmake/platforms/package.lua' and 'misc/scripts/build_egp.lua' Android NDK revision
+    ndkVersion         : '30.0.16248370',
     splashscreenVersion: '1.0.1',
     // 'openxrLoaderVersion' should be set to XR_CURRENT_API_VERSION, see 'thirdparty/openxr'
     openxrLoaderVersion: '1.1.63',

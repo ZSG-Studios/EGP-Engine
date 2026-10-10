@@ -23,15 +23,28 @@ class NativeTask {
 }
 class FixtureTasks {
     Map<String, NativeTask> entries = [:]
-    NativeTask create(Map options, Closure configure) {
-        assert options.type == Exec
-        assert !entries.containsKey(options.name)
-        NativeTask task = new NativeTask(name: options.name)
+    // Names of the AGP tasks the production script may wire into (created later by AGP).
+    List<String> agpTasks = []
+    NativeTask register(String name, Class type, Closure configure) {
+        assert type == Exec
+        assert !entries.containsKey(name)
+        NativeTask task = new NativeTask(name: name)
         configure.delegate = task
         configure.resolveStrategy = Closure.DELEGATE_FIRST
         configure.call()
-        entries[options.name] = task
+        entries[name] = task
         return task
+    }
+    // Lazy, name-filtered configuration (TaskContainer.named(Spec<String>).configureEach).
+    Expando named(Closure spec) {
+        return new Expando(configureEach: { Closure configure ->
+            List<String> matches = agpTasks.findAll { spec.call(it) }
+            assert matches.size() == 1
+            NativeTask task = getAt(matches[0])
+            configure.delegate = task
+            configure.resolveStrategy = Closure.DELEGATE_FIRST
+            configure.call(task)
+        })
     }
     NativeTask getAt(String name) {
         if (!entries.containsKey(name)) { entries[name] = new NativeTask(name: name) }
@@ -49,32 +62,29 @@ new GroovyShell(this.class.classLoader, helperBinding).evaluate(new File(android
 def rootProject = new Expando()
 extensions.each { key, value -> rootProject.setProperty(key, value) }
 FixtureTasks tasks = new FixtureTasks()
-List variants = []
-for (String flavor in ["editor", "template"]) {
-    for (String buildType in ["debug", "release"]) {
-        String fixtureFlavor = flavor
-        Map output = [:]
-        variants.add(new Expando(getFlavorName: { -> fixtureFlavor }, buildType: [name: buildType],
-            outputs: new Expando(all: { Closure action -> action.call(output) }), artifact: output))
-    }
-}
+Map<String, List<String>> flavorsBuildTypes = [editor: ["debug", "release"], template: ["debug", "release"]]
+flavorsBuildTypes.each { flavor, buildTypes -> buildTypes.each { tasks.agpTasks.add("merge${flavor.capitalize()}${it.capitalize()}JniLibFolders".toString()) } }
 Binding binding = new Binding(
     rootProject: rootProject, project: new Expando(findProperty: { String key -> key == "xmakeExecutable" ? "fixture-xmake" : null }),
-    libraryVariants: new Expando(all: { Closure action -> variants.each { action.call(it) } }),
     selectedAbis: ["arm32", "arm64", "x86_32", "x86_64"], supportedAbis: ["arm32", "arm64", "x86_32", "x86_64"],
-    supportedFlavorsBuildTypes: [editor: ["debug", "release"], template: ["debug", "release"]],
+    supportedFlavorsBuildTypes: flavorsBuildTypes,
     pathToRootDir: "../../../../", tasks: tasks, Exec: Exec,
     file: { String relative -> new File(new File(androidRoot, "lib"), relative).canonicalFile })
 String source = new File(androidRoot, "lib/build.gradle").text
-String registration = source.substring(source.indexOf("libraryVariants.all"), source.indexOf("    publishing {"))
+String registration = source.substring(source.indexOf("// BEGIN native build tasks"), source.indexOf("// END native build tasks"))
 new GroovyShell(this.class.classLoader, binding).evaluate(registration)
 List<NativeTask> nativeTasks = tasks.entries.values().findAll { !it.actions.empty }
 assert nativeTasks.size() == 16
 assert nativeTasks.every { it.command == null && it.directory == engine }
-assert variants*.artifact*.outputFileName == ["godot-lib.editor.aar", "godot-lib.editor.aar", "godot-lib.template_debug.aar", "godot-lib.template_release.aar"]
-assert tasks.entries.values().findAll { it.name.startsWith("merge") }.every { it.dependencies.size() == 4 }
+List<NativeTask> mergeTasks = tasks.entries.values().findAll { it.name.startsWith("merge") }
+assert mergeTasks.size() == 4 && mergeTasks.every { it.dependencies.size() == 4 }
 assert !source.contains("findInPath") && !source.toLowerCase().contains("scons")
-checks += 5
+// AGP 9 removed the old variant API: archives keep AGP's names and the root copy tasks rename them.
+String rootBuild = new File(androidRoot, "build.gradle").text
+assert source.contains('archivesName = "godot-lib"') && !source.contains("libraryVariants") && !source.contains("outputFileName")
+assert rootBuild.contains('include("godot-lib-template-${target}.aar")') && rootBuild.count('rename { "godot-lib.template_${targetSuffix}.aar" }') == 2
+assert rootBuild.contains('include("android-${edition}-${target}.apk")') && rootBuild.contains('rename { "android_${filenameSuffix}.apk" }')
+checks += 6
 nativeTasks.each { task ->
     task.execute()
     List<String> command = task.command
@@ -108,5 +118,10 @@ assert versions.getGodotPublishVersion() == "4.8.0.dev-SNAPSHOT"
 assert versions.getGodotLibraryVersion() == ["4.8.0.dev", 408001]
 assert !new File(androidRoot, "nativeSrcsConfigs/build.gradle").text.contains("externalNativeBuild")
 assert !new File(engine, "editor/export/android_sdk_manager.cpp").text.contains('"cmake/')
-checks += 5
+// AGP 9 built-in Kotlin: no module applies the Kotlin Android plugin or the KGP 'kotlinOptions' block.
+List<File> gradleScripts = []
+androidRoot.eachFileRecurse { File f -> if (f.name.endsWith(".gradle") && !f.path.contains("${File.separator}build${File.separator}")) { gradleScripts.add(f) } }
+assert gradleScripts.size() >= 10
+assert gradleScripts.every { !it.text.contains("org.jetbrains.kotlin.android") && !it.text.contains("kotlinOptions") }
+checks += 7
 println "ANDROID_XMAKE_GRADLE_FIXTURE_PASS $checks"

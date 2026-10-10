@@ -1,7 +1,20 @@
 // Gradle build config for Godot Engine's Android port.
+buildscript {
+    // This module is the root project of Godot gradle builds (see 'settings.gradle' in this directory).
+    apply from: 'config.gradle'
+
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // AGP 9 built-in Kotlin: pin the Kotlin Gradle plugin version (AGP only brings its minimum).
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$versions.kotlinVersion"
+    }
+}
+
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
 }
 
 apply from: 'config.gradle'
@@ -102,88 +115,89 @@ dependencies {
     }
 }
 
+// Output files are named 'android-<edition>-<buildType>.apk' / '.aab'; the copy tasks in this file
+// and in the root project rename them to the names Godot expects.
+base {
+    archivesName = 'android'
+}
+
 android {
-    compileSdkVersion versions.compileSdk
-    buildToolsVersion versions.buildTools
+    compileSdk = versions.compileSdk
+    compileSdkMinor = versions.compileSdkMinor
+    buildToolsVersion = versions.buildTools
     ndkVersion = versions.ndkVersion
 
     compileOptions {
-        sourceCompatibility versions.javaVersion
-        targetCompatibility versions.javaVersion
+        sourceCompatibility = versions.javaVersion
+        targetCompatibility = versions.javaVersion
     }
 
-    kotlinOptions {
-        jvmTarget = versions.javaVersion
-    }
-
-    assetPacks = [":assetPackInstallTime"]
+    assetPacks += [":assetPackInstallTime"]
 
     namespace = 'com.godot.game.app'
 
-    defaultConfig {
+    androidResources {
         // The default ignore pattern for the 'assets' directory includes hidden files and directories which are used by Godot projects.
-        aaptOptions {
-            ignoreAssetsPattern = "!.svn:!.git:!.gitignore:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~"
-        }
+        ignoreAssetsPattern = "!.svn:!.git:!.gitignore:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~"
+    }
 
+    defaultConfig {
         ndk {
             debugSymbolLevel = 'NONE'
-            String[] export_abi_list = getExportEnabledABIs()
-            abiFilters export_abi_list
+            abiFilters.addAll(getExportEnabledABIs())
         }
 
         // Feel free to modify the application id to your own.
-        applicationId getExportPackageName()
-        versionCode getExportVersionCode()
-        versionName getExportVersionName()
-        minSdkVersion getExportMinSdkVersion()
-        targetSdkVersion getExportTargetSdkVersion()
+        applicationId = getExportPackageName()
+        versionCode = getExportVersionCode()
+        versionName = getExportVersionName()
+        minSdk = getExportMinSdkVersion()
+        targetSdk = getExportTargetSdkVersion()
 
         missingDimensionStrategy 'products', 'template'
 
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // The following argument makes the Android Test Orchestrator run its
         // "pm clear" command after each test invocation. This command ensures
         // that the app's state is completely cleared between tests.
-        testInstrumentationRunnerArguments clearPackageData: 'true'
+        testInstrumentationRunnerArguments["clearPackageData"] = 'true'
     }
 
     testOptions {
         execution = 'ANDROIDX_TEST_ORCHESTRATOR'
     }
 
-    lintOptions {
+    lint {
         abortOnError = false
-        disable 'MissingTranslation', 'UnusedResources'
+        disable += ['MissingTranslation', 'UnusedResources']
     }
 
-    ndkVersion = versions.ndkVersion
-
-    packagingOptions {
-        exclude 'META-INF/LICENSE'
-        exclude 'META-INF/NOTICE'
-
-        // Debug symbols are kept for development within Android Studio.
-        if (shouldNotStrip()) {
-            jniLibs {
-                keepDebugSymbols += '**/*.so'
-            }
+    packaging {
+        resources {
+            excludes += ['META-INF/LICENSE', 'META-INF/NOTICE']
         }
 
         jniLibs {
+            // Debug symbols are kept for development within Android Studio.
+            if (shouldNotStrip()) {
+                keepDebugSymbols += '**/*.so'
+            }
+
             // Setting this to true causes AGP to package compressed native libraries when building the app
             // For more background, see:
             // - https://developer.android.com/build/releases/past-releases/agp-3-6-0-release-notes#extractNativeLibs
             // - https://stackoverflow.com/a/44704840
             useLegacyPackaging = shouldUseLegacyPackaging()
-        }
 
-        // Always select Godot's version of libc++_shared.so in case deps have their own
-        pickFirst 'lib/x86/libc++_shared.so'
-        pickFirst 'lib/x86_64/libc++_shared.so'
-        pickFirst 'lib/armeabi-v7a/libc++_shared.so'
-        pickFirst 'lib/arm64-v8a/libc++_shared.so'
+            // Always select Godot's version of libc++_shared.so in case deps have their own
+            pickFirsts += [
+                'lib/x86/libc++_shared.so',
+                'lib/x86_64/libc++_shared.so',
+                'lib/armeabi-v7a/libc++_shared.so',
+                'lib/arm64-v8a/libc++_shared.so',
+            ]
+        }
     }
 
     signingConfigs {
@@ -214,9 +228,8 @@ android {
     buildTypes {
 
         debug {
-            // Signing and zip-aligning are skipped for prebuilt builds, but
-            // performed for Godot gradle builds.
-            zipAlignEnabled shouldZipAlign()
+            // Signing is skipped for prebuilt builds, but performed for Godot gradle builds.
+            // AGP always zip-aligns the APKs it packages (the deprecated 'zipAlignEnabled' switch is gone).
             if (shouldSign()) {
                 signingConfig = signingConfigs.debug
             } else {
@@ -225,13 +238,11 @@ android {
         }
 
         release {
-            minifyEnabled shouldMinify()
+            minifyEnabled = shouldMinify()
             shrinkResources = false
             proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
 
-            // Signing and zip-aligning are skipped for prebuilt builds, but
-            // performed for Godot gradle builds.
-            zipAlignEnabled shouldZipAlign()
+            // Signing is skipped for prebuilt builds, but performed for Godot gradle builds.
             if (shouldSign()) {
                 signingConfig = signingConfigs.release
             } else {
@@ -240,12 +251,12 @@ android {
         }
     }
 
-    flavorDimensions 'edition'
+    flavorDimensions = ['edition']
 
     productFlavors {
         // Product flavor for the standard (no .net support) builds.
         standard {
-            getIsDefault().set(true)
+            setDefault(true)
         }
 
         // Product flavor for the Mono (.net) builds.
@@ -253,8 +264,8 @@ android {
 
         // Product flavor used for running instrumented tests.
         instrumented {
-            applicationIdSuffix ".instrumented"
-            versionNameSuffix "-instrumented"
+            applicationIdSuffix = ".instrumented"
+            versionNameSuffix = "-instrumented"
         }
     }
 
@@ -262,13 +273,6 @@ android {
         main.res.srcDirs += ['res']
         debug.jniLibs.srcDirs = ['libs/debug', 'libs/debug/vulkan_validation_layers']
         release.jniLibs.srcDirs = ['libs/release']
-    }
-
-    applicationVariants.all { variant ->
-        variant.outputs.all { output ->
-            String filenameSuffix = variant.flavorName == "mono" ? variant.name : variant.buildType.name
-            output.outputFileName = "android_${filenameSuffix}.apk"
-        }
     }
 }
 
@@ -286,20 +290,20 @@ task copyAndRenameBinary(type: Copy) {
         sourceFilename = "fusedDepsLib.aar"
 
         def fusedDepsLibProject = findProject(":fusedDepsLib")
-        sourceFilepath = "${fusedDepsLibProject.buildDir}/outputs/aar/$sourceFilename"
+        sourceFilepath = "${fusedDepsLibProject.layout.buildDirectory.get().asFile}/outputs/aar/$sourceFilename"
     } else {
         String exportEdition = getExportEdition()
         String exportBuildType = getExportBuildType()
         String exportBuildTypeCapitalized = exportBuildType.capitalize()
 
+        String archivesName = base.archivesName.get()
+        File outputsDir = new File(layout.buildDirectory.get().asFile, "outputs")
         if (exportFormat == "aab") {
-            String filenameSuffix = "${exportEdition}-${exportBuildType}"
-            sourceFilename = "${project.name}-${filenameSuffix}.aab"
-            sourceFilepath = "$buildDir/outputs/bundle/${exportEdition}${exportBuildTypeCapitalized}/$sourceFilename"
+            sourceFilename = "${archivesName}-${exportEdition}-${exportBuildType}.aab"
+            sourceFilepath = "$outputsDir/bundle/${exportEdition}${exportBuildTypeCapitalized}/$sourceFilename"
         } else {
-            String filenameSuffix = exportEdition == "mono" ? "${exportEdition}${exportBuildTypeCapitalized}" : exportBuildType
-            sourceFilename = "android_${filenameSuffix}.apk"
-            sourceFilepath = "$buildDir/outputs/apk/$exportEdition/$exportBuildType/$sourceFilename"
+            sourceFilename = "${archivesName}-${exportEdition}-${exportBuildType}.apk"
+            sourceFilepath = "$outputsDir/apk/$exportEdition/$exportBuildType/$sourceFilename"
         }
     }
 

@@ -50,7 +50,7 @@ function android(context)
     local base=path.join(context.root,'platform/android/java/lib/libs',editor and 'tools' or '',build)
     local directory=path.join(base,arch[1])
     copy(context.targetfile,path.join(directory,'libgodot_android.so'))
-    local ndk=options.ANDROID_NDK_ROOT or options.ndk or os.getenv('ANDROID_NDK_ROOT') or os.getenv('ANDROID_NDK_HOME') or (os.getenv('ANDROID_HOME') and path.join(os.getenv('ANDROID_HOME'),'ndk/29.0.14206865'))
+    local ndk=options.ANDROID_NDK_ROOT or options.ndk or os.getenv('ANDROID_NDK_ROOT') or os.getenv('ANDROID_NDK_HOME') or (os.getenv('ANDROID_HOME') and path.join(os.getenv('ANDROID_HOME'),'ndk/30.0.16248370'))
     assert(ndk,'Android NDK path is required to stage libc++_shared.so')
     local host=({windows='windows-x86_64',macosx='darwin-x86_64',linux='linux-x86_64'})[os.host()]
     copy(path.join(ndk,'toolchains/llvm/prebuilt',assert(host),'sysroot/usr/lib',arch[2],'libc++_shared.so'),path.join(directory,'libc++_shared.so'))

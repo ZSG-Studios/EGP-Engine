@@ -102,7 +102,7 @@ protected:
 public:
 	constexpr static const int DEFAULT_MIN_SDK_VERSION = 24; // Should match the value in 'platform/android/java/app/config.gradle#minSdk'.
 	constexpr static const int VULKAN_MIN_SDK_VERSION = 29; // Minimum recommended sdk version for Vulkan 1.1 support. See https://developer.android.com/games/develop/vulkan/native-engine-support#recommendations.
-	constexpr static const int DEFAULT_TARGET_SDK_VERSION = 36; // Should match the value in 'platform/android/java/app/config.gradle#targetSdk'.
+	constexpr static const int DEFAULT_TARGET_SDK_VERSION = 37; // Should match the value in 'platform/android/java/app/config.gradle#targetSdk'.
 	constexpr static const int DEFAULT_JAVA_VERSION = 17; // Should match the value in 'platform/android/java/app/config.gradle#javaVersion'.
 
 	void run_setup(const Callable &p_on_setup_completed = Callable(), const Callable &p_on_setup_cancelled = Callable());

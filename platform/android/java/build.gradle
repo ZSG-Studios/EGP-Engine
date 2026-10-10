@@ -1,5 +1,24 @@
+buildscript {
+    apply from: 'app/config.gradle'
+
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        // AGP 9 built-in Kotlin: pin the Kotlin Gradle plugin version (AGP only brings its minimum).
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$versions.kotlinVersion"
+    }
+}
+
 plugins {
     id 'io.github.gradle-nexus.publish-plugin'
+    // Load the Android plugins once, in the root classloader, next to the pinned Kotlin plugin.
+    id 'com.android.application' apply false
+    id 'com.android.library' apply false
+    id 'com.android.asset-pack' apply false
+    id 'com.android.test' apply false
+    id 'com.android.fused-library' apply false
 }
 
 apply from: 'app/config.gradle'
@@ -151,7 +170,8 @@ def generateBuildTasks(String flavor = "template", String edition = "standard", 
                     buildTasks += tasks.create(name: copyAARTaskName, type: Copy) {
                         dependsOn ":lib:assembleTemplate${capitalizedTarget}"
                         from('lib/build/outputs/aar')
-                        include("godot-lib.template_${targetSuffix}.aar")
+                        include("godot-lib-template-${target}.aar")
+                        rename { "godot-lib.template_${targetSuffix}.aar" }
                         into("app/libs/${target}")
                     }
                 }
@@ -165,7 +185,8 @@ def generateBuildTasks(String flavor = "template", String edition = "standard", 
                     buildTasks += tasks.create(name: copyAARToBinTaskName, type: Copy) {
                         dependsOn ":lib:assembleTemplate${capitalizedTarget}"
                         from('lib/build/outputs/aar')
-                        include("godot-lib.template_${targetSuffix}.aar")
+                        include("godot-lib-template-${target}.aar")
+                        rename { "godot-lib.template_${targetSuffix}.aar" }
                         into(binDir)
                     }
                 }
@@ -180,7 +201,8 @@ def generateBuildTasks(String flavor = "template", String edition = "standard", 
                         String filenameSuffix = edition == "mono" ? "${edition}${capitalizedTarget}" : target
                         dependsOn ":app:assemble${capitalizedEdition}${capitalizedTarget}"
                         from("app/build/outputs/apk/${edition}/${target}") {
-                            include("android_${filenameSuffix}.apk")
+                            include("android-${edition}-${target}.apk")
+                            rename { "android_${filenameSuffix}.apk" }
                         }
                         into(binDir)
                     }

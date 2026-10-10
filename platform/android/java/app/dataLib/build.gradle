@@ -1,6 +1,5 @@
 plugins {
     id 'com.android.library'
-    id 'org.jetbrains.kotlin.android'
 }
 
 dependencies {
@@ -22,23 +21,21 @@ dependencies {
 android {
     namespace = 'com.godot.game'
     compileSdk = versions.compileSdk
+    compileSdkMinor = versions.compileSdkMinor
+
+    androidResources {
+        // The default ignore pattern for the 'assets' directory includes hidden files and directories which are used by Godot projects.
+        ignoreAssetsPattern = "!.svn:!.git:!.gitignore:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~"
+    }
 
     defaultConfig {
-        // The default ignore pattern for the 'assets' directory includes hidden files and directories which are used by Godot projects.
-        aaptOptions {
-            ignoreAssetsPattern = "!.svn:!.git:!.gitignore:!.ds_store:!*.scc:!CVS:!thumbs.db:!picasa.ini:!*~"
-        }
-
         minSdk = versions.minSdk
 
         missingDimensionStrategy 'products', 'template'
     }
     compileOptions {
-        sourceCompatibility versions.javaVersion
-        targetCompatibility versions.javaVersion
-    }
-    kotlinOptions {
-        jvmTarget = versions.javaVersion
+        sourceCompatibility = versions.javaVersion
+        targetCompatibility = versions.javaVersion
     }
     buildFeatures {
         buildConfig = true

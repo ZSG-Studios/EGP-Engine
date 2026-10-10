@@ -1,7 +1,6 @@
 // Gradle build config for Godot Engine's Android port.
 plugins {
     id 'com.android.application'
-    id 'org.jetbrains.kotlin.android'
     id 'base'
 }
 
@@ -58,6 +57,11 @@ ext {
     }
 }
 
+// Output files are named 'android_editor-<distribution>-<buildType>.apk' / '.aab'.
+base {
+    archivesName = "android_editor"
+}
+
 def generateVersionCode() {
     int libraryVersionCode = getGodotLibraryVersionCode()
     return (libraryVersionCode * editorBuildNumberOffset) + getEditorBuildNumber()
@@ -70,19 +74,20 @@ def generateVersionName() {
 }
 
 android {
-    compileSdkVersion versions.compileSdk
-    buildToolsVersion versions.buildTools
+    compileSdk = versions.compileSdk
+    compileSdkMinor = versions.compileSdkMinor
+    buildToolsVersion = versions.buildTools
     ndkVersion = versions.ndkVersion
 
     namespace = "org.godotengine.editor"
 
     defaultConfig {
         // The 'applicationId' suffix allows to install Godot 3.x(v3) and 4.x(v4) on the same device
-        applicationId "org.godotengine.editor.v4"
-        versionCode generateVersionCode()
-        versionName generateVersionName()
-        minSdkVersion versions.minSdk
-        targetSdkVersion versions.targetSdk
+        applicationId = "org.godotengine.editor.v4"
+        versionCode = generateVersionCode()
+        versionName = generateVersionName()
+        minSdk = versions.minSdk
+        targetSdk = versions.targetSdk
 
         missingDimensionStrategy 'products', 'editor'
         manifestPlaceholders += [
@@ -92,29 +97,21 @@ android {
 
         ndk { debugSymbolLevel = 'NONE' }
 
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         // The following argument makes the Android Test Orchestrator run its
         // "pm clear" command after each test invocation. This command ensures
         // that the app's state is completely cleared between tests.
-        testInstrumentationRunnerArguments clearPackageData: 'true'
+        testInstrumentationRunnerArguments["clearPackageData"] = 'true'
     }
 
     testOptions {
         execution = 'ANDROIDX_TEST_ORCHESTRATOR'
     }
 
-    base {
-        archivesName = "android_editor"
-    }
-
     compileOptions {
-        sourceCompatibility versions.javaVersion
-        targetCompatibility versions.javaVersion
-    }
-
-    kotlinOptions {
-        jvmTarget = versions.javaVersion
+        sourceCompatibility = versions.javaVersion
+        targetCompatibility = versions.javaVersion
     }
 
     signingConfigs {
@@ -132,18 +129,18 @@ android {
 
     buildTypes {
         debug {
-            applicationIdSuffix ".debug"
+            applicationIdSuffix = ".debug"
             manifestPlaceholders += [editorBuildSuffix: " (debug)"]
             signingConfig = signingConfigs.debug
         }
 
         benchmark {
             initWith release
-            applicationIdSuffix ".benchmark"
+            applicationIdSuffix = ".benchmark"
             manifestPlaceholders += [editorBuildSuffix: " (benchmark)"]
             signingConfig = signingConfigs.debug
             matchingFallbacks = ['release']
-            debuggable false
+            debuggable = false
         }
 
         release {
@@ -155,13 +152,13 @@ android {
                 signingConfig = signingConfigs.debug
                 // In addition, we update the application ID to allow installing an Android studio release build
                 // side by side with a production build from the store.
-                applicationIdSuffix ".release"
+                applicationIdSuffix = ".release"
                 manifestPlaceholders += [editorBuildSuffix: " (release)"]
             }
         }
     }
 
-    packagingOptions {
+    packaging {
         // Debug symbols are kept for development within Android Studio.
         if (shouldNotStrip()) {
             jniLibs {
@@ -173,7 +170,7 @@ android {
     flavorDimensions = ["android_distribution"]
     productFlavors {
         android {
-            dimension "android_distribution"
+            dimension = "android_distribution"
             missingDimensionStrategy 'products', 'editor'
             ndk {
                 if (!detectedAbis.isEmpty()) {
@@ -182,27 +179,27 @@ android {
             }
         }
         horizonos {
-            dimension "android_distribution"
+            dimension = "android_distribution"
             missingDimensionStrategy 'products', 'editor'
             ndk {
                 //noinspection ChromeOsAbiSupport
-                abiFilters "arm64-v8a"
+                abiFilters += ["arm64-v8a"]
             }
-            applicationIdSuffix ".meta"
-            versionNameSuffix "-meta"
-            targetSdkVersion 32
+            applicationIdSuffix = ".meta"
+            versionNameSuffix = "-meta"
+            targetSdk = 32
         }
         picoos {
-            dimension "android_distribution"
+            dimension = "android_distribution"
             missingDimensionStrategy 'products', 'editor'
             ndk {
                 //noinspection ChromeOsAbiSupport
-                abiFilters "arm64-v8a"
+                abiFilters += ["arm64-v8a"]
             }
-            applicationIdSuffix ".pico"
-            versionNameSuffix "-pico"
-            minSdkVersion 29
-            targetSdkVersion 32
+            applicationIdSuffix = ".pico"
+            versionNameSuffix = "-pico"
+            minSdk = 29
+            targetSdk = 32
         }
     }
 }

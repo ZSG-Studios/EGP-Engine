@@ -1,28 +1,24 @@
 plugins {
     id 'com.android.test'
-    id 'org.jetbrains.kotlin.android'
 }
 
 android {
     namespace = 'org.godotengine.editor.v4.macrobenchmark'
-    compileSdk versions.compileSdk
+    compileSdk = versions.compileSdk
+    compileSdkMinor = versions.compileSdkMinor
 
     compileOptions {
-        sourceCompatibility versions.javaVersion
-        targetCompatibility versions.javaVersion
-    }
-
-    kotlinOptions {
-        jvmTarget = versions.javaVersion
+        sourceCompatibility = versions.javaVersion
+        targetCompatibility = versions.javaVersion
     }
 
     defaultConfig {
-        minSdk versions.minSdk
-        targetSdk versions.targetSdk
+        minSdk = versions.minSdk
+        targetSdk = versions.targetSdk
         missingDimensionStrategy 'products', 'editor'
         missingDimensionStrategy 'android_distribution', 'android'
 
-        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         testInstrumentationRunnerArguments["androidx.benchmark.suppressErrors"] = 'EMULATOR'
     }
 

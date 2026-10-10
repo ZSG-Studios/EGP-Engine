@@ -52,14 +52,14 @@ static const char *ANDROID_CLI_URL_WIN = "https://dl.google.com/android/cli/late
 // Android SDK packages.
 static const char *ANDROID_SDK_PACKAGES[] = {
 	"platform-tools",
-	"build-tools/36.1.0", // Should match the value in 'platform/android/java/app/config.gradle#buildTools'.
-	"platforms/android-36",
+	"build-tools/37.0.0", // Should match the value in 'platform/android/java/app/config.gradle#buildTools'.
+	"platforms/android-37.2",
 	"cmdline-tools/latest",
 	nullptr
 };
 // Android NDK packages.
 static const char *ANDROID_NDK_PACKAGES[] = {
-	"ndk/29.0.14206865", // Should match the value in 'platform/android/java/app/config.gradle#ndkVersion'.
+	"ndk/30.0.16248370", // Should match the value in 'platform/android/java/app/config.gradle#ndkVersion'.
 	nullptr
 };
 
